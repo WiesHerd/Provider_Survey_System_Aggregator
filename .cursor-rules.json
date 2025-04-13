@@ -1,0 +1,199 @@
+{
+  "description": "Healthcare Provider Survey Data Processing System Rules",
+  "globs": ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js", "components/**/*"],
+  "rules": {
+    "react": {
+      "componentStructure": {
+        "order": [
+          "imports",
+          "types/interfaces",
+          "constants",
+          "component declaration",
+          "hooks",
+          "effects",
+          "handlers",
+          "render"
+        ],
+        "preferFunctionalComponents": true,
+        "requirePropTypes": true
+      },
+      "hooks": {
+        "dependencies": {
+          "requireExhaustiveDeps": true,
+          "warnOnComplexDeps": true
+        },
+        "naming": {
+          "prefix": "use",
+          "camelCase": true
+        }
+      },
+      "performance": {
+        "memoization": {
+          "requireMemoForExpensiveCalculations": true,
+          "useCallbackForHandlers": true
+        },
+        "lazyLoading": {
+          "requireForLargeComponents": true,
+          "chunkNaming": "consistent"
+        }
+      }
+    },
+    "typescript": {
+      "strictMode": true,
+      "types": {
+        "requireExplicitTypes": true,
+        "preferInterface": true,
+        "naming": {
+          "interfaces": "^I[A-Z]",
+          "types": "^T[A-Z]",
+          "enums": "^E[A-Z]"
+        }
+      },
+      "imports": {
+        "order": [
+          "react",
+          "external libraries",
+          "components",
+          "hooks",
+          "utils",
+          "types",
+          "styles"
+        ],
+        "grouping": true
+      }
+    },
+    "dataHandling": {
+      "csv": {
+        "parsing": {
+          "validateHeaders": true,
+          "requiredColumns": [
+            "SPECIALTY",
+            "PROVIDER_TYPE",
+            "GEOGRAPHIC_REGION",
+            "TCC_P25",
+            "TCC_P50",
+            "TCC_P75",
+            "TCC_P90"
+          ],
+          "formatting": {
+            "currency": ["TCC_.*", "CF_.*"],
+            "percentage": [".*_PERCENT", ".*_RATE"],
+            "numeric": ["N_.*", "COUNT_.*"]
+          }
+        },
+        "performance": {
+          "chunkSize": 1000,
+          "workerThreads": true,
+          "caching": true
+        }
+      }
+    },
+    "styling": {
+      "tailwind": {
+        "customization": {
+          "extendTheme": true,
+          "requireConsistentSpacing": true
+        },
+        "classes": {
+          "order": [
+            "layout",
+            "positioning",
+            "display",
+            "spacing",
+            "sizing",
+            "typography",
+            "backgrounds",
+            "borders",
+            "effects",
+            "transitions"
+          ],
+          "grouping": true
+        }
+      }
+    },
+    "testing": {
+      "coverage": {
+        "minimum": 80,
+        "excludePatterns": ["**/*.d.ts", "**/*.test.*"]
+      },
+      "requirements": {
+        "unitTests": {
+          "components": true,
+          "hooks": true,
+          "utils": true
+        },
+        "integrationTests": {
+          "dataFlow": true,
+          "userJourneys": true
+        }
+      }
+    },
+    "git": {
+      "commitMessage": {
+        "format": "<type>(<scope>): <description>",
+        "types": [
+          "feat",
+          "fix",
+          "docs",
+          "style",
+          "refactor",
+          "perf",
+          "test",
+          "chore"
+        ],
+        "scopes": [
+          "data",
+          "ui",
+          "filters",
+          "preview",
+          "analytics",
+          "deps"
+        ]
+      },
+      "branchNaming": {
+        "format": "<type>/<description>",
+        "types": [
+          "feature",
+          "bugfix",
+          "hotfix",
+          "release"
+        ]
+      }
+    },
+    "security": {
+      "dataHandling": {
+        "sanitizeInput": true,
+        "validateFileTypes": ["csv", "xlsx"],
+        "maxFileSize": "50mb"
+      },
+      "authentication": {
+        "requireAuth": false,
+        "sessionTimeout": 3600
+      }
+    },
+    "accessibility": {
+      "requirements": {
+        "aria": true,
+        "semanticHTML": true,
+        "keyboardNavigation": true,
+        "colorContrast": true
+      },
+      "testing": {
+        "axe": true,
+        "lighthouse": true
+      }
+    },
+    "documentation": {
+      "components": {
+        "requireJSDoc": true,
+        "propsDescription": true,
+        "examples": true
+      },
+      "functions": {
+        "requireJSDoc": true,
+        "parameterTypes": true,
+        "returnTypes": true
+      }
+    }
+  }
+} 
