@@ -57,6 +57,7 @@ const AutoMapSpecialties: React.FC<AutoMapSpecialtiesProps> = ({ onClose, onMapp
             suggestion.standardizedName,
             suggestion.specialties.map((s: { name: string; surveySource: string }) => ({
               id: crypto.randomUUID(),
+              specialty: s.name,
               originalName: s.name,
               surveySource: s.surveySource,
               mappingId: ''

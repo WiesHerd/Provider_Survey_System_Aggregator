@@ -199,23 +199,12 @@ const SurveyUpload: React.FC = () => {
   };
 
   const handleSurveyUpload = async () => {
-    if (!surveyType || !surveyYear || files.length === 0) {
-      handleError('Please select survey type, year and upload a file');
-      return;
-    }
-
-    // Check for duplicate survey type and year combination
-    const isDuplicate = uploadedSurveys.some(
-      survey => survey.surveyType === (isCustom ? customSurveyType : surveyType) 
-        && survey.surveyYear === surveyYear
-    );
-
-    if (isDuplicate) {
-      handleError('A survey with this type and year already exists. Please remove it first.');
-      return;
-    }
-
     const file = files[0];
+    if (!file || !surveyType || !surveyYear) {
+      handleError('Please fill in all required fields');
+      return;
+    }
+
     const reader = new FileReader();
     
     reader.onload = async (e) => {
@@ -226,77 +215,111 @@ const SurveyUpload: React.FC = () => {
       }
 
       try {
-        const stats = calculateSurveyStats(fileContent);
-        if (stats.totalRows === 0) {
-          handleError('Invalid CSV file: No valid data found');
-          return;
-        }
-
         const lines = fileContent.split('\n').filter(line => line.trim());
         const headers = lines[0].split(',').map(h => h.trim());
         
+        // Required column names
+        const requiredColumns = [
+          'specialty',
+          'providerType',
+          'geographicRegion',
+          'n_orgs',
+          'n_incumbents',
+          'tcc_p25',
+          'tcc_p50',
+          'tcc_p75',
+          'tcc_p90',
+          'wrvu_p25',
+          'wrvu_p50',
+          'wrvu_p75',
+          'wrvu_p90',
+          'cf_p25',
+          'cf_p50',
+          'cf_p75',
+          'cf_p90'
+        ];
+
+        // Log available columns
+        console.log('Available columns in CSV:', headers);
+        
         // Create initial column mappings
-        const columnMappings: Record<string, string> = {
-          fileName: file.name,
-          surveyYear,
-          uploadDate: new Date().toISOString()
-        };
+        const columnMappings: Record<string, string> = {};
         headers.forEach((header, index) => {
-          columnMappings[header] = header;
+          // Try to match headers to required columns
+          const matchingColumn = requiredColumns.find(col => 
+            header.toLowerCase().includes(col.toLowerCase()) ||
+            col.toLowerCase().includes(header.toLowerCase())
+          );
+          
+          if (matchingColumn) {
+            columnMappings[matchingColumn] = header;
+            console.log(`Mapped ${header} to ${matchingColumn}`);
+          }
         });
 
-        // Parse rows with basic structure
+        // Check for missing required columns
+        const missingColumns = requiredColumns.filter(col => !columnMappings[col]);
+        if (missingColumns.length > 0) {
+          console.warn('Missing required columns:', missingColumns);
+        }
+
+        // Parse rows with mapped columns
         const rows = lines.slice(1).map(line => {
           const values = line.split(',').map(v => v.trim());
-          const row: Record<string, string | number> = {
-            normalizedSpecialty: values[0] || '', // Assuming first column is specialty
-            providerType: values[1] || '', // Assuming second column is provider type
-            geographicRegion: values[2] || '', // Assuming third column is region
-            // Initialize with default values
-            tcc_p25: 0,
-            tcc_p50: 0,
-            tcc_p75: 0,
-            tcc_p90: 0,
-            wrvu_p25: 0,
-            wrvu_p50: 0,
-            wrvu_p75: 0,
-            wrvu_p90: 0
-          };
+          const row: Record<string, string | number> = {};
 
-          // Add remaining values as is
-          headers.forEach((header, index) => {
-            if (values[index] !== undefined) {
-              row[header] = values[index];
+          // Map values using column mappings
+          requiredColumns.forEach(col => {
+            const sourceHeader = columnMappings[col];
+            if (sourceHeader) {
+              const index = headers.indexOf(sourceHeader);
+              const value = values[index];
+              
+              // Convert numeric values
+              if (col.includes('_p') || col === 'n_orgs' || col === 'n_incumbents') {
+                row[col] = Number(value) || 0;
+              } else {
+                row[col] = value || '';
+              }
+            } else {
+              // Set default values for missing columns
+              if (col.includes('_p') || col === 'n_orgs' || col === 'n_incumbents') {
+                row[col] = 0;
+              } else {
+                row[col] = '';
+              }
             }
           });
 
           return row as ISurveyRow;
         });
 
-        // Extract unique values
-        const uniqueSpecialties = Array.from(new Set(rows.map(row => row.normalizedSpecialty)));
-        const uniqueProviderTypes = Array.from(new Set(rows.map(row => row.providerType)));
-        const uniqueRegions = Array.from(new Set(rows.map(row => row.geographicRegion)));
-
-        const metadata: ISurveyMetadata & { surveyType: string; surveyProvider: string; fileContent: string } = {
-          totalRows: stats.totalRows,
-          uniqueSpecialties,
-          uniqueProviderTypes,
-          uniqueRegions,
-          columnMappings,
-          surveyType: isCustom ? customSurveyType : surveyType,
-          surveyProvider: isCustom ? customSurveyType : surveyType,
-          fileContent
-        };
+        // Get unique specialties as string array
+        const uniqueSpecialties = Array.from(new Set(rows.map(r => r.specialty))) as string[];
+        const uniqueProviderTypes = Array.from(new Set(rows.map(r => r.providerType))) as string[];
+        const uniqueRegions = Array.from(new Set(rows.map(r => r.geographicRegion))) as string[];
 
         // Store survey in IndexedDB
         await storageService.storeSurveyData({
           id: file.id!,
           rows,
-          metadata
+          metadata: {
+            surveyType: isCustom ? customSurveyType : surveyType,
+            surveyYear,
+            uploadDate: new Date().toISOString(),
+            totalRows: rows.length,
+            columnMappings,
+            uniqueSpecialties,
+            uniqueProviderTypes,
+            uniqueRegions
+          }
         });
 
-        console.log('Survey stored successfully:', file.id);
+        console.log('Survey stored successfully:', {
+          id: file.id,
+          rowCount: rows.length,
+          mappedColumns: Object.keys(columnMappings)
+        });
 
         // Update local state
         setUploadedSurveys(prev => [...prev, {
@@ -306,8 +329,13 @@ const SurveyUpload: React.FC = () => {
           surveyYear,
           uploadDate: new Date(),
           fileContent,
-          stats
+          stats: {
+            totalRows: rows.length,
+            uniqueSpecialties: uniqueSpecialties.length,
+            totalDataPoints: rows.length * Object.keys(columnMappings).length
+          }
         }]);
+
         setFiles([]);
         setSurveyType('');
         setSurveyYear('');

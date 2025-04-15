@@ -24,13 +24,17 @@ import {
   PlusIcon as AddIcon,
   MagnifyingGlassIcon as SearchIcon,
   ExclamationTriangleIcon as WarningIcon,
-  BoltIcon
+  BoltIcon,
+  TrashIcon as DeleteSweepIcon,
+  ArrowRightIcon,
+  LightBulbIcon
 } from '@heroicons/react/24/outline';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import { LocalStorageService } from '../services/StorageService';
 import { ISpecialtyMapping, IUnmappedSpecialty, IAutoMappingConfig } from '../types/specialty';
 import MappedSpecialties from './MappedSpecialties';
 import AutoMapSpecialties from './AutoMapSpecialties';
+import AutoMapDialog from './shared/AutoMapDialog';
 
 interface SpecialtyCardProps {
   specialty: IUnmappedSpecialty;
@@ -63,8 +67,9 @@ const SpecialtyMapping: React.FC = () => {
   // State for UI
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped'>('unmapped');
+  const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
   const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
+  const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
 
   const mappingService = new SpecialtyMappingService(new LocalStorageService());
 
@@ -75,12 +80,14 @@ const SpecialtyMapping: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [mappingsData, unmappedData] = await Promise.all([
+      const [mappingsData, unmappedData, learnedData] = await Promise.all([
         mappingService.getAllMappings(),
-        mappingService.getUnmappedSpecialties()
+        mappingService.getUnmappedSpecialties(),
+        mappingService.getLearnedMappings()
       ]);
       setMappings(mappingsData);
       setUnmappedSpecialties(unmappedData);
+      setLearnedMappings(learnedData || {});
       setError(null);
     } catch (err) {
       setError('Failed to load specialty data');
@@ -115,6 +122,39 @@ const SpecialtyMapping: React.FC = () => {
     );
   }, [mappings, mappedSearchTerm]);
 
+  const handleAutoMap = async (config: {
+    confidenceThreshold: number;
+    useExistingMappings: boolean;
+    enableFuzzyMatching: boolean;
+  }) => {
+    const mappingConfig = {
+      confidenceThreshold: config.confidenceThreshold,
+      useExistingMappings: config.useExistingMappings,
+      useFuzzyMatching: config.enableFuzzyMatching
+    };
+
+    const suggestions = await mappingService.generateMappingSuggestions(mappingConfig);
+
+    // Create mappings from suggestions
+    for (const suggestion of suggestions) {
+      await mappingService.createMapping(
+        suggestion.standardizedName,
+        suggestion.specialties.map((s: { name: string; surveySource: string }) => ({
+          id: crypto.randomUUID(),
+          specialty: s.name,
+          originalName: s.name,
+          surveySource: s.surveySource,
+          mappingId: ''
+        }))
+      );
+    }
+
+    // Refresh data and close dialog
+    await loadData();
+    setActiveTab('mapped');
+    setIsAutoMapOpen(false);
+  };
+
   const handleCreateMapping = async () => {
     if (selectedSpecialties.length === 0) return;
 
@@ -124,6 +164,7 @@ const SpecialtyMapping: React.FC = () => {
       
       const sourceSpecialties = selectedSpecialties.map(specialty => ({
         id: crypto.randomUUID(),
+        specialty: specialty.name,
         originalName: specialty.name,
         surveySource: specialty.surveySource,
         mappingId: ''
@@ -150,6 +191,22 @@ const SpecialtyMapping: React.FC = () => {
     }
   };
 
+  const handleDelete = async (mappingId: string) => {
+    try {
+      await mappingService.deleteMapping(mappingId);
+      // Remove from local state
+      setMappings(mappings.filter(m => m.id !== mappingId));
+      // Refresh unmapped specialties to show the deleted ones
+      const unmappedData = await mappingService.getUnmappedSpecialties();
+      setUnmappedSpecialties(unmappedData);
+      // Switch to unmapped tab
+      setActiveTab('unmapped');
+    } catch (err) {
+      setError('Failed to delete mapping');
+      console.error('Error deleting mapping:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -159,55 +216,68 @@ const SpecialtyMapping: React.FC = () => {
   }
 
   return (
-    <div className="w-full bg-gray-50 min-h-screen p-6">
-      {/* Header with Auto-Map Button */}
-      <div className="flex justify-between items-center mb-6">
-        <Typography variant="h4" className="text-gray-900">
-          Specialty Mapping
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => setIsAutoMapOpen(true)}
-          startIcon={<BoltIcon className="h-5 w-5" />}
-        >
-          Auto-Map Specialties
-        </Button>
-      </div>
-
-      <div className="flex flex-col w-full bg-gray-50">
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <Typography variant="h6" className="text-gray-700">
-                Specialty Mapping
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={handleCreateMapping}
-                startIcon={<AddIcon className="h-5 w-5" />}
-                disabled={selectedSpecialties.length === 0}
-              >
-                Create Mapping
-              </Button>
-            </div>
-          </div>
-
+    <div className="w-full min-h-screen">
+      <div className="flex flex-col w-full">
+        <div className="bg-white rounded-lg shadow mx-6">
           {error && (
-            <Alert severity="error" className="mx-6 mb-4">
+            <Alert severity="error" className="mb-4">
               {error}
             </Alert>
           )}
 
-          <div className="border-b border-gray-200">
-            <Tabs 
-              value={activeTab} 
-              onChange={(_, newValue) => setActiveTab(newValue)}
-              className="px-6"
-            >
-              <Tab label="Unmapped Specialties" value="unmapped" />
-              <Tab label="Mapped Specialties" value="mapped" />
-            </Tabs>
+          {/* Tabs and Action Buttons */}
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <Tabs 
+                value={activeTab} 
+                onChange={(_, newValue) => setActiveTab(newValue)}
+              >
+                <Tab label="Unmapped Specialties" value="unmapped" />
+                <Tab label="Mapped Specialties" value="mapped" />
+                <Tab label="Learned Mappings" value="learned" />
+              </Tabs>
+              <div className="flex space-x-3">
+                {activeTab !== 'learned' && (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={() => setIsAutoMapOpen(true)}
+                      startIcon={<BoltIcon className="h-5 w-5" />}
+                    >
+                      Auto-Map Specialties
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={handleCreateMapping}
+                      startIcon={<AddIcon className="h-5 w-5" />}
+                      disabled={selectedSpecialties.length === 0}
+                    >
+                      Create Mapping
+                    </Button>
+                  </>
+                )}
+                {activeTab === 'mapped' && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
+                        mappingService.clearAllMappings().then(() => {
+                          setMappings([]);
+                          setLearnedMappings({});
+                          setActiveTab('unmapped');
+                          loadData();
+                        });
+                      }
+                    }}
+                    startIcon={<DeleteSweepIcon className="h-5 w-5" />}
+                  >
+                    Clear All
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="p-6">
@@ -279,7 +349,7 @@ const SpecialtyMapping: React.FC = () => {
                   })}
                 </div>
               </>
-            ) : (
+            ) : activeTab === 'mapped' ? (
               <div className="space-y-6">
                 <div className="mb-6">
                   <TextField
@@ -297,14 +367,15 @@ const SpecialtyMapping: React.FC = () => {
                   />
                 </div>
 
-                {filteredMappings.map((mapping) => (
-                  <MappedSpecialties
-                    key={mapping.id}
-                    mapping={mapping}
-                    onEdit={() => {/* TODO: Implement edit */}}
-                    onDelete={() => {/* TODO: Implement delete */}}
-                  />
-                ))}
+                <div className="space-y-4">
+                  {filteredMappings.map((mapping) => (
+                    <MappedSpecialties
+                      key={mapping.id}
+                      mapping={mapping}
+                      onDelete={() => handleDelete(mapping.id)}
+                    />
+                  ))}
+                </div>
                 
                 {filteredMappings.length === 0 && (
                   <div className="text-center py-12 bg-gray-50 rounded-xl">
@@ -315,6 +386,69 @@ const SpecialtyMapping: React.FC = () => {
                     </p>
                   </div>
                 )}
+              </div>
+            ) : (
+              // Learned Mappings View
+              <div className="space-y-6">
+                <div className="mb-6">
+                  <TextField
+                    fullWidth
+                    placeholder="Search learned mappings..."
+                    value={mappedSearchTerm}
+                    onChange={(e) => setMappedSearchTerm(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  {Object.entries(learnedMappings)
+                    .filter(([original, corrected]) => 
+                      !mappedSearchTerm || 
+                      original.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+                      corrected.toLowerCase().includes(mappedSearchTerm.toLowerCase())
+                    )
+                    .map(([original, corrected]) => (
+                      <MappedSpecialties
+                        key={original}
+                        mapping={{
+                          id: original,
+                          standardizedName: corrected,
+                          sourceSpecialties: [{
+                            id: crypto.randomUUID(),
+                            specialty: original,
+                            originalName: original,
+                            surveySource: 'Learned',
+                            mappingId: original
+                          }],
+                          createdAt: new Date(),
+                          updatedAt: new Date()
+                        }}
+                        onDelete={() => {
+                          if (window.confirm('Remove this learned mapping?')) {
+                            mappingService.removeLearnedMapping(original).then(() => {
+                              const newLearnedMappings = { ...learnedMappings };
+                              delete newLearnedMappings[original];
+                              setLearnedMappings(newLearnedMappings);
+                            });
+                          }
+                        }}
+                      />
+                    ))}
+
+                  {Object.keys(learnedMappings).length === 0 && (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <Typography variant="body1" className="text-gray-500">
+                        No learned mappings yet
+                      </Typography>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -328,13 +462,11 @@ const SpecialtyMapping: React.FC = () => {
         maxWidth="md"
         fullWidth
       >
-        <AutoMapSpecialties 
-          onClose={() => setIsAutoMapOpen(false)} 
-          onMappingsCreated={() => {
-            loadData(); // Refresh the data
-            setActiveTab('mapped'); // Switch to mapped tab
-            setIsAutoMapOpen(false); // Close the dialog
-          }}
+        <AutoMapDialog
+          title="Auto-Map Specialties"
+          description="Automatically map specialties based on similarity and existing mappings."
+          onClose={() => setIsAutoMapOpen(false)}
+          onAutoMap={handleAutoMap}
         />
       </Dialog>
     </div>

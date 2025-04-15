@@ -26,6 +26,8 @@ import { ColumnMappingService } from '../services/ColumnMappingService';
 import { LocalStorageService } from '../services/StorageService';
 import { IColumnMapping, IColumnInfo } from '../types/column';
 import MappedColumns from './MappedColumns';
+import AutoMapColumns from './AutoMapColumns';
+import AutoMapDialog from './shared/AutoMapDialog';
 
 interface ColumnCardProps {
   column: IColumnInfo;
@@ -59,6 +61,7 @@ const ColumnMapping: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped'>('unmapped');
+  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
 
   const mappingService = new ColumnMappingService(new LocalStorageService());
 
@@ -161,6 +164,32 @@ const ColumnMapping: React.FC = () => {
     }
   };
 
+  const handleAutoMap = async (config: {
+    confidenceThreshold: number;
+    useExistingMappings: boolean;
+    enableFuzzyMatching: boolean;
+  }) => {
+    const mappingConfig = {
+      confidenceThreshold: config.confidenceThreshold,
+      includeDataTypeMatching: config.enableFuzzyMatching
+    };
+
+    const suggestions = await mappingService.autoMapColumns(mappingConfig);
+
+    // Create mappings from suggestions
+    for (const suggestion of suggestions) {
+      await mappingService.createMapping(
+        suggestion.standardizedName,
+        suggestion.columns
+      );
+    }
+
+    // Refresh data and close dialog
+    await loadData();
+    setActiveTab('mapped');
+    setIsAutoMapOpen(false);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -191,6 +220,16 @@ const ColumnMapping: React.FC = () => {
               </Tabs>
               
               <div className="flex space-x-4">
+                {activeTab !== 'mapped' && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => setIsAutoMapOpen(true)}
+                    startIcon={<BoltIcon className="h-5 w-5" />}
+                  >
+                    Auto-Map Columns
+                  </Button>
+                )}
                 <Button
                   variant="contained"
                   onClick={handleCreateMapping}
@@ -332,6 +371,21 @@ const ColumnMapping: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Auto-Map Dialog */}
+      <Dialog
+        open={isAutoMapOpen}
+        onClose={() => setIsAutoMapOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <AutoMapDialog
+          title="Auto-Map Columns"
+          description="Automatically map columns based on similarity and data types."
+          onClose={() => setIsAutoMapOpen(false)}
+          onAutoMap={handleAutoMap}
+        />
+      </Dialog>
     </div>
   );
 };

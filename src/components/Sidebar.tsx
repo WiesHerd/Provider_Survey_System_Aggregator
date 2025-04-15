@@ -8,6 +8,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LinkIcon,
+  TableCellsIcon,
+  ClipboardDocumentListIcon,
+  PresentationChartLineIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -15,22 +18,80 @@ interface SidebarProps {
   setIsOpen: (isOpen: boolean) => void;
 }
 
+interface MenuItem {
+  name: string;
+  icon: React.ComponentType<any>;
+  path: string;
+  children?: MenuItem[];
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
   
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
-    { name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
-    { name: 'Specialty Mapping', icon: LinkIcon, path: '/specialty-mapping' },
-    { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
+    {
+      name: 'Survey Processing',
+      icon: ClipboardDocumentListIcon,
+      path: '/upload',
+      children: [
+        { name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
+        { name: 'Specialty Mapping', icon: LinkIcon, path: '/specialty-mapping' },
+        { name: 'Column Mapping', icon: TableCellsIcon, path: '/column-mapping' },
+      ]
+    },
+    { name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
     { name: 'Documents', icon: DocumentIcon, path: '/documents' },
     { name: 'Reports', icon: ChartBarIcon, path: '/reports' },
   ];
 
   const handleNavigation = (path: string) => {
     navigate(path);
+  };
+
+  const renderMenuItem = (item: MenuItem, isChild = false) => {
+    const isActive = currentPath === item.path;
+    const isParentActive = item.children?.some(child => child.path === currentPath);
+
+    // When collapsed and item has children, don't render the parent item
+    if (!isOpen && item.children) {
+      return (
+        <div key={item.name}>
+          {item.children.map(child => renderMenuItem(child, false))}
+        </div>
+      );
+    }
+
+    return (
+      <div key={item.name} className={isChild ? 'ml-6' : ''}>
+        <button
+          onClick={() => handleNavigation(item.path)}
+          className={`w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200
+            ${!isOpen ? 'justify-center' : ''}
+            ${(isActive || isParentActive)
+              ? 'bg-indigo-50 text-indigo-600' 
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }
+          `}
+        >
+          <item.icon className={`w-6 h-6 transition-colors duration-200
+            ${(isActive || isParentActive) ? 'text-indigo-600' : 'text-gray-500'}
+          `} />
+          {isOpen && (
+            <span className="ml-3 font-medium text-sm">
+              {item.name}
+            </span>
+          )}
+        </button>
+        {isOpen && item.children && (
+          <div className="mt-1">
+            {item.children.map(child => renderMenuItem(child, true))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -57,28 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
       {/* Main Menu */}
       <nav className="flex-1 px-2 py-4 space-y-1">
-        {menuItems.map((item) => (
-          <button
-            key={item.name}
-            onClick={() => handleNavigation(item.path)}
-            className={`w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200
-              ${!isOpen ? 'justify-center' : ''}
-              ${currentPath === item.path
-                ? 'bg-indigo-50 text-indigo-600' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }
-            `}
-          >
-            <item.icon className={`w-6 h-6 transition-colors duration-200
-              ${currentPath === item.path ? 'text-indigo-600' : 'text-gray-500'}
-            `} />
-            {isOpen && (
-              <span className="ml-3 font-medium text-sm">
-                {item.name}
-              </span>
-            )}
-          </button>
-        ))}
+        {menuItems.map(item => renderMenuItem(item))}
       </nav>
 
       {/* Bottom Section */}

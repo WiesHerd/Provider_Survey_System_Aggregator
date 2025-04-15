@@ -1,8 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import SurveyUpload from './components/SurveyUpload';
 import SpecialtyMapping from './components/SpecialtyMapping';
+import ColumnMapping from './components/ColumnMapping';
+import SurveyAnalytics from './components/SurveyAnalytics';
+import PageHeader from './components/PageHeader';
+
+const PageContent = () => {
+  const location = useLocation();
+  
+  const getHeaderContent = () => {
+    switch (location.pathname) {
+      case '/upload':
+        return {
+          title: 'Survey Data Upload',
+          description: 'Upload and validate your survey data files'
+        };
+      case '/specialty-mapping':
+        return {
+          title: 'Specialty Mapping',
+          description: 'Map and standardize specialty names across surveys'
+        };
+      case '/column-mapping':
+        return {
+          title: 'Column Mapping',
+          description: 'Define column mappings and data transformations'
+        };
+      case '/analytics':
+        return {
+          title: 'Survey Analytics',
+          description: 'Analyze and compare data across multiple surveys'
+        };
+      default:
+        return {
+          title: 'Market Intelligence',
+          description: 'Survey data processing and analysis'
+        };
+    }
+  };
+
+  const headerContent = getHeaderContent();
+
+  return (
+    <>
+      <PageHeader title={headerContent.title} description={headerContent.description} />
+      <main className="min-h-[calc(100vh-4rem)] bg-gray-50 px-8">
+        <Routes>
+          <Route path="/" element={<Navigate to="/upload" replace />} />
+          <Route path="/upload" element={<SurveyUpload />} />
+          <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
+          <Route path="/column-mapping" element={<ColumnMapping />} />
+          <Route path="/analytics" element={<SurveyAnalytics />} />
+        </Routes>
+      </main>
+    </>
+  );
+};
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -23,27 +77,12 @@ function App() {
 
   return (
     <Router>
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-        
-        <div className={`flex-1 transition-all duration-300 overflow-x-auto ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
-          <header className="h-16 border-b border-gray-100 bg-white flex items-center px-8 mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent">
-                Survey Data Processing
-              </h1>
-              <p className="text-sm text-gray-500 mt-0.5">Upload and manage your survey data</p>
-            </div>
-          </header>
-          
-          <main className="min-h-[calc(100vh-4rem)] bg-gray-50 px-8">
-            <Routes>
-              <Route path="/" element={<Navigate to="/upload" replace />} />
-              <Route path="/upload" element={<SurveyUpload />} />
-              <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
-            </Routes>
-          </main>
-        </div>
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      
+      <div className={`flex-1 transition-all duration-300 overflow-x-auto ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
+          <PageContent />
+          </div>
       </div>
     </Router>
   );

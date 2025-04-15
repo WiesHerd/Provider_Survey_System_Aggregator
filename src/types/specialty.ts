@@ -1,8 +1,10 @@
 export interface ISourceSpecialty {
-  id: string;
-  originalName: string;
+  id?: string;
+  specialty: string;
+  originalName?: string;
   surveySource: string;
-  mappingId: string;
+  frequency?: number;
+  mappingId?: string;
 }
 
 export interface ISpecialtyMapping {

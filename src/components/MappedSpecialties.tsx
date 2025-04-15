@@ -82,7 +82,7 @@ const MappedSpecialties: React.FC<MappedSpecialtiesProps> = ({ mapping, onEdit, 
               >
                 <div className="flex justify-between items-center">
                   <Typography className="font-medium">
-                    {specialty.originalName}
+                    {specialty.specialty}
                   </Typography>
                   <Typography variant="caption" style={{ color: getSourceColor(specialty.surveySource) }}>
                     {specialty.surveySource}

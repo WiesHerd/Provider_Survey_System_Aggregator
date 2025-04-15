@@ -139,7 +139,7 @@ export class LocalStorageService implements IStorageService {
     console.log('Survey data stored successfully:', data.id); // Debug log
   }
 
-  async getSurveyData<T = ISurveyRow>(id: string, page: number = 1, pageSize: number = 100): Promise<{
+  async getSurveyData<T = ISurveyRow>(id: string, page: number = 1, pageSize: number = 1000000): Promise<{
     metadata: any;
     rows: T[];
     totalPages: number;
@@ -162,14 +162,10 @@ export class LocalStorageService implements IStorageService {
       throw new Error('Survey not found');
     }
 
-    // Calculate which chunks we need
-    const startChunk = Math.floor((page - 1) * pageSize / this.CHUNK_SIZE);
-    const endChunk = Math.floor((page * pageSize - 1) / this.CHUNK_SIZE);
-    
-    // Get only the chunks we need for the current page
+    // Get all chunks for this survey
     const chunks = await new Promise<T[][]>((resolve, reject) => {
       const chunks: T[][] = [];
-      const range = IDBKeyRange.bound(`${id}_${startChunk}`, `${id}_${endChunk}`);
+      const range = IDBKeyRange.bound(`${id}_`, `${id}_\uffff`);
       const request = chunksStore.openCursor(range);
 
       request.onerror = () => reject(request.error);
@@ -184,14 +180,15 @@ export class LocalStorageService implements IStorageService {
       };
     });
 
-    // Calculate exact slice points
-    const startOffset = (page - 1) * pageSize % this.CHUNK_SIZE;
-    const rows = chunks.flat().slice(startOffset, startOffset + pageSize) as T[];
+    // Combine all chunks
+    const allRows = chunks.flat() as T[];
+
+    console.log(`Loaded ${allRows.length} total rows for survey ${id}`);
 
     return {
       metadata,
-      rows,
-      totalPages: Math.ceil(metadata.totalRows / pageSize)
+      rows: allRows,
+      totalPages: 1
     };
   }
 

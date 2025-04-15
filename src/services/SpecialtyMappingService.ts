@@ -7,11 +7,30 @@ export class SpecialtyMappingService {
   private readonly MAPPINGS_KEY = 'specialty-mappings';
   private readonly storageService: LocalStorageService;
   private readonly GROUPS_KEY = 'specialty_groups';
+  private readonly LEARNED_MAPPINGS_KEY = 'learned-specialty-mappings';
   private readonly SYNONYMS: Record<string, string[]> = {
     'cardiology': ['heart', 'cardiac', 'cardiovascular'],
     'orthopedics': ['ortho', 'orthopedic', 'orthopaedic'],
     'pediatrics': ['peds', 'pediatric', 'children'],
-    // Add more synonyms as needed
+    'critical care': [
+      'intensivist', 
+      'critical care medicine', 
+      'critical care/intensivist', 
+      'intensive care',
+      'critical care medicine',
+      'cc medicine',
+      'cc/intensivist',
+      'icu'
+    ],
+    'emergency medicine': ['emergency', 'er', 'ed'],
+    'internal medicine': ['internist', 'internal med'],
+    'obstetrics': ['ob/gyn', 'obgyn', 'obstetrics and gynecology', 'obstetrics & gynecology'],
+    'anesthesiology': ['anesthesia', 'anesthetist'],
+    'family medicine': ['family practice', 'family physician', 'family med'],
+    'neurology': ['neurological', 'neuro'],
+    'psychiatry': ['psychiatric', 'mental health'],
+    'radiology': ['radiologist', 'imaging', 'diagnostic radiology'],
+    'surgery': ['surgeon', 'surgical']
   };
 
   constructor(storageService: LocalStorageService) {
@@ -50,24 +69,60 @@ export class SpecialtyMappingService {
 
   async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
     try {
+      // Get all surveys
       const surveys = await this.storageService.listSurveys();
-      const specialties: IUnmappedSpecialty[] = [];
+      const mappings = await this.getAllMappings();
+      const unmappedSpecialties: IUnmappedSpecialty[] = [];
+      const mappedNames = new Set<string>();
 
+      // Collect all mapped specialty names (both standardized and original names)
+      mappings.forEach(mapping => {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mapping.sourceSpecialties.forEach((source: ISourceSpecialty) => {
+          mappedNames.add(source.specialty.toLowerCase());
+        });
+      });
+
+      // Process each survey
       for (const survey of surveys) {
-        const metadata = survey.metadata;
-        if (metadata && metadata.uniqueSpecialties) {
-          metadata.uniqueSpecialties.forEach((specialty: string) => {
-            specialties.push({
-              id: `${specialty}-${survey.id}`.toLowerCase().replace(/\s+/g, '-'),
-              name: specialty,
-              surveySource: metadata.surveyProvider || metadata.surveyType || 'Unknown Survey',
-              frequency: 1
-            });
+        if (!survey.metadata.fileContent) continue;
+
+        const lines = survey.metadata.fileContent.split('\n');
+        const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
+        const specialtyIdx = headers.findIndex((h: string) => h.includes('specialty'));
+
+        if (specialtyIdx >= 0) {
+          // Process each line and extract specialties
+          lines.slice(1).forEach((line: string) => {
+            const values = line.split(',').map((v: string) => v.trim());
+            const specialty = values[specialtyIdx];
+            
+            // Only add if not already mapped
+            if (specialty && !mappedNames.has(specialty.toLowerCase())) {
+              unmappedSpecialties.push({
+                id: crypto.randomUUID(),
+                name: specialty,
+                surveySource: survey.metadata.surveyType,
+                frequency: 1
+              });
+            }
           });
         }
       }
 
-      return specialties;
+      // Combine duplicates and count frequencies
+      const specialtyMap = new Map<string, IUnmappedSpecialty>();
+      unmappedSpecialties.forEach(specialty => {
+        const key = `${specialty.name.toLowerCase()}-${specialty.surveySource}`;
+        if (specialtyMap.has(key)) {
+          const existing = specialtyMap.get(key)!;
+          existing.frequency += 1;
+        } else {
+          specialtyMap.set(key, { ...specialty });
+        }
+      });
+
+      return Array.from(specialtyMap.values());
     } catch (error) {
       console.error('Error getting unmapped specialties:', error);
       return [];
@@ -91,6 +146,7 @@ export class SpecialtyMappingService {
         if (mapping) {
           mapping.sourceSpecialties.push({
             id: crypto.randomUUID(),
+            specialty: specialty.name,
             originalName: specialty.name,
             surveySource: specialty.surveySource,
             mappingId: mapping.id
@@ -145,37 +201,67 @@ export class SpecialtyMappingService {
     useSynonyms: boolean = true
   ): number {
     let maxConfidence = 0;
+    const specialtyLower = specialty.toLowerCase();
+    const standardizedLower = mapping.standardizedName.toLowerCase();
 
-    // String similarity check
-    if (useFuzzyMatching) {
-      const similarity = stringSimilarity(
-        specialty.toLowerCase(),
-        mapping.standardizedName.toLowerCase()
-      );
-      maxConfidence = Math.max(maxConfidence, similarity);
+    // Check learned mappings first
+    this.getLearnedMapping(specialty).then(learnedMapping => {
+      if (learnedMapping && learnedMapping === mapping.standardizedName) {
+        return 1.0;
+      }
+    });
 
-      // Check against all source names
-      for (const source of mapping.sourceSpecialties) {
-        const sourceSimilarity = stringSimilarity(
-          specialty.toLowerCase(),
-          source.originalName.toLowerCase()
-        );
-        maxConfidence = Math.max(maxConfidence, sourceSimilarity);
+    // Direct match check
+    if (specialtyLower === standardizedLower) {
+      return 1.0;
+    }
+
+    // Critical Care specific matching
+    if (specialtyLower.includes('critical care') || 
+        specialtyLower.includes('intensivist') || 
+        standardizedLower.includes('critical care') || 
+        standardizedLower.includes('intensivist')) {
+      // If both terms are related to critical care, give very high confidence
+      if ((specialtyLower.includes('critical care') || specialtyLower.includes('intensivist')) &&
+          (standardizedLower.includes('critical care') || standardizedLower.includes('intensivist'))) {
+        return 0.95; // Very high confidence for critical care variations
       }
     }
 
     // Synonym check
     if (useSynonyms) {
-      const words = specialty.toLowerCase().split(/\W+/);
       for (const [key, synonyms] of Object.entries(this.SYNONYMS)) {
-        if (
-          words.some(word => 
-            synonyms.includes(word) || 
-            word.includes(key) || 
-            key.includes(word)
-          )
-        ) {
-          maxConfidence = Math.max(maxConfidence, 0.8);
+        const isSpecialtyMatch = specialtyLower.includes(key) || 
+          synonyms.some(syn => specialtyLower.includes(syn));
+        const isStandardizedMatch = standardizedLower.includes(key) || 
+          synonyms.some(syn => standardizedLower.includes(syn));
+        
+        if (isSpecialtyMatch && isStandardizedMatch) {
+          maxConfidence = Math.max(maxConfidence, 0.9);
+        }
+      }
+    }
+
+    // String similarity check
+    if (useFuzzyMatching) {
+      const similarity = stringSimilarity(specialtyLower, standardizedLower);
+      maxConfidence = Math.max(maxConfidence, similarity);
+
+      // Check against all source names
+      for (const source of mapping.sourceSpecialties) {
+        const sourceLower = source.specialty.toLowerCase();
+        
+        // Direct match with source
+        if (specialtyLower === sourceLower) {
+          return 1.0;
+        }
+        
+        const sourceSimilarity = stringSimilarity(specialtyLower, sourceLower);
+        maxConfidence = Math.max(maxConfidence, sourceSimilarity);
+
+        // Additional check for partial matches
+        if (specialtyLower.includes(sourceLower) || sourceLower.includes(specialtyLower)) {
+          maxConfidence = Math.max(maxConfidence, 0.85);
         }
       }
     }
@@ -265,6 +351,13 @@ export class SpecialtyMappingService {
       updatedAt: new Date()
     };
 
+    // Learn from new mappings
+    for (const specialty of sourceSpecialties) {
+      if (specialty.specialty !== standardizedName) {
+        await this.saveLearningData(specialty.specialty, standardizedName);
+      }
+    }
+
     await this.saveMapping(mapping);
     return mapping;
   }
@@ -275,6 +368,11 @@ export class SpecialtyMappingService {
     
     if (index === -1) {
       throw new Error(`Mapping with id ${mappingId} not found`);
+    }
+
+    // Learn from this correction
+    if (updates.standardizedName && updates.standardizedName !== mappings[index].standardizedName) {
+      await this.saveLearningData(mappings[index].standardizedName, updates.standardizedName);
     }
 
     const updatedMapping = {
@@ -292,6 +390,11 @@ export class SpecialtyMappingService {
     const mappings = await this.getMappings();
     const filteredMappings = mappings.filter(m => m.id !== mappingId);
     await this.storageService.setItem(this.MAPPINGS_KEY, filteredMappings);
+  }
+
+  async clearAllMappings(): Promise<void> {
+    await this.storageService.setItem(this.MAPPINGS_KEY, []);
+    await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, {});
   }
 
   async suggestMappings(specialty: IUnmappedSpecialty, config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {
@@ -313,7 +416,7 @@ export class SpecialtyMappingService {
       for (const source of mapping.sourceSpecialties) {
         const sourceSimilarity = this.calculateSimilarity(
           specialty.name,
-          source.originalName,
+          source.specialty,
           config
         );
         maxSimilarity = Math.max(maxSimilarity, sourceSimilarity);
@@ -458,5 +561,44 @@ export class SpecialtyMappingService {
     });
 
     return suggestions.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  private async saveLearningData(originalName: string, correctedName: string): Promise<void> {
+    try {
+      const learnedMappings = await this.storageService.getItem(this.LEARNED_MAPPINGS_KEY) || {};
+      learnedMappings[originalName.toLowerCase()] = correctedName;
+      await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, learnedMappings);
+    } catch (error) {
+      console.error('Error saving learning data:', error);
+    }
+  }
+
+  private async getLearnedMapping(specialty: string): Promise<string | null> {
+    try {
+      const learnedMappings = await this.storageService.getItem(this.LEARNED_MAPPINGS_KEY) || {};
+      return learnedMappings[specialty.toLowerCase()] || null;
+    } catch (error) {
+      console.error('Error getting learned mapping:', error);
+      return null;
+    }
+  }
+
+  async getLearnedMappings(): Promise<Record<string, string>> {
+    try {
+      return await this.storageService.getItem(this.LEARNED_MAPPINGS_KEY) || {};
+    } catch (error) {
+      console.error('Error getting learned mappings:', error);
+      return {};
+    }
+  }
+
+  async removeLearnedMapping(originalName: string): Promise<void> {
+    try {
+      const learnedMappings = await this.getLearnedMappings();
+      delete learnedMappings[originalName.toLowerCase()];
+      await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, learnedMappings);
+    } catch (error) {
+      console.error('Error removing learned mapping:', error);
+    }
   }
 } 

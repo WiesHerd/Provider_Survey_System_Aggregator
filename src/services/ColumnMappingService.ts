@@ -1,5 +1,5 @@
 import { LocalStorageService } from './StorageService';
-import { IColumnMapping, IColumnInfo } from '../types/column';
+import { IColumnMapping, IColumnInfo, IAutoMappingConfig } from '../types/column';
 
 export class ColumnMappingService {
   private readonly MAPPINGS_KEY = 'column_mappings';
@@ -48,78 +48,103 @@ export class ColumnMappingService {
     await this.storage.setItem(this.MAPPINGS_KEY, mappings);
   }
 
-  async autoMapColumns(confidenceThreshold: number = 0.8): Promise<IColumnMapping[]> {
+  async autoMapColumns(config: IAutoMappingConfig): Promise<Array<{
+    standardizedName: string;
+    columns: IColumnInfo[];
+    confidence: number;
+  }>> {
     const unmappedColumns = await this.getUnmappedColumns();
-    const existingMappings = await this.getAllMappings();
-    const newMappings: IColumnMapping[] = [];
+    const suggestions: Array<{
+      standardizedName: string;
+      columns: IColumnInfo[];
+      confidence: number;
+    }> = [];
 
-    // Group similar columns by name similarity and data type
-    const groups = this.groupSimilarColumns(unmappedColumns);
+    // Group columns by similarity
+    const processedColumns = new Set<string>();
+    
+    for (const column of unmappedColumns) {
+      if (processedColumns.has(column.id)) continue;
 
-    for (const group of groups) {
-      if (group.length > 1) {
-        const standardizedName = this.suggestStandardizedName(group);
-        const mapping = await this.createMapping(standardizedName, group);
-        newMappings.push(mapping);
+      const matches = unmappedColumns
+        .filter((c: IColumnInfo) => !processedColumns.has(c.id))
+        .map((c: IColumnInfo) => ({
+          column: c,
+          similarity: this.calculateSimilarity(column.name, c.name, c.dataType, column.dataType, config)
+        }))
+        .filter(match => match.similarity >= config.confidenceThreshold)
+        .sort((a, b) => b.similarity - a.similarity);
+
+      if (matches.length > 0) {
+        const matchedColumns = matches.map(m => m.column);
+        matchedColumns.forEach(c => processedColumns.add(c.id));
+
+        suggestions.push({
+          standardizedName: this.generateStandardizedName(matchedColumns),
+          columns: matchedColumns,
+          confidence: matches[0].similarity
+        });
       }
     }
 
-    return newMappings;
+    return suggestions.sort((a, b) => b.confidence - a.confidence);
   }
 
-  private groupSimilarColumns(columns: IColumnInfo[]): IColumnInfo[][] {
-    const groups: IColumnInfo[][] = [];
-    const used = new Set<string>();
+  private calculateSimilarity(name1: string, name2: string, type1: string, type2: string, config: IAutoMappingConfig): number {
+    // Normalize names
+    const normalized1 = name1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalized2 = name2.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    for (const column of columns) {
-      if (used.has(column.id)) continue;
+    // Calculate Levenshtein distance
+    const distance = this.levenshteinDistance(normalized1, normalized2);
+    const maxLength = Math.max(normalized1.length, normalized2.length);
+    let similarity = 1 - distance / maxLength;
 
-      const group = [column];
-      used.add(column.id);
+    // Consider data type if enabled
+    if (config.includeDataTypeMatching) {
+      const typeMatch = type1 === type2;
+      similarity = typeMatch ? similarity : similarity * 0.8;
+    }
 
-      // Find similar columns
-      for (const other of columns) {
-        if (used.has(other.id)) continue;
-        if (this.calculateColumnSimilarity(column, other) >= 0.8) {
-          group.push(other);
-          used.add(other.id);
+    return similarity;
+  }
+
+  private levenshteinDistance(str1: string, str2: string): number {
+    const m = str1.length;
+    const n = str2.length;
+    const dp: number[][] = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1];
+        } else {
+          dp[i][j] = 1 + Math.min(
+            dp[i - 1][j],     // deletion
+            dp[i][j - 1],     // insertion
+            dp[i - 1][j - 1]  // substitution
+          );
         }
       }
-
-      if (group.length > 0) {
-        groups.push(group);
-      }
     }
 
-    return groups;
+    return dp[m][n];
   }
 
-  private calculateColumnSimilarity(col1: IColumnInfo, col2: IColumnInfo): number {
-    // Don't match columns with different data types
-    if (col1.dataType !== col2.dataType) return 0;
+  private generateStandardizedName(columns: IColumnInfo[]): string {
+    // Use the shortest name as the base for standardization
+    const shortestName = columns
+      .map(c => c.name)
+      .reduce((a, b) => a.length <= b.length ? a : b);
 
-    const name1 = col1.name.toLowerCase();
-    const name2 = col2.name.toLowerCase();
-
-    // Exact match
-    if (name1 === name2) return 1;
-
-    // Calculate string similarity
-    const maxLength = Math.max(name1.length, name2.length);
-    let matches = 0;
-    
-    for (let i = 0; i < Math.min(name1.length, name2.length); i++) {
-      if (name1[i] === name2[i]) matches++;
-    }
-
-    return matches / maxLength;
-  }
-
-  private suggestStandardizedName(columns: IColumnInfo[]): string {
-    // Use the shortest name as it's likely to be the most concise
-    return columns.reduce((shortest, current) => 
-      current.name.length < shortest.length ? current.name : shortest
-    , columns[0].name);
+    // Clean up the name
+    return shortestName
+      .replace(/[^a-zA-Z0-9\s]/g, ' ')  // Replace special chars with space
+      .replace(/\s+/g, ' ')             // Replace multiple spaces with single space
+      .trim();
   }
 
   async getUnmappedColumns(): Promise<IColumnInfo[]> {
