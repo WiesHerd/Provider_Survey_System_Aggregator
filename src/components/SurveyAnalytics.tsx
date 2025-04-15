@@ -583,7 +583,7 @@ const SurveyAnalytics: React.FC = () => {
         <Table size="small" sx={{ minWidth: 1400 }}>
           <TableHead>
             <TableRow>
-              <TableCell colSpan={5} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
+              <TableCell colSpan={4} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
                 Survey Information
               </TableCell>
               <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#e3f2fd', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
@@ -598,7 +598,6 @@ const SurveyAnalytics: React.FC = () => {
             </TableRow>
             <TableRow>
               {/* Survey Info Headers */}
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Standardized Specialty</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Source</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Specialty</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Orgs</TableCell>
@@ -626,7 +625,7 @@ const SurveyAnalytics: React.FC = () => {
           <TableBody>
             {filteredData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={17} align="center">
+                <TableCell colSpan={16} align="center">
                   No data available for the selected filters
                 </TableCell>
               </TableRow>
@@ -638,7 +637,6 @@ const SurveyAnalytics: React.FC = () => {
                       key={`${specialty}-${idx}`}
                       sx={{ '&:nth-of-type(odd)': { backgroundColor: '#fafafa' } }}
                     >
-                      <TableCell>{row.standardizedName}</TableCell>
                       <TableCell>{row.surveySource}</TableCell>
                       <TableCell>{row.surveySpecialty}</TableCell>
                       <TableCell align="right">{row.n_orgs}</TableCell>
@@ -672,9 +670,8 @@ const SurveyAnalytics: React.FC = () => {
                           backgroundColor: '#f5f5f5',
                           borderTop: '2px solid #ccc'
                         }}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>{simple.standardizedName}</TableCell>
-                          <TableCell>{simple.surveySource}</TableCell>
-                          <TableCell>{simple.surveySpecialty}</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold' }}>Simple Average</TableCell>
+                          <TableCell>-</TableCell>
                           <TableCell align="right">{simple.n_orgs}</TableCell>
                           <TableCell align="right">{simple.n_incumbents}</TableCell>
                           
@@ -700,9 +697,8 @@ const SurveyAnalytics: React.FC = () => {
                           backgroundColor: '#e3f2fd',
                           borderBottom: '2px solid #ccc'
                         }}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>{weighted.standardizedName}</TableCell>
-                          <TableCell>{weighted.surveySource}</TableCell>
-                          <TableCell>{weighted.surveySpecialty}</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold' }}>Weighted Average</TableCell>
+                          <TableCell>-</TableCell>
                           <TableCell align="right">{weighted.n_orgs}</TableCell>
                           <TableCell align="right">{weighted.n_incumbents}</TableCell>
                           
