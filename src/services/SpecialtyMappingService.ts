@@ -1,11 +1,11 @@
-import { ISpecialtyMapping, IUnmappedSpecialty, IAutoMappingConfig, ISpecialtyGroup } from '../types/specialty';
+import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, IAutoMappingConfig, ISurveyData, ISpecialtyGroup } from '../types/specialty';
 import { stringSimilarity } from 'string-similarity-js';
 import { LocalStorageService } from './StorageService';
 import { ISurveyRow } from '../types/survey';
 
 export class SpecialtyMappingService {
-  private storage: LocalStorageService;
-  private readonly MAPPINGS_KEY = 'specialty_mappings';
+  private readonly MAPPINGS_KEY = 'specialty-mappings';
+  private readonly storageService: LocalStorageService;
   private readonly GROUPS_KEY = 'specialty_groups';
   private readonly SYNONYMS: Record<string, string[]> = {
     'cardiology': ['heart', 'cardiac', 'cardiovascular'],
@@ -14,8 +14,8 @@ export class SpecialtyMappingService {
     // Add more synonyms as needed
   };
 
-  constructor() {
-    this.storage = new LocalStorageService();
+  constructor(storageService: LocalStorageService) {
+    this.storageService = storageService;
   }
 
   async saveMapping(mapping: ISpecialtyMapping): Promise<void> {
@@ -25,65 +25,57 @@ export class SpecialtyMappingService {
     if (existingIndex >= 0) {
       mappings[existingIndex] = {
         ...mapping,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       };
     } else {
       mappings.push({
         ...mapping,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
     }
 
-    await this.storage.storeSurveyData<ISpecialtyMapping>({
-      id: this.MAPPINGS_KEY,
-      metadata: { 
-        type: 'specialty_mappings',
-        totalRows: mappings.length,
-        uniqueSpecialties: [],
-        uniqueProviderTypes: [],
-        uniqueRegions: [],
-        columnMappings: {}
-      },
-      rows: mappings
-    });
+    await this.storageService.setItem(this.MAPPINGS_KEY, mappings);
   }
 
   async getAllMappings(): Promise<ISpecialtyMapping[]> {
     try {
-      const result = await this.storage.getSurveyData<ISpecialtyMapping>(this.MAPPINGS_KEY);
-      return result.rows;
-    } catch {
+      const mappings = await this.storageService.getItem(this.MAPPINGS_KEY) as ISpecialtyMapping[];
+      return mappings || [];
+    } catch (error) {
+      console.error('Error fetching specialty mappings:', error);
       return [];
     }
   }
 
-  async getUnmappedSpecialties(provider: string): Promise<IUnmappedSpecialty[]> {
-    const mappings = await this.getAllMappings();
-    const allSpecialties = await this.storage.getSurveyData('all_specialties');
-    
-    const mappedNames = new Set(
-      mappings.flatMap(m => 
-        m.sourceNames
-          .filter((sn: { provider: string }) => sn.provider === provider)
-          .map((sn: { name: string }) => sn.name.toLowerCase())
-      )
-    );
+  async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
+    try {
+      const surveys = await this.storageService.listSurveys();
+      const specialties: IUnmappedSpecialty[] = [];
 
-    return allSpecialties.rows
-      .map((row: ISurveyRow) => row.normalizedSpecialty?.toLowerCase())
-      .filter((name: string | undefined): name is string => 
-        name !== undefined && !mappedNames.has(name)
-      )
-      .map((name: string) => ({
-        name,
-        provider,
-        suggestedMatches: this.findSuggestedMatches(name, mappings)
-      }));
+      for (const survey of surveys) {
+        const metadata = survey.metadata;
+        if (metadata && metadata.uniqueSpecialties) {
+          metadata.uniqueSpecialties.forEach((specialty: string) => {
+            specialties.push({
+              id: `${specialty}-${survey.id}`.toLowerCase().replace(/\s+/g, '-'),
+              name: specialty,
+              surveySource: metadata.surveyProvider || metadata.surveyType || 'Unknown Survey',
+              frequency: 1
+            });
+          });
+        }
+      }
+
+      return specialties;
+    } catch (error) {
+      console.error('Error getting unmapped specialties:', error);
+      return [];
+    }
   }
 
   async autoMapSpecialties(config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {
-    const unmapped = await this.getUnmappedSpecialties(config.provider);
+    const unmapped = await this.getUnmappedSpecialties();
     const existingMappings = await this.getAllMappings();
     const newMappings: ISpecialtyMapping[] = [];
 
@@ -94,12 +86,14 @@ export class SpecialtyMappingService {
         config
       );
 
-      if (bestMatch && bestMatch.confidence >= config.confidenceThreshold) {
-        const mapping = existingMappings.find(m => m.standardName === bestMatch.standardName);
+      if (bestMatch && bestMatch.confidence >= config.similarityThreshold) {
+        const mapping = existingMappings.find(m => m.standardizedName === bestMatch.standardizedName);
         if (mapping) {
-          mapping.sourceNames.push({
-            name: specialty.name,
-            provider: config.provider
+          mapping.sourceSpecialties.push({
+            id: crypto.randomUUID(),
+            originalName: specialty.name,
+            surveySource: specialty.surveySource,
+            mappingId: mapping.id
           });
           await this.saveMapping(mapping);
         }
@@ -112,10 +106,10 @@ export class SpecialtyMappingService {
   private findSuggestedMatches(
     specialty: string,
     existingMappings: ISpecialtyMapping[]
-  ): Array<{ standardName: string; confidence: number }> {
+  ): Array<{ standardizedName: string; confidence: number }> {
     return existingMappings
       .map(mapping => ({
-        standardName: mapping.standardName,
+        standardizedName: mapping.standardizedName,
         confidence: this.calculateConfidence(specialty, mapping)
       }))
       .filter(match => match.confidence > 0.3)
@@ -127,18 +121,18 @@ export class SpecialtyMappingService {
     specialty: string,
     existingMappings: ISpecialtyMapping[],
     config: IAutoMappingConfig
-  ): { standardName: string; confidence: number } | null {
+  ): { standardizedName: string; confidence: number } | null {
     const matches = existingMappings
       .map(mapping => ({
-        standardName: mapping.standardName,
+        standardizedName: mapping.standardizedName,
         confidence: this.calculateConfidence(
           specialty,
           mapping,
-          config.useStringMatching,
-          config.useSynonyms
+          config.enableFuzzyMatching,
+          true
         )
       }))
-      .filter(match => match.confidence >= config.confidenceThreshold)
+      .filter(match => match.confidence >= config.similarityThreshold)
       .sort((a, b) => b.confidence - a.confidence);
 
     return matches[0] || null;
@@ -147,24 +141,24 @@ export class SpecialtyMappingService {
   private calculateConfidence(
     specialty: string,
     mapping: ISpecialtyMapping,
-    useStringMatching: boolean = true,
+    enableFuzzyMatching: boolean = true,
     useSynonyms: boolean = true
   ): number {
     let maxConfidence = 0;
 
     // String similarity check
-    if (useStringMatching) {
+    if (enableFuzzyMatching) {
       const similarity = stringSimilarity(
         specialty.toLowerCase(),
-        mapping.standardName.toLowerCase()
+        mapping.standardizedName.toLowerCase()
       );
       maxConfidence = Math.max(maxConfidence, similarity);
 
       // Check against all source names
-      for (const source of mapping.sourceNames) {
+      for (const source of mapping.sourceSpecialties) {
         const sourceSimilarity = stringSimilarity(
           specialty.toLowerCase(),
-          source.name.toLowerCase()
+          source.originalName.toLowerCase()
         );
         maxConfidence = Math.max(maxConfidence, sourceSimilarity);
       }
@@ -197,17 +191,18 @@ export class SpecialtyMappingService {
     if (existingIndex >= 0) {
       groups[existingIndex] = {
         ...group,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       };
     } else {
+      const now = new Date();
       groups.push({
         ...group,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: now,
+        updatedAt: now
       });
     }
 
-    await this.storage.storeSurveyData<ISpecialtyGroup>({
+    await this.storageService.storeSurveyData<ISpecialtyGroup>({
       id: this.GROUPS_KEY,
       metadata: { 
         type: 'specialty_groups',
@@ -223,7 +218,7 @@ export class SpecialtyMappingService {
 
   async getAllGroups(): Promise<ISpecialtyGroup[]> {
     try {
-      const result = await this.storage.getSurveyData<ISpecialtyGroup>(this.GROUPS_KEY);
+      const result = await this.storageService.getSurveyData<ISpecialtyGroup>(this.GROUPS_KEY);
       return result.rows;
     } catch {
       return [];
@@ -234,7 +229,7 @@ export class SpecialtyMappingService {
     const groups = await this.getAllGroups();
     const filteredGroups = groups.filter(g => g.id !== groupId);
     
-    await this.storage.storeSurveyData<ISpecialtyGroup>({
+    await this.storageService.storeSurveyData<ISpecialtyGroup>({
       id: this.GROUPS_KEY,
       metadata: { 
         type: 'specialty_groups',
@@ -246,5 +241,117 @@ export class SpecialtyMappingService {
       },
       rows: filteredGroups
     });
+  }
+
+  async getMappings(): Promise<ISpecialtyMapping[]> {
+    try {
+      const mappings = await this.storageService.getItem(this.MAPPINGS_KEY) as ISpecialtyMapping[];
+      return mappings || [];
+    } catch (error) {
+      console.error('Error fetching specialty mappings:', error);
+      return [];
+    }
+  }
+
+  async createMapping(standardizedName: string, sourceSpecialties: ISourceSpecialty[]): Promise<ISpecialtyMapping> {
+    const mapping: ISpecialtyMapping = {
+      id: crypto.randomUUID(),
+      standardizedName,
+      sourceSpecialties: sourceSpecialties.map(s => ({
+        ...s,
+        mappingId: crypto.randomUUID()
+      })),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await this.saveMapping(mapping);
+    return mapping;
+  }
+
+  async updateMapping(mappingId: string, updates: Partial<ISpecialtyMapping>): Promise<ISpecialtyMapping> {
+    const mappings = await this.getMappings();
+    const index = mappings.findIndex(m => m.id === mappingId);
+    
+    if (index === -1) {
+      throw new Error(`Mapping with id ${mappingId} not found`);
+    }
+
+    const updatedMapping = {
+      ...mappings[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+
+    mappings[index] = updatedMapping;
+    await this.storageService.setItem(this.MAPPINGS_KEY, mappings);
+    return updatedMapping;
+  }
+
+  async deleteMapping(mappingId: string): Promise<void> {
+    const mappings = await this.getMappings();
+    const filteredMappings = mappings.filter(m => m.id !== mappingId);
+    await this.storageService.setItem(this.MAPPINGS_KEY, filteredMappings);
+  }
+
+  async suggestMappings(specialty: IUnmappedSpecialty, config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {
+    const mappings = await this.getMappings();
+    const suggestions: Array<{ mapping: ISpecialtyMapping; similarity: number }> = [];
+
+    for (const mapping of mappings) {
+      let maxSimilarity = 0;
+
+      // Compare with standardized name
+      const standardizedSimilarity = this.calculateSimilarity(
+        specialty.name,
+        mapping.standardizedName,
+        config
+      );
+      maxSimilarity = Math.max(maxSimilarity, standardizedSimilarity);
+
+      // Compare with source specialties
+      for (const source of mapping.sourceSpecialties) {
+        const sourceSimilarity = this.calculateSimilarity(
+          specialty.name,
+          source.originalName,
+          config
+        );
+        maxSimilarity = Math.max(maxSimilarity, sourceSimilarity);
+      }
+
+      if (maxSimilarity >= config.similarityThreshold) {
+        suggestions.push({ mapping, similarity: maxSimilarity });
+      }
+    }
+
+    return suggestions
+      .sort((a, b) => b.similarity - a.similarity)
+      .map(suggestion => suggestion.mapping);
+  }
+
+  private calculateSimilarity(str1: string, str2: string, config: IAutoMappingConfig): number {
+    if (!config.caseSensitive) {
+      str1 = str1.toLowerCase();
+      str2 = str2.toLowerCase();
+    }
+
+    if (str1 === str2) return 1;
+    if (!config.enableFuzzyMatching) return 0;
+
+    return stringSimilarity(str1, str2);
+  }
+
+  async createGroup(standardizedName: string, selectedSpecialties: IUnmappedSpecialty[]): Promise<ISpecialtyGroup> {
+    const now = new Date();
+    const group: ISpecialtyGroup = {
+      id: `${standardizedName}`.toLowerCase().replace(/\s+/g, '-'),
+      standardizedName,
+      selectedSpecialties,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    await this.saveGroup(group);
+    return group;
   }
 } 

@@ -5,6 +5,7 @@ import DataPreview from './DataPreview';
 import { IStorageService } from '../services/StorageService';
 import { createStorageService } from '../services/StorageService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
+import { TableFilters } from './TableFilters';
 
 const SURVEY_OPTIONS = [
   'SullivanCotter',
@@ -58,8 +59,61 @@ const SurveyUpload: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Add global filter state
+  const [globalFilters, setGlobalFilters] = useState({
+    specialty: '',
+    providerType: '',
+    region: ''
+  });
+
+  // Add state for unique values across all surveys
+  const [uniqueValues, setUniqueValues] = useState<{
+    specialties: Set<string>;
+    providerTypes: Set<string>;
+    regions: Set<string>;
+  }>({
+    specialties: new Set(),
+    providerTypes: new Set(),
+    regions: new Set()
+  });
 
   const storageService = React.useMemo<IStorageService>(() => createStorageService(), []);
+
+  // Update unique values when surveys change
+  useEffect(() => {
+    const newValues = {
+      specialties: new Set<string>(),
+      providerTypes: new Set<string>(),
+      regions: new Set<string>()
+    };
+
+    uploadedSurveys.forEach(survey => {
+      const lines = survey.fileContent.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      
+      const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
+      const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
+      const regionIdx = headers.findIndex(h => h.includes('region') || h.includes('geography'));
+
+      lines.slice(1).forEach(line => {
+        const values = line.split(',').map(v => v.trim());
+        if (specialtyIdx >= 0) newValues.specialties.add(values[specialtyIdx]);
+        if (providerTypeIdx >= 0) newValues.providerTypes.add(values[providerTypeIdx]);
+        if (regionIdx >= 0) newValues.regions.add(values[regionIdx]);
+      });
+    });
+
+    setUniqueValues(newValues);
+  }, [uploadedSurveys]);
+
+  // Handle global filter changes
+  const handleFilterChange = (filterName: string, value: string) => {
+    setGlobalFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+  };
 
   // Load saved surveys on component mount
   useEffect(() => {
@@ -222,13 +276,14 @@ const SurveyUpload: React.FC = () => {
         const uniqueProviderTypes = Array.from(new Set(rows.map(row => row.providerType)));
         const uniqueRegions = Array.from(new Set(rows.map(row => row.geographicRegion)));
 
-        const metadata: ISurveyMetadata & { surveyType: string; fileContent: string } = {
+        const metadata: ISurveyMetadata & { surveyType: string; surveyProvider: string; fileContent: string } = {
           totalRows: stats.totalRows,
           uniqueSpecialties,
           uniqueProviderTypes,
           uniqueRegions,
           columnMappings,
           surveyType: isCustom ? customSurveyType : surveyType,
+          surveyProvider: isCustom ? customSurveyType : surveyType,
           fileContent
         };
 
@@ -629,6 +684,8 @@ const SurveyUpload: React.FC = () => {
               <DataPreview
                 file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
                 onError={handleError}
+                globalFilters={globalFilters}
+                onFilterChange={handleFilterChange}
               />
             </div>
           </div>

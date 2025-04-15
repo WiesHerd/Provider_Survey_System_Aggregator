@@ -1,34 +1,42 @@
+export interface ISourceSpecialty {
+  id: string;
+  originalName: string;
+  surveySource: string;
+  mappingId: string;
+}
+
 export interface ISpecialtyMapping {
   id: string;
-  standardName: string;
-  sourceNames: Array<{
-    name: string;
-    provider: string;
-  }>;
-  createdAt: string;
-  updatedAt: string;
+  standardizedName: string;
+  sourceSpecialties: ISourceSpecialty[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface IUnmappedSpecialty {
+  id: string;
   name: string;
-  provider: string;
-  suggestedMatches: Array<{
-    standardName: string;
-    confidence: number;
-  }>;
-}
-
-export interface IAutoMappingConfig {
-  confidenceThreshold: number;
-  useStringMatching: boolean;
-  useSynonyms: boolean;
-  provider: string;
+  surveySource: string;
+  frequency: number;
 }
 
 export interface ISpecialtyGroup {
   id: string;
-  name: string;
-  specialties: string[];
-  createdAt: string;
-  updatedAt: string;
+  standardizedName: string;
+  selectedSpecialties: IUnmappedSpecialty[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IAutoMappingConfig {
+  similarityThreshold: number;
+  caseSensitive: boolean;
+  enableFuzzyMatching: boolean;
+}
+
+export interface ISurveyData {
+  id: string;
+  fileContent: string;
+  surveyType: string;
+  metadata: Record<string, any>;
 } 

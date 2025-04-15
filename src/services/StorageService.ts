@@ -15,6 +15,11 @@ export interface IStorageService {
   listSurveys(): Promise<Array<{ id: string; metadata: any }>>;
   getStorageStats(): Promise<{ usedSpace: number; quota: number }>;
   clearAllData(): Promise<void>;
+  getItem(key: string): Promise<any>;
+  setItem(key: string, value: any): Promise<void>;
+  getSurvey(id: string): Promise<any>;
+  getSurveyMetadata(id: string): Promise<any>;
+  getChunks(id: string): Promise<string[]>;
 }
 
 /**
@@ -272,6 +277,93 @@ export class LocalStorageService implements IStorageService {
     return Array.from({ length: Math.ceil(array.length / size) }, (_, index) =>
       array.slice(index * size, (index + 1) * size)
     );
+  }
+
+  async getItem(key: string): Promise<any> {
+    await this.initPromise;
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      const transaction = this.db.transaction(['metadata'], 'readonly');
+      const store = transaction.objectStore('metadata');
+      const request = store.get(key);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result?.value);
+    });
+  }
+
+  async setItem(key: string, value: any): Promise<void> {
+    await this.initPromise;
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      const transaction = this.db.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      const request = store.put({
+        id: key,
+        value: value,
+        timestamp: new Date().toISOString()
+      });
+
+      request.onerror = () => {
+        console.error('Error in setItem:', request.error);
+        reject(request.error);
+      };
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async getSurveyMetadata(id: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      const transaction = this.db.transaction(['metadata'], 'readonly');
+      const store = transaction.objectStore('metadata');
+      const request = store.get(`survey:${id}`);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async getChunks(id: string): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      const transaction = this.db.transaction(['chunks'], 'readonly');
+      const store = transaction.objectStore('chunks');
+      const request = store.getAll(IDBKeyRange.bound(`${id}:0`, `${id}:z`));
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const chunks = request.result
+          .sort((a, b) => a.index - b.index)
+          .map(chunk => chunk.data);
+        resolve(chunks);
+      };
+    });
+  }
+
+  async getSurvey(id: string): Promise<any> {
+    const metadata = await this.getSurveyMetadata(id);
+    if (!metadata) {
+      throw new Error(`Survey with id ${id} not found`);
+    }
+
+    const chunks = await this.getChunks(id);
+    return {
+      ...metadata,
+      fileContent: chunks.join('')
+    };
   }
 }
 

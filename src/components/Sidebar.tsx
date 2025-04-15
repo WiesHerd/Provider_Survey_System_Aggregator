@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   HomeIcon,
   ChartBarIcon,
@@ -6,6 +7,7 @@ import {
   ArrowUpTrayIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -14,15 +16,22 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
-  const [activeItem, setActiveItem] = useState('Dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
   
   const menuItems = [
-    { name: 'Dashboard', icon: HomeIcon },
-    { name: 'Upload Data', icon: ArrowUpTrayIcon },
-    { name: 'Analytics', icon: ChartBarIcon },
-    { name: 'Documents', icon: DocumentIcon },
-    { name: 'Reports', icon: ChartBarIcon },
+    { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
+    { name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
+    { name: 'Specialty Mapping', icon: LinkIcon, path: '/specialty-mapping' },
+    { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
+    { name: 'Documents', icon: DocumentIcon, path: '/documents' },
+    { name: 'Reports', icon: ChartBarIcon, path: '/reports' },
   ];
+
+  const handleNavigation = (path: string) => {
+    navigate(path);
+  };
 
   return (
     <div
@@ -51,17 +60,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         {menuItems.map((item) => (
           <button
             key={item.name}
-            onClick={() => setActiveItem(item.name)}
+            onClick={() => handleNavigation(item.path)}
             className={`w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200
               ${!isOpen ? 'justify-center' : ''}
-              ${activeItem === item.name 
+              ${currentPath === item.path
                 ? 'bg-indigo-50 text-indigo-600' 
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }
             `}
           >
             <item.icon className={`w-6 h-6 transition-colors duration-200
-              ${activeItem === item.name ? 'text-indigo-600' : 'text-gray-500'}
+              ${currentPath === item.path ? 'text-indigo-600' : 'text-gray-500'}
             `} />
             {isOpen && (
               <span className="ml-3 font-medium text-sm">

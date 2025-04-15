@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import SurveyUpload from './components/SurveyUpload';
+import SpecialtyMapping from './components/SpecialtyMapping';
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -20,26 +22,30 @@ function App() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-      
-      <div className={`flex-1 transition-all duration-300 overflow-x-auto ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
-        <header className="h-16 border-b border-gray-100 bg-white flex items-center px-8 mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent">
-              Survey Data Processing
-            </h1>
-            <p className="text-sm text-gray-500 mt-0.5">Upload and manage your survey data</p>
-          </div>
-        </header>
+    <Router>
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
         
-        <main className="min-h-[calc(100vh-4rem)] bg-gray-50 px-8">
-          <div className="w-full">
-            <SurveyUpload />
-          </div>
-        </main>
+        <div className={`flex-1 transition-all duration-300 overflow-x-auto ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
+          <header className="h-16 border-b border-gray-100 bg-white flex items-center px-8 mb-6">
+            <div>
+              <h1 className="text-2xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent">
+                Survey Data Processing
+              </h1>
+              <p className="text-sm text-gray-500 mt-0.5">Upload and manage your survey data</p>
+            </div>
+          </header>
+          
+          <main className="min-h-[calc(100vh-4rem)] bg-gray-50 px-8">
+            <Routes>
+              <Route path="/" element={<Navigate to="/upload" replace />} />
+              <Route path="/upload" element={<SurveyUpload />} />
+              <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
+            </Routes>
+          </main>
+        </div>
       </div>
-    </div>
+    </Router>
   );
 }
 
