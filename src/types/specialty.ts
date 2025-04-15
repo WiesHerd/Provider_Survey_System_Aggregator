@@ -29,9 +29,18 @@ export interface ISpecialtyGroup {
 }
 
 export interface IAutoMappingConfig {
-  similarityThreshold: number;
-  caseSensitive: boolean;
-  enableFuzzyMatching: boolean;
+  confidenceThreshold: number;
+  useExistingMappings: boolean;
+  useFuzzyMatching: boolean;
+}
+
+export interface IMappingSuggestion {
+  standardizedName: string;
+  confidence: number;
+  specialties: Array<{
+    name: string;
+    surveySource: string;
+  }>;
 }
 
 export interface ISurveyData {

@@ -89,6 +89,8 @@ const SurveyUpload: React.FC = () => {
     };
 
     uploadedSurveys.forEach(survey => {
+      if (!survey.fileContent) return;  // Skip if no file content
+      
       const lines = survey.fileContent.split('\n');
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       

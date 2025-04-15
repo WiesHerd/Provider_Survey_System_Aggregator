@@ -1,4 +1,4 @@
-import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, IAutoMappingConfig, ISurveyData, ISpecialtyGroup } from '../types/specialty';
+import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, IAutoMappingConfig, ISurveyData, ISpecialtyGroup, IMappingSuggestion } from '../types/specialty';
 import { stringSimilarity } from 'string-similarity-js';
 import { LocalStorageService } from './StorageService';
 import { ISurveyRow } from '../types/survey';
@@ -86,7 +86,7 @@ export class SpecialtyMappingService {
         config
       );
 
-      if (bestMatch && bestMatch.confidence >= config.similarityThreshold) {
+      if (bestMatch && bestMatch.confidence >= config.confidenceThreshold) {
         const mapping = existingMappings.find(m => m.standardizedName === bestMatch.standardizedName);
         if (mapping) {
           mapping.sourceSpecialties.push({
@@ -128,11 +128,11 @@ export class SpecialtyMappingService {
         confidence: this.calculateConfidence(
           specialty,
           mapping,
-          config.enableFuzzyMatching,
+          config.useFuzzyMatching,
           true
         )
       }))
-      .filter(match => match.confidence >= config.similarityThreshold)
+      .filter(match => match.confidence >= config.confidenceThreshold)
       .sort((a, b) => b.confidence - a.confidence);
 
     return matches[0] || null;
@@ -141,13 +141,13 @@ export class SpecialtyMappingService {
   private calculateConfidence(
     specialty: string,
     mapping: ISpecialtyMapping,
-    enableFuzzyMatching: boolean = true,
+    useFuzzyMatching: boolean = true,
     useSynonyms: boolean = true
   ): number {
     let maxConfidence = 0;
 
     // String similarity check
-    if (enableFuzzyMatching) {
+    if (useFuzzyMatching) {
       const similarity = stringSimilarity(
         specialty.toLowerCase(),
         mapping.standardizedName.toLowerCase()
@@ -319,7 +319,7 @@ export class SpecialtyMappingService {
         maxSimilarity = Math.max(maxSimilarity, sourceSimilarity);
       }
 
-      if (maxSimilarity >= config.similarityThreshold) {
+      if (maxSimilarity >= config.confidenceThreshold) {
         suggestions.push({ mapping, similarity: maxSimilarity });
       }
     }
@@ -330,13 +330,12 @@ export class SpecialtyMappingService {
   }
 
   private calculateSimilarity(str1: string, str2: string, config: IAutoMappingConfig): number {
-    if (!config.caseSensitive) {
-      str1 = str1.toLowerCase();
-      str2 = str2.toLowerCase();
-    }
+    // Always case-insensitive comparison
+    str1 = str1.toLowerCase();
+    str2 = str2.toLowerCase();
 
     if (str1 === str2) return 1;
-    if (!config.enableFuzzyMatching) return 0;
+    if (!config.useFuzzyMatching) return 0;
 
     return stringSimilarity(str1, str2);
   }
@@ -353,5 +352,111 @@ export class SpecialtyMappingService {
     
     await this.saveGroup(group);
     return group;
+  }
+
+  async generateMappingSuggestions(config: IAutoMappingConfig): Promise<IMappingSuggestion[]> {
+    const unmappedSpecialties = await this.getUnmappedSpecialties();
+    const existingMappings = config.useExistingMappings ? await this.getAllMappings() : [];
+    const suggestions: IMappingSuggestion[] = [];
+
+    // Group specialties by similar names
+    const groups = new Map<string, Array<{ name: string; surveySource: string }>>();
+
+    // Helper function to normalize strings for comparison
+    const normalizeString = (str: string): string => {
+      let normalized = str.toLowerCase();
+      if (!config.useFuzzyMatching) {
+        // Only basic normalization if fuzzy matching is disabled
+        return normalized.trim();
+      }
+      // More aggressive normalization for fuzzy matching
+      normalized = normalized
+        .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      return normalized;
+    };
+
+    // Function to calculate similarity between two strings
+    const calculateSimilarity = (str1: string, str2: string): number => {
+      const normalized1 = normalizeString(str1);
+      const normalized2 = normalizeString(str2);
+      
+      if (!config.useFuzzyMatching) {
+        // Exact match when fuzzy matching is disabled
+        return normalized1 === normalized2 ? 1 : 0;
+      }
+      
+      return stringSimilarity(normalized1, normalized2);
+    };
+
+    // First pass: group by exact matches
+    unmappedSpecialties.forEach(specialty => {
+      let foundMatch = false;
+      
+      // Check against existing mappings first
+      if (config.useExistingMappings) {
+        for (const mapping of existingMappings) {
+          const similarity = calculateSimilarity(specialty.name, mapping.standardizedName);
+          if (similarity >= config.confidenceThreshold) {
+            const key = mapping.standardizedName;
+            const group = groups.get(key) || [];
+            group.push({ name: specialty.name, surveySource: specialty.surveySource });
+            groups.set(key, group);
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatch) {
+        // Try to match with other unmapped specialties
+        let matched = false;
+        // Convert Map.entries() to Array to avoid iterator issues
+        Array.from(groups.entries()).forEach(([key, group]) => {
+          if (!matched) {
+            const similarity = calculateSimilarity(specialty.name, key);
+            if (similarity >= config.confidenceThreshold) {
+              group.push({ name: specialty.name, surveySource: specialty.surveySource });
+              matched = true;
+            }
+          }
+        });
+
+        if (!matched) {
+          // Create new group
+          groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource }]);
+        }
+      }
+    });
+
+    // Convert groups to suggestions
+    // Convert Map.entries() to Array to avoid iterator issues
+    Array.from(groups.entries()).forEach(([standardizedName, specialties]) => {
+      if (specialties.length > 0) {
+        // Calculate average confidence for the group
+        let totalConfidence = 0;
+        let comparisons = 0;
+
+        for (let i = 0; i < specialties.length; i++) {
+          for (let j = i + 1; j < specialties.length; j++) {
+            totalConfidence += calculateSimilarity(specialties[i].name, specialties[j].name);
+            comparisons++;
+          }
+        }
+
+        const confidence = comparisons > 0 
+          ? totalConfidence / comparisons 
+          : (specialties.length === 1 ? 1 : 0);
+
+        suggestions.push({
+          standardizedName,
+          confidence,
+          specialties
+        });
+      }
+    });
+
+    return suggestions.sort((a, b) => b.confidence - a.confidence);
   }
 } 
