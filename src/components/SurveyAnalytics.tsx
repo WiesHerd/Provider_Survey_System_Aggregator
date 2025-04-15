@@ -502,84 +502,88 @@ const SurveyAnalytics: React.FC = () => {
 
   return (
     <Box p={3}>
-      <Typography variant="h5" gutterBottom>
-        Survey Analytics Results
-      </Typography>
-
-      {/* Filter Controls with improved layout */}
-      <Box 
-        sx={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: 2, 
-          mb: 4,
-          '& .MuiFormControl-root': {
-            backgroundColor: 'white',
-            borderRadius: 1,
-            '& .MuiOutlinedInput-root': {
-              backgroundColor: 'white'
-            }
+      <Box sx={{ 
+        display: 'flex', 
+        gap: 2, 
+        mb: 3,
+        '& .MuiFormControl-root': {
+          backgroundColor: 'white',
+          borderRadius: 1,
+          '& .MuiOutlinedInput-root': {
+            backgroundColor: 'white'
           }
-        }}
-      >
-        <FormControl>
-          <InputLabel>Specialty</InputLabel>
+        }
+      }}>
+        <FormControl fullWidth>
+          <InputLabel id="specialty-label">Specialty</InputLabel>
           <Select
+            labelId="specialty-label"
             value={filters.specialty}
-            onChange={(e) => handleFilterChange('specialty', e.target.value)}
             label="Specialty"
+            onChange={(e) => handleFilterChange('specialty', e.target.value)}
           >
-            <MenuItem value="">All</MenuItem>
-            {uniqueValues.specialties.map(specialty => (
-              <MenuItem key={specialty} value={specialty}>{specialty}</MenuItem>
+            <MenuItem value="">All Specialties</MenuItem>
+            {uniqueValues.specialties.map((specialty) => (
+              <MenuItem key={specialty} value={specialty}>
+                {specialty}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <FormControl>
-          <InputLabel>Survey Source</InputLabel>
+        <FormControl fullWidth>
+          <InputLabel id="survey-source-label">Survey Source</InputLabel>
           <Select
+            labelId="survey-source-label"
             value={filters.surveySource}
-            onChange={(e) => handleFilterChange('surveySource', e.target.value)}
             label="Survey Source"
+            onChange={(e) => handleFilterChange('surveySource', e.target.value)}
           >
-            <MenuItem value="">All</MenuItem>
-            {uniqueValues.surveySources.map(source => (
-              <MenuItem key={source} value={source}>{source}</MenuItem>
+            <MenuItem value="">All Sources</MenuItem>
+            {uniqueValues.surveySources.map((source) => (
+              <MenuItem key={source} value={source}>
+                {source}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <FormControl>
-          <InputLabel>Provider Type</InputLabel>
+        <FormControl fullWidth>
+          <InputLabel id="provider-type-label">Provider Type</InputLabel>
           <Select
+            labelId="provider-type-label"
             value={filters.providerType}
-            onChange={(e) => handleFilterChange('providerType', e.target.value)}
             label="Provider Type"
+            onChange={(e) => handleFilterChange('providerType', e.target.value)}
           >
-            <MenuItem value="">All</MenuItem>
-            {uniqueValues.providerTypes.map(type => (
-              <MenuItem key={type} value={type}>{type}</MenuItem>
+            <MenuItem value="">All Types</MenuItem>
+            {uniqueValues.providerTypes.map((type) => (
+              <MenuItem key={type} value={type}>
+                {type}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <FormControl>
-          <InputLabel>Region</InputLabel>
+        <FormControl fullWidth>
+          <InputLabel id="region-label">Region</InputLabel>
           <Select
+            labelId="region-label"
             value={filters.region}
-            onChange={(e) => handleFilterChange('region', e.target.value)}
             label="Region"
+            onChange={(e) => handleFilterChange('region', e.target.value)}
           >
-            <MenuItem value="">All</MenuItem>
-            {uniqueValues.regions.map(region => (
-              <MenuItem key={region} value={region}>{region}</MenuItem>
+            <MenuItem value="">All Regions</MenuItem>
+            {uniqueValues.regions.map((region) => (
+              <MenuItem key={region} value={region}>
+                {region}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
       </Box>
 
-      <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+      <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2 }}>
         <Table size="small" sx={{ minWidth: 1400 }}>
           <TableHead>
             <TableRow>
