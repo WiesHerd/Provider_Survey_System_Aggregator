@@ -48,12 +48,12 @@ const calculatePercentile = (numbers: number[], percentile: number): number => {
   return sortedNumbers[index] || 0;
 };
 
-const formatCurrency = (value: number): string => {
+const formatCurrency = (value: number, decimals: number = 0): string => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(value);
 };
 
@@ -64,6 +64,20 @@ const formatNumber = (value: number): string => {
   }).format(value);
 };
 
+// Add utility function for calculating weighted average
+const calculateWeightedAverage = (values: number[], weights: number[]): number => {
+  if (values.length === 0 || values.length !== weights.length) return 0;
+  const sum = weights.reduce((acc, weight, index) => acc + weight * values[index], 0);
+  const weightSum = weights.reduce((acc, weight) => acc + weight, 0);
+  return weightSum === 0 ? 0 : sum / weightSum;
+};
+
+// Add utility function for calculating simple average
+const calculateAverage = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  return values.reduce((acc, val) => acc + val, 0) / values.length;
+};
+
 const SurveyAnalytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +86,8 @@ const SurveyAnalytics: React.FC = () => {
   const [filters, setFilters] = useState({
     specialty: '',
     providerType: '',
-    region: ''
+    region: '',
+    surveySource: ''
   });
 
   const mappingService = useMemo(() => new SpecialtyMappingService(new LocalStorageService()), []);
@@ -83,7 +98,8 @@ const SurveyAnalytics: React.FC = () => {
     const values = {
       specialties: new Set<string>(),
       providerTypes: new Set<string>(),
-      regions: new Set<string>()
+      regions: new Set<string>(),
+      surveySources: new Set<string>()
     };
 
     // Get all standardized names from mappings
@@ -94,11 +110,12 @@ const SurveyAnalytics: React.FC = () => {
       }
     });
 
-    // Get provider types and regions from survey data
+    // Get provider types, regions, and survey sources from survey data
     Object.values(surveys).forEach(surveyRows => {
       surveyRows.forEach(row => {
         if (row.providerType) values.providerTypes.add(String(row.providerType));
         if (row.geographicRegion) values.regions.add(String(row.geographicRegion));
+        if (row.surveySource) values.surveySources.add(String(row.surveySource));
       });
     });
 
@@ -108,7 +125,8 @@ const SurveyAnalytics: React.FC = () => {
     return {
       specialties: Array.from(values.specialties).sort(),
       providerTypes: Array.from(values.providerTypes).sort(),
-      regions: Array.from(values.regions).sort()
+      regions: Array.from(values.regions).sort(),
+      surveySources: Array.from(values.surveySources).sort()
     };
   }, [mappings, surveys]);
 
@@ -303,10 +321,43 @@ const SurveyAnalytics: React.FC = () => {
           // Use the first row as base for metadata
           const row = groupRows[0];
           
-          // Calculate aggregated metrics
+          // Calculate metrics including averages
           const metrics = {
             n_orgs: groupRows.reduce((sum, r) => sum + (Number(r.n_orgs) || 0), 0),
             n_incumbents: groupRows.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0),
+            // Simple averages
+            tcc_avg: calculateAverage([
+              ...groupRows.map(r => Number(r.tcc_p25) || 0),
+              ...groupRows.map(r => Number(r.tcc_p50) || 0),
+              ...groupRows.map(r => Number(r.tcc_p75) || 0),
+              ...groupRows.map(r => Number(r.tcc_p90) || 0)
+            ].filter(Boolean)),
+            wrvu_avg: calculateAverage([
+              ...groupRows.map(r => Number(r.wrvu_p25) || 0),
+              ...groupRows.map(r => Number(r.wrvu_p50) || 0),
+              ...groupRows.map(r => Number(r.wrvu_p75) || 0),
+              ...groupRows.map(r => Number(r.wrvu_p90) || 0)
+            ].filter(Boolean)),
+            cf_avg: calculateAverage([
+              ...groupRows.map(r => Number(r.cf_p25) || 0),
+              ...groupRows.map(r => Number(r.cf_p50) || 0),
+              ...groupRows.map(r => Number(r.cf_p75) || 0),
+              ...groupRows.map(r => Number(r.cf_p90) || 0)
+            ].filter(Boolean)),
+            // Weighted averages
+            tcc_weighted_avg: calculateWeightedAverage(
+              groupRows.map(r => (Number(r.tcc_p50) || 0)),
+              groupRows.map(r => (Number(r.n_incumbents) || 0))
+            ),
+            wrvu_weighted_avg: calculateWeightedAverage(
+              groupRows.map(r => (Number(r.wrvu_p50) || 0)),
+              groupRows.map(r => (Number(r.n_incumbents) || 0))
+            ),
+            cf_weighted_avg: calculateWeightedAverage(
+              groupRows.map(r => (Number(r.cf_p50) || 0)),
+              groupRows.map(r => (Number(r.n_incumbents) || 0))
+            ),
+            // Percentiles
             tcc_p25: calculatePercentile(groupRows.map(r => Number(r.tcc_p25) || 0).filter(Boolean), 25),
             tcc_p50: calculatePercentile(groupRows.map(r => Number(r.tcc_p50) || 0).filter(Boolean), 50),
             tcc_p75: calculatePercentile(groupRows.map(r => Number(r.tcc_p75) || 0).filter(Boolean), 75),
@@ -344,9 +395,7 @@ const SurveyAnalytics: React.FC = () => {
     
     return aggregatedData.filter(row => {
       const matchesSpecialty = !filters.specialty || row.standardizedName.toLowerCase().includes(filters.specialty.toLowerCase());
-      console.log('Checking specialty match for:', row.standardizedName, matchesSpecialty);
-      
-      // Filter based on the survey source and specialty directly
+      const matchesSurveySource = !filters.surveySource || row.surveySource.toLowerCase().includes(filters.surveySource.toLowerCase());
       const matchesProviderType = !filters.providerType || (
         Object.values(surveys).some(surveyRows =>
           surveyRows.some(s =>
@@ -356,8 +405,6 @@ const SurveyAnalytics: React.FC = () => {
           )
         )
       );
-      console.log('Provider type match:', matchesProviderType);
-
       const matchesRegion = !filters.region || (
         Object.values(surveys).some(surveyRows =>
           surveyRows.some(s =>
@@ -367,11 +414,8 @@ const SurveyAnalytics: React.FC = () => {
           )
         )
       );
-      console.log('Region match:', matchesRegion);
 
-      const matches = matchesSpecialty && matchesProviderType && matchesRegion;
-      console.log('Final match result:', matches);
-      return matches;
+      return matchesSpecialty && matchesSurveySource && matchesProviderType && matchesRegion;
     });
   }, [aggregatedData, filters, surveys]);
 
@@ -380,6 +424,64 @@ const SurveyAnalytics: React.FC = () => {
       ...prev,
       [filterName]: value
     }));
+  };
+
+  // Add function to group data by standardized specialty
+  const groupBySpecialty = (data: AggregatedData[]): Record<string, AggregatedData[]> => {
+    return data.reduce((acc, row) => {
+      if (!acc[row.standardizedName]) {
+        acc[row.standardizedName] = [];
+      }
+      acc[row.standardizedName].push(row);
+      return acc;
+    }, {} as Record<string, AggregatedData[]>);
+  };
+
+  // Add function to calculate summary rows
+  const calculateSummaryRows = (rows: AggregatedData[]): { simple: AggregatedData, weighted: AggregatedData } => {
+    const totalIncumbents = rows.reduce((sum, row) => sum + row.n_incumbents, 0);
+    
+    const simple: AggregatedData = {
+      standardizedName: 'Simple Avg',
+      surveySource: '',
+      surveySpecialty: '',
+      n_orgs: 0,
+      n_incumbents: 0,
+      tcc_p25: calculateAverage(rows.map(r => r.tcc_p25)),
+      tcc_p50: calculateAverage(rows.map(r => r.tcc_p50)),
+      tcc_p75: calculateAverage(rows.map(r => r.tcc_p75)),
+      tcc_p90: calculateAverage(rows.map(r => r.tcc_p90)),
+      wrvu_p25: calculateAverage(rows.map(r => r.wrvu_p25)),
+      wrvu_p50: calculateAverage(rows.map(r => r.wrvu_p50)),
+      wrvu_p75: calculateAverage(rows.map(r => r.wrvu_p75)),
+      wrvu_p90: calculateAverage(rows.map(r => r.wrvu_p90)),
+      cf_p25: calculateAverage(rows.map(r => r.cf_p25)),
+      cf_p50: calculateAverage(rows.map(r => r.cf_p50)),
+      cf_p75: calculateAverage(rows.map(r => r.cf_p75)),
+      cf_p90: calculateAverage(rows.map(r => r.cf_p90))
+    };
+
+    const weighted: AggregatedData = {
+      standardizedName: 'Weighted Avg',
+      surveySource: '',
+      surveySpecialty: '',
+      n_orgs: 0,
+      n_incumbents: totalIncumbents,
+      tcc_p25: calculateWeightedAverage(rows.map(r => r.tcc_p25), rows.map(r => r.n_incumbents)),
+      tcc_p50: calculateWeightedAverage(rows.map(r => r.tcc_p50), rows.map(r => r.n_incumbents)),
+      tcc_p75: calculateWeightedAverage(rows.map(r => r.tcc_p75), rows.map(r => r.n_incumbents)),
+      tcc_p90: calculateWeightedAverage(rows.map(r => r.tcc_p90), rows.map(r => r.n_incumbents)),
+      wrvu_p25: calculateWeightedAverage(rows.map(r => r.wrvu_p25), rows.map(r => r.n_incumbents)),
+      wrvu_p50: calculateWeightedAverage(rows.map(r => r.wrvu_p50), rows.map(r => r.n_incumbents)),
+      wrvu_p75: calculateWeightedAverage(rows.map(r => r.wrvu_p75), rows.map(r => r.n_incumbents)),
+      wrvu_p90: calculateWeightedAverage(rows.map(r => r.wrvu_p90), rows.map(r => r.n_incumbents)),
+      cf_p25: calculateWeightedAverage(rows.map(r => r.cf_p25), rows.map(r => r.n_incumbents)),
+      cf_p50: calculateWeightedAverage(rows.map(r => r.cf_p50), rows.map(r => r.n_incumbents)),
+      cf_p75: calculateWeightedAverage(rows.map(r => r.cf_p75), rows.map(r => r.n_incumbents)),
+      cf_p90: calculateWeightedAverage(rows.map(r => r.cf_p90), rows.map(r => r.n_incumbents))
+    };
+
+    return { simple, weighted };
   };
 
   if (isLoading) {
@@ -404,9 +506,23 @@ const SurveyAnalytics: React.FC = () => {
         Survey Analytics Results
       </Typography>
 
-      {/* Filter Controls */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
-        <FormControl sx={{ minWidth: 200 }}>
+      {/* Filter Controls with improved layout */}
+      <Box 
+        sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+          gap: 2, 
+          mb: 4,
+          '& .MuiFormControl-root': {
+            backgroundColor: 'white',
+            borderRadius: 1,
+            '& .MuiOutlinedInput-root': {
+              backgroundColor: 'white'
+            }
+          }
+        }}
+      >
+        <FormControl>
           <InputLabel>Specialty</InputLabel>
           <Select
             value={filters.specialty}
@@ -420,7 +536,21 @@ const SurveyAnalytics: React.FC = () => {
           </Select>
         </FormControl>
 
-        <FormControl sx={{ minWidth: 200 }}>
+        <FormControl>
+          <InputLabel>Survey Source</InputLabel>
+          <Select
+            value={filters.surveySource}
+            onChange={(e) => handleFilterChange('surveySource', e.target.value)}
+            label="Survey Source"
+          >
+            <MenuItem value="">All</MenuItem>
+            {uniqueValues.surveySources.map(source => (
+              <MenuItem key={source} value={source}>{source}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl>
           <InputLabel>Provider Type</InputLabel>
           <Select
             value={filters.providerType}
@@ -434,7 +564,7 @@ const SurveyAnalytics: React.FC = () => {
           </Select>
         </FormControl>
 
-        <FormControl sx={{ minWidth: 200 }}>
+        <FormControl>
           <InputLabel>Region</InputLabel>
           <Select
             value={filters.region}
@@ -449,27 +579,48 @@ const SurveyAnalytics: React.FC = () => {
         </FormControl>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table size="small">
+      <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 1400 }}>
           <TableHead>
             <TableRow>
-              <TableCell>Standardized Specialty</TableCell>
-              <TableCell>Survey Source</TableCell>
-              <TableCell>Survey Specialty</TableCell>
-              <TableCell align="right"># Orgs</TableCell>
-              <TableCell align="right"># Incumbents</TableCell>
-              <TableCell align="right">TCC P25</TableCell>
-              <TableCell align="right">TCC P50</TableCell>
-              <TableCell align="right">TCC P75</TableCell>
-              <TableCell align="right">TCC P90</TableCell>
-              <TableCell align="right">wRVU P25</TableCell>
-              <TableCell align="right">wRVU P50</TableCell>
-              <TableCell align="right">wRVU P75</TableCell>
-              <TableCell align="right">wRVU P90</TableCell>
-              <TableCell align="right">CF P25</TableCell>
-              <TableCell align="right">CF P50</TableCell>
-              <TableCell align="right">CF P75</TableCell>
-              <TableCell align="right">CF P90</TableCell>
+              <TableCell colSpan={5} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
+                Survey Information
+              </TableCell>
+              <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#e3f2fd', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
+                Total Cash Compensation (TCC)
+              </TableCell>
+              <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#e8f5e9', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
+                Work RVUs (wRVU)
+              </TableCell>
+              <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#fff3e0', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
+                Conversion Factor (CF)
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              {/* Survey Info Headers */}
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Standardized Specialty</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Source</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Specialty</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Orgs</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Incumbents</TableCell>
+              
+              {/* TCC Headers */}
+              <TableCell sx={{ backgroundColor: '#e3f2fd', borderLeft: '2px solid #ccc' }} align="right">P25</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd' }} align="right">P50</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd' }} align="right">P75</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd' }} align="right">P90</TableCell>
+              
+              {/* wRVU Headers */}
+              <TableCell sx={{ backgroundColor: '#e8f5e9', borderLeft: '2px solid #ccc' }} align="right">P25</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9' }} align="right">P50</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9' }} align="right">P75</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9' }} align="right">P90</TableCell>
+              
+              {/* CF Headers */}
+              <TableCell sx={{ backgroundColor: '#fff3e0', borderLeft: '2px solid #ccc' }} align="right">P25</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0' }} align="right">P50</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0' }} align="right">P75</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0' }} align="right">P90</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -480,26 +631,103 @@ const SurveyAnalytics: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredData.map((row, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{row.standardizedName}</TableCell>
-                  <TableCell>{row.surveySource}</TableCell>
-                  <TableCell>{row.surveySpecialty}</TableCell>
-                  <TableCell>{row.n_orgs}</TableCell>
-                  <TableCell>{row.n_incumbents}</TableCell>
-                  <TableCell>{formatCurrency(row.tcc_p25)}</TableCell>
-                  <TableCell>{formatCurrency(row.tcc_p50)}</TableCell>
-                  <TableCell>{formatCurrency(row.tcc_p75)}</TableCell>
-                  <TableCell>{formatCurrency(row.tcc_p90)}</TableCell>
-                  <TableCell>{formatNumber(row.wrvu_p25)}</TableCell>
-                  <TableCell>{formatNumber(row.wrvu_p50)}</TableCell>
-                  <TableCell>{formatNumber(row.wrvu_p75)}</TableCell>
-                  <TableCell>{formatNumber(row.wrvu_p90)}</TableCell>
-                  <TableCell>{formatNumber(row.cf_p25)}</TableCell>
-                  <TableCell>{formatNumber(row.cf_p50)}</TableCell>
-                  <TableCell>{formatNumber(row.cf_p75)}</TableCell>
-                  <TableCell>{formatNumber(row.cf_p90)}</TableCell>
-                </TableRow>
+              Object.entries(groupBySpecialty(filteredData)).map(([specialty, rows]) => (
+                <React.Fragment key={specialty}>
+                  {rows.map((row, idx) => (
+                    <TableRow 
+                      key={`${specialty}-${idx}`}
+                      sx={{ '&:nth-of-type(odd)': { backgroundColor: '#fafafa' } }}
+                    >
+                      <TableCell>{row.standardizedName}</TableCell>
+                      <TableCell>{row.surveySource}</TableCell>
+                      <TableCell>{row.surveySpecialty}</TableCell>
+                      <TableCell align="right">{row.n_orgs}</TableCell>
+                      <TableCell align="right">{row.n_incumbents}</TableCell>
+                      
+                      {/* TCC Values */}
+                      <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.tcc_p50)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.tcc_p75)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.tcc_p90)}</TableCell>
+                      
+                      {/* wRVU Values */}
+                      <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatNumber(row.wrvu_p25)}</TableCell>
+                      <TableCell align="right">{formatNumber(row.wrvu_p50)}</TableCell>
+                      <TableCell align="right">{formatNumber(row.wrvu_p75)}</TableCell>
+                      <TableCell align="right">{formatNumber(row.wrvu_p90)}</TableCell>
+                      
+                      {/* CF Values */}
+                      <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {/* Summary Rows */}
+                  {(() => {
+                    const { simple, weighted } = calculateSummaryRows(rows);
+                    return (
+                      <>
+                        <TableRow sx={{ 
+                          backgroundColor: '#f5f5f5',
+                          borderTop: '2px solid #ccc'
+                        }}>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{simple.standardizedName}</TableCell>
+                          <TableCell>{simple.surveySource}</TableCell>
+                          <TableCell>{simple.surveySpecialty}</TableCell>
+                          <TableCell align="right">{simple.n_orgs}</TableCell>
+                          <TableCell align="right">{simple.n_incumbents}</TableCell>
+                          
+                          {/* TCC Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(simple.tcc_p25)}</TableCell>
+                          <TableCell align="right">{formatCurrency(simple.tcc_p50)}</TableCell>
+                          <TableCell align="right">{formatCurrency(simple.tcc_p75)}</TableCell>
+                          <TableCell align="right">{formatCurrency(simple.tcc_p90)}</TableCell>
+                          
+                          {/* wRVU Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatNumber(simple.wrvu_p25)}</TableCell>
+                          <TableCell align="right">{formatNumber(simple.wrvu_p50)}</TableCell>
+                          <TableCell align="right">{formatNumber(simple.wrvu_p75)}</TableCell>
+                          <TableCell align="right">{formatNumber(simple.wrvu_p90)}</TableCell>
+                          
+                          {/* CF Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(simple.cf_p25, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(simple.cf_p50, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(simple.cf_p75, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(simple.cf_p90, 2)}</TableCell>
+                        </TableRow>
+                        <TableRow sx={{ 
+                          backgroundColor: '#e3f2fd',
+                          borderBottom: '2px solid #ccc'
+                        }}>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{weighted.standardizedName}</TableCell>
+                          <TableCell>{weighted.surveySource}</TableCell>
+                          <TableCell>{weighted.surveySpecialty}</TableCell>
+                          <TableCell align="right">{weighted.n_orgs}</TableCell>
+                          <TableCell align="right">{weighted.n_incumbents}</TableCell>
+                          
+                          {/* TCC Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(weighted.tcc_p25)}</TableCell>
+                          <TableCell align="right">{formatCurrency(weighted.tcc_p50)}</TableCell>
+                          <TableCell align="right">{formatCurrency(weighted.tcc_p75)}</TableCell>
+                          <TableCell align="right">{formatCurrency(weighted.tcc_p90)}</TableCell>
+                          
+                          {/* wRVU Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatNumber(weighted.wrvu_p25)}</TableCell>
+                          <TableCell align="right">{formatNumber(weighted.wrvu_p50)}</TableCell>
+                          <TableCell align="right">{formatNumber(weighted.wrvu_p75)}</TableCell>
+                          <TableCell align="right">{formatNumber(weighted.wrvu_p90)}</TableCell>
+                          
+                          {/* CF Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(weighted.cf_p25, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(weighted.cf_p50, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(weighted.cf_p75, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(weighted.cf_p90, 2)}</TableCell>
+                        </TableRow>
+                      </>
+                    );
+                  })()}
+                </React.Fragment>
               ))
             )}
           </TableBody>
