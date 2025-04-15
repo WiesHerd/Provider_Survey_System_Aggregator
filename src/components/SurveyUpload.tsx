@@ -1,7 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, XMarkIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import DataPreview from './DataPreview';
+import { IStorageService } from '../services/StorageService';
+import { createStorageService } from '../services/StorageService';
+import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 
 const SURVEY_OPTIONS = [
   'SullivanCotter',
@@ -17,6 +20,14 @@ interface FileWithPreview extends File {
   surveyType?: string;
   surveyYear?: string;
   uploadDate?: Date;
+}
+
+interface StorageSurvey {
+  id: string;
+  metadata: ISurveyMetadata & {
+    surveyType: string;
+    fileContent: string;
+  };
 }
 
 interface UploadedSurveyMetadata {
@@ -46,6 +57,40 @@ const SurveyUpload: React.FC = () => {
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const storageService = React.useMemo<IStorageService>(() => createStorageService(), []);
+
+  // Load saved surveys on component mount
+  useEffect(() => {
+    const loadSurveys = async () => {
+      try {
+        setIsLoading(true);
+        const surveys = await storageService.listSurveys();
+        console.log('Loaded surveys:', surveys);
+        setUploadedSurveys(surveys.map((survey: StorageSurvey) => ({
+          id: survey.id,
+          fileName: survey.metadata.columnMappings['fileName'] || '',
+          surveyType: survey.metadata.surveyType,
+          surveyYear: survey.metadata.columnMappings['surveyYear'] || '',
+          uploadDate: new Date(survey.metadata.columnMappings['uploadDate'] || new Date()),
+          fileContent: survey.metadata.fileContent,
+          stats: {
+            totalRows: survey.metadata.totalRows,
+            uniqueSpecialties: survey.metadata.uniqueSpecialties.length,
+            totalDataPoints: survey.metadata.totalRows * Object.keys(survey.metadata.columnMappings).length
+          }
+        })));
+      } catch (error) {
+        console.error('Error loading surveys:', error);
+        handleError('Error loading saved surveys');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSurveys();
+  }, [storageService]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -83,15 +128,21 @@ const SurveyUpload: React.FC = () => {
     setFiles([]);
   };
 
-  const removeUploadedSurvey = (surveyId: string, e?: React.MouseEvent) => {
+  const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
-    if (selectedSurvey === surveyId) {
-      setSelectedSurvey(null);
+    try {
+      await storageService.deleteSurveyData(surveyId);
+      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
+      if (selectedSurvey === surveyId) {
+        setSelectedSurvey(null);
+      }
+    } catch (error) {
+      console.error('Error removing survey:', error);
+      handleError('Error removing survey');
     }
   };
 
-  const handleSurveyUpload = () => {
+  const handleSurveyUpload = async () => {
     if (!surveyType || !surveyYear || files.length === 0) {
       handleError('Please select survey type, year and upload a file');
       return;
@@ -111,14 +162,13 @@ const SurveyUpload: React.FC = () => {
     const file = files[0];
     const reader = new FileReader();
     
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const fileContent = e.target?.result as string;
       if (!fileContent) {
         handleError('Error reading file content');
         return;
       }
 
-      // Validate CSV format and calculate stats
       try {
         const stats = calculateSurveyStats(fileContent);
         if (stats.totalRows === 0) {
@@ -126,41 +176,89 @@ const SurveyUpload: React.FC = () => {
           return;
         }
 
-        const surveyMetadata: UploadedSurveyMetadata = {
+        const lines = fileContent.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim());
+        
+        // Create initial column mappings
+        const columnMappings: Record<string, string> = {
+          fileName: file.name,
+          surveyYear,
+          uploadDate: new Date().toISOString()
+        };
+        headers.forEach((header, index) => {
+          columnMappings[header] = header;
+        });
+
+        // Parse rows with basic structure
+        const rows = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim());
+          const row: Record<string, string | number> = {
+            normalizedSpecialty: values[0] || '', // Assuming first column is specialty
+            providerType: values[1] || '', // Assuming second column is provider type
+            geographicRegion: values[2] || '', // Assuming third column is region
+            // Initialize with default values
+            tcc_p25: 0,
+            tcc_p50: 0,
+            tcc_p75: 0,
+            tcc_p90: 0,
+            wrvu_p25: 0,
+            wrvu_p50: 0,
+            wrvu_p75: 0,
+            wrvu_p90: 0
+          };
+
+          // Add remaining values as is
+          headers.forEach((header, index) => {
+            if (values[index] !== undefined) {
+              row[header] = values[index];
+            }
+          });
+
+          return row as ISurveyRow;
+        });
+
+        // Extract unique values
+        const uniqueSpecialties = Array.from(new Set(rows.map(row => row.normalizedSpecialty)));
+        const uniqueProviderTypes = Array.from(new Set(rows.map(row => row.providerType)));
+        const uniqueRegions = Array.from(new Set(rows.map(row => row.geographicRegion)));
+
+        const metadata: ISurveyMetadata & { surveyType: string; fileContent: string } = {
+          totalRows: stats.totalRows,
+          uniqueSpecialties,
+          uniqueProviderTypes,
+          uniqueRegions,
+          columnMappings,
+          surveyType: isCustom ? customSurveyType : surveyType,
+          fileContent
+        };
+
+        // Store survey in IndexedDB
+        await storageService.storeSurveyData({
+          id: file.id!,
+          rows,
+          metadata
+        });
+
+        console.log('Survey stored successfully:', file.id);
+
+        // Update local state
+        setUploadedSurveys(prev => [...prev, {
           id: file.id!,
           fileName: file.name,
           surveyType: isCustom ? customSurveyType : surveyType,
           surveyYear,
           uploadDate: new Date(),
+          fileContent,
           stats
-        };
-
-        // Store only metadata in localStorage
-        try {
-          const savedMetadata = JSON.parse(localStorage.getItem('surveyMetadata') || '[]');
-          savedMetadata.push(surveyMetadata);
-          localStorage.setItem('surveyMetadata', JSON.stringify(savedMetadata));
-        } catch (error) {
-          console.error('Error storing survey metadata:', error);
-          handleError('Error saving survey information');
-          return;
-        }
-
-        // Create full survey object with content for current session
-        const newSurvey: UploadedSurvey = {
-          ...surveyMetadata,
-          fileContent
-        };
-
-        setUploadedSurveys(prev => [...prev, newSurvey]);
+        }]);
         setFiles([]);
         setSurveyType('');
         setSurveyYear('');
         setCustomSurveyType('');
         setIsCustom(false);
       } catch (error) {
-        console.error('Error processing CSV:', error);
-        handleError('Invalid CSV file format');
+        console.error('Error processing and storing survey:', error);
+        handleError('Error saving survey data');
       }
     };
 
@@ -171,41 +269,16 @@ const SurveyUpload: React.FC = () => {
     reader.readAsText(file);
   };
 
-  // Load saved survey metadata on component mount
-  React.useEffect(() => {
+  const handleClearAll = async () => {
     try {
-      const savedMetadataString = localStorage.getItem('surveyMetadata');
-      if (!savedMetadataString) return;
-
-      const savedMetadata = JSON.parse(savedMetadataString);
-      if (!Array.isArray(savedMetadata)) {
-        console.error('Invalid saved metadata format');
-        return;
-      }
-
-      // Validate metadata structure
-      const validMetadata = savedMetadata.filter((metadata): metadata is UploadedSurveyMetadata => {
-        return metadata && 
-               typeof metadata === 'object' &&
-               typeof metadata.id === 'string' &&
-               typeof metadata.fileName === 'string' &&
-               typeof metadata.surveyType === 'string' &&
-               typeof metadata.surveyYear === 'string' &&
-               typeof metadata.stats === 'object';
-      });
-
-      // Create survey objects with empty content for display
-      const surveys: UploadedSurvey[] = validMetadata.map(metadata => ({
-        ...metadata,
-        fileContent: '' // Content will be loaded on demand when viewing preview
-      }));
-
-      setUploadedSurveys(surveys);
+      await storageService.clearAllData();
+      setUploadedSurveys([]);
+      setSelectedSurvey(null);
     } catch (error) {
-      console.error('Error loading saved survey metadata:', error);
-      localStorage.removeItem('surveyMetadata');
+      console.error('Error clearing all surveys:', error);
+      handleError('Error clearing surveys');
     }
-  }, []);
+  };
 
   // Generate years from 1990 to current year + 5
   const currentYear = new Date().getFullYear();
@@ -429,24 +502,29 @@ const SurveyUpload: React.FC = () => {
         </div>
 
         {/* Uploaded Surveys Grid */}
-        {uploadedSurveys.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('surveyMetadata');
-                  setUploadedSurveys([]);
-                  setSelectedSurvey(null);
-                }}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
-                  transition-colors duration-200 rounded-md hover:bg-red-50"
-              >
-                <XMarkIcon className="h-4 w-4 mr-1.5" />
-                Clear All
-              </button>
-            </div>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
+            <button
+              onClick={handleClearAll}
+              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
+                transition-colors duration-200 rounded-md hover:bg-red-50"
+            >
+              <XMarkIcon className="h-4 w-4 mr-1.5" />
+              Clear All
+            </button>
+          </div>
 
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
+            </div>
+          ) : uploadedSurveys.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-xl">
+              <p className="text-gray-500">No surveys uploaded yet</p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {uploadedSurveys.map((survey) => {
                 const stats = calculateSurveyStats(survey.fileContent);
@@ -538,8 +616,8 @@ const SurveyUpload: React.FC = () => {
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Data Preview */}
         {selectedSurvey && (
