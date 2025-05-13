@@ -46,6 +46,7 @@ interface UploadedSurveyMetadata {
 
 interface UploadedSurvey extends UploadedSurveyMetadata {
   fileContent: string;
+  rows: ISurveyRow[];
 }
 
 const SurveyUpload: React.FC = () => {
@@ -124,19 +125,30 @@ const SurveyUpload: React.FC = () => {
         setIsLoading(true);
         const surveys = await storageService.listSurveys();
         console.log('Loaded surveys:', surveys);
-        setUploadedSurveys(surveys.map((survey: StorageSurvey) => ({
-          id: survey.id,
-          fileName: survey.metadata.columnMappings['fileName'] || '',
-          surveyType: survey.metadata.surveyType,
-          surveyYear: survey.metadata.columnMappings['surveyYear'] || '',
-          uploadDate: new Date(survey.metadata.columnMappings['uploadDate'] || new Date()),
-          fileContent: survey.metadata.fileContent,
-          stats: {
-            totalRows: survey.metadata.totalRows,
-            uniqueSpecialties: survey.metadata.uniqueSpecialties.length,
-            totalDataPoints: survey.metadata.totalRows * Object.keys(survey.metadata.columnMappings).length
-          }
-        })));
+        
+        // Process each survey to ensure column mappings are preserved
+        const processedSurveys = await Promise.all(surveys.map(async (survey: StorageSurvey) => {
+          // Get the full survey data to ensure we have all mappings
+          const fullData = await storageService.getSurveyData(survey.id);
+          
+          return {
+            id: survey.id,
+            fileName: survey.metadata.columnMappings['fileName'] || '',
+            surveyType: survey.metadata.surveyType,
+            surveyYear: survey.metadata.columnMappings['surveyYear'] || '',
+            uploadDate: new Date(survey.metadata.columnMappings['uploadDate'] || new Date()),
+            fileContent: survey.metadata.fileContent,
+            rows: fullData.rows,
+            stats: {
+              totalRows: fullData.rows.length,
+              uniqueSpecialties: new Set(fullData.rows.map(r => r.specialty)).size,
+              totalDataPoints: fullData.rows.length * Object.keys(fullData.rows[0] || {}).length
+            },
+            columnMappings: survey.metadata.columnMappings || {}
+          };
+        }));
+
+        setUploadedSurveys(processedSurveys);
       } catch (error) {
         console.error('Error loading surveys:', error);
         handleError('Error loading saved surveys');
@@ -311,7 +323,8 @@ const SurveyUpload: React.FC = () => {
             columnMappings,
             uniqueSpecialties,
             uniqueProviderTypes,
-            uniqueRegions
+            uniqueRegions,
+            fileContent
           }
         });
 
@@ -321,20 +334,32 @@ const SurveyUpload: React.FC = () => {
           mappedColumns: Object.keys(columnMappings)
         });
 
+        // Immediately read back from IndexedDB to verify persistence
+        try {
+          const stored = await storageService.getSurveyData(file.id!);
+          console.log('Read back from IndexedDB:', stored);
+        } catch (err) {
+          console.error('Error reading back from IndexedDB:', err);
+        }
+
         // Update local state
-        setUploadedSurveys(prev => [...prev, {
-          id: file.id!,
-          fileName: file.name,
-          surveyType: isCustom ? customSurveyType : surveyType,
-          surveyYear,
-          uploadDate: new Date(),
-          fileContent,
-          stats: {
-            totalRows: rows.length,
-            uniqueSpecialties: uniqueSpecialties.length,
-            totalDataPoints: rows.length * Object.keys(columnMappings).length
+        setUploadedSurveys(prev => [
+          ...prev,
+          {
+            id: file.id!,
+            fileName: file.name,
+            surveyType: isCustom ? customSurveyType : surveyType,
+            surveyYear,
+            uploadDate: new Date(),
+            fileContent,
+            rows,
+            stats: {
+              totalRows: rows.length,
+              uniqueSpecialties: uniqueSpecialties.length,
+              totalDataPoints: rows.length * Object.keys(columnMappings).length
+            }
           }
-        }]);
+        ]);
 
         setFiles([]);
         setSurveyType('');
@@ -359,6 +384,7 @@ const SurveyUpload: React.FC = () => {
       await storageService.clearAllData();
       setUploadedSurveys([]);
       setSelectedSurvey(null);
+      window.location.reload(); // Force full reload to clear all state and DB
     } catch (error) {
       console.error('Error clearing all surveys:', error);
       handleError('Error clearing surveys');
@@ -379,50 +405,25 @@ const SurveyUpload: React.FC = () => {
   };
 
   // Add helper function to calculate survey statistics
-  const calculateSurveyStats = (content: string | undefined) => {
-    if (!content) {
+  const calculateSurveyStats = (rows: ISurveyRow[] | undefined) => {
+    if (!rows || rows.length === 0) {
       return {
         totalRows: 0,
         uniqueSpecialties: 0,
         totalDataPoints: 0
       };
     }
-
-    try {
-      const lines = content.split('\n');
-      if (lines.length === 0) {
-        return {
-          totalRows: 0,
-          uniqueSpecialties: 0,
-          totalDataPoints: 0
-        };
-      }
-
-      const headers = lines[0].split(',').map(h => h.trim());
-      const data = lines.slice(1).filter(line => line.trim());
-      
-      // Calculate unique specialties - case insensitive
-      const specialtyIndex = headers.findIndex(h => h.toLowerCase() === 'specialty');
-      const uniqueSpecialties = new Set(
-        specialtyIndex >= 0 
-          ? data.map(line => line.split(',')[specialtyIndex]?.trim().toLowerCase())
-              .filter(Boolean)
-          : []
-      );
-
-      return {
-        totalRows: data.length,
-        uniqueSpecialties: uniqueSpecialties.size,
-        totalDataPoints: data.length * headers.length
-      };
-    } catch (error) {
-      console.error('Error calculating survey stats:', error);
-      return {
-        totalRows: 0,
-        uniqueSpecialties: 0,
-        totalDataPoints: 0
-      };
-    }
+    // Only call toLowerCase on string values
+    const uniqueSpecialtiesSet = new Set(
+      rows
+        .map(r => typeof r.specialty === 'string' ? r.specialty.toLowerCase() : undefined)
+        .filter(Boolean)
+    );
+    return {
+      totalRows: rows.length,
+      uniqueSpecialties: uniqueSpecialtiesSet.size,
+      totalDataPoints: rows.length * Object.keys(rows[0] || {}).length
+    };
   };
 
   return (
@@ -612,7 +613,7 @@ const SurveyUpload: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {uploadedSurveys.map((survey) => {
-                const stats = calculateSurveyStats(survey.fileContent);
+                const stats = calculateSurveyStats(survey.rows);
                 return (
                   <div
                     key={survey.id}
