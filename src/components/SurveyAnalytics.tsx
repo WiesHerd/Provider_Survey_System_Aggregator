@@ -24,6 +24,7 @@ interface AggregatedData {
   standardizedName: string;
   surveySource: string;
   surveySpecialty: string;
+  geographicRegion: string;
   n_orgs: number;
   n_incumbents: number;
   tcc_p25: number;
@@ -376,6 +377,7 @@ const SurveyAnalytics: React.FC = () => {
             standardizedName: selectedMapping.standardizedName,
             surveySource: sourceSpec.surveySource,
             surveySpecialty: sourceSpec.specialty,
+            geographicRegion: row.geographicRegion || '',
             ...metrics
           });
         });
@@ -445,6 +447,7 @@ const SurveyAnalytics: React.FC = () => {
       standardizedName: 'Simple Avg',
       surveySource: '',
       surveySpecialty: '',
+      geographicRegion: '',
       n_orgs: 0,
       n_incumbents: 0,
       tcc_p25: calculateAverage(rows.map(r => r.tcc_p25)),
@@ -465,6 +468,7 @@ const SurveyAnalytics: React.FC = () => {
       standardizedName: 'Weighted Avg',
       surveySource: '',
       surveySpecialty: '',
+      geographicRegion: '',
       n_orgs: 0,
       n_incumbents: totalIncumbents,
       tcc_p25: calculateWeightedAverage(rows.map(r => r.tcc_p25), rows.map(r => r.n_incumbents)),
@@ -587,7 +591,7 @@ const SurveyAnalytics: React.FC = () => {
         <Table size="small" sx={{ minWidth: 1400 }}>
           <TableHead>
             <TableRow>
-              <TableCell colSpan={4} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
+              <TableCell colSpan={5} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
                 Survey Information
               </TableCell>
               <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#e3f2fd', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
@@ -604,6 +608,7 @@ const SurveyAnalytics: React.FC = () => {
               {/* Survey Info Headers */}
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Source</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Specialty</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Region</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Orgs</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Incumbents</TableCell>
               
@@ -629,7 +634,7 @@ const SurveyAnalytics: React.FC = () => {
           <TableBody>
             {filteredData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={16} align="center">
+                <TableCell colSpan={17} align="center">
                   No data available for the selected filters
                 </TableCell>
               </TableRow>
@@ -643,6 +648,7 @@ const SurveyAnalytics: React.FC = () => {
                     >
                       <TableCell>{row.surveySource}</TableCell>
                       <TableCell>{row.surveySpecialty}</TableCell>
+                      <TableCell>{row.geographicRegion || 'N/A'}</TableCell>
                       <TableCell align="right">{row.n_orgs}</TableCell>
                       <TableCell align="right">{row.n_incumbents}</TableCell>
                       
@@ -676,6 +682,7 @@ const SurveyAnalytics: React.FC = () => {
                         }}>
                           <TableCell sx={{ fontWeight: 'bold' }}>Simple Average</TableCell>
                           <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
                           <TableCell align="right">{simple.n_orgs}</TableCell>
                           <TableCell align="right">{simple.n_incumbents}</TableCell>
                           
@@ -702,6 +709,7 @@ const SurveyAnalytics: React.FC = () => {
                           borderBottom: '2px solid #ccc'
                         }}>
                           <TableCell sx={{ fontWeight: 'bold' }}>Weighted Average</TableCell>
+                          <TableCell>-</TableCell>
                           <TableCell>-</TableCell>
                           <TableCell align="right">{weighted.n_orgs}</TableCell>
                           <TableCell align="right">{weighted.n_incumbents}</TableCell>

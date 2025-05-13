@@ -11,6 +11,8 @@ import {
   TableCellsIcon,
   ClipboardDocumentListIcon,
   PresentationChartLineIcon,
+  MapIcon,
+  CalculatorIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -43,6 +45,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       ]
     },
     { name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
+    { name: 'Regional Analytics', icon: MapIcon, path: '/regional-analytics' },
+    { name: 'Survey Regional Analytics', icon: MapIcon, path: '/survey-regional-analytics' },
+    { name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
     { name: 'Documents', icon: DocumentIcon, path: '/documents' },
     { name: 'Reports', icon: ChartBarIcon, path: '/reports' },
   ];

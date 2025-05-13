@@ -32,20 +32,36 @@ export class LocalStorageService implements IStorageService {
   private readonly CHUNK_SIZE = 1000; // Adjust based on data size
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  private initError: Error | null = null;
 
   constructor() {
-    this.initPromise = this.initializeDB().catch(console.error);
+    this.initPromise = this.initializeDB().catch(err => {
+      console.error('Failed to initialize IndexedDB:', err);
+      this.initError = err instanceof Error ? err : new Error('Failed to initialize IndexedDB');
+      throw this.initError;
+    });
   }
 
   private async initializeDB(): Promise<void> {
     if (this.db) return;
+    if (this.initError) throw this.initError;
 
     return new Promise((resolve, reject) => {
+      // Check if IndexedDB is available
+      if (!window.indexedDB) {
+        const error = new Error('IndexedDB is not supported in this browser');
+        this.initError = error;
+        reject(error);
+        return;
+      }
+
       const request = indexedDB.open(this.DB_NAME, 1);
 
-      request.onerror = () => {
-        console.error('Failed to open database:', request.error);
-        reject(request.error);
+      request.onerror = (event) => {
+        const error = request.error || new Error('Failed to open database');
+        console.error('Failed to open database:', error);
+        this.initError = error;
+        reject(error);
       };
 
       request.onsuccess = () => {
@@ -368,5 +384,20 @@ export class LocalStorageService implements IStorageService {
  * Factory function to create a storage service instance
  */
 export const createStorageService = (): IStorageService => {
-  return new LocalStorageService();
+  try {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      throw new Error('StorageService can only be used in a browser environment');
+    }
+    
+    // Check if IndexedDB is available
+    if (!window.indexedDB) {
+      throw new Error('IndexedDB is not supported in this browser');
+    }
+    
+    return new LocalStorageService();
+  } catch (error) {
+    console.error('Failed to create storage service:', error);
+    throw error instanceof Error ? error : new Error('Failed to create storage service');
+  }
 }; 
