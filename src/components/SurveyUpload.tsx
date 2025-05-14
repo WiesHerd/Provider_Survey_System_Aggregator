@@ -1,7 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, XMarkIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import DataPreview from './DataPreview';
+import { IStorageService } from '../services/StorageService';
+import { createStorageService } from '../services/StorageService';
+import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
+import { TableFilters } from './TableFilters';
 
 const SURVEY_OPTIONS = [
   'SullivanCotter',
@@ -19,6 +23,14 @@ interface FileWithPreview extends File {
   uploadDate?: Date;
 }
 
+interface StorageSurvey {
+  id: string;
+  metadata: ISurveyMetadata & {
+    surveyType: string;
+    fileContent: string;
+  };
+}
+
 interface UploadedSurveyMetadata {
   id: string;
   fileName: string;
@@ -34,6 +46,7 @@ interface UploadedSurveyMetadata {
 
 interface UploadedSurvey extends UploadedSurveyMetadata {
   fileContent: string;
+  rows: ISurveyRow[];
 }
 
 const SurveyUpload: React.FC = () => {
@@ -46,6 +59,106 @@ const SurveyUpload: React.FC = () => {
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Add global filter state
+  const [globalFilters, setGlobalFilters] = useState({
+    specialty: '',
+    providerType: '',
+    region: ''
+  });
+
+  // Add state for unique values across all surveys
+  const [uniqueValues, setUniqueValues] = useState<{
+    specialties: Set<string>;
+    providerTypes: Set<string>;
+    regions: Set<string>;
+  }>({
+    specialties: new Set(),
+    providerTypes: new Set(),
+    regions: new Set()
+  });
+
+  const storageService = React.useMemo<IStorageService>(() => createStorageService(), []);
+
+  // Update unique values when surveys change
+  useEffect(() => {
+    const newValues = {
+      specialties: new Set<string>(),
+      providerTypes: new Set<string>(),
+      regions: new Set<string>()
+    };
+
+    uploadedSurveys.forEach(survey => {
+      if (!survey.fileContent) return;  // Skip if no file content
+      
+      const lines = survey.fileContent.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      
+      const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
+      const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
+      const regionIdx = headers.findIndex(h => h.includes('region') || h.includes('geography'));
+
+      lines.slice(1).forEach(line => {
+        const values = line.split(',').map(v => v.trim());
+        if (specialtyIdx >= 0) newValues.specialties.add(values[specialtyIdx]);
+        if (providerTypeIdx >= 0) newValues.providerTypes.add(values[providerTypeIdx]);
+        if (regionIdx >= 0) newValues.regions.add(values[regionIdx]);
+      });
+    });
+
+    setUniqueValues(newValues);
+  }, [uploadedSurveys]);
+
+  // Handle global filter changes
+  const handleFilterChange = (filterName: string, value: string) => {
+    setGlobalFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+  };
+
+  // Load saved surveys on component mount
+  useEffect(() => {
+    const loadSurveys = async () => {
+      try {
+        setIsLoading(true);
+        const surveys = await storageService.listSurveys();
+        console.log('Loaded surveys:', surveys);
+        
+        // Process each survey to ensure column mappings are preserved
+        const processedSurveys = await Promise.all(surveys.map(async (survey: StorageSurvey) => {
+          // Get the full survey data to ensure we have all mappings
+          const fullData = await storageService.getSurveyData(survey.id);
+          
+          return {
+            id: survey.id,
+            fileName: survey.metadata.columnMappings['fileName'] || '',
+            surveyType: survey.metadata.surveyType,
+            surveyYear: survey.metadata.columnMappings['surveyYear'] || '',
+            uploadDate: new Date(survey.metadata.columnMappings['uploadDate'] || new Date()),
+            fileContent: survey.metadata.fileContent,
+            rows: fullData.rows,
+            stats: {
+              totalRows: fullData.rows.length,
+              uniqueSpecialties: new Set(fullData.rows.map(r => r.specialty)).size,
+              totalDataPoints: fullData.rows.length * Object.keys(fullData.rows[0] || {}).length
+            },
+            columnMappings: survey.metadata.columnMappings || {}
+          };
+        }));
+
+        setUploadedSurveys(processedSurveys);
+      } catch (error) {
+        console.error('Error loading surveys:', error);
+        handleError('Error loading saved surveys');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSurveys();
+  }, [storageService]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -83,84 +196,179 @@ const SurveyUpload: React.FC = () => {
     setFiles([]);
   };
 
-  const removeUploadedSurvey = (surveyId: string, e?: React.MouseEvent) => {
+  const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
-    if (selectedSurvey === surveyId) {
-      setSelectedSurvey(null);
+    try {
+      await storageService.deleteSurveyData(surveyId);
+      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
+      if (selectedSurvey === surveyId) {
+        setSelectedSurvey(null);
+      }
+    } catch (error) {
+      console.error('Error removing survey:', error);
+      handleError('Error removing survey');
     }
   };
 
-  const handleSurveyUpload = () => {
-    if (!surveyType || !surveyYear || files.length === 0) {
-      handleError('Please select survey type, year and upload a file');
-      return;
-    }
-
-    // Check for duplicate survey type and year combination
-    const isDuplicate = uploadedSurveys.some(
-      survey => survey.surveyType === (isCustom ? customSurveyType : surveyType) 
-        && survey.surveyYear === surveyYear
-    );
-
-    if (isDuplicate) {
-      handleError('A survey with this type and year already exists. Please remove it first.');
-      return;
-    }
-
+  const handleSurveyUpload = async () => {
     const file = files[0];
+    if (!file || !surveyType || !surveyYear) {
+      handleError('Please fill in all required fields');
+      return;
+    }
+
     const reader = new FileReader();
     
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const fileContent = e.target?.result as string;
       if (!fileContent) {
         handleError('Error reading file content');
         return;
       }
 
-      // Validate CSV format and calculate stats
       try {
-        const stats = calculateSurveyStats(fileContent);
-        if (stats.totalRows === 0) {
-          handleError('Invalid CSV file: No valid data found');
-          return;
+        const lines = fileContent.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim());
+        
+        // Required column names
+        const requiredColumns = [
+          'specialty',
+          'providerType',
+          'geographicRegion',
+          'n_orgs',
+          'n_incumbents',
+          'tcc_p25',
+          'tcc_p50',
+          'tcc_p75',
+          'tcc_p90',
+          'wrvu_p25',
+          'wrvu_p50',
+          'wrvu_p75',
+          'wrvu_p90',
+          'cf_p25',
+          'cf_p50',
+          'cf_p75',
+          'cf_p90'
+        ];
+
+        // Log available columns
+        console.log('Available columns in CSV:', headers);
+        
+        // Create initial column mappings
+        const columnMappings: Record<string, string> = {};
+        headers.forEach((header, index) => {
+          // Try to match headers to required columns
+          const matchingColumn = requiredColumns.find(col => 
+            header.toLowerCase().includes(col.toLowerCase()) ||
+            col.toLowerCase().includes(header.toLowerCase())
+          );
+          
+          if (matchingColumn) {
+            columnMappings[matchingColumn] = header;
+            console.log(`Mapped ${header} to ${matchingColumn}`);
+          }
+        });
+
+        // Check for missing required columns
+        const missingColumns = requiredColumns.filter(col => !columnMappings[col]);
+        if (missingColumns.length > 0) {
+          console.warn('Missing required columns:', missingColumns);
         }
 
-        const surveyMetadata: UploadedSurveyMetadata = {
+        // Parse rows with mapped columns
+        const rows = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim());
+          const row: Record<string, string | number> = {};
+
+          // Map values using column mappings
+          requiredColumns.forEach(col => {
+            const sourceHeader = columnMappings[col];
+            if (sourceHeader) {
+              const index = headers.indexOf(sourceHeader);
+              const value = values[index];
+              
+              // Convert numeric values
+              if (col.includes('_p') || col === 'n_orgs' || col === 'n_incumbents') {
+                row[col] = Number(value) || 0;
+              } else {
+                row[col] = value || '';
+              }
+            } else {
+              // Set default values for missing columns
+              if (col.includes('_p') || col === 'n_orgs' || col === 'n_incumbents') {
+                row[col] = 0;
+              } else {
+                row[col] = '';
+              }
+            }
+          });
+
+          return row as ISurveyRow;
+        });
+
+        // Get unique specialties as string array
+        const uniqueSpecialties = Array.from(new Set(rows.map(r => r.specialty))) as string[];
+        const uniqueProviderTypes = Array.from(new Set(rows.map(r => r.providerType))) as string[];
+        const uniqueRegions = Array.from(new Set(rows.map(r => r.geographicRegion))) as string[];
+
+        // Store survey in IndexedDB
+        await storageService.storeSurveyData({
           id: file.id!,
-          fileName: file.name,
-          surveyType: isCustom ? customSurveyType : surveyType,
-          surveyYear,
-          uploadDate: new Date(),
-          stats
-        };
+          rows,
+          metadata: {
+            surveyType: isCustom ? customSurveyType : surveyType,
+            surveyYear,
+            uploadDate: new Date().toISOString(),
+            totalRows: rows.length,
+            columnMappings,
+            uniqueSpecialties,
+            uniqueProviderTypes,
+            uniqueRegions,
+            fileContent
+          }
+        });
 
-        // Store only metadata in localStorage
+        console.log('Survey stored successfully:', {
+          id: file.id,
+          rowCount: rows.length,
+          mappedColumns: Object.keys(columnMappings)
+        });
+
+        // Immediately read back from IndexedDB to verify persistence
         try {
-          const savedMetadata = JSON.parse(localStorage.getItem('surveyMetadata') || '[]');
-          savedMetadata.push(surveyMetadata);
-          localStorage.setItem('surveyMetadata', JSON.stringify(savedMetadata));
-        } catch (error) {
-          console.error('Error storing survey metadata:', error);
-          handleError('Error saving survey information');
-          return;
+          const stored = await storageService.getSurveyData(file.id!);
+          console.log('Read back from IndexedDB:', stored);
+        } catch (err) {
+          console.error('Error reading back from IndexedDB:', err);
         }
 
-        // Create full survey object with content for current session
-        const newSurvey: UploadedSurvey = {
-          ...surveyMetadata,
-          fileContent
-        };
+        // Update local state
+        setUploadedSurveys(prev => [
+          ...prev,
+          {
+            id: file.id!,
+            fileName: file.name,
+            surveyType: isCustom ? customSurveyType : surveyType,
+            surveyYear,
+            uploadDate: new Date(),
+            fileContent,
+            rows,
+            stats: {
+              totalRows: rows.length,
+              uniqueSpecialties: uniqueSpecialties.length,
+              totalDataPoints: rows.length * Object.keys(columnMappings).length
+            }
+          }
+        ]);
 
-        setUploadedSurveys(prev => [...prev, newSurvey]);
         setFiles([]);
         setSurveyType('');
         setSurveyYear('');
         setCustomSurveyType('');
         setIsCustom(false);
       } catch (error) {
-        console.error('Error processing CSV:', error);
-        handleError('Invalid CSV file format');
+        console.error('Error processing and storing survey:', error);
+        handleError('Error saving survey data');
       }
     };
 
@@ -171,41 +379,17 @@ const SurveyUpload: React.FC = () => {
     reader.readAsText(file);
   };
 
-  // Load saved survey metadata on component mount
-  React.useEffect(() => {
+  const handleClearAll = async () => {
     try {
-      const savedMetadataString = localStorage.getItem('surveyMetadata');
-      if (!savedMetadataString) return;
-
-      const savedMetadata = JSON.parse(savedMetadataString);
-      if (!Array.isArray(savedMetadata)) {
-        console.error('Invalid saved metadata format');
-        return;
-      }
-
-      // Validate metadata structure
-      const validMetadata = savedMetadata.filter((metadata): metadata is UploadedSurveyMetadata => {
-        return metadata && 
-               typeof metadata === 'object' &&
-               typeof metadata.id === 'string' &&
-               typeof metadata.fileName === 'string' &&
-               typeof metadata.surveyType === 'string' &&
-               typeof metadata.surveyYear === 'string' &&
-               typeof metadata.stats === 'object';
-      });
-
-      // Create survey objects with empty content for display
-      const surveys: UploadedSurvey[] = validMetadata.map(metadata => ({
-        ...metadata,
-        fileContent: '' // Content will be loaded on demand when viewing preview
-      }));
-
-      setUploadedSurveys(surveys);
+      await storageService.clearAllData();
+      setUploadedSurveys([]);
+      setSelectedSurvey(null);
+      window.location.reload(); // Force full reload to clear all state and DB
     } catch (error) {
-      console.error('Error loading saved survey metadata:', error);
-      localStorage.removeItem('surveyMetadata');
+      console.error('Error clearing all surveys:', error);
+      handleError('Error clearing surveys');
     }
-  }, []);
+  };
 
   // Generate years from 1990 to current year + 5
   const currentYear = new Date().getFullYear();
@@ -221,50 +405,25 @@ const SurveyUpload: React.FC = () => {
   };
 
   // Add helper function to calculate survey statistics
-  const calculateSurveyStats = (content: string | undefined) => {
-    if (!content) {
+  const calculateSurveyStats = (rows: ISurveyRow[] | undefined) => {
+    if (!rows || rows.length === 0) {
       return {
         totalRows: 0,
         uniqueSpecialties: 0,
         totalDataPoints: 0
       };
     }
-
-    try {
-      const lines = content.split('\n');
-      if (lines.length === 0) {
-        return {
-          totalRows: 0,
-          uniqueSpecialties: 0,
-          totalDataPoints: 0
-        };
-      }
-
-      const headers = lines[0].split(',').map(h => h.trim());
-      const data = lines.slice(1).filter(line => line.trim());
-      
-      // Calculate unique specialties - case insensitive
-      const specialtyIndex = headers.findIndex(h => h.toLowerCase() === 'specialty');
-      const uniqueSpecialties = new Set(
-        specialtyIndex >= 0 
-          ? data.map(line => line.split(',')[specialtyIndex]?.trim().toLowerCase())
-              .filter(Boolean)
-          : []
-      );
-
-      return {
-        totalRows: data.length,
-        uniqueSpecialties: uniqueSpecialties.size,
-        totalDataPoints: data.length * headers.length
-      };
-    } catch (error) {
-      console.error('Error calculating survey stats:', error);
-      return {
-        totalRows: 0,
-        uniqueSpecialties: 0,
-        totalDataPoints: 0
-      };
-    }
+    // Only call toLowerCase on string values
+    const uniqueSpecialtiesSet = new Set(
+      rows
+        .map(r => typeof r.specialty === 'string' ? r.specialty.toLowerCase() : undefined)
+        .filter(Boolean)
+    );
+    return {
+      totalRows: rows.length,
+      uniqueSpecialties: uniqueSpecialtiesSet.size,
+      totalDataPoints: rows.length * Object.keys(rows[0] || {}).length
+    };
   };
 
   return (
@@ -429,27 +588,32 @@ const SurveyUpload: React.FC = () => {
         </div>
 
         {/* Uploaded Surveys Grid */}
-        {uploadedSurveys.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('surveyMetadata');
-                  setUploadedSurveys([]);
-                  setSelectedSurvey(null);
-                }}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
-                  transition-colors duration-200 rounded-md hover:bg-red-50"
-              >
-                <XMarkIcon className="h-4 w-4 mr-1.5" />
-                Clear All
-              </button>
-            </div>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
+            <button
+              onClick={handleClearAll}
+              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
+                transition-colors duration-200 rounded-md hover:bg-red-50"
+            >
+              <XMarkIcon className="h-4 w-4 mr-1.5" />
+              Clear All
+            </button>
+          </div>
 
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
+            </div>
+          ) : uploadedSurveys.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-xl">
+              <p className="text-gray-500">No surveys uploaded yet</p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {uploadedSurveys.map((survey) => {
-                const stats = calculateSurveyStats(survey.fileContent);
+                const stats = calculateSurveyStats(survey.rows);
                 return (
                   <div
                     key={survey.id}
@@ -538,8 +702,8 @@ const SurveyUpload: React.FC = () => {
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Data Preview */}
         {selectedSurvey && (
@@ -551,6 +715,8 @@ const SurveyUpload: React.FC = () => {
               <DataPreview
                 file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
                 onError={handleError}
+                globalFilters={globalFilters}
+                onFilterChange={handleFilterChange}
               />
             </div>
           </div>

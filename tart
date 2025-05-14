@@ -1,0 +1,25 @@
+[33mcommit 357eb3bd15b70bb73f48d948f535b57ed3a2dee1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Sun Apr 13 13:44:42 2025 -0700
+
+    feat: Implement robust local storage solution with IndexedDB for efficient data handling
+
+[33mcommit c507e576187ddeacf4c5416bb663d7a6d67cce67[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Sun Apr 13 12:14:35 2025 -0700
+
+    feat: Implement robust survey data storage system
+    
+    Add IndexedDB storage with chunked data processing, worker-based CSV processing with streaming, DatabaseService with transaction support, and optimized memory usage
+
+[33mcommit b0e98f67af0bd2fa63371b537e961a4728f57f6f[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Sun Apr 13 11:13:55 2025 -0700
+
+    docs: Add comprehensive README with project documentation
+
+[33mcommit 8444ab1f08e5a56aadc8fd1920a218867e5edcff[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Sun Apr 13 11:10:22 2025 -0700
+
+    Clean up: Remove unused imports and fix ESLint warnings
