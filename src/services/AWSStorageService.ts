@@ -21,7 +21,7 @@ export class AWSStorageService {
    * Stores survey metadata in DynamoDB and raw data in S3
    */
   async storeSurveyData(data: ISurveyData): Promise<void> {
-    const { id, metadata, rows } = data;
+    const { id, metadata, data: rows } = data;
     
     // Store metadata in DynamoDB
     await this.dynamoDB.put({

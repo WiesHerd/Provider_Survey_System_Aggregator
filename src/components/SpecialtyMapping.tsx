@@ -234,7 +234,7 @@ const SpecialtyMapping: React.FC = () => {
             <Tab label="Mapped Specialties" value="mapped" />
             <Tab label="Learned Mappings" value="learned" />
           </Tabs>
-          <div className="flex space-x-3 mr-4">
+          <div className="flex space-x-4">
             {activeTab !== 'learned' && (
               <>
                 <Button

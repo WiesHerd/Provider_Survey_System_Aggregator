@@ -29,7 +29,7 @@ export class LocalStorageService implements IStorageService {
   private readonly DB_NAME = 'survey-data';
   private readonly METADATA_STORE = 'metadata';
   private readonly CHUNKS_STORE = 'chunks';
-  private readonly CHUNK_SIZE = 1000;
+  private readonly CHUNK_SIZE = 1000; // Adjust based on data size
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
   private initError: Error | null = null;
@@ -134,20 +134,16 @@ export class LocalStorageService implements IStorageService {
     });
 
     // Store chunks
-    if (data.rows && data.rows.length > 0) {
+    if (data.rows) {
       const chunks = this.chunkArray(data.rows, this.CHUNK_SIZE);
-      console.log(`Storing ${chunks.length} chunks for survey ${data.id}`); // Debug log
-
       await Promise.all(chunks.map((chunk, index) => 
         new Promise<void>((resolve, reject) => {
           const request = chunksStore.put({
             id: `${data.id}_${index}`,
             surveyId: data.id,
             data: chunk,
-            timestamp,
-            chunkIndex: index
+            timestamp
           });
-
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve();
         })
@@ -285,9 +281,11 @@ export class LocalStorageService implements IStorageService {
   }
 
   private chunkArray<T>(array: T[], size: number): T[][] {
-    return Array.from({ length: Math.ceil(array.length / size) }, (_, index) =>
-      array.slice(index * size, (index + 1) * size)
-    );
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
   }
 
   async getItem(key: string): Promise<any> {
@@ -346,21 +344,12 @@ export class LocalStorageService implements IStorageService {
 
   async getChunks(id: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error('Database not initialized'));
-        return;
-      }
-      const transaction = this.db.transaction(['chunks'], 'readonly');
-      const store = transaction.objectStore('chunks');
-      const request = store.getAll(IDBKeyRange.bound(`${id}:0`, `${id}:z`));
+      const transaction = this.db!.transaction([this.CHUNKS_STORE], 'readonly');
+      const store = transaction.objectStore(this.CHUNKS_STORE);
+      const request = store.get(`survey:${id}`);
 
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const chunks = request.result
-          .sort((a, b) => a.index - b.index)
-          .map(chunk => chunk.data);
-        resolve(chunks);
-      };
+      request.onsuccess = () => resolve(request.result?.chunks || []);
     });
   }
 
