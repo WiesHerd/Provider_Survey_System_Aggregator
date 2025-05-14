@@ -4,6 +4,9 @@ import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import Autocomplete from '@mui/material/Autocomplete';
 
+// At the top level, after LocalStorageService is imported
+(window as any).LocalStorageService = LocalStorageService;
+
 // Real FilterBar implementation
 const specialties = ['Cardiology', 'Family Medicine', 'Internal Medicine', 'Orthopedics'];
 const providerTypes = ['MD', 'DO', 'NP', 'PA'];
@@ -199,7 +202,7 @@ const TCCItemization: React.FC<{
   );
 };
 
-// Update WRVUsInput for compact, centered layout
+// Refactor WRVUsInput for left-aligned, TCC-style layout
 const WRVUsInput: React.FC<{
   value: string;
   onChange: (v: string) => void;
@@ -208,9 +211,9 @@ const WRVUsInput: React.FC<{
   const normalized = fte ? (Number(value) / fte) : Number(value);
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
-      <Typography variant="subtitle1" sx={{ mb: 1 }}>Work RVUs</Typography>
-      <Grid container spacing={2} alignItems="center" justifyContent="center">
+      <Grid container spacing={2} alignItems="center">
         <Grid item xs={12} md={4}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Work RVUs</Typography>
           <TextField
             label="Annual wRVUs"
             type="number"
@@ -219,16 +222,16 @@ const WRVUsInput: React.FC<{
             fullWidth
             size="small"
             InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
+            sx={{ mb: 1 }}
           />
-        </Grid>
-        <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
             FTE-adjusted: {normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} wRVUs
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Your value will be annualized to 1.0 FTE for market comparison.
           </Typography>
         </Grid>
+        <Grid item xs={12} md={8}></Grid>
       </Grid>
     </Paper>
   );
@@ -286,14 +289,25 @@ const ResultsPanel: React.FC<{
       maximumFractionDigits: 0,
     }).format(value);
   };
-  const getPercentileData = () => {
-    if (!marketData) return null;
-    return marketData[compareType.toLowerCase()];
-  };
-  const percentileData = getPercentileData();
-  const currentPercentile = percentiles[compareType.toLowerCase() as keyof typeof percentiles];
 
-  const noMarketData = !percentileData || Object.values(percentileData).every(v => !v || v === 0);
+  // Use explicit mapping for marketData keys
+  const percentileData =
+    compareType === 'wRVUs'
+      ? marketData?.wrvu
+      : compareType === 'TCC'
+      ? marketData?.tcc
+      : compareType === 'CFs'
+      ? marketData?.cf
+      : undefined;
+  const currentPercentile = percentiles[compareType.toLowerCase() as keyof typeof percentiles];
+  // Always show cards if percentileData exists (even if values are zero)
+  const noMarketData = !percentileData;
+
+  // Debug logs
+  console.log('ResultsPanel compareType:', compareType);
+  console.log('ResultsPanel percentileData:', percentileData);
+  console.log('ResultsPanel marketData:', marketData);
+  console.log('ResultsPanel currentPercentile:', currentPercentile);
 
   return (
     <Paper sx={{ p: 2, mt: 2 }}>
@@ -319,13 +333,16 @@ const ResultsPanel: React.FC<{
                       {percentile} Percentile
                     </Typography>
                     <Typography variant="h6">
-                      {percentileData ? formatValue(percentileData[key]) : '-'}
+                      {percentileData && percentileData[key] != null
+                        ? formatValue(percentileData[key])
+                        : '-'}
                     </Typography>
                   </Paper>
                 </Grid>
               );
             })}
           </Grid>
+          {/* Always show percentile bar and marker if currentPercentile is a number */}
           {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
             <Box sx={{ mt: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -336,6 +353,7 @@ const ResultsPanel: React.FC<{
                   Your Value: {formatValue(Number(inputValue))}
                 </Typography>
               </Box>
+              {/* Blue percentile bar and marker */}
               <Box sx={{ position: 'relative', height: 6, bgcolor: 'grey.200', borderRadius: 2 }}>
                 <Box
                   sx={{
@@ -352,7 +370,7 @@ const ResultsPanel: React.FC<{
                     zIndex: 1,
                   }}
                 />
-                <Box sx={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 6, bgcolor: 'primary.light', borderRadius: 2, opacity: 0.2 }} />
+                <Box sx={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 6, bgcolor: 'primary.main', borderRadius: 2, opacity: 0.2 }} />
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
                 <Typography variant="caption">0th</Typography>
@@ -378,6 +396,21 @@ const calculatePercentile = (numbers: number[], percentile: number): number => {
   const sortedNumbers = numbers.sort((a, b) => a - b);
   const index = Math.floor((percentile / 100) * sortedNumbers.length);
   return sortedNumbers[index] || 0;
+};
+
+const DebugSurveyData: React.FC = () => {
+  useEffect(() => {
+    const storageService = new LocalStorageService();
+    storageService.getSurveyData('ziimyk').then(data => {
+      if (data && data.rows && data.rows.length > 0) {
+        console.log('First row:', data.rows[0]);
+        console.log('All column names:', Object.keys(data.rows[0]));
+      } else {
+        console.log('No rows found for this survey.');
+      }
+    });
+  }, []);
+  return null;
 };
 
 const FMVCalculator: React.FC = () => {
@@ -487,35 +520,49 @@ const FMVCalculator: React.FC = () => {
       for (const survey of uploadedSurveys) {
         const data = await storageService.getSurveyData(survey.id);
         if (data && data.rows) {
+          // Use columnMappings for robust field access
+          const cm = survey.metadata?.columnMappings || {};
           allRows = allRows.concat(data.rows.map(row => ({
             ...row,
             surveySource: survey.metadata.surveyType,
-            specialty: row.specialty || row.normalizedSpecialty || '',
-            providerType: row.providerType || '',
-            geographicRegion: row.geographicRegion || '',
+            specialty: row[cm.specialty || 'specialty'] || row.specialty || row.normalizedSpecialty || '',
+            providerType: row[cm.provider_type || 'provider_type'] || row.provider_type || '',
+            geographicRegion: row[cm.geographic_region || 'geographic_region'] || row.geographic_region || '',
             year: survey.metadata.surveyYear || '',
-            tcc_p25: Number(row.tcc_p25) || 0,
-            tcc_p50: Number(row.tcc_p50) || 0,
-            tcc_p75: Number(row.tcc_p75) || 0,
-            tcc_p90: Number(row.tcc_p90) || 0,
-            wrvu_p25: Number(row.wrvu_p25) || 0,
-            wrvu_p50: Number(row.wrvu_p50) || 0,
-            wrvu_p75: Number(row.wrvu_p75) || 0,
-            wrvu_p90: Number(row.wrvu_p90) || 0,
-            cf_p25: Number(row.cf_p25) || 0,
-            cf_p50: Number(row.cf_p50) || 0,
-            cf_p75: Number(row.cf_p75) || 0,
-            cf_p90: Number(row.cf_p90) || 0,
+            tcc_p25: Number(row[cm.tcc_p25 || 'tcc_p25']) || 0,
+            tcc_p50: Number(row[cm.tcc_p50 || 'tcc_p50']) || 0,
+            tcc_p75: Number(row[cm.tcc_p75 || 'tcc_p75']) || 0,
+            tcc_p90: Number(row[cm.tcc_p90 || 'tcc_p90']) || 0,
+            wrvu_p25: Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0,
+            wrvu_p50: Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0,
+            wrvu_p75: Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0,
+            wrvu_p90: Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0,
+            cf_p25: Number(row[cm.cf_p25 || 'cf_p25']) || 0,
+            cf_p50: Number(row[cm.cf_p50 || 'cf_p50']) || 0,
+            cf_p75: Number(row[cm.cf_p75 || 'cf_p75']) || 0,
+            cf_p90: Number(row[cm.cf_p90 || 'cf_p90']) || 0,
           })));
         }
       }
-      // Filter rows based on user filters
+      // Use mapping service for robust specialty matching
       let filteredRows = allRows;
-      if (filters.specialty) filteredRows = filteredRows.filter(r => r.specialty === filters.specialty);
-      if (filters.providerType) filteredRows = filteredRows.filter(r => r.providerType === filters.providerType);
-      if (filters.region) filteredRows = filteredRows.filter(r => r.geographicRegion === filters.region);
-      if (filters.surveySource) filteredRows = filteredRows.filter(r => r.surveySource === filters.surveySource);
+      if (filters.specialty) {
+        // Find all mapped source specialties for the selected standardized specialty
+        const mapping = allMappings.find(m => m.standardizedName.toLowerCase().trim() === filters.specialty.toLowerCase().trim());
+        let mappedSpecs: string[] = [];
+        if (mapping) {
+          mappedSpecs = mapping.sourceSpecialties.map(s => s.specialty.toLowerCase().trim());
+        } else {
+          mappedSpecs = [filters.specialty.toLowerCase().trim()];
+        }
+        filteredRows = filteredRows.filter(r => mappedSpecs.includes((r.specialty || '').toLowerCase().trim()));
+      }
+      if (filters.providerType) filteredRows = filteredRows.filter(r => (r.providerType || '').toLowerCase().trim() === filters.providerType.toLowerCase().trim());
+      if (filters.region) filteredRows = filteredRows.filter(r => (r.geographicRegion || '').toLowerCase().trim() === filters.region.toLowerCase().trim());
+      if (filters.surveySource) filteredRows = filteredRows.filter(r => (r.surveySource || '').toLowerCase().trim() === filters.surveySource.toLowerCase().trim());
       if (filters.year) filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
+      console.log('Filtered rows:', filteredRows);
+      console.log('wRVU values:', filteredRows.map(r => [r.wrvu_p25, r.wrvu_p50, r.wrvu_p75, r.wrvu_p90]));
       // Aggregate percentiles for TCC, wRVUs, CF
       const tccs = filteredRows.flatMap(r => [r.tcc_p25, r.tcc_p50, r.tcc_p75, r.tcc_p90].filter(Boolean));
       const wrvus = filteredRows.flatMap(r => [r.wrvu_p25, r.wrvu_p50, r.wrvu_p75, r.wrvu_p90].filter(Boolean));
@@ -549,11 +596,8 @@ const FMVCalculator: React.FC = () => {
           { p: 75, v: percentileObj.p75 },
           { p: 90, v: percentileObj.p90 },
         ];
-        // Below 25th
         if (value <= points[0].v) return 0;
-        // Above 90th
         if (value >= points[3].v) return 100;
-        // Interpolate between points
         for (let i = 0; i < points.length - 1; i++) {
           if (value >= points[i].v && value < points[i + 1].v) {
             const { p: p1, v: v1 } = points[i];
@@ -594,9 +638,9 @@ const FMVCalculator: React.FC = () => {
       <Card sx={{ p: 2.5, width: '100%', maxWidth: 1400, boxShadow: 2, background: '#fff' }}>
         <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
           Make your selections below to filter market data
-        </Typography>
+      </Typography>
         <Divider sx={{ mb: 2 }} />
-        <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
+      <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
         <CompareTypeSelector compareType={compareType} setCompareType={setCompareType} />
         {compareType === 'TCC' && (
           <TCCItemization components={compComponents} setComponents={setCompComponents} />
@@ -612,7 +656,7 @@ const FMVCalculator: React.FC = () => {
           fte={filters.fte}
           onResetFilters={() => setFilters({ ...filters, specialty: '', providerType: '', region: '', surveySource: '', year: '' })}
         />
-      </Card>
+    </Card>
     </Box>
   );
 };
