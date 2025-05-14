@@ -587,7 +587,7 @@ const SurveyAnalytics: React.FC = () => {
         </FormControl>
       </Box>
 
-      <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2 }}>
+      <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2, border: '1px solid #ccc' }}>
         <Table size="small" sx={{ minWidth: 1400 }}>
           <TableHead>
             <TableRow>

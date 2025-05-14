@@ -216,243 +216,239 @@ const SpecialtyMapping: React.FC = () => {
   }
 
   return (
-    <div className="w-full min-h-screen">
-      <div className="flex flex-col w-full">
-        <div className="bg-white rounded-lg shadow mx-6">
-          {error && (
-            <Alert severity="error" className="mb-4">
-              {error}
-            </Alert>
-          )}
+    <div className="bg-white rounded-lg shadow mx-6 mt-4">
+      {error && (
+        <Alert severity="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
 
-          {/* Tabs and Action Buttons */}
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <Tabs 
-                value={activeTab} 
-                onChange={(_, newValue) => setActiveTab(newValue)}
-              >
-                <Tab label="Unmapped Specialties" value="unmapped" />
-                <Tab label="Mapped Specialties" value="mapped" />
-                <Tab label="Learned Mappings" value="learned" />
-              </Tabs>
-              <div className="flex space-x-3">
-                {activeTab !== 'learned' && (
-                  <>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() => setIsAutoMapOpen(true)}
-                      startIcon={<BoltIcon className="h-5 w-5" />}
-                    >
-                      Auto-Map Specialties
-                    </Button>
-                    <Button
-                      variant="contained"
-                      onClick={handleCreateMapping}
-                      startIcon={<AddIcon className="h-5 w-5" />}
-                      disabled={selectedSpecialties.length === 0}
-                    >
-                      Create Mapping
-                    </Button>
-                  </>
-                )}
-                {activeTab === 'mapped' && (
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
-                        mappingService.clearAllMappings().then(() => {
-                          setMappings([]);
-                          setLearnedMappings({});
-                          setActiveTab('unmapped');
-                          loadData();
-                        });
-                      }
-                    }}
-                    startIcon={<DeleteSweepIcon className="h-5 w-5" />}
-                  >
-                    Clear All
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6">
-            {activeTab === 'unmapped' ? (
+      {/* Tabs and Action Buttons */}
+      <div className="px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <Tabs 
+            value={activeTab} 
+            onChange={(_, newValue) => setActiveTab(newValue)}
+          >
+            <Tab label="Unmapped Specialties" value="unmapped" />
+            <Tab label="Mapped Specialties" value="mapped" />
+            <Tab label="Learned Mappings" value="learned" />
+          </Tabs>
+          <div className="flex space-x-3 mr-4">
+            {activeTab !== 'learned' && (
               <>
-                <div className="mb-6">
-                  <TextField
-                    fullWidth
-                    placeholder="Search across all surveys..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </div>
-
-                {selectedSpecialties.length > 0 && (
-                  <div className="mb-6">
-                    <Typography variant="subtitle2" className="mb-2">
-                      Selected Specialties:
-                    </Typography>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedSpecialties.map((specialty) => (
-                        <Chip
-                          key={specialty.id}
-                          label={`${specialty.name} (${specialty.surveySource})`}
-                          onDelete={() => handleSpecialtySelect(specialty)}
-                          color="primary"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
-                    const color = source === 'SullivanCotter' ? '#818CF8' :
-                                source === 'MGMA' ? '#34D399' :
-                                source === 'Gallagher' ? '#F472B6' :
-                                source === 'ECG' ? '#FBBF24' :
-                                source === 'AMGA' ? '#60A5FA' : '#9CA3AF';
-                    
-                    return (
-                      <Paper key={source} className="p-4 relative overflow-hidden">
-                        <Typography variant="h6" className="mb-4 flex items-center justify-between">
-                          <span style={{ color }}>{source}</span>
-                          <Typography variant="caption" color="textSecondary">
-                            {specialties.length} specialties
-                          </Typography>
-                        </Typography>
-                        <div className="space-y-2">
-                          {specialties.map((specialty) => (
-                            <SpecialtyCard
-                              key={specialty.id}
-                              specialty={specialty}
-                              isSelected={selectedSpecialties.some(s => s.id === specialty.id)}
-                              onSelect={handleSpecialtySelect}
-                            />
-                          ))}
-                        </div>
-                        <div className="absolute bottom-0 inset-x-0 h-1.5" style={{ backgroundColor: color }} />
-                      </Paper>
-                    );
-                  })}
-                </div>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => setIsAutoMapOpen(true)}
+                  startIcon={<BoltIcon className="h-5 w-5" />}
+                >
+                  Auto-Map Specialties
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleCreateMapping}
+                  startIcon={<AddIcon className="h-5 w-5" />}
+                  disabled={selectedSpecialties.length === 0}
+                >
+                  Create Mapping
+                </Button>
               </>
-            ) : activeTab === 'mapped' ? (
-              <div className="space-y-6">
-                <div className="mb-6">
-                  <TextField
-                    fullWidth
-                    placeholder="Search mapped specialties..."
-                    value={mappedSearchTerm}
-                    onChange={(e) => setMappedSearchTerm(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  {filteredMappings.map((mapping) => (
-                    <MappedSpecialties
-                      key={mapping.id}
-                      mapping={mapping}
-                      onDelete={() => handleDelete(mapping.id)}
-                    />
-                  ))}
-                </div>
-                
-                {filteredMappings.length === 0 && (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">
-                      {mappedSearchTerm 
-                        ? "No mapped specialties match your search"
-                        : "No mapped specialties yet"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              // Learned Mappings View
-              <div className="space-y-6">
-                <div className="mb-6">
-                  <TextField
-                    fullWidth
-                    placeholder="Search learned mappings..."
-                    value={mappedSearchTerm}
-                    onChange={(e) => setMappedSearchTerm(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  {Object.entries(learnedMappings)
-                    .filter(([original, corrected]) => 
-                      !mappedSearchTerm || 
-                      original.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
-                      corrected.toLowerCase().includes(mappedSearchTerm.toLowerCase())
-                    )
-                    .map(([original, corrected]) => (
-                      <MappedSpecialties
-                        key={original}
-                        mapping={{
-                          id: original,
-                          standardizedName: corrected,
-                          sourceSpecialties: [{
-                            id: crypto.randomUUID(),
-                            specialty: original,
-                            originalName: original,
-                            surveySource: 'Learned',
-                            mappingId: original
-                          }],
-                          createdAt: new Date(),
-                          updatedAt: new Date()
-                        }}
-                        onDelete={() => {
-                          if (window.confirm('Remove this learned mapping?')) {
-                            mappingService.removeLearnedMapping(original).then(() => {
-                              const newLearnedMappings = { ...learnedMappings };
-                              delete newLearnedMappings[original];
-                              setLearnedMappings(newLearnedMappings);
-                            });
-                          }
-                        }}
-                      />
-                    ))}
-
-                  {Object.keys(learnedMappings).length === 0 && (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg">
-                      <Typography variant="body1" className="text-gray-500">
-                        No learned mappings yet
-                      </Typography>
-                    </div>
-                  )}
-                </div>
-              </div>
+            )}
+            {activeTab === 'mapped' && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
+                    mappingService.clearAllMappings().then(() => {
+                      setMappings([]);
+                      setLearnedMappings({});
+                      setActiveTab('unmapped');
+                      loadData();
+                    });
+                  }
+                }}
+                startIcon={<DeleteSweepIcon className="h-5 w-5" />}
+              >
+                Clear All
+              </Button>
             )}
           </div>
         </div>
+      </div>
+
+      <div className="p-6">
+        {activeTab === 'unmapped' ? (
+          <>
+            <div className="mb-6">
+              <TextField
+                fullWidth
+                placeholder="Search across all surveys..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon className="h-5 w-5 text-gray-400" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </div>
+
+            {selectedSpecialties.length > 0 && (
+              <div className="mb-6">
+                <Typography variant="subtitle2" className="mb-2">
+                  Selected Specialties:
+                </Typography>
+                <div className="flex flex-wrap gap-2">
+                  {selectedSpecialties.map((specialty) => (
+                    <Chip
+                      key={specialty.id}
+                      label={`${specialty.name} (${specialty.surveySource})`}
+                      onDelete={() => handleSpecialtySelect(specialty)}
+                      color="primary"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
+                const color = source === 'SullivanCotter' ? '#818CF8' :
+                            source === 'MGMA' ? '#34D399' :
+                            source === 'Gallagher' ? '#F472B6' :
+                            source === 'ECG' ? '#FBBF24' :
+                            source === 'AMGA' ? '#60A5FA' : '#9CA3AF';
+                
+                return (
+                  <Paper key={source} className="p-4 relative overflow-hidden">
+                    <Typography variant="h6" className="mb-4 flex items-center justify-between">
+                      <span style={{ color }}>{source}</span>
+                      <Typography variant="caption" color="textSecondary">
+                        {specialties.length} specialties
+                      </Typography>
+                    </Typography>
+                    <div className="space-y-2">
+                      {specialties.map((specialty) => (
+                        <SpecialtyCard
+                          key={specialty.id}
+                          specialty={specialty}
+                          isSelected={selectedSpecialties.some(s => s.id === specialty.id)}
+                          onSelect={handleSpecialtySelect}
+                        />
+                      ))}
+                    </div>
+                    <div className="absolute bottom-0 inset-x-0 h-1.5" style={{ backgroundColor: color }} />
+                  </Paper>
+                );
+              })}
+            </div>
+          </>
+        ) : activeTab === 'mapped' ? (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <TextField
+                fullWidth
+                placeholder="Search mapped specialties..."
+                value={mappedSearchTerm}
+                onChange={(e) => setMappedSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon className="h-5 w-5 text-gray-400" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </div>
+
+            <div className="space-y-4">
+              {filteredMappings.map((mapping) => (
+                <MappedSpecialties
+                  key={mapping.id}
+                  mapping={mapping}
+                  onDelete={() => handleDelete(mapping.id)}
+                />
+              ))}
+            </div>
+            
+            {filteredMappings.length === 0 && (
+              <div className="text-center py-12 bg-gray-50 rounded-xl">
+                <p className="text-gray-500">
+                  {mappedSearchTerm 
+                    ? "No mapped specialties match your search"
+                    : "No mapped specialties yet"}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          // Learned Mappings View
+          <div className="space-y-6">
+            <div className="mb-6">
+              <TextField
+                fullWidth
+                placeholder="Search learned mappings..."
+                value={mappedSearchTerm}
+                onChange={(e) => setMappedSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon className="h-5 w-5 text-gray-400" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </div>
+
+            <div className="space-y-4">
+              {Object.entries(learnedMappings)
+                .filter(([original, corrected]) => 
+                  !mappedSearchTerm || 
+                  original.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+                  corrected.toLowerCase().includes(mappedSearchTerm.toLowerCase())
+                )
+                .map(([original, corrected]) => (
+                  <MappedSpecialties
+                    key={original}
+                    mapping={{
+                      id: original,
+                      standardizedName: corrected,
+                      sourceSpecialties: [{
+                        id: crypto.randomUUID(),
+                        specialty: original,
+                        originalName: original,
+                        surveySource: 'Learned',
+                        mappingId: original
+                      }],
+                      createdAt: new Date(),
+                      updatedAt: new Date()
+                    }}
+                    onDelete={() => {
+                      if (window.confirm('Remove this learned mapping?')) {
+                        mappingService.removeLearnedMapping(original).then(() => {
+                          const newLearnedMappings = { ...learnedMappings };
+                          delete newLearnedMappings[original];
+                          setLearnedMappings(newLearnedMappings);
+                        });
+                      }
+                    }}
+                  />
+                ))}
+
+              {Object.keys(learnedMappings).length === 0 && (
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <Typography variant="body1" className="text-gray-500">
+                    No learned mappings yet
+                  </Typography>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Auto-Map Dialog */}

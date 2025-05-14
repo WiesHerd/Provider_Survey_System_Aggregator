@@ -116,7 +116,9 @@ export class LocalStorageService implements IStorageService {
       totalRows: data.rows.length,
       specialties: Array.from(new Set(data.rows.map((row: any) => row.normalizedSpecialty))).filter(Boolean),
       dataPoints: data.rows.length * Object.keys(data.rows[0] || {}).length,
-      lastUpdated: timestamp
+      lastUpdated: timestamp,
+      // Ensure column mappings are preserved
+      columnMappings: data.metadata.columnMappings || {}
     };
 
     // Store metadata
@@ -171,7 +173,14 @@ export class LocalStorageService implements IStorageService {
     const metadata = await new Promise<any>((resolve, reject) => {
       const request = metadataStore.get(id);
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result?.metadata);
+      request.onsuccess = () => {
+        const result = request.result?.metadata;
+        if (result) {
+          // Ensure column mappings are preserved
+          result.columnMappings = result.columnMappings || {};
+        }
+        resolve(result);
+      };
     });
 
     if (!metadata) {

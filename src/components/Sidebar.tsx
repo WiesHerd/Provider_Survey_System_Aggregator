@@ -45,8 +45,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       ]
     },
     { name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
-    { name: 'Regional Analytics', icon: MapIcon, path: '/regional-analytics' },
-    { name: 'Survey Regional Analytics', icon: MapIcon, path: '/survey-regional-analytics' },
     { name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
     { name: 'Documents', icon: DocumentIcon, path: '/documents' },
     { name: 'Reports', icon: ChartBarIcon, path: '/reports' },
@@ -107,15 +105,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       {/* Branding */}
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
-          <div className="w-10 h-10">
-            <svg className="w-full h-full text-indigo-600" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-              <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
-            </svg>
+          <div className="w-12 h-12 flex items-center justify-center">
+            <img src="/Icon.png" alt="BenchPoint Logo" className="w-10 h-10 object-contain" />
           </div>
           {isOpen && (
-            <span className="ml-3 font-semibold text-gray-900">
-              Market Intelligence
+            <span className="ml-3 font-bold text-2xl flex items-center" style={{ letterSpacing: 0.5 }}>
+              <span className="text-gray-900">Bench</span>
+              <span className="text-indigo-600">Point</span>
             </span>
           )}
         </div>
@@ -127,23 +123,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       </nav>
 
       {/* Bottom Section */}
-      <div className="p-4 border-t border-gray-100">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200
-            ${!isOpen ? 'justify-center' : ''}
-          `}
-          aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          {isOpen ? (
-            <>
-              <ChevronLeftIcon className="w-6 h-6" />
-              <span className="ml-3 font-medium text-sm">Collapse</span>
-            </>
-          ) : (
-            <ChevronRightIcon className="w-6 h-6" />
-          )}
-        </button>
+      <div className="absolute left-4 bottom-4">
+        <div className="group relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 bg-white shadow-md hover:bg-gray-100 transition-all duration-200 focus:outline-none"
+            aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
+          </button>
+          <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1 rounded bg-gray-900 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
+            Collapse sidebar
+          </span>
+        </div>
       </div>
     </div>
   );

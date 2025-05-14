@@ -34,58 +34,39 @@ export const MappingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const loadMappings = async () => {
       try {
-        // Try to get existing mappings
+        // Only try to get existing mappings; do not seed initial mappings
         let surveyData;
         try {
           surveyData = await storageService.getSurveyData('specialty_mappings');
         } catch (err) {
-          // If no mappings exist, store and use initial mappings
-          const metadata: ISurveyMetadata = {
-            totalRows: initialSpecialtyMappings.length,
-            uniqueSpecialties: initialSpecialtyMappings.map(m => m.standardizedName),
-            uniqueProviderTypes: [],
-            uniqueRegions: [],
-            columnMappings: {}
-          };
-
-          await storageService.storeSurveyData({
-            id: 'specialty_mappings',
-            surveyProvider: 'system',
-            surveyYear: new Date().getFullYear().toString(),
-            uploadDate: new Date(),
-            metadata,
-            rows: initialSpecialtyMappings as any[]
-          });
-          
+          // If no mappings exist, just set to empty, do not seed
           surveyData = {
-            metadata,
-            rows: initialSpecialtyMappings,
+            metadata: {
+              totalRows: 0,
+              uniqueSpecialties: [],
+              uniqueProviderTypes: [],
+              uniqueRegions: [],
+              columnMappings: {}
+            },
+            rows: [],
             totalPages: 1
           };
         }
-
-        const mappings = surveyData.rows.map(row => ({
-          id: String(row.id),
-          standardizedName: String(row.standardizedName),
-          sourceSpecialties: Array.isArray(row.sourceSpecialties) 
-            ? row.sourceSpecialties.map((source: any) => ({
-                id: String(source.id),
-                specialty: String(source.specialty),
-                originalName: String(source.originalName || source.specialty),
-                surveySource: String(source.surveySource),
-                frequency: Number(source.frequency || 1),
-                mappingId: String(source.mappingId || row.id)
-              })) as ISourceSpecialty[]
-            : [],
-          createdAt: new Date(row.createdAt || Date.now()),
-          updatedAt: new Date(row.updatedAt || Date.now())
-        })) as ISpecialtyMapping[];
-        
-        setSpecialtyMappings(mappings);
+        // Defensive: filter only ISpecialtyMapping objects
+        const validMappings = Array.isArray(surveyData.rows)
+          ? (surveyData.rows.filter(row =>
+              row &&
+              typeof row.id === 'string' &&
+              typeof row.standardizedName === 'string' &&
+              Array.isArray(row.sourceSpecialties) &&
+              row.createdAt &&
+              row.updatedAt
+            ) as unknown as ISpecialtyMapping[])
+          : [];
+        setSpecialtyMappings(validMappings);
+        setLoading(false);
       } catch (err) {
-        console.error('Error loading mappings:', err);
-        setError(err instanceof Error ? err : new Error('Failed to load specialty mappings'));
-      } finally {
+        setError(err as Error);
         setLoading(false);
       }
     };
