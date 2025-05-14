@@ -207,12 +207,13 @@ const WRVUsInput: React.FC<{
   value: string;
   onChange: (v: string) => void;
   fte: number;
-}> = ({ value, onChange, fte }) => {
+  percentile?: number | null;
+}> = ({ value, onChange, fte, percentile }) => {
   const normalized = fte ? (Number(value) / fte) : Number(value);
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Grid container spacing={2} alignItems="center">
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={4} sx={{ display: 'flex', alignItems: 'center' }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>Work RVUs</Typography>
           <TextField
             label="Annual wRVUs"
@@ -222,17 +223,25 @@ const WRVUsInput: React.FC<{
             fullWidth
             size="small"
             InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
-            sx={{ mb: 1 }}
+            sx={{ mb: 1, mr: 2 }}
           />
-          <Typography variant="body2" color="text.secondary">
-            FTE-adjusted: {normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} wRVUs
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Your value will be annualized to 1.0 FTE for market comparison.
-          </Typography>
+          {/* Percentile badge to the right of the input */}
+          {percentile !== undefined && percentile !== null && !isNaN(percentile) && value && (
+            <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ bgcolor: 'primary.light', color: 'primary.main', px: 1.5, py: 0.5, borderRadius: 1, fontWeight: 600 }}>
+                {percentile.toFixed(2)}th percentile
+              </Typography>
+            </Box>
+          )}
         </Grid>
         <Grid item xs={12} md={8}></Grid>
       </Grid>
+      <Typography variant="body2" color="text.secondary">
+        FTE-adjusted: {normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} wRVUs
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        Your value will be annualized to 1.0 FTE for market comparison.
+      </Typography>
     </Paper>
   );
 };
@@ -242,12 +251,13 @@ const CFInput: React.FC<{
   value: string;
   onChange: (v: string) => void;
   fte: number;
-}> = ({ value, onChange }) => {
+  percentile?: number | null;
+}> = ({ value, onChange, percentile }) => {
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Typography variant="subtitle1" sx={{ mb: 1 }}>Conversion Factor ($/wRVU)</Typography>
-      <Grid container spacing={2} alignItems="center" justifyContent="center">
-        <Grid item xs={12} md={4}>
+      <Grid container spacing={2} alignItems="center" justifyContent="flex-start">
+        <Grid item xs={12} md={4} sx={{ display: 'flex', alignItems: 'center' }}>
           <TextField
             label="Conversion Factor"
             type="number"
@@ -256,7 +266,16 @@ const CFInput: React.FC<{
             fullWidth
             size="small"
             InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, endAdornment: <InputAdornment position="end">/wRVU</InputAdornment> }}
+            sx={{ mr: 2 }}
           />
+          {/* Percentile badge to the right of the input */}
+          {percentile !== undefined && percentile !== null && !isNaN(percentile) && value && (
+            <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ bgcolor: 'primary.light', color: 'primary.main', px: 1.5, py: 0.5, borderRadius: 1, fontWeight: 600 }}>
+                {percentile.toFixed(2)}th percentile
+              </Typography>
+            </Box>
+          )}
         </Grid>
         <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <Typography variant="caption" color="text.secondary">
@@ -299,7 +318,14 @@ const ResultsPanel: React.FC<{
       : compareType === 'CFs'
       ? marketData?.cf
       : undefined;
-  const currentPercentile = percentiles[compareType.toLowerCase() as keyof typeof percentiles];
+  const currentPercentile =
+    compareType === 'wRVUs'
+      ? percentiles.wrvu
+      : compareType === 'TCC'
+      ? percentiles.tcc
+      : compareType === 'CFs'
+      ? percentiles.cf
+      : null;
   // Always show cards if percentileData exists (even if values are zero)
   const noMarketData = !percentileData;
 
@@ -342,48 +368,47 @@ const ResultsPanel: React.FC<{
               );
             })}
           </Grid>
-          {/* Always show percentile bar and marker if currentPercentile is a number */}
-          {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
-            <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Typography variant="body2" gutterBottom color="primary" sx={{ mr: 1 }}>
-                  You are in the {currentPercentile.toFixed(2)}th percentile
+          {/* Blue percentile bar and marker, always show for wRVUs */}
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
+                <>
+                  <Typography variant="body2" gutterBottom color="primary" sx={{ mr: 1 }}>
+                    You are in the {currentPercentile.toFixed(2)}th percentile
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', bgcolor: 'grey.100', px: 1.5, py: 0.5, borderRadius: 1, ml: 1 }}>
+                    Your Value: {formatValue(Number(inputValue))}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" gutterBottom color="text.secondary">
+                  Enter a value to see your percentile
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', bgcolor: 'grey.100', px: 1.5, py: 0.5, borderRadius: 1, ml: 1 }}>
-                  Your Value: {formatValue(Number(inputValue))}
-                </Typography>
-              </Box>
-              {/* Blue percentile bar and marker */}
-              <Box sx={{ position: 'relative', height: 6, bgcolor: 'grey.200', borderRadius: 2 }}>
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    left: `${currentPercentile}%`,
-                    top: -4,
-                    width: 14,
-                    height: 14,
-                    bgcolor: 'primary.main',
-                    border: '2px solid #fff',
-                    boxShadow: 1,
-                    borderRadius: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 1,
-                  }}
-                />
-                <Box sx={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 6, bgcolor: 'primary.main', borderRadius: 2, opacity: 0.2 }} />
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                <Typography variant="caption">0th</Typography>
-                <Typography variant="caption">100th</Typography>
-              </Box>
+              )}
             </Box>
-          ) : (
-            <Box sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                No percentile can be calculated for the current selection.
-              </Typography>
+            <Box sx={{ position: 'relative', height: 6, bgcolor: 'grey.200', borderRadius: 2 }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  left: `${typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? currentPercentile : 0}%`,
+                  top: -4,
+                  width: 14,
+                  height: 14,
+                  bgcolor: 'primary.main',
+                  border: '2px solid #fff',
+                  boxShadow: 1,
+                  borderRadius: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 1,
+                }}
+              />
+              <Box sx={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 6, bgcolor: 'primary.main', borderRadius: 2, opacity: 0.2 }} />
             </Box>
-          )}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+              <Typography variant="caption">0th</Typography>
+              <Typography variant="caption">100th</Typography>
+            </Box>
+          </Box>
         </>
       )}
     </Paper>
@@ -440,6 +465,10 @@ const FMVCalculator: React.FC = () => {
   // Market data and percentiles
   const [marketData, setMarketData] = useState<any | null>(null);
   const [percentiles, setPercentiles] = useState<{ tcc: number | null; wrvu: number | null; cf: number | null }>({ tcc: null, wrvu: null, cf: null });
+
+  // FTE-adjusted values (move here for use in ResultsPanel)
+  const tccFTEAdjusted = filters.fte ? Number(tcc) / filters.fte : Number(tcc);
+  const wrvusFTEAdjusted = filters.fte ? Number(wrvus) / filters.fte : Number(wrvus);
 
   // Fetch unique filter values from survey data and mappings
   const [uniqueValues, setUniqueValues] = useState<{
@@ -589,7 +618,7 @@ const FMVCalculator: React.FC = () => {
       };
       // Calculate user value percentile using linear interpolation
       const getPercentileRank = (percentileObj: any, value: number) => {
-        if (!percentileObj) return null;
+        if (!percentileObj || value === null || value === undefined || isNaN(value)) return null;
         const points = [
           { p: 25, v: percentileObj.p25 },
           { p: 50, v: percentileObj.p50 },
@@ -602,14 +631,16 @@ const FMVCalculator: React.FC = () => {
           if (value >= points[i].v && value < points[i + 1].v) {
             const { p: p1, v: v1 } = points[i];
             const { p: p2, v: v2 } = points[i + 1];
+            if (v2 === v1) return p1; // Prevent division by zero
             const percent = p1 + ((value - v1) / (v2 - v1)) * (p2 - p1);
             return percent;
           }
         }
         return null;
       };
-      const tccValue = tcc;
-      const wrvuValue = Number(wrvus);
+      // Use FTE-adjusted values for percentile calculation
+      const tccValue = tccFTEAdjusted;
+      const wrvuValue = wrvusFTEAdjusted;
       const cfValue = Number(cf);
       const percentiles = {
         tcc: getPercentileRank(marketData?.tcc, tccValue),
@@ -629,10 +660,6 @@ const FMVCalculator: React.FC = () => {
     fetchMarketData();
   }, [fetchMarketData]);
 
-  // Adjust TCC and wRVUs for FTE in percentile calculation
-  const tccFTEAdjusted = filters.fte ? Number(tcc) / filters.fte : Number(tcc);
-  const wrvusFTEAdjusted = filters.fte ? Number(wrvus) / filters.fte : Number(wrvus);
-
   return (
     <Box sx={{ pl: 4, pr: 2, pt: 4 }}>
       <Card sx={{ p: 2.5, width: '100%', maxWidth: 1400, boxShadow: 2, background: '#fff' }}>
@@ -645,8 +672,8 @@ const FMVCalculator: React.FC = () => {
         {compareType === 'TCC' && (
           <TCCItemization components={compComponents} setComponents={setCompComponents} />
         )}
-        {compareType === 'wRVUs' && <WRVUsInput value={wrvus} onChange={setWRVUs} fte={filters.fte} />}
-        {compareType === 'CFs' && <CFInput value={cf} onChange={setCF} fte={filters.fte} />}
+        {compareType === 'wRVUs' && <WRVUsInput value={wrvus} onChange={setWRVUs} fte={filters.fte} percentile={percentiles.wrvu} />}
+        {compareType === 'CFs' && <CFInput value={cf} onChange={setCF} fte={filters.fte} percentile={percentiles.cf} />}
         <ResultsPanel 
           compareType={compareType}
           marketData={marketData}
