@@ -3,6 +3,7 @@ import { Card, Typography, Divider, Grid, TextField, MenuItem, InputAdornment, B
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import Autocomplete from '@mui/material/Autocomplete';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 // At the top level, after LocalStorageService is imported
 (window as any).LocalStorageService = LocalStorageService;
@@ -27,7 +28,7 @@ interface FilterBarProps {
 }
 
 const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues }) => (
-  <Grid container spacing={2} sx={{ mb: 2 }}>
+  <Grid container spacing={2} sx={{ mb: 3 }}>
     <Grid item xs={12} md={4}>
       <TextField
         select
@@ -122,22 +123,28 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
 
 // Replace CompareTypeSelector with a real component
 const CompareTypeSelector: React.FC<{ compareType: string, setCompareType: (type: 'TCC' | 'wRVUs' | 'CFs') => void }> = ({ compareType, setCompareType }) => (
-  <Paper sx={{ p: 2, mb: 2, background: '#f8fafc', boxShadow: 0, border: '1px solid #e0e7ef' }}>
-    <FormControl component="fieldset" fullWidth>
-      <FormLabel component="legend" sx={{ mb: 1, fontWeight: 600, color: 'text.primary' }}>
+  <Paper sx={{ p: 2, mb: 3, background: '#f8fafc', boxShadow: 0, border: '1px solid #e0e7ef' }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+      <Typography
+        variant="subtitle1"
+        sx={{ fontWeight: 600, color: 'text.primary', mb: 0, minWidth: 180 }}
+        component="label"
+        htmlFor="comparison-type-radio-group"
+      >
         Comparison Type
-      </FormLabel>
+      </Typography>
       <RadioGroup
         row
+        id="comparison-type-radio-group"
         value={compareType}
         onChange={e => setCompareType(e.target.value as 'TCC' | 'wRVUs' | 'CFs')}
-        sx={{ justifyContent: 'center', gap: 4 }}
+        sx={{ gap: 4 }}
       >
         <FormControlLabel value="TCC" control={<Radio />} label="Total Cash Compensation" />
         <FormControlLabel value="wRVUs" control={<Radio />} label="Work RVUs" />
         <FormControlLabel value="CFs" control={<Radio />} label="Conversion Factors" />
       </RadioGroup>
-    </FormControl>
+    </Box>
   </Paper>
 );
 
@@ -155,7 +162,7 @@ const TCCItemization: React.FC<{
   };
   const total = components.reduce((sum, c) => sum + Number(c.amount || 0), 0);
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
+    <Paper sx={{ p: 2, mb: 3 }}>
       <Typography variant="subtitle1" sx={{ mb: 1 }}>Compensation Components</Typography>
       <Grid container spacing={2} alignItems="center">
         {components.map((c, idx) => (
@@ -182,25 +189,32 @@ const TCCItemization: React.FC<{
                 InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
               />
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}>
               <TextField
                 label="Notes"
                 value={c.notes}
                 onChange={e => updateComponent(idx, 'notes', e.target.value)}
-                fullWidth
                 size="small"
+                sx={{ flex: 1, mr: 2 }}
               />
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button onClick={() => removeComponent(idx)} color="error" size="small" sx={{ mt: 0.5 }}>Remove</Button>
+              <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 120, justifyContent: 'flex-end' }}>
+                <Button
+                  onClick={() => removeComponent(idx)}
+                  color="error"
+                  size="small"
+                  sx={{ minWidth: 0, p: 1, mr: 1 }}
+                  aria-label="Remove"
+                >
+                  <TrashIcon className="h-5 w-5 text-gray-500" />
+                </Button>
+                <Typography variant="subtitle1" sx={{ whiteSpace: 'nowrap' }}>
+                  {idx === components.length - 1 && `Total TCC: $${total.toLocaleString()}`}
+                </Typography>
+              </Box>
             </Grid>
           </React.Fragment>
         ))}
       </Grid>
-      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button onClick={addComponent} size="small" variant="outlined">Add Component</Button>
-        <Typography variant="subtitle1">Total TCC: ${total.toLocaleString()}</Typography>
-      </Box>
     </Paper>
   );
 };
@@ -323,7 +337,7 @@ const ResultsPanel: React.FC<{
   console.log('ResultsPanel currentPercentile:', currentPercentile);
 
   return (
-    <Paper sx={{ p: 2, mt: 2 }}>
+    <Paper sx={{ p: 2, mt: 3 }}>
       <Typography variant="subtitle1" sx={{ mb: 2 }}>Market Comparison</Typography>
       {noMarketData ? (
         <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -665,7 +679,7 @@ const FMVCalculator: React.FC = () => {
     <div className="w-full bg-gray-50 min-h-screen">
       <Card sx={{
         p: 3,
-        maxWidth: 'none',
+        maxWidth: '90vw',
         width: '100%',
         margin: '40px auto 0 auto',
         boxShadow: 2,
