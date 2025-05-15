@@ -4,6 +4,7 @@ import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import Autocomplete from '@mui/material/Autocomplete';
 import { TrashIcon } from '@heroicons/react/24/outline';
+import { keyframes } from '@mui/system';
 
 // At the top level, after LocalStorageService is imported
 (window as any).LocalStorageService = LocalStorageService;
@@ -163,7 +164,7 @@ const TCCItemization: React.FC<{
   const total = components.reduce((sum, c) => sum + Number(c.amount || 0), 0);
   return (
     <Paper sx={{ p: 2, mb: 3 }}>
-      <Typography variant="subtitle1" sx={{ mb: 1 }}>Compensation Components</Typography>
+      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>Compensation Components</Typography>
       <Grid container spacing={2} alignItems="center">
         {components.map((c, idx) => (
           <React.Fragment key={idx}>
@@ -215,6 +216,17 @@ const TCCItemization: React.FC<{
           </React.Fragment>
         ))}
       </Grid>
+      {/* Add Component Button */}
+      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<span style={{ fontWeight: 'bold', fontSize: '1.2em' }}>+</span>}
+          onClick={addComponent}
+        >
+          Add Component
+        </Button>
+      </Box>
     </Paper>
   );
 };
@@ -282,6 +294,13 @@ const CFInput: React.FC<{
   );
 };
 
+// Add CSS keyframes for marker pulse animation
+const markerPulse = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+`;
+
 // In ResultsPanel, show message if no market data or percentile is available, and add Reset Filters button
 const ResultsPanel: React.FC<{
   compareType: 'TCC' | 'wRVUs' | 'CFs';
@@ -332,7 +351,7 @@ const ResultsPanel: React.FC<{
 
   return (
     <Paper sx={{ p: 2, mt: 3, border: '1.5px solid #b0b4bb', boxShadow: 'none' }}>
-      <Typography variant="subtitle1" sx={{ mb: 2 }}>Market Comparison</Typography>
+      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>Market Comparison</Typography>
       {noMarketData ? (
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -349,7 +368,7 @@ const ResultsPanel: React.FC<{
               const key = `p${percentile.slice(0, 2)}` as keyof typeof percentileData;
               return (
                 <Grid item xs={12} sm={6} md={3} key={percentile}>
-                  <Paper sx={{ p: 1.5, textAlign: 'center', background: '#f8fafc', boxShadow: 2, border: '1.5px solid #888' }}>
+                  <Paper sx={{ p: 1.5, textAlign: 'center', background: '#f8fafc', boxShadow: 2, border: '1.5px solid #b0b4bb' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       {percentile} Percentile
                     </Typography>
@@ -363,45 +382,44 @@ const ResultsPanel: React.FC<{
               );
             })}
           </Grid>
-          {/* Blue percentile bar and marker, always show for wRVUs */}
-          <Box sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
-                <>
-                  <Typography variant="body2" gutterBottom color="primary" sx={{ mr: 1 }}>
-                    You are in the {currentPercentile.toFixed(2)}th percentile
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', bgcolor: 'grey.100', px: 1.5, py: 0.5, borderRadius: 1, ml: 1 }}>
-                    Your Value: {formatValue(Number(inputValue))}
-                  </Typography>
-                </>
-              ) : (
-                <Typography variant="body2" gutterBottom color="text.secondary">
-                  Enter a value to see your percentile
-                </Typography>
-              )}
-            </Box>
-            <Box sx={{ position: 'relative', height: 6, bgcolor: 'grey.200', borderRadius: 2 }}>
+          {/* Animated/Emphasized Percentile Section */}
+          <Box sx={{ mt: 7, mb: 2, textAlign: 'center' }}>
+            {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
+              <Typography
+                variant="h6"
+                gutterBottom
+                color="primary"
+                sx={{ fontWeight: 700, fontSize: '1.35rem', mb: 2 }}
+              >
+                You are in the {currentPercentile.toFixed(2)}th percentile
+              </Typography>
+            ) : (
+              <Typography variant="h6" gutterBottom color="text.secondary" sx={{ mb: 2 }}>
+                Enter a value to see your percentile
+              </Typography>
+            )}
+            <Box sx={{ position: 'relative', height: 6, bgcolor: 'grey.200', borderRadius: 2, mt: 3 }}>
               <Box
                 sx={{
                   position: 'absolute',
                   left: `${typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? currentPercentile : 0}%`,
-                  top: -4,
-                  width: 14,
-                  height: 14,
+                  top: -8,
+                  width: 24,
+                  height: 24,
                   bgcolor: 'primary.main',
-                  border: '2px solid #fff',
+                  border: '3px solid #fff',
                   boxShadow: 1,
                   borderRadius: '50%',
                   transform: 'translateX(-50%)',
                   zIndex: 1,
+                  animation: `${markerPulse} 1.5s infinite`,
                 }}
               />
               <Box sx={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 6, bgcolor: 'primary.main', borderRadius: 2, opacity: 0.2 }} />
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-              <Typography variant="caption">0th</Typography>
-              <Typography variant="caption">100th</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1.1rem' }}>0th</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1.1rem' }}>100th</Typography>
             </Box>
           </Box>
         </>
