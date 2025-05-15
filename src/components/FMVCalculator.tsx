@@ -439,6 +439,32 @@ const DebugSurveyData: React.FC = () => {
   return null;
 };
 
+// Utility to normalize a survey row
+const normalizeSurveyRow = (row: any, surveyMeta: any, cm: any = {}) => ({
+  ...row,
+  providerType: row[cm.providerType || 'providerType'] || row.providerType || row.provider_type || '',
+  geographicRegion: row[cm.geographicRegion || 'geographicRegion'] || row.geographicRegion || row.geographic_region || '',
+  specialty: row[cm.specialty || 'specialty'] || row.specialty || row.normalizedSpecialty || '',
+  normalizedSpecialty: row.normalizedSpecialty || '',
+  surveySource: surveyMeta?.surveyType || '',
+  year: surveyMeta?.surveyYear || '',
+  tcc_p25: Number(row[cm.tcc_p25 || 'tcc_p25']) || 0,
+  tcc_p50: Number(row[cm.tcc_p50 || 'tcc_p50']) || 0,
+  tcc_p75: Number(row[cm.tcc_p75 || 'tcc_p75']) || 0,
+  tcc_p90: Number(row[cm.tcc_p90 || 'tcc_p90']) || 0,
+  wrvu_p25: Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0,
+  wrvu_p50: Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0,
+  wrvu_p75: Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0,
+  wrvu_p90: Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0,
+  cf_p25: Number(row[cm.cf_p25 || 'cf_p25']) || 0,
+  cf_p50: Number(row[cm.cf_p50 || 'cf_p50']) || 0,
+  cf_p75: Number(row[cm.cf_p75 || 'cf_p75']) || 0,
+  cf_p90: Number(row[cm.cf_p90 || 'cf_p90']) || 0,
+});
+
+// Utility to robustly normalize strings for comparison
+const normalizeString = (str: string) => (str || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
 const FMVCalculator: React.FC = () => {
   // Filters
   const [filters, setFilters] = useState({
@@ -502,20 +528,18 @@ const FMVCalculator: React.FC = () => {
         regions: new Set<string>(),
         surveySources: new Set<string>()
       };
+      let allRows: any[] = [];
       allMappings.forEach(mapping => {
         if (mapping.standardizedName) values.specialties.add(mapping.standardizedName);
       });
       for (const survey of uploadedSurveys) {
-        // Prefer columnMappings.surveyYear if present, else fallback
         let year = '';
         if (survey.metadata && survey.metadata.columnMappings && survey.metadata.columnMappings.surveyYear) {
           year = String(survey.metadata.columnMappings.surveyYear);
         } else if (survey.metadata && survey.metadata.surveyYear) {
           year = String(survey.metadata.surveyYear);
         }
-        if (year) {
-          yearsSet.add(year);
-        }
+        if (year) yearsSet.add(year);
         if (survey.metadata.uniqueProviderTypes) {
           survey.metadata.uniqueProviderTypes.forEach((pt: string) => values.providerTypes.add(pt));
         }
@@ -523,9 +547,21 @@ const FMVCalculator: React.FC = () => {
           survey.metadata.uniqueRegions.forEach((r: string) => values.regions.add(r));
         }
         if (survey.metadata.surveyType) values.surveySources.add(survey.metadata.surveyType);
+        const data = await storageService.getSurveyData(survey.id);
+        if (data && data.rows) {
+          const cm = survey.metadata?.columnMappings || {};
+          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey.metadata, cm));
+          normalizedRows.forEach((row: any) => {
+            if (row.providerType) values.providerTypes.add(row.providerType);
+            if (row.geographicRegion) values.regions.add(row.geographicRegion);
+            // Always extract unique specialties from uploaded survey data rows to ensure the dropdown is populated,
+            // even if the mapping table is empty or out of sync.
+            if (row.specialty) values.specialties.add(row.specialty);
+            if (row.year) yearsSet.add(String(row.year));
+          });
+          allRows = allRows.concat(normalizedRows);
+        }
       }
-      console.log('Uploaded surveys:', uploadedSurveys);
-      console.log('Extracted years for dropdown:', Array.from(yearsSet));
       setUniqueValues({
         specialties: Array.from(values.specialties).sort(),
         providerTypes: Array.from(values.providerTypes).sort(),
@@ -550,46 +586,31 @@ const FMVCalculator: React.FC = () => {
       for (const survey of uploadedSurveys) {
         const data = await storageService.getSurveyData(survey.id);
         if (data && data.rows) {
-          // Use columnMappings for robust field access
           const cm = survey.metadata?.columnMappings || {};
-          allRows = allRows.concat(data.rows.map(row => ({
-            ...row,
-            surveySource: survey.metadata.surveyType,
-            specialty: row[cm.specialty || 'specialty'] || row.specialty || row.normalizedSpecialty || '',
-            providerType: row[cm.provider_type || 'provider_type'] || row.provider_type || '',
-            geographicRegion: row[cm.geographic_region || 'geographic_region'] || row.geographic_region || '',
-            year: survey.metadata.surveyYear || '',
-            tcc_p25: Number(row[cm.tcc_p25 || 'tcc_p25']) || 0,
-            tcc_p50: Number(row[cm.tcc_p50 || 'tcc_p50']) || 0,
-            tcc_p75: Number(row[cm.tcc_p75 || 'tcc_p75']) || 0,
-            tcc_p90: Number(row[cm.tcc_p90 || 'tcc_p90']) || 0,
-            wrvu_p25: Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0,
-            wrvu_p50: Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0,
-            wrvu_p75: Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0,
-            wrvu_p90: Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0,
-            cf_p25: Number(row[cm.cf_p25 || 'cf_p25']) || 0,
-            cf_p50: Number(row[cm.cf_p50 || 'cf_p50']) || 0,
-            cf_p75: Number(row[cm.cf_p75 || 'cf_p75']) || 0,
-            cf_p90: Number(row[cm.cf_p90 || 'cf_p90']) || 0,
-          })));
+          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey.metadata, cm));
+          allRows = allRows.concat(normalizedRows);
         }
       }
       // Use mapping service for robust specialty matching
       let filteredRows = allRows;
       if (filters.specialty) {
         // Find all mapped source specialties for the selected standardized specialty
-        const mapping = allMappings.find(m => m.standardizedName.toLowerCase().trim() === filters.specialty.toLowerCase().trim());
+        const mapping = allMappings.find(m => normalizeString(m.standardizedName) === normalizeString(filters.specialty));
         let mappedSpecs: string[] = [];
         if (mapping) {
-          mappedSpecs = mapping.sourceSpecialties.map(s => s.specialty.toLowerCase().trim());
+          mappedSpecs = mapping.sourceSpecialties.map(s => normalizeString(s.specialty));
         } else {
-          mappedSpecs = [filters.specialty.toLowerCase().trim()];
+          mappedSpecs = [normalizeString(filters.specialty)];
         }
-        filteredRows = filteredRows.filter(r => mappedSpecs.includes((r.specialty || '').toLowerCase().trim()));
+        filteredRows = filteredRows.filter(r => mappedSpecs.includes(normalizeString(r.specialty)));
       }
-      if (filters.providerType) filteredRows = filteredRows.filter(r => (r.providerType || '').toLowerCase().trim() === filters.providerType.toLowerCase().trim());
-      if (filters.region) filteredRows = filteredRows.filter(r => (r.geographicRegion || '').toLowerCase().trim() === filters.region.toLowerCase().trim());
-      if (filters.surveySource) filteredRows = filteredRows.filter(r => (r.surveySource || '').toLowerCase().trim() === filters.surveySource.toLowerCase().trim());
+      if (filters.providerType) {
+        console.log('Provider Types in data:', filteredRows.map(r => r.providerType));
+        console.log('Filtering for providerType:', filters.providerType);
+        filteredRows = filteredRows.filter(r => normalizeString(r.providerType) === normalizeString(filters.providerType));
+      }
+      if (filters.region) filteredRows = filteredRows.filter(r => normalizeString(r.geographicRegion) === normalizeString(filters.region));
+      if (filters.surveySource) filteredRows = filteredRows.filter(r => normalizeString(r.surveySource) === normalizeString(filters.surveySource));
       if (filters.year) filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
       console.log('Filtered rows:', filteredRows);
       console.log('wRVU values:', filteredRows.map(r => [r.wrvu_p25, r.wrvu_p50, r.wrvu_p75, r.wrvu_p90]));

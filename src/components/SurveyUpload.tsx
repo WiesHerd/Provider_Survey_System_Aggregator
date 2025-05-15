@@ -49,6 +49,15 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
   rows: ISurveyRow[];
 }
 
+// Normalization Note:
+// -------------------
+// Many survey CSVs use snake_case headers (e.g., provider_type, geographic_region),
+// but the application expects camelCase (providerType, geographicRegion) for internal logic and dropdowns.
+// To ensure robust mapping regardless of CSV header style, we normalize both required column names and CSV headers to camelCase before mapping.
+// This prevents dropdowns (like Provider Type and Region) from being empty due to mismatched field names.
+// If you add new required columns, ensure they are included in the normalization logic.
+// See mapping logic in handleSurveyUpload for details.
+
 const SurveyUpload: React.FC = () => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
@@ -254,19 +263,19 @@ const SurveyUpload: React.FC = () => {
         // Log available columns
         console.log('Available columns in CSV:', headers);
         
-        // Create initial column mappings
+        // Helper to normalize header names to camelCase for robust mapping
+        const normalize = (str: string) => str.replace(/[_\s]+(.)?/g, (_, c) => c ? c.toUpperCase() : '').replace(/^./, c => c.toLowerCase());
+        
+        // Map required columns to CSV headers, handling both camelCase and snake_case
         const columnMappings: Record<string, string> = {};
         headers.forEach((header, index) => {
-          // Try to match headers to required columns
-          const matchingColumn = requiredColumns.find(col => 
-            header.toLowerCase().includes(col.toLowerCase()) ||
-            col.toLowerCase().includes(header.toLowerCase())
-          );
-          
-          if (matchingColumn) {
-            columnMappings[matchingColumn] = header;
-            console.log(`Mapped ${header} to ${matchingColumn}`);
-          }
+          const normalizedHeader = normalize(header);
+          requiredColumns.forEach(col => {
+            if (normalize(col) === normalizedHeader) {
+              columnMappings[col] = header;
+              console.log(`Mapped ${header} to ${col}`);
+            }
+          });
         });
 
         // Check for missing required columns
@@ -305,6 +314,9 @@ const SurveyUpload: React.FC = () => {
 
           return row as ISurveyRow;
         });
+
+        // Log a sample of the first 3 parsed rows for debugging
+        console.log('Sample parsed rows:', rows.slice(0, 3));
 
         // Get unique specialties as string array
         const uniqueSpecialties = Array.from(new Set(rows.map(r => r.specialty))) as string[];
@@ -381,10 +393,10 @@ const SurveyUpload: React.FC = () => {
 
   const handleClearAll = async () => {
     try {
-      await storageService.clearAllData();
-      setUploadedSurveys([]);
+      setIsLoading(false); // Set loading to false immediately
+      setUploadedSurveys([]); // Clear surveys from UI right away
       setSelectedSurvey(null);
-      window.location.reload(); // Force full reload to clear all state and DB
+      await storageService.clearAllData(); // Clear persistent storage
     } catch (error) {
       console.error('Error clearing all surveys:', error);
       handleError('Error clearing surveys');
