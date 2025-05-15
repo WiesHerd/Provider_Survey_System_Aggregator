@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, Typography, Divider, Grid, TextField, MenuItem, InputAdornment, Box, Paper, RadioGroup, FormControlLabel, Radio, Button, FormControl, FormLabel } from '@mui/material';
+import { Card, Typography, Divider, Grid, TextField, MenuItem, InputAdornment, Box, Paper, RadioGroup, FormControlLabel, Radio, Button, FormControl, FormHelperText } from '@mui/material';
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -121,9 +121,9 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
   </Grid>
 );
 
-// Replace CompareTypeSelector with a real component
+// Update CompareTypeSelector for lighter border and no shadow
 const CompareTypeSelector: React.FC<{ compareType: string, setCompareType: (type: 'TCC' | 'wRVUs' | 'CFs') => void }> = ({ compareType, setCompareType }) => (
-  <Paper sx={{ p: 2, mb: 3, background: '#f8fafc', boxShadow: 0, border: '1px solid #e0e7ef' }}>
+  <Paper sx={{ p: 2, mb: 3, background: '#f8fafc', boxShadow: 'none', border: '1.5px solid #b0b4bb' }}>
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
       <Typography
         variant="subtitle1"
@@ -219,7 +219,7 @@ const TCCItemization: React.FC<{
   );
 };
 
-// Refactor WRVUsInput for left-aligned, TCC-style layout
+// Refactor WRVUsInput for consistent vertical layout with CFInput
 const WRVUsInput: React.FC<{
   value: string;
   onChange: (v: string) => void;
@@ -228,35 +228,32 @@ const WRVUsInput: React.FC<{
   const normalized = fte ? (Number(value) / fte) : Number(value);
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
-      <Grid container spacing={2} alignItems="center">
-        <Grid item xs={12} md={8} sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box sx={{ minWidth: 250, flexShrink: 0 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>Work RVUs</Typography>
-            <TextField
-              label="Annual wRVUs"
-              type="number"
-              value={value}
-              onChange={e => onChange(e.target.value)}
-              size="small"
-              InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
-              sx={{ mb: 1, mr: 2, width: 220 }}
-            />
-          </Box>
-          <Box sx={{ ml: 3, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <Typography variant="body2" color="text.secondary">
-              FTE-adjusted: {normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} wRVUs
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Your value will be annualized to 1.0 FTE for market comparison.
-            </Typography>
-          </Box>
-        </Grid>
-      </Grid>
+      <FormControl fullWidth>
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>Work RVUs</Typography>
+        <TextField
+          label="Annual wRVUs"
+          type="number"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          size="small"
+          InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
+          sx={{ mb: 1, width: 220 }}
+        />
+        <FormHelperText>
+          <span style={{ fontWeight: 500, color: '#333' }}>
+            FTE-adjusted: {normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} wRVUs
+          </span>
+          <br />
+          <span style={{ color: '#888' }}>
+            Your value will be annualized to 1.0 FTE for market comparison.
+          </span>
+        </FormHelperText>
+      </FormControl>
     </Paper>
   );
 };
 
-// Update CFInput for compact, centered layout
+// Update CFInput for lighter border and no shadow
 const CFInput: React.FC<{
   value: string;
   onChange: (v: string) => void;
@@ -264,26 +261,23 @@ const CFInput: React.FC<{
   percentile?: number | null;
 }> = ({ value, onChange }) => {
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
-      <Typography variant="subtitle1" sx={{ mb: 1 }}>Conversion Factor ($/wRVU)</Typography>
-      <Grid container spacing={2} alignItems="center" justifyContent="flex-start">
-        <Grid item xs={12} md={4} sx={{ display: 'flex', alignItems: 'center' }}>
-          <TextField
-            label="Conversion Factor"
-            type="number"
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            size="small"
-            InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, endAdornment: <InputAdornment position="end">/wRVU</InputAdornment> }}
-            sx={{ mr: 2, width: 220 }}
-          />
-        </Grid>
-        <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
-            Enter your conversion factor, or calculate as TCC / wRVUs. FTE does not affect this value.
-          </Typography>
-        </Grid>
-      </Grid>
+    <Paper sx={{ p: 2, mb: 2, border: '1.5px solid #b0b4bb', boxShadow: 'none' }}>
+      <FormControl fullWidth>
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>Conversion Factor ($/wRVU)</Typography>
+        <TextField
+          label="Conversion Factor"
+          type="number"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          size="small"
+          InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, endAdornment: <InputAdornment position="end">/wRVU</InputAdornment> }}
+          sx={{ mb: 1, width: 220 }}
+        />
+        <FormHelperText>
+          Enter your conversion factor, or calculate as TCC / wRVUs.<br />
+          <span style={{ color: '#888' }}>FTE does not affect this value.</span>
+        </FormHelperText>
+      </FormControl>
     </Paper>
   );
 };
@@ -305,8 +299,8 @@ const ResultsPanel: React.FC<{
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(value);
   };
 
@@ -337,7 +331,7 @@ const ResultsPanel: React.FC<{
   console.log('ResultsPanel currentPercentile:', currentPercentile);
 
   return (
-    <Paper sx={{ p: 2, mt: 3 }}>
+    <Paper sx={{ p: 2, mt: 3, border: '1.5px solid #b0b4bb', boxShadow: 'none' }}>
       <Typography variant="subtitle1" sx={{ mb: 2 }}>Market Comparison</Typography>
       {noMarketData ? (
         <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -350,12 +344,12 @@ const ResultsPanel: React.FC<{
         </Box>
       ) : (
         <>
-          <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid container spacing={2} sx={{ mb: 3 }}>
             {['25th', '50th', '75th', '90th'].map((percentile) => {
               const key = `p${percentile.slice(0, 2)}` as keyof typeof percentileData;
               return (
                 <Grid item xs={12} sm={6} md={3} key={percentile}>
-                  <Paper sx={{ p: 1.5, textAlign: 'center', background: '#f8fafc', boxShadow: 2, border: '1px solid #e0e7ef' }}>
+                  <Paper sx={{ p: 1.5, textAlign: 'center', background: '#f8fafc', boxShadow: 2, border: '1.5px solid #888' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       {percentile} Percentile
                     </Typography>
@@ -370,7 +364,7 @@ const ResultsPanel: React.FC<{
             })}
           </Grid>
           {/* Blue percentile bar and marker, always show for wRVUs */}
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
                 <>
@@ -712,7 +706,9 @@ const FMVCalculator: React.FC = () => {
           Make your selections below to filter market data
         </Typography>
         <Divider sx={{ mb: 2 }} />
-        <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
+        <Box sx={{ mb: 5 }}>
+          <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
+        </Box>
         <CompareTypeSelector compareType={compareType} setCompareType={setCompareType} />
         {compareType === 'TCC' && (
           <TCCItemization components={compComponents} setComponents={setCompComponents} />

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Box, Typography, Paper, Grid, Divider } from '@mui/material';
+import { Box, Typography, Paper, Grid, Divider, FormControl, FormHelperText } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { TextField, InputAdornment } from '@mui/material';
 
 type CompareType = 'TCC' | 'wRVUs' | 'CFs';
 
@@ -387,9 +388,28 @@ export const FairMarketValuePrintable: React.FC<PrintableFairMarketValueProps> =
               >
                 Annual wRVUs
               </Typography>
-              <Typography>
-                {formatWRVUs(productivity.wrvus)}
-              </Typography>
+              <FormControl fullWidth>
+                <TextField
+                  label="Annual wRVUs"
+                  type="number"
+                  value={productivity.wrvus}
+                  onChange={(e) => {
+                    // Handle change
+                  }}
+                  size="small"
+                  InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
+                  sx={{ mb: 1, width: 220 }}
+                />
+                <FormHelperText>
+                  <span style={{ fontWeight: 500, color: '#333' }}>
+                    FTE-adjusted: {productivity.wrvuPercentile.toFixed(2)} wRVUs
+                  </span>
+                  <br />
+                  <span style={{ color: '#888' }}>
+                    Your value will be annualized to 1.0 FTE for market comparison.
+                  </span>
+                </FormHelperText>
+              </FormControl>
             </Grid>
             <Grid item xs={6}>
               <Typography 
