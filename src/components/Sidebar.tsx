@@ -106,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
           <div className="w-12 h-12 flex items-center justify-center">
-            <img src="/Icon.png" alt="BenchPoint Logo" className="w-10 h-10 object-contain" />
+            <img src={process.env.PUBLIC_URL + '/Icon.png'} alt="BenchPoint Logo" className="w-10 h-10 object-contain" />
           </div>
           {isOpen && (
             <span className="ml-3 font-bold text-2xl flex items-center" style={{ letterSpacing: 0.5 }}>
