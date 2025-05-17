@@ -1,6 +1,6 @@
 # Provider Survey System Aggregator
 
-A modern web application for processing, analyzing, and visualizing healthcare provider survey data. Built with React, TypeScript, and Tailwind CSS.
+A modern web application for  processing, analyzing, and visualizing healthcare provider survey data. Built with React, TypeScript, and Tailwind CSS.
 
 ## Features
 
