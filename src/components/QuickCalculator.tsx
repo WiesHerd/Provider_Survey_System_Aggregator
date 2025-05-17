@@ -13,7 +13,6 @@ import {
   MenuItem,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
-import { PrintDialog } from './PrintDialog';
 import type { Theme } from '@mui/material/styles';
 import type { SxProps } from '@mui/system';
 
@@ -238,13 +237,6 @@ export const QuickCalculator: React.FC<QuickCalculatorProps> = ({ data }) => {
           </Grid>
         </Grid>
       </Paper>
-
-      {/* Print Dialog */}
-      <PrintDialog
-        open={printDialogOpen}
-        onClose={() => setPrintDialogOpen(false)}
-        data={dataForPrintDialog}
-      />
     </Box>
   );
 }; 

@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, Typography, Divider, Grid, TextField, MenuItem, InputAdornment, Box, Paper, RadioGroup, FormControlLabel, Radio, Button, FormControl, FormHelperText } from '@mui/material';
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import Autocomplete from '@mui/material/Autocomplete';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { keyframes } from '@mui/system';
+import { useReactToPrint } from 'react-to-print';
+import FairMarketValuePrintable from './FairMarketValuePrintable';
 
 // At the top level, after LocalStorageService is imported
 (window as any).LocalStorageService = LocalStorageService;
@@ -163,7 +165,7 @@ const TCCItemization: React.FC<{
   };
   const total = components.reduce((sum, c) => sum + Number(c.amount || 0), 0);
   return (
-    <Paper sx={{ p: 2, mb: 3 }}>
+    <Paper sx={{ p: 2, mb: 3, border: '1.5px solid #b0b4bb', boxShadow: 'none' }}>
       <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>Compensation Components</Typography>
       <Grid container spacing={2} alignItems="center">
         {components.map((c, idx) => (
@@ -208,16 +210,16 @@ const TCCItemization: React.FC<{
                 >
                   <TrashIcon className="h-5 w-5 text-gray-500" />
                 </Button>
-                <Typography variant="subtitle1" sx={{ whiteSpace: 'nowrap' }}>
-                  {idx === components.length - 1 && `Total TCC: $${total.toLocaleString()}`}
-                </Typography>
               </Box>
             </Grid>
           </React.Fragment>
         ))}
       </Grid>
-      {/* Add Component Button */}
-      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Total TCC and Add Component Button in a flex bar */}
+      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', textAlign: 'left' }}>
+          Total TCC: ${total.toLocaleString()}
+        </Typography>
         <Button
           variant="outlined"
           size="small"
@@ -452,27 +454,33 @@ const DebugSurveyData: React.FC = () => {
 };
 
 // Utility to normalize a survey row
-const normalizeSurveyRow = (row: any, surveyMeta: any, cm: any = {}) => ({
-  ...row,
-  providerType: row[cm.providerType || 'providerType'] || row.providerType || row.provider_type || '',
-  geographicRegion: row[cm.geographicRegion || 'geographicRegion'] || row.geographicRegion || row.geographic_region || '',
-  specialty: row[cm.specialty || 'specialty'] || row.specialty || row.normalizedSpecialty || '',
-  normalizedSpecialty: row.normalizedSpecialty || '',
-  surveySource: surveyMeta?.surveyType || '',
-  year: surveyMeta?.surveyYear || '',
-  tcc_p25: Number(row[cm.tcc_p25 || 'tcc_p25']) || 0,
-  tcc_p50: Number(row[cm.tcc_p50 || 'tcc_p50']) || 0,
-  tcc_p75: Number(row[cm.tcc_p75 || 'tcc_p75']) || 0,
-  tcc_p90: Number(row[cm.tcc_p90 || 'tcc_p90']) || 0,
-  wrvu_p25: Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0,
-  wrvu_p50: Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0,
-  wrvu_p75: Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0,
-  wrvu_p90: Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0,
-  cf_p25: Number(row[cm.cf_p25 || 'cf_p25']) || 0,
-  cf_p50: Number(row[cm.cf_p50 || 'cf_p50']) || 0,
-  cf_p75: Number(row[cm.cf_p75 || 'cf_p75']) || 0,
-  cf_p90: Number(row[cm.cf_p90 || 'cf_p90']) || 0,
-});
+const normalizeSurveyRow = (row: any, surveyMeta: any, cm: any = {}) => {
+  // Debug: print surveyMeta for a few rows
+  if (Math.random() < 0.01) {
+    console.log('Normalizing row, surveyMeta:', surveyMeta);
+  }
+  return {
+    ...row,
+    providerType: row[cm.providerType || 'providerType'] || row.providerType || row.provider_type || '',
+    geographicRegion: row[cm.geographicRegion || 'geographicRegion'] || row.geographicRegion || row.geographic_region || '',
+    specialty: row[cm.specialty || 'specialty'] || row.specialty || row.normalizedSpecialty || '',
+    normalizedSpecialty: row.normalizedSpecialty || '',
+    surveySource: surveyMeta?.surveyType || '',
+    year: String(row[cm.year || 'year'] || row.year || surveyMeta?.surveyYear || surveyMeta?.metadata?.surveyYear || ''),
+    tcc_p25: Number(row[cm.tcc_p25 || 'tcc_p25']) || 0,
+    tcc_p50: Number(row[cm.tcc_p50 || 'tcc_p50']) || 0,
+    tcc_p75: Number(row[cm.tcc_p75 || 'tcc_p75']) || 0,
+    tcc_p90: Number(row[cm.tcc_p90 || 'tcc_p90']) || 0,
+    wrvu_p25: Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0,
+    wrvu_p50: Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0,
+    wrvu_p75: Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0,
+    wrvu_p90: Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0,
+    cf_p25: Number(row[cm.cf_p25 || 'cf_p25']) || 0,
+    cf_p50: Number(row[cm.cf_p50 || 'cf_p50']) || 0,
+    cf_p75: Number(row[cm.cf_p75 || 'cf_p75']) || 0,
+    cf_p90: Number(row[cm.cf_p90 || 'cf_p90']) || 0,
+  };
+};
 
 // Utility to robustly normalize strings for comparison
 const normalizeString = (str: string) => (str || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -526,6 +534,15 @@ const FMVCalculator: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Use useRef for react-to-print v3.1.0
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    pageStyle: "@page { size: auto; margin: 0; }",
+    documentTitle: "Fair Market Value Report"
+  });
 
   useEffect(() => {
     const fetchUniqueValues = async () => {
@@ -623,7 +640,12 @@ const FMVCalculator: React.FC = () => {
       }
       if (filters.region) filteredRows = filteredRows.filter(r => normalizeString(r.geographicRegion) === normalizeString(filters.region));
       if (filters.surveySource) filteredRows = filteredRows.filter(r => normalizeString(r.surveySource) === normalizeString(filters.surveySource));
-      if (filters.year) filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
+      if (filters.year) {
+        console.log('Year filter value:', filters.year);
+        console.log('Row years before filter:', filteredRows.map(r => r.year));
+        filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
+        console.log('Row years after filter:', filteredRows.map(r => r.year));
+      }
       console.log('Filtered rows:', filteredRows);
       console.log('wRVU values:', filteredRows.map(r => [r.wrvu_p25, r.wrvu_p50, r.wrvu_p75, r.wrvu_p90]));
       // Aggregate percentiles for TCC, wRVUs, CF
@@ -709,41 +731,76 @@ const FMVCalculator: React.FC = () => {
   }, [fetchMarketData]);
 
   return (
-    <div className="w-full bg-gray-50 min-h-screen">
-      <Card sx={{
-        p: 3,
-        maxWidth: '90vw',
-        width: '100%',
-        margin: '40px auto 0 auto',
-        boxShadow: 2,
-        background: '#fff',
-        borderRadius: 2,
-        px: { xs: 2, sm: 4, md: 8 },
-      }}>
-        <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
-          Make your selections below to filter market data
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Box sx={{ mb: 5 }}>
-          <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
-        </Box>
-        <CompareTypeSelector compareType={compareType} setCompareType={setCompareType} />
-        {compareType === 'TCC' && (
-          <TCCItemization components={compComponents} setComponents={setCompComponents} />
-        )}
-        {compareType === 'wRVUs' && <WRVUsInput value={wrvus} onChange={setWRVUs} fte={filters.fte} />}
-        {compareType === 'CFs' && <CFInput value={cf} onChange={setCF} fte={filters.fte} />}
-        <ResultsPanel 
-          compareType={compareType}
-          marketData={marketData}
-          percentiles={percentiles}
-          inputValue={compareType === 'TCC' ? tccFTEAdjusted : compareType === 'wRVUs' ? wrvusFTEAdjusted : Number(cf)}
-          rawValue={compareType === 'TCC' ? Number(tcc) : compareType === 'wRVUs' ? Number(wrvus) : Number(cf)}
-          fte={filters.fte}
-          onResetFilters={() => setFilters({ ...filters, specialty: '', providerType: '', region: '', surveySource: '', year: '' })}
-        />
-      </Card>
-    </div>
+    <>
+      {/* Main App Content */}
+      <div id="main-app-content" className="w-full bg-gray-50 min-h-screen">
+        <Card sx={{
+          p: 3,
+          maxWidth: '90vw',
+          width: '100%',
+          margin: '40px auto 0 auto',
+          boxShadow: 2,
+          background: '#fff',
+          borderRadius: 2,
+          px: { xs: 2, sm: 4, md: 8 },
+        }}>
+          {/* Print Button - top right, above main heading */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={handlePrint}
+            >
+              Print
+            </Button>
+          </Box>
+          <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+            Make your selections below to filter market data
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+          <Box sx={{ mb: 5 }}>
+            <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
+          </Box>
+          <CompareTypeSelector compareType={compareType} setCompareType={setCompareType} />
+          {compareType === 'TCC' && (
+            <TCCItemization components={compComponents} setComponents={setCompComponents} />
+          )}
+          {compareType === 'wRVUs' && <WRVUsInput value={wrvus} onChange={setWRVUs} fte={filters.fte} />}
+          {compareType === 'CFs' && <CFInput value={cf} onChange={setCF} fte={filters.fte} />}
+          <ResultsPanel 
+            compareType={compareType}
+            marketData={marketData}
+            percentiles={percentiles}
+            inputValue={compareType === 'TCC' ? tccFTEAdjusted : compareType === 'wRVUs' ? wrvusFTEAdjusted : Number(cf)}
+            rawValue={compareType === 'TCC' ? Number(tcc) : compareType === 'wRVUs' ? Number(wrvus) : Number(cf)}
+            fte={filters.fte}
+            onResetFilters={() => setFilters({ ...filters, specialty: '', providerType: '', region: '', surveySource: '', year: '' })}
+          />
+        </Card>
+        {/* Hidden printable component for react-to-print */}
+        <div style={{ position: 'absolute', left: '-9999px', top: 0, visibility: 'hidden' }}>
+          <FairMarketValuePrintable
+            ref={printRef}
+            compareType={compareType}
+            specialty={filters.specialty}
+            providerType={filters.providerType}
+            region={filters.region}
+            year={filters.year}
+            value={compareType === 'TCC' ? tcc : compareType === 'wRVUs' ? Number(wrvus) : Number(cf)}
+            marketPercentile={
+              compareType === 'TCC' ? percentiles.tcc ?? 0 :
+              compareType === 'wRVUs' ? percentiles.wrvu ?? 0 :
+              percentiles.cf ?? 0
+            }
+            marketData={
+              compareType === 'TCC' ? (marketData?.tcc ?? { p25: 0, p50: 0, p75: 0, p90: 0 }) :
+              compareType === 'wRVUs' ? (marketData?.wrvu ?? { p25: 0, p50: 0, p75: 0, p90: 0 }) :
+              (marketData?.cf ?? { p25: 0, p50: 0, p75: 0, p90: 0 })
+            }
+          />
+        </div>
+      </div>
+    </>
   );
 };
 

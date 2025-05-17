@@ -12,6 +12,7 @@ import { SurveyRegionalAnalytics } from './components/SurveyRegionalAnalytics';
 import FairMarketValue from './components/FairMarketValue';
 import { StorageProvider } from './contexts/StorageContext';
 import { MappingProvider } from './contexts/MappingContext';
+import { InformationCircleIcon, ArrowUpTrayIcon, LinkIcon, TableCellsIcon, PresentationChartLineIcon, CalculatorIcon, PrinterIcon } from '@heroicons/react/24/outline';
 
 const PageContent = () => {
   const location = useLocation();
@@ -58,10 +59,10 @@ const PageContent = () => {
           title: 'Fair Market Value Calculator',
           description: 'Calculate and compare compensation with market data'
         };
-      case '/documents':
+      case '/instructions':
         return {
-          title: 'Documents',
-          description: 'Access and manage your survey documents'
+          title: 'Instructions',
+          description: 'How to use the BenchPoint Survey Aggregator and Market Analytics App'
         };
       case '/reports':
         return {
@@ -92,7 +93,43 @@ const PageContent = () => {
           <Route path="/regional-analytics" element={<RegionalAnalytics />} />
           <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />
           <Route path="/fair-market-value" element={<FairMarketValue />} />
-          <Route path="/documents" element={<div className="p-4">Documents page coming soon</div>} />
+          <Route path="/instructions" element={
+            <div className="p-4 max-w-2xl mx-auto">
+              <div className="flex items-center mb-8">
+                <div className="bg-indigo-100 p-3 rounded-full mr-4">
+                  <InformationCircleIcon className="w-8 h-8 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-extrabold text-gray-900 mb-1">Instructions</h2>
+                  <p className="text-lg text-gray-600">Step-by-step guide to using the BenchPoint Survey Aggregator & Market Analytics App</p>
+                </div>
+              </div>
+              <ol className="space-y-6 ml-0">
+                {[
+                  { icon: ArrowUpTrayIcon, color: 'text-blue-500', title: 'Upload Your Survey Data', text: 'Go to Survey Processing → Upload Data. Click "Upload" and select your market survey CSV file. Follow the prompts to map your columns to the app’s required fields.' },
+                  { icon: LinkIcon, color: 'text-green-500', title: 'Map Specialties', text: 'After uploading, use Specialty Mapping to standardize specialty names across all surveys. This ensures accurate analytics and comparisons.' },
+                  { icon: TableCellsIcon, color: 'text-purple-500', title: 'Map Columns', text: 'Use Column Mapping to match your data columns (e.g., provider type, region) to the app’s expected format. This step is required for correct data processing.' },
+                  { icon: PresentationChartLineIcon, color: 'text-yellow-500', title: 'Analyze Survey Data', text: 'Go to Survey Analytics or Regional Analytics to explore, filter, and compare your survey data. Use filters to focus on specific specialties, provider types, regions, or years.' },
+                  { icon: CalculatorIcon, color: 'text-indigo-500', title: 'Calculate Fair Market Value', text: 'Open the Fair Market Value calculator. Enter compensation, wRVUs, or conversion factors to see how your values compare to market percentiles.' },
+                  { icon: PrinterIcon, color: 'text-pink-500', title: 'Print or Export Reports', text: 'On analytics or calculator pages, click the Print button to generate a professional report for documentation or compliance.' },
+                ].map((step, idx) => (
+                  <li key={step.title} className="flex items-center gap-5">
+                    <div className="flex flex-col items-center">
+                      <span className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-600 text-white font-bold text-lg border-4 border-white shadow">{idx + 1}</span>
+                      <step.icon className={`w-7 h-7 mt-2 ${step.color}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg mb-1">{step.title}</h3>
+                      <p>{step.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-10 text-gray-700 bg-indigo-50 rounded-lg p-4 border border-indigo-100">
+                <b>Tip:</b> For best results, ensure your uploaded data is clean and columns are mapped correctly. For help, contact your system administrator or refer to the user guide.
+              </div>
+            </div>
+          } />
           <Route path="/reports" element={<div className="p-4">Reports page coming soon</div>} />
         </Routes>
       </main>

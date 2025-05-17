@@ -1,508 +1,177 @@
-import React from 'react';
-import { Box, Typography, Paper, Grid, Divider, FormControl, FormHelperText } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { TextField, InputAdornment } from '@mui/material';
+import { Box, Typography, Table, TableBody, TableCell, TableRow, Grid } from '@mui/material';
+import { forwardRef } from 'react';
 
-type CompareType = 'TCC' | 'wRVUs' | 'CFs';
-
-interface CompensationComponent {
-  id: string;
-  name: string;
-  value: string;
-  label: string;
+interface Props {
+  compareType: 'TCC' | 'wRVUs' | 'CFs';
+  specialty: string;
+  providerType: string;
+  region: string;
+  year: string;
+  value: number;
+  marketPercentile: number;
+  marketData: { p25: number; p50: number; p75: number; p90: number };
 }
 
-interface MarketData {
-  tcc: {
-    p25: number;
-    p50: number;
-    p75: number;
-    p90: number;
-  };
-  wrvu: {
-    p25: number;
-    p50: number;
-    p75: number;
-    p90: number;
-  };
-  cf: {
-    p25: number;
-    p50: number;
-    p75: number;
-    p90: number;
-  };
-}
-
-interface PrintableFairMarketValueProps {
-  filters: {
-    specialty: string;
-    providerType: string;
-    region: string;
-    compareType: CompareType;
-  };
-  compensation: {
-    total: number;
-    components: CompensationComponent[];
-    marketPercentile: number;
-  };
-  productivity: {
-    wrvus: number;
-    wrvuPercentile: number;
-  };
-  marketData: MarketData | null;
-  conversionFactor: number;
-}
-
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
-const formatWRVUs = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
-
-export const FairMarketValuePrintable: React.FC<PrintableFairMarketValueProps> = ({
-  filters,
-  compensation,
-  productivity,
-  marketData,
-  conversionFactor,
-}) => {
-  const theme = useTheme();
+const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
+  compareType, specialty, providerType, region, year,
+  value, marketPercentile, marketData
+}, ref) => {
+  // Label and formatting based on compareType
+  let valueLabel = 'Total Compensation';
+  let valuePrefix = '$';
+  let valueSuffix = '';
+  if (compareType === 'wRVUs') {
+    valueLabel = 'Work RVUs';
+    valuePrefix = '';
+    valueSuffix = ' wRVUs';
+  } else if (compareType === 'CFs') {
+    valueLabel = 'Conversion Factor';
+    valuePrefix = '$';
+    valueSuffix = ' /wRVU';
+  }
+  const formatValue = (v: number) =>
+    compareType === 'wRVUs'
+      ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : v.toLocaleString();
 
   return (
-    <Box 
-      className="printable-report"
-      sx={{ 
-        p: 4, 
-        maxWidth: '100%', 
+    <Box
+      ref={ref}
+      sx={{
+        fontFamily: 'Inter, Roboto, Arial, Helvetica, sans-serif',
+        background: 'white',
+        color: 'black',
+        maxWidth: 650,
         margin: '0 auto',
+        p: 4,
+        boxSizing: 'border-box',
         '@media print': {
-          padding: 0,
-          margin: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'white',
           color: 'black',
-          fontSize: '12pt',
-          lineHeight: 1.5,
-          pageBreakAfter: 'always',
-          pageBreakInside: 'avoid',
+          backgroundColor: 'white',
+          boxShadow: 'none',
+          '-webkit-print-color-adjust': 'exact',
+          printColorAdjust: 'exact',
+          padding: '32px',
+          maxWidth: '650px',
+          margin: '0 auto',
         }
       }}
     >
-      {/* Header */}
-      <Box 
-        sx={{ 
-          textAlign: 'center', 
-          mb: 4,
-          '@media print': {
-            marginBottom: '20px',
-            pageBreakAfter: 'avoid',
+      {/* Global print CSS for strong borders, font, and spacing */}
+      <style>{`
+        @media print {
+          body { background: white !important; }
+          * { box-sizing: border-box; }
+          .fmv-print-title { font-size: 32px !important; font-weight: 800 !important; letter-spacing: 0.5px; }
+          .fmv-print-section { font-size: 18px !important; font-weight: 700 !important; margin-bottom: 8px; }
+          .fmv-print-table, .fmv-print-table th, .fmv-print-table td {
+            border: 2px solid #222 !important;
+            font-size: 16px !important;
+            font-weight: 500 !important;
+            color: #111 !important;
           }
-        }}
-      >
-        <Typography 
-          variant="h4" 
-          sx={{ 
-            fontWeight: 'bold',
-            '@media print': {
-              fontSize: '24pt',
-              marginBottom: '10px',
-            }
-          }}
-        >
-          Fair Market Value Analysis
-        </Typography>
-        <Typography 
-          variant="subtitle1" 
-          sx={{ 
-            color: 'text.secondary',
-            '@media print': {
-              fontSize: '14pt',
-              color: 'black',
-            }
-          }}
-        >
-          {filters.specialty} {filters.providerType && `- ${filters.providerType}`} {filters.region && `- ${filters.region}`}
-        </Typography>
+          .fmv-print-table th, .fmv-print-table td { padding: 12px 16px !important; }
+          .fmv-print-bold { font-weight: 800 !important; }
+          .fmv-print-market-label { font-size: 15px !important; font-weight: 700 !important; }
+          .fmv-print-market-value { font-size: 20px !important; font-weight: 800 !important; }
+        }
+      `}</style>
+      {/* Header with real logo */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <img src="/Icon.png" alt="BenchPoint Logo" style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 16 }} />
+          <Typography sx={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, fontFamily: 'inherit' }}>BenchPoint</Typography>
+        </Box>
+        <Box textAlign="right">
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'black', mb: 0.5 }}>Fair Market Value Report</Typography>
+          <Typography sx={{ fontSize: 13, color: 'black' }}>Generated: {new Date().toLocaleDateString()}</Typography>
+        </Box>
       </Box>
-
+      <Box sx={{ borderBottom: '2px solid #222', mb: 2 }} />
+      {/* Title */}
+      <Typography className="fmv-print-title" sx={{ mb: 2, mt: 1, color: 'black', textAlign: 'left' }}>
+        Fair Market Value Summary
+      </Typography>
+      <Box sx={{ borderBottom: '2px solid #222', mb: 2 }} />
       {/* Position Details */}
-      <Box 
-        sx={{ 
-          mb: 4,
-          '@media print': {
-            marginBottom: '20px',
-            pageBreakAfter: 'avoid',
-          }
-        }}
-      >
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            mb: 2,
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            pb: 1,
-            '@media print': {
-              fontSize: '16pt',
-              borderBottom: '1px solid black',
-            }
-          }}
-        >
-          Position Details
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
-            <Typography 
-              variant="subtitle2" 
-              sx={{ 
-                color: 'text.secondary',
-                '@media print': {
-                  color: 'black',
-                  fontWeight: 'bold',
-                }
-              }}
-            >
-              Specialty
-            </Typography>
-            <Typography>{filters.specialty}</Typography>
+      <Typography className="fmv-print-section" sx={{ color: 'black', mb: 0 }}>Position Details</Typography>
+      <Table size="small" className="fmv-print-table" sx={{ mb: 3, minWidth: 400, border: '2px solid #222', borderRadius: 1 }}>
+        <TableBody>
+          <TableRow>
+            <TableCell>{specialty}</TableCell>
+            <TableCell>{providerType}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>{region}</TableCell>
+            <TableCell>Year {year}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      {/* Compensation/Productivity/CF Analysis */}
+      <Typography className="fmv-print-section" sx={{ color: 'black', mb: 0 }}>{valueLabel} Analysis</Typography>
+      <Box sx={{ border: '2px solid #222', borderRadius: 1, mb: 3 }}>
+        <Grid container>
+          <Grid item xs={7} sx={{ p: 1.5, borderRight: '1.5px solid #222', fontSize: 16, fontWeight: 500 }}>{valueLabel}</Grid>
+          <Grid item xs={5} sx={{ p: 1.5, textAlign: 'right', fontWeight: 700, fontSize: 20 }}>
+            {valuePrefix}{formatValue(value)}{valueSuffix}
           </Grid>
-          <Grid item xs={6}>
-            <Typography 
-              variant="subtitle2" 
-              sx={{ 
-                color: 'text.secondary',
-                '@media print': {
-                  color: 'black',
-                  fontWeight: 'bold',
-                }
-              }}
-            >
-              Provider Type
-            </Typography>
-            <Typography>{filters.providerType}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography 
-              variant="subtitle2" 
-              sx={{ 
-                color: 'text.secondary',
-                '@media print': {
-                  color: 'black',
-                  fontWeight: 'bold',
-                }
-              }}
-            >
-              Region
-            </Typography>
-            <Typography>{filters.region}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography 
-              variant="subtitle2" 
-              sx={{ 
-                color: 'text.secondary',
-                '@media print': {
-                  color: 'black',
-                  fontWeight: 'bold',
-                }
-              }}
-            >
-              Compare Type
-            </Typography>
-            <Typography>{filters.compareType}</Typography>
+        </Grid>
+        <Box sx={{ borderTop: '1.5px solid #222' }} />
+        <Grid container>
+          <Grid item xs={7} sx={{ p: 1.5, borderRight: '1.5px solid #222', fontSize: 16, fontWeight: 500 }}>Market Percentile</Grid>
+          <Grid item xs={5} sx={{ p: 1.5, textAlign: 'right', fontWeight: 500, fontSize: 16 }}>
+            {marketPercentile.toFixed(1)}th
           </Grid>
         </Grid>
       </Box>
-
-      {/* Compensation Analysis */}
-      <Box 
-        sx={{ 
-          mb: 4,
-          '@media print': {
-            marginBottom: '20px',
-            pageBreakAfter: 'avoid',
-          }
-        }}
-      >
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            mb: 2,
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            pb: 1,
-            '@media print': {
-              fontSize: '16pt',
-              borderBottom: '1px solid black',
-            }
-          }}
-        >
-          Compensation Analysis
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Typography 
-              variant="subtitle2" 
-              sx={{ 
-                color: 'text.secondary',
-                '@media print': {
-                  color: 'black',
-                  fontWeight: 'bold',
-                }
-              }}
-            >
-              Total Compensation
-            </Typography>
-            <Typography 
-              variant="h5"
-              sx={{
-                '@media print': {
-                  fontSize: '18pt',
-                }
-              }}
-            >
-              {formatCurrency(compensation.total)}
-            </Typography>
-          </Grid>
-          <Grid item xs={12}>
-            <Typography 
-              variant="subtitle2" 
-              sx={{ 
-                color: 'text.secondary',
-                '@media print': {
-                  color: 'black',
-                  fontWeight: 'bold',
-                }
-              }}
-            >
-              Market Percentile
-            </Typography>
-            <Typography 
-              variant="h5"
-              sx={{
-                '@media print': {
-                  fontSize: '18pt',
-                }
-              }}
-            >
-              {compensation.marketPercentile.toFixed(1)}th
-            </Typography>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {/* Compensation Components */}
-      {compensation.components.length > 0 && (
-        <Box 
-          sx={{ 
-            mb: 4,
-            '@media print': {
-              marginBottom: '20px',
-              pageBreakAfter: 'avoid',
-            }
-          }}
-        >
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              mb: 2,
-              borderBottom: `1px solid ${theme.palette.divider}`,
-              pb: 1,
-              '@media print': {
-                fontSize: '16pt',
-                borderBottom: '1px solid black',
-              }
-            }}
-          >
-            Compensation Components
-          </Typography>
-          <Grid container spacing={2}>
-            {compensation.components.map((component) => (
-              <Grid item xs={6} key={component.id}>
-                <Typography 
-                  variant="subtitle2" 
-                  sx={{ 
-                    color: 'text.secondary',
-                    '@media print': {
-                      color: 'black',
-                      fontWeight: 'bold',
-                    }
-                  }}
-                >
-                  {component.label}
-                </Typography>
-                <Typography>
-                  {formatCurrency(parseFloat(component.value) || 0)}
+      {/* Market Data */}
+      <Typography className="fmv-print-section" sx={{ color: 'black', mb: 0 }}>Market Data</Typography>
+      <Box sx={{ border: '2px solid #222', borderRadius: 1, mb: 3, p: 0 }}>
+        <Grid container>
+          {['25th', '50th', '75th', '90th'].map((label, i) => {
+            const valueKey = ['p25', 'p50', 'p75', 'p90'][i] as keyof typeof marketData;
+            return (
+              <Grid item xs={3} key={label} sx={{
+                borderRight: i < 3 ? '1.5px solid #222' : 'none',
+                p: 2,
+                textAlign: 'center',
+              }}>
+                <Typography className="fmv-print-market-label" sx={{ mb: 0.5 }}>{label} Percentile</Typography>
+                <Typography className="fmv-print-market-value" sx={{ color: 'black' }}>
+                  {valuePrefix}{formatValue(marketData[valueKey] ?? 0)}{valueSuffix}
                 </Typography>
               </Grid>
-            ))}
-          </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
+      {/* Percentile Bar */}
+      <Box sx={{ mt: 2, mb: 0 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" fontSize="1.1rem" mb={0.5}>
+          <Typography sx={{ fontWeight: 700, fontSize: 16 }}>0th</Typography>
+          <Typography sx={{ fontWeight: 700, fontSize: 16 }}>100th</Typography>
         </Box>
-      )}
-
-      {/* Productivity Analysis */}
-      {filters.compareType === 'wRVUs' && (
-        <Box 
-          sx={{ 
-            mb: 4,
-            '@media print': {
-              marginBottom: '20px',
-              pageBreakAfter: 'avoid',
-            }
-          }}
-        >
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              mb: 2,
-              borderBottom: `1px solid ${theme.palette.divider}`,
-              pb: 1,
-              '@media print': {
-                fontSize: '16pt',
-                borderBottom: '1px solid black',
-              }
+        <Box position="relative" height={18} bgcolor="#e0e0e0" borderRadius={3} mb={1}>
+          <Box
+            sx={{
+              position: 'absolute',
+              left: `${Math.max(0, Math.min(100, marketPercentile))}%`,
+              width: 22, height: 22,
+              bgcolor: 'black',
+              borderRadius: '50%',
+              border: '3px solid white',
+              boxShadow: 1,
+              transform: 'translateX(-50%)',
+              top: -2,
             }}
-          >
-            Productivity Analysis
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <Typography 
-                variant="subtitle2" 
-                sx={{ 
-                  color: 'text.secondary',
-                  '@media print': {
-                    color: 'black',
-                    fontWeight: 'bold',
-                  }
-                }}
-              >
-                Annual wRVUs
-              </Typography>
-              <FormControl fullWidth>
-                <TextField
-                  label="Annual wRVUs"
-                  type="number"
-                  value={productivity.wrvus}
-                  onChange={(e) => {
-                    // Handle change
-                  }}
-                  size="small"
-                  InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
-                  sx={{ mb: 1, width: 220 }}
-                />
-                <FormHelperText>
-                  <span style={{ fontWeight: 500, color: '#333' }}>
-                    FTE-adjusted: {productivity.wrvuPercentile.toFixed(2)} wRVUs
-                  </span>
-                  <br />
-                  <span style={{ color: '#888' }}>
-                    Your value will be annualized to 1.0 FTE for market comparison.
-                  </span>
-                </FormHelperText>
-              </FormControl>
-            </Grid>
-            <Grid item xs={6}>
-              <Typography 
-                variant="subtitle2" 
-                sx={{ 
-                  color: 'text.secondary',
-                  '@media print': {
-                    color: 'black',
-                    fontWeight: 'bold',
-                  }
-                }}
-              >
-                wRVU Percentile
-              </Typography>
-              <Typography>
-                {productivity.wrvuPercentile.toFixed(1)}th
-              </Typography>
-            </Grid>
-          </Grid>
+          />
         </Box>
-      )}
-
-      {/* Market Data */}
-      {marketData && (
-        <Box 
-          sx={{ 
-            '@media print': {
-              pageBreakAfter: 'avoid',
-            }
-          }}
-        >
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              mb: 2,
-              borderBottom: `1px solid ${theme.palette.divider}`,
-              pb: 1,
-              '@media print': {
-                fontSize: '16pt',
-                borderBottom: '1px solid black',
-              }
-            }}
-          >
-            Market Data
-          </Typography>
-          <Grid container spacing={2}>
-            {['25th', '50th', '75th', '90th'].map((percentile) => {
-              const key = `p${percentile.slice(0, 2)}` as keyof typeof marketData.tcc;
-              return (
-                <Grid item xs={3} key={percentile}>
-                  <Typography 
-                    variant="subtitle2" 
-                    sx={{ 
-                      color: 'text.secondary',
-                      '@media print': {
-                        color: 'black',
-                        fontWeight: 'bold',
-                      }
-                    }}
-                  >
-                    {percentile}
-                  </Typography>
-                  <Typography>
-                    {filters.compareType === 'wRVUs'
-                      ? formatWRVUs(marketData.wrvu[key])
-                      : formatCurrency(marketData.tcc[key])}
-                  </Typography>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </Box>
-      )}
-
-      {/* Footer */}
-      <Box 
-        sx={{ 
-          mt: 4, 
-          pt: 2, 
-          borderTop: `1px solid ${theme.palette.divider}`,
-          '@media print': {
-            marginTop: '20px',
-            paddingTop: '10px',
-            borderTop: '1px solid black',
-            fontSize: '10pt',
-            color: 'text.secondary',
-          }
-        }}
-      >
-        <Typography variant="body2" align="center">
-          Generated on {new Date().toLocaleDateString()} | Fair Market Value Analysis Report
+        <Typography textAlign="center" fontSize={16} fontWeight={700} mt={1} mb={1}>
+          In {marketPercentile.toFixed(1)}th percentile
         </Typography>
       </Box>
     </Box>
   );
-}; 
+});
+
+export default FairMarketValuePrintable; 

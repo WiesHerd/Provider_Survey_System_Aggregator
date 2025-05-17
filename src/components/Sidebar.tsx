@@ -13,6 +13,7 @@ import {
   PresentationChartLineIcon,
   MapIcon,
   CalculatorIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -46,8 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     },
     { name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
     { name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
-    { name: 'Documents', icon: DocumentIcon, path: '/documents' },
-    { name: 'Reports', icon: ChartBarIcon, path: '/reports' },
+    { name: 'Instructions', icon: InformationCircleIcon, path: '/instructions' },
   ];
 
   const handleNavigation = (path: string) => {
