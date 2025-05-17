@@ -66,5 +66,5 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1"
   },
-  "homepage": "https://wiesherd.github.io/Provider_Survey_System_Aggregator"
+  "homepage": "https://wiesherd.github.io/dashboard"
 }
