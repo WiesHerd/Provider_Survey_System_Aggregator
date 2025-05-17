@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/Provider_Survey_System_Aggregator/static/css/main.5c16c57e.css",
+    "main.js": "/Provider_Survey_System_Aggregator/static/js/main.ac469c5d.js",
+    "index.html": "/Provider_Survey_System_Aggregator/index.html",
+    "main.5c16c57e.css.map": "/Provider_Survey_System_Aggregator/static/css/main.5c16c57e.css.map",
+    "main.ac469c5d.js.map": "/Provider_Survey_System_Aggregator/static/js/main.ac469c5d.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.5c16c57e.css",
+    "static/js/main.ac469c5d.js"
+  ]
+}
