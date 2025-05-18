@@ -95,15 +95,6 @@ const PageContent = () => {
           <Route path="/fair-market-value" element={<FairMarketValue />} />
           <Route path="/instructions" element={
             <div className="p-4 max-w-2xl mx-auto">
-              <div className="flex items-center mb-8">
-                <div className="bg-indigo-100 p-3 rounded-full mr-4">
-                  <InformationCircleIcon className="w-8 h-8 text-indigo-600" />
-                </div>
-                <div>
-                  <h2 className="text-3xl font-extrabold text-gray-900 mb-1">Instructions</h2>
-                  <p className="text-lg text-gray-600">Step-by-step guide to using the BenchPoint Survey Aggregator & Market Analytics App</p>
-                </div>
-              </div>
               <ol className="space-y-6 ml-0">
                 {[
                   { icon: ArrowUpTrayIcon, color: 'text-blue-500', title: 'Upload Your Survey Data', text: 'Go to Survey Processing → Upload Data. Click "Upload" and select your market survey CSV file. Follow the prompts to map your columns to the app\'s required fields.' },
