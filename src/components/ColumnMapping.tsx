@@ -20,7 +20,12 @@ import {
   PlusIcon as AddIcon,
   MagnifyingGlassIcon as SearchIcon,
   BoltIcon,
-  TrashIcon as DeleteSweepIcon
+  TrashIcon as DeleteSweepIcon,
+  PencilIcon as EditIcon,
+  ExclamationTriangleIcon as WarningIcon,
+  ArrowRightIcon,
+  LightBulbIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { ColumnMappingService } from '../services/ColumnMappingService';
 import { LocalStorageService } from '../services/StorageService';
@@ -62,6 +67,7 @@ const ColumnMapping: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped'>('unmapped');
   const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const mappingService = new ColumnMappingService(new LocalStorageService());
 
@@ -200,8 +206,47 @@ const ColumnMapping: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen">
-      <div className="flex flex-col w-full">
-        <div className="bg-white rounded-lg shadow mx-6">
+      <div className="mx-6">
+        {/* Collapsible Help Section */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowHelp((prev) => !prev)}
+            className="w-full flex items-center justify-between px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded font-medium mb-2"
+          >
+            <span className="flex items-center gap-2">
+              <LightBulbIcon className="h-5 w-5 text-indigo-600" />
+              <span>Column Mapping Help</span>
+            </span>
+            <ChevronDownIcon 
+              className={`h-5 w-5 text-indigo-600 transition-transform duration-200 ${showHelp ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {showHelp && (
+            <div className="p-4 bg-white border border-indigo-100 rounded shadow text-sm space-y-3">
+              <h3 className="font-bold text-indigo-700 mb-1">How Auto-Mapping Works</h3>
+              <ul className="list-disc pl-5 mb-2">
+                <li>The app uses smart matching to suggest standardized column names for each survey's data columns.</li>
+                <li>Auto-mapping considers column names, data types, and patterns to suggest the most likely matches.</li>
+                <li>You can adjust the confidence threshold and enable/disable fuzzy matching in the Auto-Map dialog.</li>
+              </ul>
+              <h3 className="font-bold text-indigo-700 mb-1">How to Review and Fix Mappings</h3>
+              <ul className="list-disc pl-5 mb-2">
+                <li>After auto-mapping, review the suggested mappings in the "Mapped" tab.</li>
+                <li>If a column is mapped incorrectly, you can delete the mapping and manually remap it by selecting the correct columns and clicking "Create Mapping."</li>
+                <li>Use the search bar to quickly find and review specific columns.</li>
+                <li>Clearing all mappings will reset the process and allow you to start over.</li>
+              </ul>
+              <h3 className="font-bold text-indigo-700 mb-1">Best Practices</h3>
+              <ul className="list-disc pl-5">
+                <li>Always review auto-mapped results for accuracy, especially for columns with similar names or purposes.</li>
+                <li>Use consistent column naming conventions in your source data for best results.</li>
+                <li>Contact support if you encounter persistent mapping issues.</li>
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow">
           {error && (
             <Alert severity="error" className="mb-4">
               {error}

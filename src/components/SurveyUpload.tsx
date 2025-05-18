@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudArrowUpIcon, XMarkIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, XMarkIcon, CalendarIcon, ChevronDownIcon, LightBulbIcon } from '@heroicons/react/24/outline';
 import DataPreview from './DataPreview';
 import { IStorageService } from '../services/StorageService';
 import { createStorageService } from '../services/StorageService';
@@ -69,6 +69,7 @@ const SurveyUpload: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showInstructions, setShowInstructions] = useState(true);
   
   // Add global filter state
   const [globalFilters, setGlobalFilters] = useState({
@@ -439,300 +440,336 @@ const SurveyUpload: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-gray-50">
-      {error && (
-        <div className="fixed top-4 right-4 w-96 p-4 bg-red-50 border border-red-200 rounded-lg shadow-lg z-50">
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
-
-      <div className="w-full">
-        {/* Form Controls */}
-        <div className="w-full mb-8">
-          <div className="bg-white shadow-sm px-8 py-6 rounded-lg">
-            <div className="grid grid-cols-12 gap-6">
-              {/* Survey Type Selection */}
-              <div className="col-span-4">
-                <label htmlFor="surveyType" className="block text-sm font-medium text-gray-700 mb-2">
-                  Survey Type
-                </label>
-                <div className="relative">
-                  <select
-                    id="surveyType"
-                    value={surveyType}
-                    onChange={handleSurveyTypeChange}
-                    className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg
-                      focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                      bg-white text-base transition-colors duration-200"
-                  >
-                    <option value="">Select a survey type</option>
-                    {SURVEY_OPTIONS.map(option => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                    <option value="custom">Custom Survey Type</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-                {isCustom && (
-                  <input
-                    type="text"
-                    value={customSurveyType}
-                    onChange={(e) => setCustomSurveyType(e.target.value)}
-                    placeholder="Enter custom survey type"
-                    className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg
-                      focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                      placeholder-gray-400 text-base transition-colors duration-200"
-                  />
-                )}
-              </div>
-
-              {/* Survey Year Selection */}
-              <div className="col-span-4">
-                <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
-                  Survey Year
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    id="surveyYear"
-                    value={surveyYear}
-                    onClick={() => setIsYearPickerOpen(true)}
-                    readOnly
-                    placeholder="Select year"
-                    className="block w-full px-4 py-3 border border-gray-300 rounded-lg
-                      focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                      bg-white text-base cursor-pointer transition-colors duration-200"
-                  />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                    <CalendarIcon className="h-5 w-5" />
-                  </div>
-
-                  {/* Year Picker Dropdown */}
-                  {isYearPickerOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                      <div className="py-1">
-                        {years.map(year => (
-                          <button
-                            key={year}
-                            onClick={() => {
-                              setSurveyYear(year.toString());
-                              setIsYearPickerOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2.5 text-base transition-colors duration-200
-                              ${surveyYear === year.toString() 
-                                ? 'bg-indigo-50 text-indigo-600 font-medium' 
-                                : 'text-gray-700 hover:bg-gray-50'
-                              }`}
-                          >
-                            {year}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="col-span-4 flex items-end space-x-3">
-                <div {...getRootProps()} className="flex-1">
-                  <input {...getInputProps()} />
-                  <button
-                    type="button"
-                    className="w-full h-[46px] rounded-lg text-base font-medium bg-indigo-600 
-                      hover:bg-indigo-700 text-white transition-all duration-200
-                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <span className="flex items-center justify-center">
-                      <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                      Select File
-                    </span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSurveyUpload}
-                  disabled={files.length === 0 || !surveyType || !surveyYear}
-                  className="flex-1 h-[46px] rounded-lg text-base font-medium
-                    bg-green-600 hover:bg-green-700 text-white transition-all duration-200
-                    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
-                    disabled:opacity-50 disabled:cursor-not-allowed"
+    <div className="w-full min-h-screen">
+      <div className="mx-6">
+        {/* Collapsible Help Section */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowInstructions((prev) => !prev)}
+            className="w-full flex items-center justify-between px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded font-medium mb-2"
+          >
+            <span className="flex items-center gap-2">
+              <LightBulbIcon className="h-5 w-5 text-blue-600" />
+              <span>Upload Instructions</span>
+            </span>
+            <ChevronDownIcon 
+              className={`h-5 w-5 text-blue-600 transition-transform duration-200 ${showInstructions ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {showInstructions && (
+            <div className="p-4 bg-white border border-blue-100 rounded shadow text-sm space-y-3">
+              <h3 className="font-bold text-blue-700 mb-1">Required File Format</h3>
+              <ul className="list-disc pl-5 mb-2">
+                <li>Accepted file type: <b>CSV</b></li>
+                <li>Your file must include these columns (exact names): <code>specialty, provider_type, geographic_region, n_orgs, n_incumbents, tcc_p25, tcc_p50, tcc_p75, tcc_p90, wrvu_p25, wrvu_p50, wrvu_p75, wrvu_p90, cf_p25, cf_p50, cf_p75, cf_p90</code></li>
+                <li>Extra columns are OK—they'll be ignored.</li>
+              </ul>
+              <h3 className="font-bold text-blue-700 mb-1">How Auto-Mapping Works</h3>
+              <p className="mb-2">
+                When you upload your file, the app will automatically try to match your column names to the required fields. If a column is not matched, you'll be prompted to map it manually before continuing.
+              </p>
+              <div className="mt-4">
+                <a
+                  href={process.env.PUBLIC_URL + '/sample-survey.csv'}
+                  download="sample-survey.csv"
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                 >
-                  <span className="flex items-center justify-center">
-                    Upload Survey
-                  </span>
-                </button>
+                  <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                  Download Sample CSV
+                </a>
               </div>
-            </div>
-
-            {/* Selected File Preview */}
-            {files.length > 0 && (
-              <div className="mt-6 border-t border-gray-200 pt-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Selected File</h3>
-                <div className="bg-gray-50 px-4 py-3 rounded-lg flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center text-gray-500">
-                      <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span className="text-sm font-medium">{files[0].name}</span>
-                    </div>
-                    {surveyType && surveyYear && (
-                      <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                        {isCustom ? customSurveyType : surveyType} • {surveyYear}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => files[0].id && removeFile(files[0].id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Uploaded Surveys Grid */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
-            <button
-              onClick={handleClearAll}
-              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
-                transition-colors duration-200 rounded-md hover:bg-red-50"
-            >
-              <XMarkIcon className="h-4 w-4 mr-1.5" />
-              Clear All
-            </button>
-          </div>
-
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
-              <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
-            </div>
-          ) : uploadedSurveys.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-xl">
-              <p className="text-gray-500">No surveys uploaded yet</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {uploadedSurveys.map((survey) => {
-                const stats = calculateSurveyStats(survey.rows);
-                return (
-                  <div
-                    key={survey.id}
-                    className={`relative group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 
-                      overflow-hidden cursor-pointer border border-gray-200
-                      ${selectedSurvey === survey.id ? 'ring-2 ring-indigo-500' : ''}`}
-                    onClick={() => setSelectedSurvey(survey.id)}
-                  >
-                    {/* Card Header */}
-                    <div className="px-6 py-4 border-b border-gray-100">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-indigo-50 rounded-lg">
-                            <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-medium text-gray-900 truncate max-w-[180px]">
-                              {survey.surveyType}
-                            </h3>
-                            <span className="text-xs text-gray-500">
-                              {new Date(survey.uploadDate).toLocaleDateString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                          bg-indigo-50 text-indigo-700">
-                          {survey.surveyYear}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-xs text-gray-500 truncate">
-                        {survey.fileName}
-                      </div>
-                    </div>
-
-                    {/* Card Stats */}
-                    <div className="px-6 py-4">
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="text-center">
-                          <div className="text-2xl font-semibold text-gray-900">
-                            {stats.totalRows.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">Rows</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-semibold text-gray-900">
-                            {stats.uniqueSpecialties.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">Specialties</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-semibold text-gray-900">
-                            {stats.totalDataPoints.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">Data Points</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Survey Type Badge */}
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <button
-                        onClick={(e) => removeUploadedSurvey(survey.id, e)}
-                        className="p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100"
-                        title="Delete survey"
-                      >
-                        <XMarkIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-
-                    {/* Survey Type Badge */}
-                    <div className="absolute bottom-0 inset-x-0 h-1.5" style={{
-                      backgroundColor: survey.surveyType === 'SullivanCotter' ? '#818CF8' :
-                                     survey.surveyType === 'MGMA' ? '#34D399' :
-                                     survey.surveyType === 'Gallagher' ? '#F472B6' :
-                                     survey.surveyType === 'ECG' ? '#FBBF24' :
-                                     survey.surveyType === 'AMGA' ? '#60A5FA' : '#9CA3AF'
-                    }} />
-                  </div>
-                );
-              })}
             </div>
           )}
         </div>
 
-        {/* Data Preview */}
-        {selectedSurvey && (
-          <div className="bg-white shadow-sm rounded-xl overflow-hidden">
-            <div className="px-8 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Survey Preview</h2>
-            </div>
-            <div className="w-full overflow-x-auto">
-              <DataPreview
-                file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
-                onError={handleError}
-                globalFilters={globalFilters}
-                onFilterChange={handleFilterChange}
-              />
+        <div className="bg-white rounded-lg shadow">
+          {/* Form Controls */}
+          <div className="w-full mb-8">
+            <div className="bg-white shadow-sm px-8 py-6 rounded-lg">
+              <div className="grid grid-cols-12 gap-6">
+                {/* Survey Type Selection */}
+                <div className="col-span-4">
+                  <label htmlFor="surveyType" className="block text-sm font-medium text-gray-700 mb-2">
+                    Survey Type
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="surveyType"
+                      value={surveyType}
+                      onChange={handleSurveyTypeChange}
+                      className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        bg-white text-base transition-colors duration-200"
+                    >
+                      <option value="">Select a survey type</option>
+                      {SURVEY_OPTIONS.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                      <option value="custom">Custom Survey Type</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
+                  {isCustom && (
+                    <input
+                      type="text"
+                      value={customSurveyType}
+                      onChange={(e) => setCustomSurveyType(e.target.value)}
+                      placeholder="Enter custom survey type"
+                      className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        placeholder-gray-400 text-base transition-colors duration-200"
+                    />
+                  )}
+                </div>
+
+                {/* Survey Year Selection */}
+                <div className="col-span-4">
+                  <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
+                    Survey Year
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="surveyYear"
+                      value={surveyYear}
+                      onClick={() => setIsYearPickerOpen(true)}
+                      readOnly
+                      placeholder="Select year"
+                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        bg-white text-base cursor-pointer transition-colors duration-200"
+                    />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                      <CalendarIcon className="h-5 w-5" />
+                    </div>
+
+                    {/* Year Picker Dropdown */}
+                    {isYearPickerOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                        <div className="py-1">
+                          {years.map(year => (
+                            <button
+                              key={year}
+                              onClick={() => {
+                                setSurveyYear(year.toString());
+                                setIsYearPickerOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-base transition-colors duration-200
+                                ${surveyYear === year.toString() 
+                                  ? 'bg-indigo-50 text-indigo-600 font-medium' 
+                                  : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                              {year}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="col-span-4 flex items-end space-x-3">
+                  <div {...getRootProps()} className="flex-1">
+                    <input {...getInputProps()} />
+                    <button
+                      type="button"
+                      className="w-full h-[46px] rounded-lg text-base font-medium bg-indigo-600 
+                        hover:bg-indigo-700 text-white transition-all duration-200
+                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <span className="flex items-center justify-center">
+                        <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                        Select File
+                      </span>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSurveyUpload}
+                    disabled={files.length === 0 || !surveyType || !surveyYear}
+                    className="flex-1 h-[46px] rounded-lg text-base font-medium
+                      bg-green-600 hover:bg-green-700 text-white transition-all duration-200
+                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
+                      disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="flex items-center justify-center">
+                      Upload Survey
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected File Preview */}
+              {files.length > 0 && (
+                <div className="mt-6 border-t border-gray-200 pt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Selected File</h3>
+                  <div className="bg-gray-50 px-4 py-3 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center text-gray-500">
+                        <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="text-sm font-medium">{files[0].name}</span>
+                      </div>
+                      {surveyType && surveyYear && (
+                        <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                          {isCustom ? customSurveyType : surveyType} • {surveyYear}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => files[0].id && removeFile(files[0].id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Uploaded Surveys Grid */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
+              <button
+                onClick={handleClearAll}
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
+                  transition-colors duration-200 rounded-md hover:bg-red-50"
+              >
+                <XMarkIcon className="h-4 w-4 mr-1.5" />
+                Clear All
+              </button>
+            </div>
+
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
+              </div>
+            ) : uploadedSurveys.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-xl">
+                <p className="text-gray-500">No surveys uploaded yet</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {uploadedSurveys.map((survey) => {
+                  const stats = calculateSurveyStats(survey.rows);
+                  return (
+                    <div
+                      key={survey.id}
+                      className={`relative group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 
+                        overflow-hidden cursor-pointer border border-gray-200
+                        ${selectedSurvey === survey.id ? 'ring-2 ring-indigo-500' : ''}`}
+                      onClick={() => setSelectedSurvey(survey.id)}
+                    >
+                      {/* Card Header */}
+                      <div className="px-6 py-4 border-b border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-indigo-50 rounded-lg">
+                              <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-medium text-gray-900 truncate max-w-[180px]">
+                                {survey.surveyType}
+                              </h3>
+                              <span className="text-xs text-gray-500">
+                                {new Date(survey.uploadDate).toLocaleDateString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            bg-indigo-50 text-indigo-700">
+                            {survey.surveyYear}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-500 truncate">
+                          {survey.fileName}
+                        </div>
+                      </div>
+
+                      {/* Card Stats */}
+                      <div className="px-6 py-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-semibold text-gray-900">
+                              {stats.totalRows.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">Rows</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-semibold text-gray-900">
+                              {stats.uniqueSpecialties.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">Specialties</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-semibold text-gray-900">
+                              {stats.totalDataPoints.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">Data Points</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Survey Type Badge */}
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button
+                          onClick={(e) => removeUploadedSurvey(survey.id, e)}
+                          className="p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100"
+                          title="Delete survey"
+                        >
+                          <XMarkIcon className="h-5 w-5" />
+                        </button>
+                      </div>
+
+                      {/* Survey Type Badge */}
+                      <div className="absolute bottom-0 inset-x-0 h-1.5" style={{
+                        backgroundColor: survey.surveyType === 'SullivanCotter' ? '#818CF8' :
+                                       survey.surveyType === 'MGMA' ? '#34D399' :
+                                       survey.surveyType === 'Gallagher' ? '#F472B6' :
+                                       survey.surveyType === 'ECG' ? '#FBBF24' :
+                                       survey.surveyType === 'AMGA' ? '#60A5FA' : '#9CA3AF'
+                      }} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Data Preview */}
+          {selectedSurvey && (
+            <div className="bg-white shadow-sm rounded-xl overflow-hidden">
+              <div className="px-8 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Survey Preview</h2>
+              </div>
+              <div className="w-full overflow-x-auto">
+                <DataPreview
+                  file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
+                  onError={handleError}
+                  globalFilters={globalFilters}
+                  onFilterChange={handleFilterChange}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
