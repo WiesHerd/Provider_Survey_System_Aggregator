@@ -106,9 +106,9 @@ const PageContent = () => {
               </div>
               <ol className="space-y-6 ml-0">
                 {[
-                  { icon: ArrowUpTrayIcon, color: 'text-blue-500', title: 'Upload Your Survey Data', text: 'Go to Survey Processing → Upload Data. Click "Upload" and select your market survey CSV file. Follow the prompts to map your columns to the app’s required fields.' },
+                  { icon: ArrowUpTrayIcon, color: 'text-blue-500', title: 'Upload Your Survey Data', text: 'Go to Survey Processing → Upload Data. Click "Upload" and select your market survey CSV file. Follow the prompts to map your columns to the app's required fields.' },
                   { icon: LinkIcon, color: 'text-green-500', title: 'Map Specialties', text: 'After uploading, use Specialty Mapping to standardize specialty names across all surveys. This ensures accurate analytics and comparisons.' },
-                  { icon: TableCellsIcon, color: 'text-purple-500', title: 'Map Columns', text: 'Use Column Mapping to match your data columns (e.g., provider type, region) to the app’s expected format. This step is required for correct data processing.' },
+                  { icon: TableCellsIcon, color: 'text-purple-500', title: 'Map Columns', text: 'Use Column Mapping to match your data columns (e.g., provider type, region) to the app's expected format. This step is required for correct data processing.' },
                   { icon: PresentationChartLineIcon, color: 'text-yellow-500', title: 'Analyze Survey Data', text: 'Go to Survey Analytics or Regional Analytics to explore, filter, and compare your survey data. Use filters to focus on specific specialties, provider types, regions, or years.' },
                   { icon: CalculatorIcon, color: 'text-indigo-500', title: 'Calculate Fair Market Value', text: 'Open the Fair Market Value calculator. Enter compensation, wRVUs, or conversion factors to see how your values compare to market percentiles.' },
                   { icon: PrinterIcon, color: 'text-pink-500', title: 'Print or Export Reports', text: 'On analytics or calculator pages, click the Print button to generate a professional report for documentation or compliance.' },
@@ -131,6 +131,7 @@ const PageContent = () => {
             </div>
           } />
           <Route path="/reports" element={<div className="p-4">Reports page coming soon</div>} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
     </>
@@ -157,7 +158,7 @@ function App() {
   return (
     <StorageProvider>
       <MappingProvider>
-        <Router>
+        <Router basename={process.env.PUBLIC_URL}>
           <div className="flex h-screen bg-gray-50">
             <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
             
