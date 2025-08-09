@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useRef } from 'react';
+import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import {
   HomeIcon,
   ChartBarIcon,
@@ -32,6 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const listRef = useRef<HTMLUListElement>(null);
   
   const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
@@ -51,8 +52,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     { name: 'Instructions', icon: InformationCircleIcon, path: '/instructions' },
   ];
 
-  const handleNavigation = (path: string) => {
-    navigate(path);
+  const handleNavigation = (path: string) => navigate(path);
+
+  // Keyboard navigation: Arrow/Home/End over visible items
+  const handleKeyDown: React.KeyboardEventHandler<HTMLUListElement> = (e) => {
+    const items = Array.from((listRef.current?.querySelectorAll('[role="menuitem"]') || []) as NodeListOf<HTMLElement>);
+    const currentIndex = items.findIndex((el) => el === document.activeElement);
+    if (items.length === 0) return;
+    let nextIndex = currentIndex;
+    switch (e.key) {
+      case 'ArrowDown':
+        nextIndex = (currentIndex + 1 + items.length) % items.length; break;
+      case 'ArrowUp':
+        nextIndex = (currentIndex - 1 + items.length) % items.length; break;
+      case 'Home':
+        nextIndex = 0; break;
+      case 'End':
+        nextIndex = items.length - 1; break;
+      case 'Escape':
+        setIsOpen(false); return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    items[nextIndex]?.focus();
   };
 
   const renderMenuItem = (item: MenuItem, isChild = false) => {
@@ -80,11 +103,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
             }
           `}
         >
-          <item.icon className={`w-6 h-6 transition-colors duration-200
+          <item.icon className={`w-5 h-5 transition-colors duration-200
             ${(isActive || isParentActive) ? 'text-indigo-600' : 'text-gray-500'}
           `} />
           {isOpen && (
-            <span className="ml-3 font-medium text-sm">
+            <span className="ml-3 font-medium text-xs">
               {item.name}
             </span>
           )}
@@ -119,8 +142,57 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       </div>
 
       {/* Main Menu */}
-      <nav className="flex-1 px-2 py-4 space-y-1">
-        {menuItems.map(item => renderMenuItem(item))}
+      <nav aria-label="Primary" className="flex-1 px-2 py-4">
+        <ul role="menu" ref={listRef} onKeyDown={handleKeyDown} className="space-y-1">
+          {menuItems.map(item => (
+            <li key={item.name}>
+              {(!isOpen && item.children) ? (
+                // When collapsed, render children directly
+                <ul role="menu" className="space-y-1">
+                  {item.children.map(child => (
+                    <li key={child.name}>
+                      <NavLink
+                        to={child.path}
+                        role="menuitem"
+                        className={({ isActive }) => `w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200 justify-center ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                      >
+                        <child.icon className={`w-5 h-5`} />
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div>
+                  <NavLink
+                    to={item.path}
+                    role="menuitem"
+                    aria-current={currentPath === item.path ? 'page' : undefined}
+                    className={({ isActive }) => `w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${!isOpen ? 'justify-center' : ''} ${isActive || item.children?.some(c => c.path === currentPath) ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <item.icon className={`w-5 h-5 ${currentPath === item.path ? 'text-indigo-600' : 'text-gray-500'}`} />
+                    {isOpen && <span className="ml-3 font-medium text-xs">{item.name}</span>}
+                  </NavLink>
+                  {isOpen && item.children && (
+                    <ul role="menu" className="mt-1 ml-6 space-y-1">
+                      {item.children.map(child => (
+                        <li key={child.name}>
+                          <NavLink
+                            to={child.path}
+                            role="menuitem"
+                            className={({ isActive }) => `w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                          >
+                            <child.icon className={`w-5 h-5 ${currentPath === child.path ? 'text-indigo-600' : 'text-gray-500'}`} />
+                            <span className="ml-3 font-medium text-xs">{child.name}</span>
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       </nav>
 
       {/* Bottom Section */}
@@ -131,10 +203,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
             className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 bg-white shadow-md hover:bg-gray-100 transition-all duration-200 focus:outline-none"
             aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
-            <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
+            {isOpen ? (
+              <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
+            ) : (
+              <ChevronRightIcon className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
+            )}
           </button>
           <span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1 rounded bg-gray-900 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
-            Collapse sidebar
+            {isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           </span>
         </div>
       </div>

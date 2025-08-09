@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudArrowUpIcon, XMarkIcon, CalendarIcon, ChevronDownIcon, LightBulbIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, XMarkIcon, CalendarIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import DataPreview from './DataPreview';
-import { IStorageService } from '../services/StorageService';
-import { createStorageService } from '../services/StorageService';
+import BackendService from '../services/BackendService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 import { TableFilters } from './TableFilters';
 
@@ -69,7 +68,10 @@ const SurveyUpload: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showInstructions, setShowInstructions] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState(0);
   
   // Add global filter state
   const [globalFilters, setGlobalFilters] = useState({
@@ -89,7 +91,11 @@ const SurveyUpload: React.FC = () => {
     regions: new Set()
   });
 
-  const storageService = React.useMemo<IStorageService>(() => createStorageService(), []);
+  // Add state for collapsible sections
+  const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
+  const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
+
+  const backendService = React.useMemo(() => BackendService.getInstance(), []);
 
   // Update unique values when surveys change
   useEffect(() => {
@@ -133,32 +139,31 @@ const SurveyUpload: React.FC = () => {
     const loadSurveys = async () => {
       try {
         setIsLoading(true);
-        const surveys = await storageService.listSurveys();
+        const surveys = await backendService.getAllSurveys();
         console.log('Loaded surveys:', surveys);
         
-        // Process each survey to ensure column mappings are preserved
-        const processedSurveys = await Promise.all(surveys.map(async (survey: StorageSurvey) => {
-          // Get the full survey data to ensure we have all mappings
-          const fullData = await storageService.getSurveyData(survey.id);
-          
-          return {
-            id: survey.id,
-            fileName: survey.metadata.columnMappings['fileName'] || '',
-            surveyType: survey.metadata.surveyType,
-            surveyYear: survey.metadata.columnMappings['surveyYear'] || '',
-            uploadDate: new Date(survey.metadata.columnMappings['uploadDate'] || new Date()),
-            fileContent: survey.metadata.fileContent,
-            rows: fullData.rows,
-            stats: {
-              totalRows: fullData.rows.length,
-              uniqueSpecialties: new Set(fullData.rows.map(r => r.specialty)).size,
-              totalDataPoints: fullData.rows.length * Object.keys(fullData.rows[0] || {}).length
-            },
-            columnMappings: survey.metadata.columnMappings || {}
-          };
+        // Build lightweight survey list; fetch detailed rows only when a survey is selected
+        const processedSurveys = surveys.map((survey: any) => ({
+          id: survey.id,
+          fileName: survey.name || '',
+          surveyType: survey.type || '',
+          surveyYear: survey.year?.toString() || '',
+          uploadDate: new Date(survey.uploadDate || new Date()),
+          fileContent: '',
+          rows: [],
+          stats: {
+            totalRows: survey.rowCount ?? survey.row_count ?? 0,
+            uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
+            totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
+          },
+          columnMappings: {}
         }));
 
         setUploadedSurveys(processedSurveys);
+        // Auto-select first survey if none selected
+        if (!selectedSurvey && processedSurveys.length > 0) {
+          setSelectedSurvey(processedSurveys[0].id);
+        }
       } catch (error) {
         console.error('Error loading surveys:', error);
         handleError('Error loading saved surveys');
@@ -168,7 +173,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [storageService]);
+  }, [backendService]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -209,7 +214,7 @@ const SurveyUpload: React.FC = () => {
   const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     try {
-      await storageService.deleteSurveyData(surveyId);
+      await backendService.deleteSurvey(surveyId);
       setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
       if (selectedSurvey === surveyId) {
         setSelectedSurvey(null);
@@ -227,180 +232,96 @@ const SurveyUpload: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    
-    reader.onload = async (e) => {
-      const fileContent = e.target?.result as string;
-      if (!fileContent) {
-        handleError('Error reading file content');
-        return;
-      }
+    setIsUploading(true);
+    setUploadProgress(0);
 
-      try {
-        const lines = fileContent.split('\n').filter(line => line.trim());
-        const headers = lines[0].split(',').map(h => h.trim());
-        
-        // Required column names
-        const requiredColumns = [
-          'specialty',
-          'providerType',
-          'geographicRegion',
-          'n_orgs',
-          'n_incumbents',
-          'tcc_p25',
-          'tcc_p50',
-          'tcc_p75',
-          'tcc_p90',
-          'wrvu_p25',
-          'wrvu_p50',
-          'wrvu_p75',
-          'wrvu_p90',
-          'cf_p25',
-          'cf_p50',
-          'cf_p75',
-          'cf_p90'
-        ];
+    try {
+      // Simulate progress for better UX
+      // Real upload progress from XHR (front-end only). Once the file is uploaded,
+      // the modal stays with an indeterminate spinner while the server processes rows.
 
-        // Log available columns
-        console.log('Available columns in CSV:', headers);
-        
-        // Helper to normalize header names to camelCase for robust mapping
-        const normalize = (str: string) => str.replace(/[_\s]+(.)?/g, (_, c) => c ? c.toUpperCase() : '').replace(/^./, c => c.toLowerCase());
-        
-        // Map required columns to CSV headers, handling both camelCase and snake_case
-        const columnMappings: Record<string, string> = {};
-        headers.forEach((header, index) => {
-          const normalizedHeader = normalize(header);
-          requiredColumns.forEach(col => {
-            if (normalize(col) === normalizedHeader) {
-              columnMappings[col] = header;
-              console.log(`Mapped ${header} to ${col}`);
-            }
-          });
-        });
+      // Upload survey to backend
+      const uploadResult = await backendService.uploadSurvey(
+        file,
+        file.name,
+        parseInt(surveyYear),
+        isCustom ? customSurveyType : surveyType,
+        (p) => setUploadProgress(Math.min(p, 100))
+      );
+      // At this point the file is on the server; server-side parsing/inserts may still be running.
+      setUploadProgress(100);
 
-        // Check for missing required columns
-        const missingColumns = requiredColumns.filter(col => !columnMappings[col]);
-        if (missingColumns.length > 0) {
-          console.warn('Missing required columns:', missingColumns);
-        }
+      console.log('Survey uploaded successfully:', {
+        surveyId: uploadResult.surveyId,
+        rowCount: uploadResult.rowCount
+      });
 
-        // Parse rows with mapped columns
-        const rows = lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim());
-          const row: Record<string, string | number> = {};
-
-          // Map values using column mappings
-          requiredColumns.forEach(col => {
-            const sourceHeader = columnMappings[col];
-            if (sourceHeader) {
-              const index = headers.indexOf(sourceHeader);
-              const value = values[index];
-              
-              // Convert numeric values
-              if (col.includes('_p') || col === 'n_orgs' || col === 'n_incumbents') {
-                row[col] = Number(value) || 0;
-              } else {
-                row[col] = value || '';
-              }
-            } else {
-              // Set default values for missing columns
-              if (col.includes('_p') || col === 'n_orgs' || col === 'n_incumbents') {
-                row[col] = 0;
-              } else {
-                row[col] = '';
-              }
-            }
-          });
-
-          return row as ISurveyRow;
-        });
-
-        // Log a sample of the first 3 parsed rows for debugging
-        console.log('Sample parsed rows:', rows.slice(0, 3));
-
-        // Get unique specialties as string array
-        const uniqueSpecialties = Array.from(new Set(rows.map(r => r.specialty))) as string[];
-        const uniqueProviderTypes = Array.from(new Set(rows.map(r => r.providerType))) as string[];
-        const uniqueRegions = Array.from(new Set(rows.map(r => r.geographicRegion))) as string[];
-
-        // Store survey in IndexedDB
-        await storageService.storeSurveyData({
-          id: file.id!,
-          rows,
-          metadata: {
-            surveyType: isCustom ? customSurveyType : surveyType,
-            surveyYear,
-            uploadDate: new Date().toISOString(),
-            totalRows: rows.length,
-            columnMappings,
-            uniqueSpecialties,
-            uniqueProviderTypes,
-            uniqueRegions,
-            fileContent
-          }
-        });
-
-        console.log('Survey stored successfully:', {
-          id: file.id,
-          rowCount: rows.length,
-          mappedColumns: Object.keys(columnMappings)
-        });
-
-        // Immediately read back from IndexedDB to verify persistence
-        try {
-          const stored = await storageService.getSurveyData(file.id!);
-          console.log('Read back from IndexedDB:', stored);
-        } catch (err) {
-          console.error('Error reading back from IndexedDB:', err);
-        }
-
-        // Update local state
-        setUploadedSurveys(prev => [
+      // Update local state and select the new survey
+      setUploadedSurveys(prev => {
+        const updated = [
           ...prev,
           {
-            id: file.id!,
+            id: uploadResult.surveyId,
             fileName: file.name,
             surveyType: isCustom ? customSurveyType : surveyType,
             surveyYear,
             uploadDate: new Date(),
-            fileContent,
-            rows,
+            fileContent: '',
+            rows: [],
             stats: {
-              totalRows: rows.length,
-              uniqueSpecialties: uniqueSpecialties.length,
-              totalDataPoints: rows.length * Object.keys(columnMappings).length
-            }
+              totalRows: uploadResult.rowCount,
+              uniqueSpecialties: 0,
+              totalDataPoints: uploadResult.rowCount
+            },
+            columnMappings: {}
           }
-        ]);
+        ];
+        return updated;
+      });
+      
+      setSelectedSurvey(uploadResult.surveyId);
 
-        setFiles([]);
-        setSurveyType('');
-        setSurveyYear('');
-        setCustomSurveyType('');
-        setIsCustom(false);
-      } catch (error) {
-        console.error('Error processing and storing survey:', error);
-        handleError('Error saving survey data');
-      }
-    };
+      // Clear form
+      setFiles([]);
+      setSurveyType('');
+      setSurveyYear('');
+      setCustomSurveyType('');
+      setIsCustom(false);
 
-    reader.onerror = () => {
-      handleError('Error processing file');
-    };
+      // Show success message
+      setTimeout(() => {
+        setUploadProgress(0);
+        setIsUploading(false);
+      }, 1000);
 
-    reader.readAsText(file);
+    } catch (error) {
+      console.error('Error uploading survey:', error);
+      handleError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   const handleClearAll = async () => {
     try {
-      setIsLoading(false); // Set loading to false immediately
-      setUploadedSurveys([]); // Clear surveys from UI right away
+      // Confirm destructive action
+      const confirmDelete = window.confirm('This will delete ALL surveys from Azure. Type OK to proceed.');
+      if (!confirmDelete) return;
+      setIsDeleting(true);
+      setDeleteProgress(10);
+      await backendService.deleteAllSurveys();
+      setDeleteProgress(90);
+      setUploadedSurveys([]);
       setSelectedSurvey(null);
-      await storageService.clearAllData(); // Clear persistent storage
     } catch (error) {
       console.error('Error clearing all surveys:', error);
       handleError('Error clearing surveys');
+    } finally {
+      setDeleteProgress(100);
+      setTimeout(() => {
+        setIsDeleting(false);
+        setDeleteProgress(0);
+      }, 600);
     }
   };
 
@@ -440,53 +361,39 @@ const SurveyUpload: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen">
-      <div className="mx-6">
-        {/* Collapsible Help Section */}
-        <div className="mb-6">
-          <button
-            onClick={() => setShowInstructions((prev) => !prev)}
-            className="w-full flex items-center justify-between px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded font-medium mb-2"
-          >
-            <span className="flex items-center gap-2">
-              <LightBulbIcon className="h-5 w-5 text-blue-600" />
-              <span>Upload Instructions</span>
-            </span>
-            <ChevronDownIcon 
-              className={`h-5 w-5 text-blue-600 transition-transform duration-200 ${showInstructions ? 'rotate-180' : ''}`}
-            />
-          </button>
-          {showInstructions && (
-            <div className="p-4 bg-white border border-blue-100 rounded shadow text-sm space-y-3">
-              <h3 className="font-bold text-blue-700 mb-1">Required File Format</h3>
-              <ul className="list-disc pl-5 mb-2">
-                <li>Accepted file type: <b>CSV</b></li>
-                <li>Your file must include these columns (exact names): <code>specialty, provider_type, geographic_region, n_orgs, n_incumbents, tcc_p25, tcc_p50, tcc_p75, tcc_p90, wrvu_p25, wrvu_p50, wrvu_p75, wrvu_p90, cf_p25, cf_p50, cf_p75, cf_p90</code></li>
-                <li>Extra columns are OK—they'll be ignored.</li>
-              </ul>
-              <h3 className="font-bold text-blue-700 mb-1">How Auto-Mapping Works</h3>
-              <p className="mb-2">
-                When you upload your file, the app will automatically try to match your column names to the required fields. If a column is not matched, you'll be prompted to map it manually before continuing.
-              </p>
-              <div className="mt-4">
-                <a
-                  href={process.env.PUBLIC_URL + '/sample-survey.csv'}
-                  download="sample-survey.csv"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-                >
-                  <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                  Download Sample CSV
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
+    <>
+      <div className="w-full min-h-screen">
+        <div className="w-full flex flex-col gap-4">
 
-        <div className="bg-white rounded-lg shadow">
-          {/* Form Controls */}
-          <div className="w-full mb-8">
-            <div className="bg-white shadow-sm px-8 py-6 rounded-lg">
-              <div className="grid grid-cols-12 gap-6">
+          {/* Upload Form Section */}
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsUploadSectionCollapsed(!isUploadSectionCollapsed)}
+                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                  aria-label={isUploadSectionCollapsed ? "Expand upload section" : "Collapse upload section"}
+                >
+                  {isUploadSectionCollapsed ? (
+                    <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+                  )}
+                </button>
+                <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
+              </div>
+              <a
+                href={process.env.PUBLIC_URL + '/sample-survey.csv'}
+                download="sample-survey.csv"
+                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+              >
+                Download Sample
+              </a>
+            </div>
+            
+            {!isUploadSectionCollapsed && (
+              <>
+                <div className="grid grid-cols-12 gap-4">
                 {/* Survey Type Selection */}
                 <div className="col-span-4">
                   <label htmlFor="surveyType" className="block text-sm font-medium text-gray-700 mb-2">
@@ -497,9 +404,9 @@ const SurveyUpload: React.FC = () => {
                       id="surveyType"
                       value={surveyType}
                       onChange={handleSurveyTypeChange}
-                      className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-lg
+                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        bg-white text-base transition-colors duration-200"
+                        bg-white text-sm transition-colors duration-200"
                     >
                       <option value="">Select a survey type</option>
                       {SURVEY_OPTIONS.map(option => (
@@ -519,9 +426,9 @@ const SurveyUpload: React.FC = () => {
                       value={customSurveyType}
                       onChange={(e) => setCustomSurveyType(e.target.value)}
                       placeholder="Enter custom survey type"
-                      className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg
+                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        placeholder-gray-400 text-base transition-colors duration-200"
+                        placeholder-gray-400 text-sm transition-colors duration-200"
                     />
                   )}
                 </div>
@@ -539,9 +446,9 @@ const SurveyUpload: React.FC = () => {
                       onClick={() => setIsYearPickerOpen(true)}
                       readOnly
                       placeholder="Select year"
-                      className="block w-full px-4 py-3 border border-gray-300 rounded-lg
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        bg-white text-base cursor-pointer transition-colors duration-200"
+                        bg-white text-sm cursor-pointer transition-colors duration-200"
                     />
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                       <CalendarIcon className="h-5 w-5" />
@@ -558,7 +465,7 @@ const SurveyUpload: React.FC = () => {
                                 setSurveyYear(year.toString());
                                 setIsYearPickerOpen(false);
                               }}
-                              className={`w-full text-left px-4 py-2.5 text-base transition-colors duration-200
+                              className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200
                                 ${surveyYear === year.toString() 
                                   ? 'bg-indigo-50 text-indigo-600 font-medium' 
                                   : 'text-gray-700 hover:bg-gray-50'
@@ -579,9 +486,7 @@ const SurveyUpload: React.FC = () => {
                     <input {...getInputProps()} />
                     <button
                       type="button"
-                      className="w-full h-[46px] rounded-lg text-base font-medium bg-indigo-600 
-                        hover:bg-indigo-700 text-white transition-all duration-200
-                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                     >
                       <span className="flex items-center justify-center">
                         <CloudArrowUpIcon className="h-5 w-5 mr-2" />
@@ -592,24 +497,30 @@ const SurveyUpload: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSurveyUpload}
-                    disabled={files.length === 0 || !surveyType || !surveyYear}
-                    className="flex-1 h-[46px] rounded-lg text-base font-medium
-                      bg-green-600 hover:bg-green-700 text-white transition-all duration-200
-                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
-                      disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={files.length === 0 || !surveyType || !surveyYear || isUploading}
+                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span className="flex items-center justify-center">
-                      Upload Survey
+                      {isUploading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Uploading...
+                        </>
+                      ) : (
+                        'Upload Survey'
+                      )}
                     </span>
                   </button>
                 </div>
+
+                {/* Upload progress is displayed in a modal overlay below */}
               </div>
 
               {/* Selected File Preview */}
               {files.length > 0 && (
                 <div className="mt-6 border-t border-gray-200 pt-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Selected File</h3>
-                  <div className="bg-gray-50 px-4 py-3 rounded-lg flex items-center justify-between">
+                  <div className="bg-gray-50 px-3 py-2 rounded-lg flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center text-gray-500">
                         <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -632,146 +543,177 @@ const SurveyUpload: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </>
+            )}
           </div>
-
-          {/* Uploaded Surveys Grid */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Uploaded Surveys</h2>
-              <button
-                onClick={handleClearAll}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 
-                  transition-colors duration-200 rounded-md hover:bg-red-50"
-              >
-                <XMarkIcon className="h-4 w-4 mr-1.5" />
-                Clear All
-              </button>
+          {/* Uploaded Surveys Section (compact tabs) */}
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-visible">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsUploadedSurveysCollapsed(!isUploadedSurveysCollapsed)}
+                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                  aria-label={isUploadedSurveysCollapsed ? "Expand uploaded surveys section" : "Collapse uploaded surveys section"}
+                >
+                  {isUploadedSurveysCollapsed ? (
+                    <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+                  )}
+                </button>
+                <h2 className="text-lg font-semibold text-gray-900">Uploaded Surveys</h2>
+              </div>
+              {uploadedSurveys.length > 0 && (
+                <button
+                  onClick={handleClearAll}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 transition-colors duration-200 rounded-lg hover:bg-red-50"
+                >
+                  <XMarkIcon className="h-4 w-4 mr-1.5" />
+                  Clear All
+                </button>
+              )}
             </div>
 
-            {isLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
-                <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
-              </div>
-            ) : uploadedSurveys.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-xl">
-                <p className="text-gray-500">No surveys uploaded yet</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {uploadedSurveys.map((survey) => {
-                  const stats = calculateSurveyStats(survey.rows);
-                  return (
-                    <div
-                      key={survey.id}
-                      className={`relative group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 
-                        overflow-hidden cursor-pointer border border-gray-200
-                        ${selectedSurvey === survey.id ? 'ring-2 ring-indigo-500' : ''}`}
-                      onClick={() => setSelectedSurvey(survey.id)}
-                    >
-                      {/* Card Header */}
-                      <div className="px-6 py-4 border-b border-gray-100">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-indigo-50 rounded-lg">
-                              <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-medium text-gray-900 truncate max-w-[180px]">
-                                {survey.surveyType}
-                              </h3>
-                              <span className="text-xs text-gray-500">
-                                {new Date(survey.uploadDate).toLocaleDateString(undefined, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
-                              </span>
-                            </div>
-                          </div>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                            bg-indigo-50 text-indigo-700">
-                            {survey.surveyYear}
-                          </span>
-                        </div>
-                        <div className="mt-2 text-xs text-gray-500 truncate">
-                          {survey.fileName}
-                        </div>
-                      </div>
+            {!isUploadedSurveysCollapsed && (
+              <>
+                {isLoading ? (
+                  <div className="text-center py-6">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+                    <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
+                  </div>
+                ) : uploadedSurveys.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-xl">
+                    <p className="text-gray-500">No surveys uploaded yet</p>
+                  </div>
+                ) : (
+                  <div className="relative z-10 flex items-center gap-2 overflow-x-auto overflow-y-visible whitespace-nowrap pb-1">
+                    {uploadedSurveys.map((survey) => {
+                      const isActive = selectedSurvey === survey.id;
+                      const stats = calculateSurveyStats(survey.rows);
+                      const accent = survey.surveyType === 'SullivanCotter' ? '#818CF8' :
+                                      survey.surveyType === 'MGMA' ? '#34D399' :
+                                      survey.surveyType === 'Gallagher' ? '#F472B6' :
+                                      survey.surveyType === 'ECG' ? '#FBBF24' :
+                                      survey.surveyType === 'AMGA' ? '#60A5FA' : '#9CA3AF';
+                      return (
+                        <div key={survey.id} className="relative group inline-flex items-center">
+                          <button
+                            onClick={() => setSelectedSurvey(survey.id)}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                            title={`${survey.surveyType} • ${survey.surveyYear}`}
+                          >
+                            <span className="font-medium">{survey.surveyType}</span>
+                            <span className={`text-xs ${isActive ? 'text-indigo-100' : 'text-gray-500'}`}>{survey.surveyYear}</span>
+                          </button>
+                          <button
+                            onClick={(e) => removeUploadedSurvey(survey.id, e)}
+                            className="ml-1 text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-gray-100"
+                            title="Remove survey"
+                          >
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
 
-                      {/* Card Stats */}
-                      <div className="px-6 py-4">
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="text-center">
-                            <div className="text-2xl font-semibold text-gray-900">
-                              {stats.totalRows.toLocaleString()}
+                          {/* Hover stats tooltip */}
+                          <div className="pointer-events-none absolute z-50 -top-32 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 w-64">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="text-xs font-medium text-gray-900">{survey.surveyType} • {survey.surveyYear}</div>
+                                <div className="text-[10px] text-gray-500">{new Date(survey.uploadDate).toLocaleDateString()}</div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-3 text-center">
+                                <div>
+                                  <div className="text-base font-semibold text-gray-900">{stats.totalRows.toLocaleString()}</div>
+                                  <div className="text-[10px] text-gray-500 mt-0.5">Rows</div>
+                                </div>
+                                <div>
+                                  <div className="text-base font-semibold text-gray-900">{stats.uniqueSpecialties.toLocaleString()}</div>
+                                  <div className="text-[10px] text-gray-500 mt-0.5">Specialties</div>
+                                </div>
+                                <div>
+                                  <div className="text-base font-semibold text-gray-900">{stats.totalDataPoints.toLocaleString()}</div>
+                                  <div className="text-[10px] text-gray-500 mt-0.5">Data Points</div>
+                                </div>
+                              </div>
+                              <div className="mt-2 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">Rows</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-semibold text-gray-900">
-                              {stats.uniqueSpecialties.toLocaleString()}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">Specialties</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-semibold text-gray-900">
-                              {stats.totalDataPoints.toLocaleString()}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">Data Points</div>
                           </div>
                         </div>
-                      </div>
-
-                      {/* Survey Type Badge */}
-                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <button
-                          onClick={(e) => removeUploadedSurvey(survey.id, e)}
-                          className="p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100"
-                          title="Delete survey"
-                        >
-                          <XMarkIcon className="h-5 w-5" />
-                        </button>
-                      </div>
-
-                      {/* Survey Type Badge */}
-                      <div className="absolute bottom-0 inset-x-0 h-1.5" style={{
-                        backgroundColor: survey.surveyType === 'SullivanCotter' ? '#818CF8' :
-                                       survey.surveyType === 'MGMA' ? '#34D399' :
-                                       survey.surveyType === 'Gallagher' ? '#F472B6' :
-                                       survey.surveyType === 'ECG' ? '#FBBF24' :
-                                       survey.surveyType === 'AMGA' ? '#60A5FA' : '#9CA3AF'
-                      }} />
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          {/* Data Preview */}
-          {selectedSurvey && (
-            <div className="bg-white shadow-sm rounded-xl overflow-hidden">
-              <div className="px-8 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">Survey Preview</h2>
-              </div>
-              <div className="w-full overflow-x-auto">
-                <DataPreview
-                  file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
-                  onError={handleError}
-                  globalFilters={globalFilters}
-                  onFilterChange={handleFilterChange}
-                />
-              </div>
+        {/* Data Preview */}
+        {selectedSurvey && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <DataPreview
+                file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
+                onError={handleError}
+                globalFilters={globalFilters}
+                onFilterChange={handleFilterChange}
+              />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
+      {/* Upload Progress Modal */}
+      {isUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-md p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 id="upload-modal-title" className="text-lg font-semibold text-gray-900">Uploading survey…</h3>
+                <p className="mt-1 text-sm text-gray-500">Please keep this tab open while we process your file.</p>
+              </div>
+              <div className="w-6 h-6 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" aria-hidden="true" />
+            </div>
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Progress</span>
+                <span className="text-sm text-gray-500">{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="h-2.5 rounded-full transition-all duration-300 ease-out bg-emerald-600" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <div className="mt-3 text-xs text-gray-500">
+                {uploadProgress < 100 ? 'Processing survey data…' : 'Upload complete! Finalizing…'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Deleting Progress Modal */}
+      {isDeleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-md p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900">Clearing surveys…</h3>
+                <p className="mt-1 text-sm text-gray-500">Deleting all surveys from Azure. This can take a few seconds.</p>
+              </div>
+              <div className="w-6 h-6 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" aria-hidden="true" />
+            </div>
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Progress</span>
+                <span className="text-sm text-gray-500">{deleteProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="h-2.5 rounded-full transition-all duration-300 ease-out bg-red-600" style={{ width: `${deleteProgress}%` }} />
+              </div>
+              <div className="mt-3 text-xs text-gray-500">
+                {deleteProgress < 100 ? 'Removing survey data…' : 'All surveys cleared.'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
