@@ -171,7 +171,7 @@ export const QuickCalculator: React.FC<QuickCalculatorProps> = ({ data }) => {
               <Select
                 value={selectedSpecialty}
                 label="Specialty"
-                onChange={(e) => setSelectedSpecialty(e.target.value)}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedSpecialty(e.target.value as string)}
               >
                 <MenuItem value="cardiology">Cardiology</MenuItem>
                 <MenuItem value="orthopedics">Orthopedics</MenuItem>
@@ -185,7 +185,7 @@ export const QuickCalculator: React.FC<QuickCalculatorProps> = ({ data }) => {
               <Select
                 value={selectedProviderType}
                 label="Provider Type"
-                onChange={(e) => setSelectedProviderType(e.target.value)}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedProviderType(e.target.value as string)}
               >
                 <MenuItem value="physician">Physician</MenuItem>
                 <MenuItem value="nurse">Nurse Practitioner</MenuItem>
@@ -199,7 +199,7 @@ export const QuickCalculator: React.FC<QuickCalculatorProps> = ({ data }) => {
               <Select
                 value={selectedRegion}
                 label="Region"
-                onChange={(e) => setSelectedRegion(e.target.value)}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedRegion(e.target.value as string)}
               >
                 <MenuItem value="northeast">Northeast</MenuItem>
                 <MenuItem value="southeast">Southeast</MenuItem>
@@ -209,30 +209,30 @@ export const QuickCalculator: React.FC<QuickCalculatorProps> = ({ data }) => {
             </FormControl>
           </Grid>
           <Grid item xs={12} md={4}>
-            <TextField
+              <TextField
               fullWidth
               label="Base Salary"
               type="number"
               value={baseSalary}
-              onChange={(e) => setBaseSalary(Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBaseSalary(Number(e.target.value))}
             />
           </Grid>
           <Grid item xs={12} md={4}>
-            <TextField
+              <TextField
               fullWidth
               label="Incentive Payment"
               type="number"
               value={incentivePayment}
-              onChange={(e) => setIncentivePayment(Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIncentivePayment(Number(e.target.value))}
             />
           </Grid>
           <Grid item xs={12} md={4}>
-            <TextField
+              <TextField
               fullWidth
               label="Estimated wRVUs"
               type="number"
               value={estimatedWRVUs}
-              onChange={(e) => setEstimatedWRVUs(Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEstimatedWRVUs(Number(e.target.value))}
             />
           </Grid>
         </Grid>

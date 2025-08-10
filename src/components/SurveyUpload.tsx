@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, XMarkIcon, CalendarIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import DataPreview from './DataPreview';
@@ -95,7 +95,27 @@ const SurveyUpload: React.FC = () => {
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
 
+  // Add ref for year picker click-outside handling
+  const yearPickerRef = useRef<HTMLDivElement>(null);
+
   const backendService = React.useMemo(() => BackendService.getInstance(), []);
+
+  // Handle click outside year picker
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (yearPickerRef.current && !yearPickerRef.current.contains(event.target as Node)) {
+        setIsYearPickerOpen(false);
+      }
+    };
+
+    if (isYearPickerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isYearPickerOpen]);
 
   // Update unique values when surveys change
   useEffect(() => {
@@ -325,12 +345,13 @@ const SurveyUpload: React.FC = () => {
     }
   };
 
-  // Generate years from 1990 to current year + 5
+  // Generate years from 1990 to current year + 10 (more future-proof)
   const currentYear = new Date().getFullYear();
   const startYear = 1990;
+  const endYear = currentYear + 10; // Extend to 10 years in the future
   const years = Array.from(
-    { length: currentYear - startYear + 6 },
-    (_, i) => currentYear + 5 - i
+    { length: endYear - startYear + 1 },
+    (_, i) => endYear - i
   );
 
   const handleError = (errorMessage: string) => {
@@ -424,7 +445,7 @@ const SurveyUpload: React.FC = () => {
                     <input
                       type="text"
                       value={customSurveyType}
-                      onChange={(e) => setCustomSurveyType(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveyType(e.target.value)}
                       placeholder="Enter custom survey type"
                       className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
@@ -443,21 +464,28 @@ const SurveyUpload: React.FC = () => {
                       type="text"
                       id="surveyYear"
                       value={surveyYear}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const value = e.target.value;
+                        // Allow typing numbers and basic validation
+                        if (value === '' || /^\d{4}$/.test(value)) {
+                          setSurveyYear(value);
+                        }
+                      }}
                       onClick={() => setIsYearPickerOpen(true)}
-                      readOnly
+                      onFocus={() => setIsYearPickerOpen(true)}
                       placeholder="Select year"
                       className="block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        bg-white text-sm cursor-pointer transition-colors duration-200"
+                        bg-white text-sm transition-colors duration-200"
                     />
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                       <CalendarIcon className="h-5 w-5" />
                     </div>
 
-                    {/* Year Picker Dropdown */}
+                    {/* Simple Year Picker Dropdown */}
                     {isYearPickerOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                        <div className="py-1">
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60" ref={yearPickerRef}>
+                        <div className="overflow-y-auto max-h-56">
                           {years.map(year => (
                             <button
                               key={year}
@@ -465,11 +493,16 @@ const SurveyUpload: React.FC = () => {
                                 setSurveyYear(year.toString());
                                 setIsYearPickerOpen(false);
                               }}
-                              className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200
+                              className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 hover:bg-gray-50
                                 ${surveyYear === year.toString() 
                                   ? 'bg-indigo-50 text-indigo-600 font-medium' 
-                                  : 'text-gray-700 hover:bg-gray-50'
+                                  : 'text-gray-700'
                                 }`}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  setIsYearPickerOpen(false);
+                                }
+                              }}
                             >
                               {year}
                             </button>

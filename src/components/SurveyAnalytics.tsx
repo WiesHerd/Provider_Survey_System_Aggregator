@@ -524,7 +524,7 @@ const SurveyAnalytics: React.FC = () => {
             labelId="specialty-label"
             value={filters.specialty}
             label="Specialty"
-            onChange={(e) => handleFilterChange('specialty', e.target.value)}
+            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('specialty', e.target.value as string)}
           >
             <MenuItem value="">All Specialties</MenuItem>
             {uniqueValues.specialties.map((specialty) => (
@@ -541,7 +541,7 @@ const SurveyAnalytics: React.FC = () => {
             labelId="survey-source-label"
             value={filters.surveySource}
             label="Survey Source"
-            onChange={(e) => handleFilterChange('surveySource', e.target.value)}
+            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('surveySource', e.target.value as string)}
           >
             <MenuItem value="">All Sources</MenuItem>
             {uniqueValues.surveySources.map((source) => (
@@ -558,7 +558,7 @@ const SurveyAnalytics: React.FC = () => {
             labelId="provider-type-label"
             value={filters.providerType}
             label="Provider Type"
-            onChange={(e) => handleFilterChange('providerType', e.target.value)}
+            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('providerType', e.target.value as string)}
           >
             <MenuItem value="">All Types</MenuItem>
             {uniqueValues.providerTypes.map((type) => (
@@ -575,7 +575,7 @@ const SurveyAnalytics: React.FC = () => {
             labelId="region-label"
             value={filters.region}
             label="Region"
-            onChange={(e) => handleFilterChange('region', e.target.value)}
+            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
           >
             <MenuItem value="">All Regions</MenuItem>
             {uniqueValues.regions.map((region) => (

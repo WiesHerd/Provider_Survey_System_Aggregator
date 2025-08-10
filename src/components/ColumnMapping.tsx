@@ -258,7 +258,7 @@ const ColumnMapping: React.FC = () => {
             <div className="flex items-center justify-between">
               <Tabs 
                 value={activeTab} 
-                onChange={(_, newValue) => setActiveTab(newValue)}
+                onChange={(_event: React.SyntheticEvent, newValue: 'unmapped' | 'mapped') => setActiveTab(newValue)}
               >
                 <Tab label="Unmapped Columns" value="unmapped" />
                 <Tab label="Mapped Columns" value="mapped" />
@@ -313,7 +313,7 @@ const ColumnMapping: React.FC = () => {
                     fullWidth
                     placeholder="Search across all surveys..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -381,7 +381,7 @@ const ColumnMapping: React.FC = () => {
                     fullWidth
                     placeholder="Search mapped columns..."
                     value={mappedSearchTerm}
-                    onChange={(e) => setMappedSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">

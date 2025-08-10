@@ -82,18 +82,24 @@ const SpecialtyMapping: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('Loading specialty mapping data...');
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
         mappingService.getAllMappings(),
         mappingService.getUnmappedSpecialties(),
         mappingService.getLearnedMappings()
       ]);
+      console.log('Loaded data:', { 
+        mappings: mappingsData.length, 
+        unmapped: unmappedData.length, 
+        learned: Object.keys(learnedData || {}).length 
+      });
       setMappings(mappingsData);
       setUnmappedSpecialties(unmappedData);
       setLearnedMappings(learnedData || {});
       setError(null);
     } catch (err) {
-      setError('Failed to load specialty data');
       console.error('Error loading data:', err);
+      setError('Failed to load specialty data');
     } finally {
       setLoading(false);
     }
@@ -271,7 +277,7 @@ const SpecialtyMapping: React.FC = () => {
             <div className="flex items-center justify-between">
               <Tabs 
                 value={activeTab} 
-                onChange={(_, newValue) => setActiveTab(newValue)}
+                onChange={(_event: React.SyntheticEvent, newValue: 'unmapped' | 'mapped' | 'learned') => setActiveTab(newValue)}
               >
                 <Tab label="Unmapped Specialties" value="unmapped" />
                 <Tab label="Mapped Specialties" value="mapped" />
@@ -329,7 +335,7 @@ const SpecialtyMapping: React.FC = () => {
                     fullWidth
                     placeholder="Search across all surveys..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -389,6 +395,30 @@ const SpecialtyMapping: React.FC = () => {
                     );
                   })}
                 </div>
+
+                {Array.from(specialtiesBySurvey.entries()).length === 0 && (
+                  <div className="text-center py-12 bg-gray-50 rounded-xl">
+                    <WarningIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <Typography variant="h6" color="textSecondary" className="mb-2">
+                      No Unmapped Specialties Found
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" className="mb-4">
+                      {searchTerm 
+                        ? "No specialties match your search criteria"
+                        : "All specialties have been mapped or no survey data is available"
+                      }
+                    </Typography>
+                    {!searchTerm && (
+                      <Button
+                        variant="outlined"
+                        onClick={() => loadData()}
+                        startIcon={<BoltIcon className="h-5 w-5" />}
+                      >
+                        Refresh Data
+                      </Button>
+                    )}
+                  </div>
+                )}
               </>
             ) : activeTab === 'mapped' ? (
               <div className="space-y-6">
@@ -397,7 +427,7 @@ const SpecialtyMapping: React.FC = () => {
                     fullWidth
                     placeholder="Search mapped specialties..."
                     value={mappedSearchTerm}
-                    onChange={(e) => setMappedSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -436,7 +466,7 @@ const SpecialtyMapping: React.FC = () => {
                     fullWidth
                     placeholder="Search learned mappings..."
                     value={mappedSearchTerm}
-                    onChange={(e) => setMappedSearchTerm(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">

@@ -80,7 +80,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
   const renderMenuItem = (item: MenuItem, isChild = false) => {
     const isActive = currentPath === item.path;
-    const isParentActive = item.children?.some(child => child.path === currentPath);
 
     // When collapsed and item has children, don't render the parent item
     if (!isOpen && item.children) {
@@ -97,14 +96,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           onClick={() => handleNavigation(item.path)}
           className={`w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200
             ${!isOpen ? 'justify-center' : ''}
-            ${(isActive || isParentActive)
-              ? 'bg-indigo-50 text-indigo-600' 
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }
+            ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
           `}
         >
           <item.icon className={`w-5 h-5 transition-colors duration-200
-            ${(isActive || isParentActive) ? 'text-indigo-600' : 'text-gray-500'}
+            ${isActive ? 'text-indigo-600' : 'text-gray-500'}
           `} />
           {isOpen && (
             <span className="ml-3 font-medium text-xs">
@@ -167,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                     to={item.path}
                     role="menuitem"
                     aria-current={currentPath === item.path ? 'page' : undefined}
-                    className={({ isActive }) => `w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${!isOpen ? 'justify-center' : ''} ${isActive || item.children?.some(c => c.path === currentPath) ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={({ isActive }) => `w-full flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${!isOpen ? 'justify-center' : ''} ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <item.icon className={`w-5 h-5 ${currentPath === item.path ? 'text-indigo-600' : 'text-gray-500'}`} />
                     {isOpen && <span className="ml-3 font-medium text-xs">{item.name}</span>}

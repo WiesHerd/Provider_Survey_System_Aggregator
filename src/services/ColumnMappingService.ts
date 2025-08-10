@@ -153,21 +153,24 @@ export class ColumnMappingService {
       mappings.flatMap(m => m.sourceColumns.map(c => c.id))
     );
 
-    const surveys = await this.storage.listSurveys();
+    // Prefer backend source of truth so every uploaded survey appears
+    const backend = (await import('./BackendService')).default.getInstance();
+    const surveys = await backend.getAllSurveys();
     const columns: IColumnInfo[] = [];
-    
-    for (const survey of surveys) {
-      if (!survey.metadata.fileContent) continue;
 
-      const headers = survey.metadata.fileContent.split('\n')[0].split(',');
+    for (const survey of surveys as Array<any>) {
+      const meta = await backend.getSurveyMeta(survey.id).catch(() => ({} as any));
+      const headers: string[] = Array.isArray(meta?.columns) && meta.columns.length > 0
+        ? meta.columns
+        : [];
       headers.forEach((header: string, index: number) => {
-        const columnId = `${survey.metadata.surveyType}-${index}`;
+        const columnId = `${(survey.type || survey.name || 'Unknown')}-${index}`;
         if (!mappedColumnIds.has(columnId)) {
           columns.push({
             id: columnId,
-            name: header.trim(),
-            surveySource: survey.metadata.surveyType,
-            dataType: this.inferDataType(survey.metadata.fileContent, index)
+            name: String(header || '').trim(),
+            surveySource: survey.type || survey.name || 'Unknown',
+            dataType: 'string'
           });
         }
       });

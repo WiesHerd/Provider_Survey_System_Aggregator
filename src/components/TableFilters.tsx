@@ -6,7 +6,6 @@ import {
   MenuItem,
   Select,
   TextField,
-  SelectChangeEvent,
   Stack
 } from '@mui/material';
 
@@ -29,8 +28,12 @@ export const TableFilters: React.FC<TableFiltersProps> = ({
   filters,
   onFilterChange,
 }) => {
-  const handleChange = (event: SelectChangeEvent | React.ChangeEvent<HTMLInputElement>) => {
-    onFilterChange(event.target.name, event.target.value);
+  const handleChange = (
+    event: React.ChangeEvent<{ name?: string; value: unknown }> | React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const name = (event.target as any).name as string;
+    const value = (event.target as any).value as string;
+    onFilterChange(name, value);
   };
 
   return (

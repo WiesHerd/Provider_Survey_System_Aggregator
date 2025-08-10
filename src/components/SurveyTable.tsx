@@ -12,8 +12,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Box,
-  SelectChangeEvent
+  Box
 } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 
@@ -50,16 +49,16 @@ export const SurveyTable: React.FC<SurveyTableProps> = ({ data }) => {
     });
   }, [data, specialtyFilter, providerTypeFilter, regionFilter]);
 
-  const handleSpecialtyChange = (e: SelectChangeEvent<string>) => {
-    setSpecialtyFilter(e.target.value);
+  const handleSpecialtyChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+    setSpecialtyFilter(e.target.value as string);
   };
 
-  const handleProviderTypeChange = (e: SelectChangeEvent<string>) => {
-    setProviderTypeFilter(e.target.value);
+  const handleProviderTypeChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+    setProviderTypeFilter(e.target.value as string);
   };
 
-  const handleRegionChange = (e: SelectChangeEvent<string>) => {
-    setRegionFilter(e.target.value);
+  const handleRegionChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+    setRegionFilter(e.target.value as string);
   };
 
   return (

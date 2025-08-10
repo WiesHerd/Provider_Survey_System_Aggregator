@@ -6,26 +6,37 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop survey-aggregator-backend",
+    "pm2:restart": "pm2 restart survey-aggregator-backend",
+    "pm2:logs": "pm2 logs survey-aggregator-backend",
+    "pm2:status": "pm2 status",
+    "pm2:delete": "pm2 delete survey-aggregator-backend",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test-db": "node test-azure-connection.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "mssql": "^10.0.2",
-    "sqlite3": "^5.1.6",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
-    "uuid": "^9.0.1",
-    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "dotenv": "^16.3.1"
+    "helmet": "^7.1.0",
+    "mssql": "^10.0.2",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "pm2": "^6.0.8"
   },
-  "keywords": ["survey", "aggregator", "api", "express"],
+  "keywords": [
+    "survey",
+    "aggregator",
+    "api",
+    "express"
+  ],
   "author": "Your Name",
   "license": "MIT"
 }
-

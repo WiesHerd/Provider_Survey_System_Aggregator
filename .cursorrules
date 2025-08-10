@@ -1,0 +1,382 @@
+# Cursor Project Rules: Survey Aggregator - Enterprise Grade Standards
+
+## 🎯 Project Overview
+This is a **world-class, enterprise-grade survey data aggregation system** designed for healthcare compensation administrators. Think **Silicon Valley startup quality** - clean, scalable, performant, and user-centric.
+
+## 🏗️ Architecture & Tech Stack
+
+### Frontend (React 18+)
+- **Framework**: React 18+ with TypeScript (strict mode)
+- **State Management**: React Context + useReducer for complex state, avoid prop drilling
+- **Routing**: React Router v6 with proper code splitting
+- **Styling**: Tailwind CSS + shadcn/ui components (NO Material-UI mixing)
+- **Data Grid**: AG Grid Enterprise patterns (community version)
+- **Charts**: Recharts with consistent theming
+- **Forms**: React Hook Form + Zod validation
+- **Animations**: Framer Motion for micro-interactions
+- **Icons**: Heroicons (outline variant) + Lucide React for consistency
+
+### Backend (Node.js)
+- **Framework**: Express.js with proper middleware chain
+- **Database**: SQLite (dev) + Azure SQL (prod) with connection pooling
+- **Security**: Helmet, CORS, rate limiting, input validation
+- **File Processing**: Multer with file size limits and type validation
+- **Process Management**: PM2 for production deployment
+- **Logging**: Structured logging with Winston (implement)
+
+### DevOps & Quality
+- **TypeScript**: Strict mode, no `any` types, proper interfaces
+- **ESLint**: Airbnb config with custom rules
+- **Prettier**: Consistent code formatting
+- **Testing**: Jest + React Testing Library (implement)
+- **Error Handling**: Global error boundaries, proper HTTP status codes
+
+## 🎨 Design System & UI/UX
+
+### Design Philosophy
+- **Minimalist**: Clean, uncluttered interfaces
+- **Consistent**: Every component follows the same patterns
+- **Accessible**: WCAG 2.1 AA compliance
+- **Responsive**: Mobile-first, breakpoint-driven design
+- **Performance**: 60fps animations, lazy loading, virtual scrolling
+
+### Color Palette (Tailwind)
+```css
+/* Primary Brand */
+--primary: 79 70 229; /* Indigo-600 */
+--primary-foreground: 255 255 255;
+
+/* Success States */
+--success: 16 185 129; /* Emerald-500 */
+--success-foreground: 255 255 255;
+
+/* Warning States */
+--warning: 245 158 11; /* Amber-500 */
+--warning-foreground: 255 255 255;
+
+/* Error States */
+--destructive: 239 68 68; /* Red-500 */
+--destructive-foreground: 255 255 255;
+
+/* Neutral Scale */
+--background: 249 250 251; /* Gray-50 */
+--foreground: 17 24 39; /* Gray-900 */
+--muted: 243 244 246; /* Gray-100 */
+--muted-foreground: 107 114 128; /* Gray-500 */
+```
+
+### Typography
+- **Primary Font**: Inter (Google Fonts) - Clean, modern, highly readable
+- **Monospace**: JetBrains Mono - For code and data displays
+- **Font Weights**: 400 (regular), 500 (medium), 600 (semibold), 700 (bold)
+- **Line Heights**: 1.5 for body text, 1.25 for headings
+
+### Component Patterns
+```tsx
+// Standard component structure
+interface ComponentProps {
+  // Props interface with JSDoc comments
+}
+
+export const Component: React.FC<ComponentProps> = ({ prop1, prop2 }) => {
+  // Hooks at the top
+  // Event handlers
+  // Render logic
+  return (
+    // JSX with proper semantic HTML
+  );
+};
+```
+
+## 📊 Data Management
+
+### Database Design
+- **Normalized**: Proper foreign keys, indexes, constraints
+- **Audit Trail**: Created/updated timestamps, user tracking
+- **Soft Deletes**: Never permanently delete data
+- **Migrations**: Version-controlled schema changes
+
+### API Design
+```typescript
+// RESTful endpoints with proper HTTP methods
+GET    /api/surveys           // List surveys with pagination
+POST   /api/surveys           // Create new survey
+GET    /api/surveys/:id       // Get survey details
+PUT    /api/surveys/:id       // Update survey
+DELETE /api/surveys/:id       // Soft delete survey
+GET    /api/surveys/:id/data  // Get survey data with filters
+```
+
+### Error Handling
+```typescript
+// Consistent error response format
+interface ApiError {
+  error: string;
+  message: string;
+  code: string;
+  details?: Record<string, any>;
+}
+```
+
+## 🔒 Security & Performance
+
+### Security Standards
+- **Input Validation**: Zod schemas for all inputs
+- **SQL Injection**: Parameterized queries only
+- **XSS Prevention**: Content Security Policy
+- **File Upload**: Type validation, size limits, virus scanning
+- **Authentication**: JWT tokens with refresh (implement)
+- **Authorization**: Role-based access control (implement)
+
+### Performance Standards
+- **Bundle Size**: < 500KB initial load
+- **Lighthouse Score**: > 90 in all categories
+- **Database Queries**: < 100ms response time
+- **File Upload**: Progress indicators, chunked uploads
+- **Caching**: Redis for session data (implement)
+
+## 🧪 Code Quality Standards
+
+### TypeScript
+```typescript
+// Strict typing - no any types
+interface SurveyData {
+  id: string;
+  name: string;
+  type: SurveyType;
+  year: number;
+  uploadDate: Date;
+  rowCount: number;
+}
+
+// Use branded types for IDs
+type SurveyId = string & { readonly brand: unique symbol };
+```
+
+### React Patterns
+```tsx
+// Custom hooks for reusable logic
+const useSurveyData = (surveyId: string) => {
+  const [data, setData] = useState<SurveyData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Implementation
+  return { data, loading, error, refetch };
+};
+
+// Proper error boundaries
+class SurveyErrorBoundary extends React.Component {
+  // Implementation
+}
+```
+
+### Testing Standards
+```typescript
+// Unit tests for all utilities
+describe('surveyDataProcessor', () => {
+  it('should normalize column names', () => {
+    // Test implementation
+  });
+});
+
+// Integration tests for API endpoints
+describe('POST /api/surveys', () => {
+  it('should create survey with valid data', () => {
+    // Test implementation
+  });
+});
+```
+
+## 📱 User Experience Standards
+
+### Loading States
+- **Skeleton Loaders**: For content areas
+- **Progress Indicators**: For file uploads
+- **Optimistic Updates**: For immediate feedback
+- **Error Recovery**: Clear error messages with actions
+
+### Accessibility
+- **Semantic HTML**: Proper heading hierarchy, landmarks
+- **Keyboard Navigation**: Full keyboard support
+- **Screen Readers**: ARIA labels, descriptions
+- **Color Contrast**: 4.5:1 minimum ratio
+- **Focus Management**: Visible focus indicators
+
+### Mobile Experience
+- **Touch Targets**: Minimum 44px
+- **Gesture Support**: Swipe, pinch-to-zoom
+- **Responsive Design**: Breakpoint-driven layouts
+- **Performance**: Optimized for mobile networks
+
+## 🚀 Deployment & DevOps
+
+### Environment Management
+```bash
+# Development
+NODE_ENV=development
+PORT=3001
+ENABLE_AZURE_SQL=false
+
+# Production
+NODE_ENV=production
+PORT=3001
+ENABLE_AZURE_SQL=true
+AZURE_SQL_SERVER=your-server.database.windows.net
+AZURE_SQL_DATABASE=your-database
+AZURE_SQL_USER=your-username
+AZURE_SQL_PASSWORD=your-password
+```
+
+### Monitoring & Logging
+- **Application Logs**: Winston with structured logging
+- **Error Tracking**: Sentry integration (implement)
+- **Performance Monitoring**: New Relic or DataDog (implement)
+- **Health Checks**: `/health` endpoint with dependencies
+
+## 📋 Code Review Checklist
+
+### Before Committing
+- [ ] TypeScript compiles without errors
+- [ ] ESLint passes with no warnings
+- [ ] Prettier formatting applied
+- [ ] Tests pass
+- [ ] No console.log statements
+- [ ] Proper error handling
+- [ ] Accessibility considerations
+- [ ] Mobile responsiveness
+- [ ] Performance impact assessed
+
+### Component Standards
+- [ ] Proper TypeScript interfaces
+- [ ] JSDoc comments for complex logic
+- [ ] Error boundaries where needed
+- [ ] Loading and error states
+- [ ] Accessibility attributes
+- [ ] Responsive design
+- [ ] Performance optimizations
+
+## 🎯 Feature Implementation Guidelines
+
+### Data Upload Flow
+1. **File Validation**: Type, size, content validation
+2. **Progress Tracking**: Real-time upload progress
+3. **Data Processing**: Background processing with status updates
+4. **Error Handling**: Clear error messages with recovery options
+5. **Success Feedback**: Confirmation with next steps
+
+### Data Visualization
+1. **Chart Selection**: Appropriate chart types for data
+2. **Interactive Elements**: Hover states, zoom, filtering
+3. **Export Options**: PDF, Excel, CSV formats
+4. **Print Optimization**: Print-friendly layouts
+5. **Accessibility**: Alt text, keyboard navigation
+
+### Filtering & Search
+1. **Server-side Filtering**: For large datasets
+2. **Debounced Search**: Performance optimization
+3. **Filter Persistence**: URL state management
+4. **Clear Filters**: Easy reset functionality
+5. **Filter Combinations**: Logical AND/OR operations
+
+## 🔧 Development Workflow
+
+### Git Standards
+```bash
+# Branch naming
+feature/survey-upload-enhancement
+bugfix/double-scrollbar-issue
+hotfix/security-vulnerability
+
+# Commit messages
+feat: add custom year input to survey picker
+fix: resolve double scrollbar in year dropdown
+docs: update API documentation
+test: add unit tests for data processor
+```
+
+### Code Organization
+```
+src/
+├── components/          # Reusable UI components
+│   ├── ui/             # shadcn/ui components
+│   └── forms/          # Form-specific components
+├── hooks/              # Custom React hooks
+├── services/           # API and external services
+├── utils/              # Utility functions
+├── types/              # TypeScript type definitions
+├── constants/          # Application constants
+└── styles/             # Global styles and themes
+```
+
+## 🎨 UI/UX Specific Rules
+
+### Form Design
+- **Validation**: Real-time validation with clear messages
+- **Progressive Disclosure**: Show advanced options when needed
+- **Auto-save**: Save drafts automatically
+- **Keyboard Shortcuts**: Common actions (Ctrl+S, Esc)
+- **Form State**: Clear indication of unsaved changes
+
+### Data Tables
+- **Sorting**: Multi-column sorting with indicators
+- **Filtering**: Column-specific filters
+- **Pagination**: Smart pagination with page size options
+- **Selection**: Row selection with bulk actions
+- **Export**: Export filtered/sorted data
+
+### Navigation
+- **Breadcrumbs**: Clear navigation hierarchy
+- **Active States**: Clear indication of current page
+- **Search**: Global search with suggestions
+- **Shortcuts**: Quick access to common actions
+
+## 🚨 Anti-Patterns to Avoid
+
+### Frontend
+- ❌ Mixing Material-UI with Tailwind
+- ❌ Using `any` types in TypeScript
+- ❌ Inline styles or hardcoded colors
+- ❌ Console.log in production code
+- ❌ Large bundle sizes without code splitting
+- ❌ No error boundaries or loading states
+
+### Backend
+- ❌ SQL injection vulnerabilities
+- ❌ No input validation
+- ❌ Hardcoded credentials
+- ❌ No error logging
+- ❌ Synchronous file operations
+- ❌ No rate limiting
+
+### General
+- ❌ Inconsistent naming conventions
+- ❌ No documentation
+- ❌ No tests
+- ❌ Poor error messages
+- ❌ No accessibility considerations
+
+## 🎯 Success Metrics
+
+### Performance
+- **Page Load Time**: < 2 seconds
+- **Time to Interactive**: < 3 seconds
+- **Lighthouse Score**: > 90
+- **Bundle Size**: < 500KB
+
+### User Experience
+- **Error Rate**: < 1%
+- **Task Completion**: > 95%
+- **User Satisfaction**: > 4.5/5
+- **Accessibility Score**: 100%
+
+### Code Quality
+- **Test Coverage**: > 80%
+- **TypeScript Coverage**: 100%
+- **ESLint Score**: 0 warnings
+- **Code Review Time**: < 30 minutes
+
+---
+
+**Remember**: This is a **world-class, enterprise-grade application**. Every line of code should reflect Silicon Valley quality standards. Think like you're building for Google, Facebook, or Apple - clean, scalable, performant, and user-centric.
+

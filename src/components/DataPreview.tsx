@@ -4,8 +4,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  Box,
-  SelectChangeEvent
+  Box
 } from '@mui/material';
 import BackendService from '../services/BackendService';
 // removed toggle UI
@@ -83,6 +82,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [pageSize] = useState(100);
   const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; pages: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const rowsPerPage = 10;
   const [gridApi, setGridApi] = useState<any | null>(null);
   const [columnApi, setColumnApi] = useState<any | null>(null);
@@ -94,7 +94,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [serverProviderTypes, setServerProviderTypes] = useState<string[]>([]);
   const [serverRegions, setServerRegions] = useState<string[]>([]);
 
-  const handleFilterChange = (event: SelectChangeEvent<string>) => {
+  const handleFilterChange = (
+    event: React.ChangeEvent<{ name?: string; value: unknown }> | any
+  ) => {
     onFilterChange(event.target.name, event.target.value);
   };
 
@@ -102,7 +104,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let isCancelled = false;
     const loadSurveyData = async () => {
       try {
-        setIsLoading(true);
+        // Only show loading on initial load or page change, not filter changes
+        if (currentPage === 1 && !originalData.length) {
+          setIsLoading(true);
+        }
+        
         const backendService = BackendService.getInstance();
         
         // Pass current filters to server for server-side filtering
@@ -163,7 +169,85 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return () => {
       isCancelled = true;
     };
-  }, [file.id, currentPage, pageSize, globalFilters]);
+  }, [file.id, currentPage, pageSize]); // Removed globalFilters dependency to prevent flickering
+
+  // Separate effect for filter changes with debouncing
+  useEffect(() => {
+    let isCancelled = false;
+    let timeoutId: NodeJS.Timeout;
+    
+    const loadFilteredData = async () => {
+      try {
+        setIsRefreshing(true);
+        const backendService = BackendService.getInstance();
+        
+        const filters = {
+          specialty: globalFilters.specialty || undefined,
+          providerType: globalFilters.providerType || undefined,
+          region: globalFilters.region || undefined
+        };
+        
+        const { rows: surveyData, pagination } = await backendService.getSurveyData(
+          file.id,
+          filters,
+          { page: 1, limit: pageSize } // Reset to page 1 when filters change
+        );
+        
+        if (!isCancelled && surveyData.length > 0) {
+          setOriginalData(surveyData);
+          
+          // Reuse existing headers if available
+          let headers: string[] = [];
+          if (previewData[0] && previewData[0].length > 0) {
+            headers = previewData[0];
+          } else {
+            try {
+              const meta = await BackendService.getInstance().getSurveyMeta(file.id);
+              if (Array.isArray(meta.columns) && meta.columns.length > 0) {
+                headers = meta.columns;
+              } else {
+                headers = Object.keys(surveyData[0]);
+              }
+            } catch {
+              headers = Object.keys(surveyData[0]);
+            }
+          }
+          
+          headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+          const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+          
+          setStats({
+            columnNames: headers,
+            totalRows: surveyData.length,
+            uniqueSpecialties: new Set(surveyData.map(row => row.specialty)).size,
+            totalDataPoints: surveyData.length * headers.length
+          });
+          setPreviewData([headers, ...rows]);
+          setCurrentPage(1); // Reset to first page
+        }
+        if (!isCancelled && pagination) {
+          setPagination(pagination);
+        }
+        if (!isCancelled) setIsRefreshing(false);
+      } catch (error) {
+        console.error('Error loading filtered data:', error);
+        onError('Error loading filtered data from backend');
+        if (!isCancelled) setIsRefreshing(false);
+      }
+    };
+
+    // Debounce filter changes to prevent rapid API calls
+    timeoutId = setTimeout(() => {
+      if (file.id) {
+        loadFilteredData();
+      }
+    }, 300); // 300ms debounce
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [globalFilters.specialty, globalFilters.providerType, globalFilters.region, file.id, pageSize]);
 
   // Load global filter options from server (not paginated)
   useEffect(() => {
@@ -289,11 +373,47 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   if (isLoading) {
     return (
       <div className="w-full bg-white shadow-sm">
-        <div className="animate-pulse">
-          <div className="h-[400px] bg-gray-50">
-            <div className="h-10 bg-gray-200 mb-4" />
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-8 bg-gray-100 mb-2" />
+        {/* Keep the filter controls visible during loading */}
+        <Box sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          p: 2, 
+          borderBottom: 1, 
+          borderColor: 'divider'
+        }}>
+          {/* Header with Clear Filter Button */}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Survey Preview</h3>
+            <button
+              disabled
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 cursor-not-allowed"
+              title="Clear all filters"
+            >
+              <div className="relative w-4 h-4 mr-2">
+                <svg className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+                </svg>
+              </div>
+              <span className="text-xs">Clear Filters</span>
+            </button>
+          </div>
+
+          {/* Filter Dropdowns - Disabled during loading */}
+          <div className="grid grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="h-10 bg-gray-200 rounded-md"></div>
+              </div>
+            ))}
+          </div>
+        </Box>
+
+        {/* Data Table Loading State */}
+        <div className="ag-theme-alpine" style={{ height: 520, width: '100%' }}>
+          <div className="animate-pulse">
+            <div className="h-10 bg-gray-200 mb-2"></div>
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="h-8 bg-gray-100 mb-1"></div>
             ))}
           </div>
         </div>
@@ -393,7 +513,16 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       </Box>
 
       {/* Data Table - AG Grid as primary */}
-      <div className="ag-theme-alpine" style={{ height: 520, width: '100%' }}>
+      <div className="ag-theme-alpine relative" style={{ height: 520, width: '100%' }}>
+        {/* Subtle refreshing overlay */}
+        {isRefreshing && (
+          <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
+            <div className="flex items-center space-x-2 text-gray-600">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+              <span className="text-sm">Updating data...</span>
+            </div>
+          </div>
+        )}
         <AgGridReact
           onGridReady={(params: any) => {
             setGridApi(params.api);

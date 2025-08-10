@@ -16,9 +16,24 @@ dotenv.config({ path: path.join(__dirname, 'env.local') });
 
 // Optional Azure SQL helpers
 let getConnection, initializeDatabase;
+let azureEnabled = false;
 try {
   ({ getConnection, initializeDatabase } = require('./config/database'));
-} catch {}
+  azureEnabled = process.env.ENABLE_AZURE_SQL === 'true' && 
+                 process.env.AZURE_SQL_SERVER && 
+                 process.env.AZURE_SQL_DATABASE && 
+                 process.env.AZURE_SQL_USER && 
+                 process.env.AZURE_SQL_PASSWORD;
+  
+  if (azureEnabled) {
+    console.log('🔗 Azure SQL enabled - will attempt dual-write');
+  } else {
+    console.log('📝 Azure SQL disabled - using SQLite only');
+  }
+} catch (error) {
+  console.log('⚠️ Azure SQL configuration not available - using SQLite only');
+  azureEnabled = false;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -128,10 +143,19 @@ app.get('/api/health', (req, res) => {
 
 // Upload survey
 app.post('/api/upload', upload.single('file'), async (req, res) => {
+  // Set a timeout for the entire upload process
+  const uploadTimeout = setTimeout(() => {
+    console.error('⏰ Upload timeout - process taking too long');
+    res.status(408).json({ error: 'Upload timeout - please try again with a smaller file' });
+  }, 300000); // 5 minutes timeout
+
   try {
     if (!req.file) {
+      clearTimeout(uploadTimeout);
       return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    console.log(`📁 Starting upload: ${req.file.originalname} (${req.file.size} bytes)`);
 
     const { name, year, type } = req.body;
     const surveyId = uuidv4();
@@ -157,6 +181,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         if (data.geographic_region || data.Region) regions.add(data.geographic_region || data.Region);
       })
       .on('end', async () => {
+        clearTimeout(uploadTimeout); // Clear timeout on successful end
         try {
           // Insert survey metadata
           const metadata = JSON.stringify({
@@ -190,48 +215,47 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                   VALUES (@id, @name, @year, @type, @uploadDate, @rowCount, @specialtyCount, @dataPoints, @colorAccent, @metadata)
                 `);
 
-              // Prepared statement for survey_data rows
-              const ps = new sql.PreparedStatement(pool);
-              ps.input('id', sql.NVarChar);
-              ps.input('surveyId', sql.NVarChar);
-              ps.input('specialty', sql.NVarChar);
-              ps.input('providerType', sql.NVarChar);
-              ps.input('region', sql.NVarChar);
-              ps.input('tcc', sql.Float);
-              ps.input('cf', sql.Float);
-              ps.input('wrvu', sql.Float);
-              ps.input('count', sql.Int);
-              ps.input('rawData', sql.NVarChar);
-              await ps.prepare(`
-                INSERT INTO survey_data (id, surveyId, specialty, providerType, region, tcc, cf, wrvu, count, rawData)
-                VALUES (@id, @surveyId, @specialty, @providerType, @region, @tcc, @cf, @wrvu, @count, @rawData)
-              `);
-
-              for (const row of results) {
-                const dataId = uuidv4();
-                const specialty = row.specialty || row.Specialty || '';
-                const providerType = row.provider_type || row['Provider Type'] || '';
-                const region = row.geographic_region || row.Region || '';
-                const tcc = Number.parseFloat(row.tcc_p50) || Number.parseFloat(row.TCC) || 0;
-                const cf = Number.parseFloat(row.cf_p50) || Number.parseFloat(row.CF) || 0;
-                const wrvu = Number.parseFloat(row.wrvu_p50) || Number.parseFloat(row.wRVU) || 0;
-                const count = Number.parseInt(row.n_incumbents) || Number.parseInt(row.Count) || 0;
-                await ps.execute({
-                  id: dataId,
-                  surveyId,
-                  specialty,
-                  providerType,
-                  region,
-                  tcc,
-                  cf,
-                  wrvu,
-                  count,
-                  rawData: JSON.stringify(row)
-                });
+              // Batch insert for survey_data rows (much faster than individual inserts)
+              const batchSize = 100;
+              const batches = [];
+              
+              for (let i = 0; i < results.length; i += batchSize) {
+                batches.push(results.slice(i, i + batchSize));
               }
 
-              await ps.unprepare();
-              console.log('✅ Azure SQL: upload stored');
+              console.log(`📊 Processing ${results.length} rows in ${batches.length} batches...`);
+
+              for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                console.log(`📦 Processing batch ${i + 1}/${batches.length} (${batch.length} rows)`);
+                
+                try {
+                  const values = batch.map((row, index) => {
+                    const dataId = uuidv4();
+                    const specialty = row.specialty || row.Specialty || '';
+                    const providerType = row.provider_type || row['Provider Type'] || '';
+                    const region = row.geographic_region || row.Region || '';
+                    const tcc = Number.parseFloat(row.tcc_p50) || Number.parseFloat(row.TCC) || 0;
+                    const cf = Number.parseFloat(row.cf_p50) || Number.parseFloat(row.CF) || 0;
+                    const wrvu = Number.parseFloat(row.wrvu_p50) || Number.parseFloat(row.wRVU) || 0;
+                    const count = Number.parseInt(row.n_incumbents) || Number.parseInt(row.Count) || 0;
+                    
+                    return `('${dataId}', '${surveyId}', '${specialty.replace(/'/g, "''")}', '${providerType.replace(/'/g, "''")}', '${region.replace(/'/g, "''")}', ${tcc}, ${cf}, ${wrvu}, ${count}, '${JSON.stringify(row).replace(/'/g, "''")}')`;
+                  }).join(', ');
+
+                  await pool.request().query(`
+                    INSERT INTO survey_data (id, surveyId, specialty, providerType, region, tcc, cf, wrvu, count, data)
+                    VALUES ${values}
+                  `);
+                  
+                  console.log(`✅ Batch ${i + 1} completed successfully`);
+                } catch (batchError) {
+                  console.error(`❌ Error in batch ${i + 1}:`, batchError.message);
+                  throw batchError; // Re-throw to be caught by outer try-catch
+                }
+              }
+
+              console.log('✅ Azure SQL: upload stored successfully');
             } catch (azureErr) {
               console.error('⚠️ Azure SQL write failed (continuing with local SQLite):', azureErr.message);
             }
@@ -286,12 +310,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                 stmt.finalize((err) => {
                   if (err) {
                     console.error('Error finalizing data insert:', err);
+                    clearTimeout(uploadTimeout);
                     return res.status(500).json({ error: 'Data insertion error' });
                   }
 
                   // Clean up uploaded file
                   fs.unlinkSync(req.file.path);
 
+                  clearTimeout(uploadTimeout);
                   res.json({
                     success: true,
                     surveyId,
@@ -476,6 +502,44 @@ app.delete('/api/survey/:id', (req, res) => {
       res.json({ success: true, message: 'Survey deleted successfully' });
     });
   });
+});
+
+// Delete all surveys
+app.delete('/api/surveys', async (req, res) => {
+  try {
+    // Delete from SQLite
+    db.run('DELETE FROM survey_data', function(err) {
+      if (err) {
+        console.error('Error deleting all survey data:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      db.run('DELETE FROM surveys', function(err) {
+        if (err) {
+          console.error('Error deleting all surveys:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Also delete from Azure SQL if enabled
+        if (azureEnabled && getConnection) {
+          getConnection().then(pool => {
+            return pool.request().query('DELETE FROM survey_data');
+          }).then(() => {
+            return getConnection().then(pool => pool.request().query('DELETE FROM surveys'));
+          }).then(() => {
+            console.log('✅ Azure SQL: all surveys deleted');
+          }).catch(azureErr => {
+            console.error('⚠️ Azure SQL delete failed (continuing):', azureErr.message);
+          });
+        }
+        
+        res.json({ success: true, message: 'All surveys deleted successfully' });
+      });
+    });
+  } catch (error) {
+    console.error('Error in delete all surveys:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Export survey data
