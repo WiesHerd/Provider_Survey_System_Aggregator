@@ -1,4 +1,5 @@
 import { LocalStorageService } from './StorageService';
+import BackendService from './BackendService';
 import { IColumnMapping, IColumnInfo, IAutoMappingConfig } from '../types/column';
 
 export class ColumnMappingService {
@@ -11,42 +12,36 @@ export class ColumnMappingService {
   }
 
   async createMapping(standardizedName: string, sourceColumns: IColumnInfo[]): Promise<IColumnMapping> {
-    const mapping: IColumnMapping = {
-      id: crypto.randomUUID(),
-      standardizedName,
-      sourceColumns,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    const mappings = await this.getAllMappings();
-    await this.saveMappings([...mappings, mapping]);
-    return mapping;
+    const payload = { standardizedName, sourceColumns };
+    const res = await fetch('http://localhost:3001/api/mappings/column', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const saved = await res.json();
+    return saved as IColumnMapping;
   }
 
   async getAllMappings(): Promise<IColumnMapping[]> {
     try {
-      const result = await this.storage.getItem(this.MAPPINGS_KEY);
-      return result || [];
+      const res = await fetch('http://localhost:3001/api/mappings/column');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      return data as IColumnMapping[];
     } catch {
       return [];
     }
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    const mappings = await this.getAllMappings();
-    const filteredMappings = mappings.filter(m => m.id !== mappingId);
-    await this.saveMappings(filteredMappings);
+    await fetch(`http://localhost:3001/api/mappings/column/${mappingId}`, { method: 'DELETE' });
   }
 
   async clearAllMappings(): Promise<void> {
-    await this.saveMappings([]);
-    await this.storage.setItem(this.LEARNED_MAPPINGS_KEY, {});
+    await fetch('http://localhost:3001/api/mappings/column', { method: 'DELETE' });
   }
 
-  private async saveMappings(mappings: IColumnMapping[]): Promise<void> {
-    await this.storage.setItem(this.MAPPINGS_KEY, mappings);
-  }
+  private async saveMappings(_mappings: IColumnMapping[]): Promise<void> {}
 
   async autoMapColumns(config: IAutoMappingConfig): Promise<Array<{
     standardizedName: string;

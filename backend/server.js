@@ -103,6 +103,41 @@ db.serialize(() => {
     mappedSpecialty TEXT,
     createdDate TEXT
   )`);
+
+  // New normalized mappings schema (v2)
+  db.run(`CREATE TABLE IF NOT EXISTS specialty_mappings_v2 (
+    id TEXT PRIMARY KEY,
+    standardizedName TEXT NOT NULL,
+    createdAt TEXT,
+    updatedAt TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS specialty_mapping_sources_v2 (
+    id TEXT PRIMARY KEY,
+    mappingId TEXT NOT NULL,
+    specialty TEXT,
+    originalName TEXT,
+    surveySource TEXT,
+    createdAt TEXT,
+    FOREIGN KEY (mappingId) REFERENCES specialty_mappings_v2 (id)
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS column_mappings_v2 (
+    id TEXT PRIMARY KEY,
+    standardizedName TEXT NOT NULL,
+    createdAt TEXT,
+    updatedAt TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS column_mapping_sources_v2 (
+    id TEXT PRIMARY KEY,
+    mappingId TEXT NOT NULL,
+    name TEXT,
+    surveySource TEXT,
+    dataType TEXT,
+    createdAt TEXT,
+    FOREIGN KEY (mappingId) REFERENCES column_mappings_v2 (id)
+  )`);
 });
 
 // File upload configuration
@@ -481,6 +516,201 @@ app.get('/api/survey/:id/filters', (req, res) => {
       });
     });
   });
+});
+
+// ------------------------
+// Mapping persistence APIs
+// ------------------------
+
+// Helper to run SQLite queries as promises
+function runAsync(sqlText, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sqlText, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
+  });
+}
+
+function allAsync(sqlText, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sqlText, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+}
+
+// Specialty mappings
+app.get('/api/mappings/specialty', async (req, res) => {
+  try {
+    const mappings = await allAsync('SELECT * FROM specialty_mappings_v2');
+    const result = [];
+    for (const m of mappings) {
+      const sources = await allAsync('SELECT * FROM specialty_mapping_sources_v2 WHERE mappingId = ?', [m.id]);
+      result.push({
+        id: m.id,
+        standardizedName: m.standardizedName,
+        sourceSpecialties: sources.map(s => ({
+          id: s.id,
+          specialty: s.specialty,
+          originalName: s.originalName,
+          surveySource: s.surveySource,
+          mappingId: m.id
+        })),
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Error listing specialty mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/mappings/specialty', async (req, res) => {
+  try {
+    const { standardizedName, sourceSpecialties = [] } = req.body || {};
+    if (!standardizedName || !Array.isArray(sourceSpecialties)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    await runAsync('INSERT INTO specialty_mappings_v2 (id, standardizedName, createdAt, updatedAt) VALUES (?, ?, ?, ?)', [id, standardizedName, now, now]);
+    for (const s of sourceSpecialties) {
+      const sid = uuidv4();
+      await runAsync('INSERT INTO specialty_mapping_sources_v2 (id, mappingId, specialty, originalName, surveySource, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [sid, id, s.specialty || s.name || '', s.originalName || s.name || '', s.surveySource || '', now]);
+    }
+    // Best-effort Azure dual-write
+    if (azureEnabled && getConnection) {
+      getConnection().then(async pool => {
+        try {
+          await pool.request()
+            .input('id', sql.NVarChar, id)
+            .input('standardizedName', sql.NVarChar, standardizedName)
+            .input('createdAt', sql.NVarChar, now)
+            .input('updatedAt', sql.NVarChar, now)
+            .query('INSERT INTO specialty_mappings_v2 (id, standardizedName, createdAt, updatedAt) VALUES (@id, @standardizedName, @createdAt, @updatedAt)');
+          for (const s of sourceSpecialties) {
+            const sid = uuidv4();
+            await pool.request()
+              .input('id', sql.NVarChar, sid)
+              .input('mappingId', sql.NVarChar, id)
+              .input('specialty', sql.NVarChar, s.specialty || s.name || '')
+              .input('originalName', sql.NVarChar, s.originalName || s.name || '')
+              .input('surveySource', sql.NVarChar, s.surveySource || '')
+              .input('createdAt', sql.NVarChar, now)
+              .query('INSERT INTO specialty_mapping_sources_v2 (id, mappingId, specialty, originalName, surveySource, createdAt) VALUES (@id, @mappingId, @specialty, @originalName, @surveySource, @createdAt)');
+          }
+        } catch (e) {
+          console.warn('Azure dual-write (specialty mappings) failed:', e.message);
+        }
+      });
+    }
+    res.status(201).json({ id, standardizedName, sourceSpecialties, createdAt: now, updatedAt: now });
+  } catch (err) {
+    console.error('Error creating specialty mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/specialty/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runAsync('DELETE FROM specialty_mapping_sources_v2 WHERE mappingId = ?', [id]);
+    await runAsync('DELETE FROM specialty_mappings_v2 WHERE id = ?', [id]);
+    if (azureEnabled && getConnection) {
+      getConnection().then(async pool => {
+        try {
+          await pool.request().input('id', sql.NVarChar, id).query('DELETE FROM specialty_mapping_sources_v2 WHERE mappingId = @id');
+          await pool.request().input('id', sql.NVarChar, id).query('DELETE FROM specialty_mappings_v2 WHERE id = @id');
+        } catch (e) {
+          console.warn('Azure dual-delete (specialty mappings) failed:', e.message);
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting specialty mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/specialty', async (req, res) => {
+  try {
+    await runAsync('DELETE FROM specialty_mapping_sources_v2');
+    await runAsync('DELETE FROM specialty_mappings_v2');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing specialty mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Column mappings
+app.get('/api/mappings/column', async (req, res) => {
+  try {
+    const mappings = await allAsync('SELECT * FROM column_mappings_v2');
+    const result = [];
+    for (const m of mappings) {
+      const sources = await allAsync('SELECT * FROM column_mapping_sources_v2 WHERE mappingId = ?', [m.id]);
+      result.push({
+        id: m.id,
+        standardizedName: m.standardizedName,
+        sourceColumns: sources.map(s => ({ id: s.id, name: s.name, surveySource: s.surveySource, dataType: s.dataType, mappingId: m.id })),
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Error listing column mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/mappings/column', async (req, res) => {
+  try {
+    const { standardizedName, sourceColumns = [] } = req.body || {};
+    if (!standardizedName || !Array.isArray(sourceColumns)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    await runAsync('INSERT INTO column_mappings_v2 (id, standardizedName, createdAt, updatedAt) VALUES (?, ?, ?, ?)', [id, standardizedName, now, now]);
+    for (const c of sourceColumns) {
+      const cid = uuidv4();
+      await runAsync('INSERT INTO column_mapping_sources_v2 (id, mappingId, name, surveySource, dataType, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [cid, id, c.name || '', c.surveySource || '', c.dataType || 'string', now]);
+    }
+    res.status(201).json({ id, standardizedName, sourceColumns, createdAt: now, updatedAt: now });
+  } catch (err) {
+    console.error('Error creating column mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/column/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runAsync('DELETE FROM column_mapping_sources_v2 WHERE mappingId = ?', [id]);
+    await runAsync('DELETE FROM column_mappings_v2 WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting column mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/column', async (req, res) => {
+  try {
+    await runAsync('DELETE FROM column_mapping_sources_v2');
+    await runAsync('DELETE FROM column_mappings_v2');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing column mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
 // Delete survey

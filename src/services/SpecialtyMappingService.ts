@@ -1,6 +1,7 @@
 import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, IAutoMappingConfig, ISurveyData, ISpecialtyGroup, IMappingSuggestion } from '../types/specialty';
 import { stringSimilarity } from 'string-similarity-js';
 import { LocalStorageService } from './StorageService';
+import BackendService from './BackendService';
 import { ISurveyRow } from '../types/survey';
 import BackendService from './BackendService';
 
@@ -45,29 +46,28 @@ export class SpecialtyMappingService {
   }
 
   async saveMapping(mapping: ISpecialtyMapping): Promise<void> {
-    const mappings = await this.getAllMappings();
-    const existingIndex = mappings.findIndex(m => m.id === mapping.id);
-    
-    if (existingIndex >= 0) {
-      mappings[existingIndex] = {
-        ...mapping,
-        updatedAt: new Date()
-      };
-    } else {
-      mappings.push({
-        ...mapping,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    }
-
-    await this.storageService.setItem(this.MAPPINGS_KEY, mappings);
+    // Persist to backend API
+    const payload = {
+      standardizedName: mapping.standardizedName,
+      sourceSpecialties: mapping.sourceSpecialties.map(s => ({
+        specialty: s.specialty,
+        originalName: s.originalName,
+        surveySource: s.surveySource
+      }))
+    };
+    await fetch('http://localhost:3001/api/mappings/specialty', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
   }
 
   async getAllMappings(): Promise<ISpecialtyMapping[]> {
     try {
-      const mappings = await this.storageService.getItem(this.MAPPINGS_KEY) as ISpecialtyMapping[];
-      return mappings || [];
+      const res = await fetch('http://localhost:3001/api/mappings/specialty');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      return data as ISpecialtyMapping[];
     } catch (error) {
       console.error('Error fetching specialty mappings:', error);
       return [];
