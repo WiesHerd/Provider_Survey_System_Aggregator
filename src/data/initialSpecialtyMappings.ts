@@ -240,5 +240,37 @@ export const initialSpecialtyMappings: ISpecialtyMapping[] = [
     ],
     createdAt: new Date(),
     updatedAt: new Date()
+  },
+  {
+    id: '11',
+    standardizedName: 'Anesthesiology',
+    sourceSpecialties: [
+      {
+        id: '11a',
+        specialty: 'Anesthesiology',
+        originalName: 'Anesthesiology',
+        surveySource: 'MGMA',
+        frequency: 1,
+        mappingId: '11'
+      },
+      {
+        id: '11b',
+        specialty: 'Anesthesiology',
+        originalName: 'Anesthesiology',
+        surveySource: 'SullivanCotter',
+        frequency: 1,
+        mappingId: '11'
+      },
+      {
+        id: '11c',
+        specialty: 'Anesthesiology',
+        originalName: 'Anesthesiology',
+        surveySource: 'Gallagher',
+        frequency: 1,
+        mappingId: '11'
+      }
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date()
   }
 ]; 

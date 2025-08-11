@@ -1,4 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { AgGridReact } from 'ag-grid-react';
+import { ColDef, GridOptions } from 'ag-grid-community';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
 
 interface RegionalData {
   region: string;
@@ -27,6 +31,8 @@ const percentiles = [
   { key: 'p90', label: '90th Percentile' },
 ];
 
+
+
 const metricConfigs = [
   {
     key: 'tcc',
@@ -51,72 +57,113 @@ const getMinMax = (values: number[]) => {
   return { min, max };
 };
 
-const getRowAverage = (values: number[]) => {
-  if (!values.length) return 0;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-};
 
-const getPercentDiff = (value: number, avg: number) => {
-  if (avg === 0) return '';
-  const diff = ((value - avg) / avg) * 100;
-  return (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
-};
 
 const RegionalComparison: React.FC<RegionalComparisonProps> = ({ data }) => {
   const regionNames = data.map(region => region.region);
 
+  // Create AG Grid column definitions for each metric
+  const createColumnDefs = (metric: typeof metricConfigs[0]): ColDef[] => {
+    const baseColDef: ColDef = {
+      sortable: true,
+      filter: true,
+      resizable: true,
+      headerClass: 'font-semibold text-gray-700',
+    };
+
+    const cols: ColDef[] = [
+      {
+        headerName: 'Percentile',
+        field: 'percentile',
+        pinned: 'left',
+        width: 150,
+        cellClass: 'font-medium text-gray-600',
+        ...baseColDef,
+      },
+    ];
+
+    // Add region columns
+    regionNames.forEach(region => {
+      cols.push({
+        headerName: region,
+        field: region,
+        flex: 1, // Make columns flex to fill available space
+                 cellRenderer: (params: any) => {
+           const value = params.value;
+           const values = data.map(r => r[`${metric.key}_${params.data.percentileKey}` as keyof RegionalData] as number);
+           const { min, max } = getMinMax(values);
+           
+           let cellClass = '';
+           let tooltip = '';
+           
+           if (value === max) {
+             cellClass = 'bg-green-50 font-bold';
+             tooltip = 'Highest value';
+           } else if (value === min) {
+             cellClass = 'bg-red-50 font-bold';
+             tooltip = 'Lowest value';
+           }
+           
+           return (
+             <div className={`${cellClass}`} title={tooltip}>
+               <div>{metric.format(value)}</div>
+             </div>
+           );
+         },
+        ...baseColDef,
+      });
+    });
+
+    return cols;
+  };
+
+  // Create row data for each metric
+  const createRowData = (metric: typeof metricConfigs[0]) => {
+    return percentiles.map(p => {
+      const row: any = {
+        percentile: p.label,
+        percentileKey: p.key,
+      };
+      
+      regionNames.forEach(region => {
+        const regionData = data.find(d => d.region === region);
+        if (regionData) {
+          row[region] = regionData[`${metric.key}_${p.key}` as keyof RegionalData] as number;
+        }
+      });
+      
+      return row;
+    });
+  };
+
+  // Grid options
+  const gridOptions: GridOptions = {
+    defaultColDef: {
+      sortable: true,
+      filter: true,
+      resizable: true,
+    },
+    domLayout: 'autoHeight',
+    suppressRowHoverHighlight: false,
+    rowHeight: 50,
+    suppressColumnVirtualisation: true, // Ensure all columns are rendered
+    suppressHorizontalScroll: true, // Prevent horizontal scrollbar
+  };
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {metricConfigs.map(metric => (
-        <div key={metric.key} className="bg-white rounded-lg shadow-lg p-6 overflow-x-auto">
-          <h3 className="text-lg font-semibold mb-4">{metric.label}</h3>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="p-3 text-left font-semibold text-gray-600 border-b w-48">Percentile</th>
-                {regionNames.map(region => (
-                  <th key={region} className="p-3 text-right font-semibold text-gray-600 border-b">
-                    {region}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {percentiles.map(p => {
-                const values = data.map(r => r[`${metric.key}_${p.key}` as keyof RegionalData] as number);
-                const { min, max } = getMinMax(values);
-                const avg = getRowAverage(values);
-                return (
-                  <tr key={p.key} className="hover:bg-gray-50">
-                    <td className="p-3 text-gray-600 border-b font-medium">{p.label}</td>
-                    {data.map(region => {
-                      const value = region[`${metric.key}_${p.key}` as keyof RegionalData] as number;
-                      let cellClass = '';
-                      let tooltip = '';
-                      let percentDiff = '';
-                      if (value === max) {
-                        cellClass = 'bg-green-50 font-bold ';
-                        tooltip = 'Highest value';
-                        percentDiff = getPercentDiff(value, avg);
-                      } else if (value === min) {
-                        cellClass = 'bg-red-50 font-bold ';
-                        tooltip = 'Lowest value';
-                        percentDiff = getPercentDiff(value, avg);
-                      }
-                      return (
-                        <td key={region.region} className={`p-3 text-gray-700 border-b text-right align-middle ${cellClass}`} title={tooltip}>
-                          <span>{metric.format(value)}</span>
-                          {(value === max || value === min) && (
-                            <span className="block text-xs text-gray-500 mt-0.5">{percentDiff}</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div key={metric.key} className="bg-white rounded-lg shadow-lg p-6">
+          <h3 className="text-xl font-semibold mb-6 text-gray-800">{metric.label}</h3>
+          <div className="ag-theme-alpine w-full overflow-visible">
+            <AgGridReact
+              columnDefs={createColumnDefs(metric)}
+              rowData={createRowData(metric)}
+              gridOptions={gridOptions}
+              suppressCellFocus={true}
+              suppressRowClickSelection={true}
+            />
+          </div>
         </div>
       ))}
     </div>

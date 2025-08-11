@@ -124,14 +124,14 @@ const PageContent = () => {
     <div className="flex h-screen bg-gray-50">
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       
-      <div className={`flex-1 transition-all duration-300 overflow-x-auto ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
+      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'pl-64' : 'pl-20'}`}>
         <PageHeader 
           title={headerContent.title} 
           description={headerContent.description} 
           showDownloadButton={headerContent.showDownloadButton}
           titleClassName={location.pathname === '/upload' ? 'text-lg' : undefined}
         />
-        <main className="min-h-[calc(100vh-4rem)] bg-gray-50 px-8">
+        <main className="bg-gray-50 px-8">
           <Routes>
             <Route path="/upload" element={<SurveyUpload />} />
             <Route path="/specialty-mapping" element={<SpecialtyMapping />} />

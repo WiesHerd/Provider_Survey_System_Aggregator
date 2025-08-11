@@ -44,12 +44,18 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
+// Rate limiting (relax/disable for local dev to avoid 429s during bulk requests)
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || (process.env.NODE_ENV === 'development' ? '100000' : '300'), 10);
+const DISABLE_RATE_LIMIT = process.env.DISABLE_RATE_LIMIT === 'true' || process.env.NODE_ENV === 'development';
+if (!DISABLE_RATE_LIMIT) {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: RATE_LIMIT_MAX
+  });
+  app.use(limiter);
+} else {
+  console.log('⚙️  Rate limiting disabled for this environment');
+}
 
 // Database setup (SQLite primary for local dev; optional Azure dual-write when enabled)
 const dbPath = path.join(__dirname, 'survey_data.db');
@@ -106,20 +112,19 @@ db.serialize(() => {
 
   // New normalized mappings schema (v2)
   db.run(`CREATE TABLE IF NOT EXISTS specialty_mappings_v2 (
-    id TEXT PRIMARY KEY,
-    standardizedName TEXT NOT NULL,
-    createdAt TEXT,
-    updatedAt TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    standardized_name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS specialty_mapping_sources_v2 (
-    id TEXT PRIMARY KEY,
-    mappingId TEXT NOT NULL,
-    specialty TEXT,
-    originalName TEXT,
-    surveySource TEXT,
-    createdAt TEXT,
-    FOREIGN KEY (mappingId) REFERENCES specialty_mappings_v2 (id)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mapping_id INTEGER NOT NULL,
+    source_specialty TEXT NOT NULL,
+    source_survey TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (mapping_id) REFERENCES specialty_mappings_v2(id)
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS column_mappings_v2 (
@@ -279,7 +284,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                   }).join(', ');
 
                   await pool.request().query(`
-                    INSERT INTO survey_data (id, surveyId, specialty, providerType, region, tcc, cf, wrvu, count, data)
+                    INSERT INTO survey_data (id, surveyId, specialty, providerType, region, tcc, cf, wrvu, count, rawData)
                     VALUES ${values}
                   `);
                   
@@ -547,19 +552,19 @@ app.get('/api/mappings/specialty', async (req, res) => {
     const mappings = await allAsync('SELECT * FROM specialty_mappings_v2');
     const result = [];
     for (const m of mappings) {
-      const sources = await allAsync('SELECT * FROM specialty_mapping_sources_v2 WHERE mappingId = ?', [m.id]);
+      const sources = await allAsync('SELECT * FROM specialty_mapping_sources_v2 WHERE mapping_id = ?', [m.id]);
       result.push({
         id: m.id,
-        standardizedName: m.standardizedName,
+        standardizedName: m.standardized_name,
         sourceSpecialties: sources.map(s => ({
           id: s.id,
-          specialty: s.specialty,
-          originalName: s.originalName,
-          surveySource: s.surveySource,
+          specialty: s.source_specialty,
+          originalName: s.source_specialty,
+          surveySource: s.source_survey,
           mappingId: m.id
         })),
-        createdAt: m.createdAt,
-        updatedAt: m.updatedAt
+        createdAt: m.created_at,
+        updatedAt: m.updated_at
       });
     }
     res.json(result);
@@ -575,19 +580,20 @@ app.post('/api/mappings/specialty', async (req, res) => {
     if (!standardizedName || !Array.isArray(sourceSpecialties)) {
       return res.status(400).json({ error: 'Invalid payload' });
     }
-    const id = uuidv4();
     const now = new Date().toISOString();
-    await runAsync('INSERT INTO specialty_mappings_v2 (id, standardizedName, createdAt, updatedAt) VALUES (?, ?, ?, ?)', [id, standardizedName, now, now]);
+    const result = await runAsync('INSERT INTO specialty_mappings_v2 (standardized_name, created_at, updated_at) VALUES (?, ?, ?)', [standardizedName, now, now]);
+    const id = result.lastID;
     for (const s of sourceSpecialties) {
-      const sid = uuidv4();
-      await runAsync('INSERT INTO specialty_mapping_sources_v2 (id, mappingId, specialty, originalName, surveySource, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [sid, id, s.specialty || s.name || '', s.originalName || s.name || '', s.surveySource || '', now]);
+      await runAsync('INSERT INTO specialty_mapping_sources_v2 (mapping_id, source_specialty, source_survey, created_at) VALUES (?, ?, ?, ?)', [id, s.specialty || s.name || '', s.surveySource || '', now]);
     }
     // Best-effort Azure dual-write
     if (azureEnabled && getConnection) {
       getConnection().then(async pool => {
         try {
+          // Generate UUID for Azure SQL
+          const azureId = uuidv4();
           await pool.request()
-            .input('id', sql.NVarChar, id)
+            .input('id', sql.NVarChar, azureId)
             .input('standardizedName', sql.NVarChar, standardizedName)
             .input('createdAt', sql.NVarChar, now)
             .input('updatedAt', sql.NVarChar, now)
@@ -596,7 +602,7 @@ app.post('/api/mappings/specialty', async (req, res) => {
             const sid = uuidv4();
             await pool.request()
               .input('id', sql.NVarChar, sid)
-              .input('mappingId', sql.NVarChar, id)
+              .input('mappingId', sql.NVarChar, azureId)
               .input('specialty', sql.NVarChar, s.specialty || s.name || '')
               .input('originalName', sql.NVarChar, s.originalName || s.name || '')
               .input('surveySource', sql.NVarChar, s.surveySource || '')
@@ -615,10 +621,65 @@ app.post('/api/mappings/specialty', async (req, res) => {
   }
 });
 
+app.put('/api/mappings/specialty/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { standardizedName, sourceSpecialties = [] } = req.body || {};
+    if (!standardizedName) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    const now = new Date().toISOString();
+    
+    // Update SQLite
+    await runAsync('UPDATE specialty_mappings_v2 SET standardized_name = ?, updated_at = ? WHERE id = ?', [standardizedName, now, id]);
+    await runAsync('DELETE FROM specialty_mapping_sources_v2 WHERE mapping_id = ?', [id]);
+    for (const s of sourceSpecialties) {
+      const sid = uuidv4();
+      await runAsync('INSERT INTO specialty_mapping_sources_v2 (id, mapping_id, source_specialty, source_survey, created_at) VALUES (?, ?, ?, ?, ?)', [sid, id, s.specialty || '', s.surveySource || '', now]);
+    }
+    
+    // Update Azure SQL if enabled
+    if (azureEnabled && getConnection) {
+      getConnection().then(async pool => {
+        try {
+          // For updates, we need to find the Azure ID by matching the standardized name
+          // This is a limitation of having different ID systems
+          await pool.request()
+            .input('standardizedName', sql.NVarChar, standardizedName)
+            .input('updatedAt', sql.NVarChar, now)
+            .query('UPDATE specialty_mappings_v2 SET standardizedName = @standardizedName, updatedAt = @updatedAt WHERE standardizedName = @standardizedName');
+          
+          // Delete and recreate source specialties
+          await pool.request().input('standardizedName', sql.NVarChar, standardizedName).query('DELETE FROM specialty_mapping_sources_v2 WHERE mappingId IN (SELECT id FROM specialty_mappings_v2 WHERE standardizedName = @standardizedName)');
+          
+          for (const s of sourceSpecialties) {
+            const sid = uuidv4();
+            await pool.request()
+              .input('id', sql.NVarChar, sid)
+              .input('standardizedName', sql.NVarChar, standardizedName)
+              .input('specialty', sql.NVarChar, s.specialty || '')
+              .input('originalName', sql.NVarChar, s.originalName || '')
+              .input('surveySource', sql.NVarChar, s.surveySource || '')
+              .input('createdAt', sql.NVarChar, now)
+              .query('INSERT INTO specialty_mapping_sources_v2 (id, mappingId, specialty, originalName, surveySource, createdAt) VALUES (@id, (SELECT id FROM specialty_mappings_v2 WHERE standardizedName = @standardizedName), @specialty, @originalName, @surveySource, @createdAt)');
+          }
+        } catch (e) {
+          console.warn('Azure dual-update (specialty mappings) failed:', e.message);
+        }
+      });
+    }
+    
+    res.json({ id, standardizedName, sourceSpecialties, updatedAt: now });
+  } catch (err) {
+    console.error('Error updating specialty mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.delete('/api/mappings/specialty/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await runAsync('DELETE FROM specialty_mapping_sources_v2 WHERE mappingId = ?', [id]);
+    await runAsync('DELETE FROM specialty_mapping_sources_v2 WHERE mapping_id = ?', [id]);
     await runAsync('DELETE FROM specialty_mappings_v2 WHERE id = ?', [id]);
     if (azureEnabled && getConnection) {
       getConnection().then(async pool => {

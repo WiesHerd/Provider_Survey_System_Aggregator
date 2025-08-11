@@ -3,29 +3,23 @@ import {
   Button,
   TextField,
   Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Chip,
   Typography,
   Alert,
-  CircularProgress,
   InputAdornment,
   Paper,
   Tabs,
-  Tab,
-  Box
+  Tab
 } from '@mui/material';
 import { 
   PlusIcon as AddIcon,
   MagnifyingGlassIcon as SearchIcon,
   BoltIcon,
   TrashIcon as DeleteSweepIcon,
-  PencilIcon as EditIcon,
   ExclamationTriangleIcon as WarningIcon,
-  ArrowRightIcon,
   LightBulbIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  ArrowPathIcon as RefreshIcon
 } from '@heroicons/react/24/outline';
 import { ColumnMappingService } from '../services/ColumnMappingService';
 import { LocalStorageService } from '../services/StorageService';
@@ -33,6 +27,7 @@ import { IColumnMapping, IColumnInfo } from '../types/column';
 import MappedColumns from './MappedColumns';
 import AutoMapColumns from './AutoMapColumns';
 import AutoMapDialog from './shared/AutoMapDialog';
+import LoadingSpinner from './ui/loading-spinner';
 
 interface ColumnCardProps {
   column: IColumnInfo;
@@ -43,14 +38,14 @@ interface ColumnCardProps {
 const ColumnCard: React.FC<ColumnCardProps> = ({ column, isSelected, onSelect }) => (
   <button
     onClick={() => onSelect(column)}
-    className={`w-full p-3 mb-2 text-left rounded-lg transition-all ${
+    className={`w-full p-2 mb-1.5 text-left rounded-md transition-all text-sm ${
       isSelected 
         ? 'bg-indigo-100 border-2 border-indigo-500' 
         : 'bg-white hover:bg-gray-50 border border-gray-200'
     }`}
   >
-    <div className="font-medium">{column.name}</div>
-    <div className="text-sm text-gray-500">Type: {column.dataType}</div>
+    <div className="font-medium text-sm">{column.name}</div>
+    <div className="text-xs text-gray-500">Type: {column.dataType}</div>
   </button>
 );
 
@@ -156,12 +151,21 @@ const ColumnMapping: React.FC = () => {
 
   const handleDelete = async (mappingId: string) => {
     try {
+      console.log('Deleting mapping:', mappingId);
       await mappingService.deleteMapping(mappingId);
+      
+      // Wait a moment for backend to process the deletion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Remove from local state
       setMappings(mappings.filter(m => m.id !== mappingId));
+      
       // Refresh unmapped columns to show the deleted ones
+      console.log('Refreshing unmapped columns...');
       const unmappedData = await mappingService.getUnmappedColumns();
+      console.log('Unmapped columns after delete:', unmappedData.length);
       setUnmappedColumns(unmappedData);
+      
       // Switch to unmapped tab
       setActiveTab('unmapped');
     } catch (err) {
@@ -175,32 +179,44 @@ const ColumnMapping: React.FC = () => {
     useExistingMappings: boolean;
     enableFuzzyMatching: boolean;
   }) => {
-    const mappingConfig = {
-      confidenceThreshold: config.confidenceThreshold,
-      includeDataTypeMatching: config.enableFuzzyMatching
-    };
+    try {
+      setLoading(true);
+      const mappingConfig = {
+        confidenceThreshold: config.confidenceThreshold,
+        includeDataTypeMatching: config.enableFuzzyMatching
+      };
 
-    const suggestions = await mappingService.autoMapColumns(mappingConfig);
+      const suggestions = await mappingService.autoMapColumns(mappingConfig);
 
-    // Create mappings from suggestions
-    for (const suggestion of suggestions) {
-      await mappingService.createMapping(
-        suggestion.standardizedName,
-        suggestion.columns
-      );
+      // Create mappings from suggestions
+      for (const suggestion of suggestions) {
+        await mappingService.createMapping(
+          suggestion.standardizedName,
+          suggestion.columns
+        );
+      }
+
+      // Wait a moment for backend to process, then refresh data
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await loadData();
+      
+      setActiveTab('mapped');
+      setIsAutoMapOpen(false);
+    } catch (error) {
+      console.error('Auto-mapping error:', error);
+      setError('Failed to auto-map columns. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    // Refresh data and close dialog
-    await loadData();
-    setActiveTab('mapped');
-    setIsAutoMapOpen(false);
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <CircularProgress />
-      </div>
+      <LoadingSpinner 
+        message="Loading column mappings..." 
+        fullScreen={true}
+        size="lg"
+      />
     );
   }
 
@@ -254,23 +270,44 @@ const ColumnMapping: React.FC = () => {
           )}
 
           {/* Tabs and Action Buttons */}
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <Tabs 
                 value={activeTab} 
                 onChange={(_event: React.SyntheticEvent, newValue: 'unmapped' | 'mapped') => setActiveTab(newValue)}
+                sx={{ 
+                  '& .MuiTab-root': { 
+                    fontSize: '0.875rem', 
+                    fontWeight: 500,
+                    textTransform: 'none',
+                    minHeight: '40px',
+                    padding: '8px 16px'
+                  }
+                }}
               >
                 <Tab label="Unmapped Columns" value="unmapped" />
                 <Tab label="Mapped Columns" value="mapped" />
               </Tabs>
               
-              <div className="flex space-x-4">
+              <div className="flex space-x-2">
+                <Button
+                  variant="outlined"
+                  onClick={loadData}
+                  startIcon={<RefreshIcon className="h-4 w-4" />}
+                  disabled={loading}
+                  size="small"
+                  sx={{ fontSize: '0.875rem', textTransform: 'none' }}
+                >
+                  Refresh
+                </Button>
                 {activeTab !== 'mapped' && (
                   <Button
                     variant="contained"
                     color="primary"
                     onClick={() => setIsAutoMapOpen(true)}
-                    startIcon={<BoltIcon className="h-5 w-5" />}
+                    startIcon={<BoltIcon className="h-4 w-4" />}
+                    size="small"
+                    sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                   >
                     Auto-Map Columns
                   </Button>
@@ -278,8 +315,10 @@ const ColumnMapping: React.FC = () => {
                 <Button
                   variant="contained"
                   onClick={handleCreateMapping}
-                  startIcon={<AddIcon className="h-5 w-5" />}
+                  startIcon={<AddIcon className="h-4 w-4" />}
                   disabled={selectedColumns.length === 0}
+                  size="small"
+                  sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                 >
                   Create Mapping
                 </Button>
@@ -287,16 +326,25 @@ const ColumnMapping: React.FC = () => {
                   <Button
                     variant="outlined"
                     color="error"
-                    onClick={() => {
+                    onClick={async () => {
                       if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
-                        mappingService.clearAllMappings().then(() => {
+                        try {
+                          console.log('User confirmed clear all mappings');
+                          await mappingService.clearAllMappings();
+                          console.log('Successfully cleared all mappings from database');
                           setMappings([]);
                           setActiveTab('unmapped');
-                          loadData();
-                        });
+                          await loadData();
+                          console.log('UI updated after clearing mappings');
+                        } catch (error) {
+                          console.error('Error clearing all mappings:', error);
+                          setError('Failed to clear all mappings. Please try again.');
+                        }
                       }
                     }}
-                    startIcon={<DeleteSweepIcon className="h-5 w-5" />}
+                    startIcon={<DeleteSweepIcon className="h-4 w-4" />}
+                    size="small"
+                    sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                   >
                     Clear All
                   </Button>
@@ -305,19 +353,26 @@ const ColumnMapping: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-4">
             {activeTab === 'unmapped' ? (
               <>
-                <div className="mb-6">
+                <div className="mb-4">
                   <TextField
                     fullWidth
                     placeholder="Search across all surveys..."
                     value={searchTerm}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                    size="small"
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        fontSize: '0.875rem',
+                        height: '40px'
+                      }
+                    }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                          <SearchIcon className="h-4 w-4 text-gray-400" />
                         </InputAdornment>
                       ),
                     }}
@@ -325,8 +380,8 @@ const ColumnMapping: React.FC = () => {
                 </div>
 
                 {selectedColumns.length > 0 && (
-                  <div className="mb-6">
-                    <Typography variant="subtitle2" className="mb-2">
+                  <div className="mb-4">
+                    <Typography variant="subtitle2" className="mb-2 text-sm">
                       Selected Columns:
                     </Typography>
                     <div className="flex flex-wrap gap-2">
@@ -336,13 +391,15 @@ const ColumnMapping: React.FC = () => {
                           label={`${column.name} (${column.surveySource})`}
                           onDelete={() => handleColumnSelect(column)}
                           color="primary"
+                          size="small"
+                          sx={{ fontSize: '0.75rem' }}
                         />
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {Array.from(columnsBySurvey.entries()).map(([source, columns]) => {
                     const color = source === 'SullivanCotter' ? '#818CF8' :
                                 source === 'MGMA' ? '#34D399' :
@@ -351,14 +408,14 @@ const ColumnMapping: React.FC = () => {
                                 source === 'AMGA' ? '#60A5FA' : '#9CA3AF';
                     
                     return (
-                      <Paper key={source} className="p-4 relative overflow-hidden">
-                        <Typography variant="h6" className="mb-4 flex items-center justify-between">
+                      <Paper key={source} className="p-3 relative overflow-hidden">
+                        <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
                           <span style={{ color }}>{source}</span>
-                          <Typography variant="caption" color="textSecondary">
+                          <Typography variant="caption" color="textSecondary" className="text-xs">
                             {columns.length} columns
                           </Typography>
                         </Typography>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {columns.map((column) => (
                             <ColumnCard
                               key={column.id}
@@ -368,31 +425,64 @@ const ColumnMapping: React.FC = () => {
                             />
                           ))}
                         </div>
-                        <div className="absolute bottom-0 inset-x-0 h-1.5" style={{ backgroundColor: color }} />
+                        <div className="absolute bottom-0 inset-x-0 h-1" style={{ backgroundColor: color }} />
                       </Paper>
                     );
                   })}
                 </div>
+
+                {Array.from(columnsBySurvey.entries()).length === 0 && (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <WarningIcon className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+                    <Typography variant="h6" color="textSecondary" className="mb-2 text-sm">
+                      No Unmapped Columns Found
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" className="mb-3 text-sm">
+                      {searchTerm 
+                        ? "No columns match your search criteria"
+                        : "All columns have been mapped or no survey data is available"
+                      }
+                    </Typography>
+                    {!searchTerm && (
+                      <Button
+                        variant="outlined"
+                        onClick={() => loadData()}
+                        startIcon={<BoltIcon className="h-4 w-4" />}
+                        size="small"
+                        sx={{ fontSize: '0.875rem', textTransform: 'none' }}
+                      >
+                        Refresh Data
+                      </Button>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
-              <div className="space-y-6">
-                <div className="mb-6">
+              <div className="space-y-4">
+                <div className="mb-4">
                   <TextField
                     fullWidth
                     placeholder="Search mapped columns..."
                     value={mappedSearchTerm}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
+                    size="small"
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        fontSize: '0.875rem',
+                        height: '40px'
+                      }
+                    }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                          <SearchIcon className="h-4 w-4 text-gray-400" />
                         </InputAdornment>
                       ),
                     }}
                   />
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {filteredMappings.map((mapping) => (
                     <MappedColumns
                       key={mapping.id}
@@ -403,8 +493,8 @@ const ColumnMapping: React.FC = () => {
                 </div>
                 
                 {filteredMappings.length === 0 && (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 text-sm">
                       {mappedSearchTerm 
                         ? "No mapped columns match your search"
                         : "No mapped columns yet"}

@@ -6,13 +6,13 @@ import {
   FormControlLabel,
   Switch,
   Button,
-  CircularProgress,
   Alert,
   Box,
   Chip,
   Divider
 } from '@mui/material';
 import { BoltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
+import { ButtonSpinner } from './ui/loading-spinner';
 import { ColumnMappingService } from '../services/ColumnMappingService';
 import { LocalStorageService } from '../services/StorageService';
 import { IAutoMappingConfig } from '../types/column';
@@ -129,7 +129,7 @@ const AutoMapColumns: React.FC<AutoMapColumnsProps> = ({ onClose, onMappingsCrea
           variant="contained"
           onClick={handleAutoMap}
           disabled={loading}
-          startIcon={loading ? <CircularProgress size={20} /> : <BoltIcon className="h-5 w-5" />}
+          startIcon={loading ? <ButtonSpinner size="sm" /> : <BoltIcon className="h-5 w-5" />}
         >
           {loading ? 'Auto-Mapping...' : 'Start Auto-Mapping'}
         </Button>

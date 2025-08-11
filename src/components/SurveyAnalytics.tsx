@@ -9,16 +9,23 @@ import {
   Paper,
   Box,
   Typography,
-  CircularProgress,
+  Button,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
 } from '@mui/material';
+import { Listbox, Transition } from '@headlessui/react';
+import { useForm, Controller } from 'react-hook-form';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
+import { ColumnMappingService } from '../services/ColumnMappingService';
 import { IStorageService, LocalStorageService } from '../services/StorageService';
+import BackendService from '../services/BackendService';
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
+import LoadingSpinner from './ui/loading-spinner';
+import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
+const SHOW_DEBUG = true;
 
 interface AggregatedData {
   standardizedName: string;
@@ -79,6 +86,195 @@ const calculateAverage = (values: number[]): number => {
   return values.reduce((acc, val) => acc + val, 0) / values.length;
 };
 
+// Fuzzy matching function for specialty names (word-based, not letter-based)
+const fuzzyMatchSpecialty = (specialty1: string, specialty2: string): boolean => {
+  const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const norm1 = normalize(specialty1);
+  const norm2 = normalize(specialty2);
+
+  if (!norm1 || !norm2) return false;
+
+  // Exact or simple contains
+  if (norm1 === norm2) return true;
+  if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
+
+  const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+  const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+  if (words1.length === 0 || words2.length === 0) return false;
+
+  const common = words1.filter(w => words2.includes(w));
+  const jaccard = common.length / new Set([...words1, ...words2]).size;
+
+  return jaccard >= 0.6 || common.length >= Math.min(words1.length, words2.length) * 0.8;
+};
+
+// Data transformation function that applies column mappings and specialty mappings
+const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string): any[] => {
+  console.log('🔄 Transforming survey data with mappings:', {
+    rawDataLength: rawData.length,
+    columnMappingsCount: columnMappings.length,
+    specialtyMappingsCount: specialtyMappings.length,
+    surveySource
+  });
+  
+  console.log('🔍 First few raw specialties:', rawData.slice(0, 3).map(row => row.specialty));
+  
+  // Special debugging for SullivanCotter raw data
+  if (surveySource === 'SullivanCotter') {
+    const allergyRows = rawData.filter(row => 
+      row.specialty && (row.specialty.toLowerCase().includes('allergy') || row.specialty.toLowerCase().includes('immunology'))
+    );
+    console.log('🔍 Found', allergyRows.length, 'Allergy & Immunology rows in SullivanCotter raw data');
+    if (allergyRows.length > 0) {
+      console.log('📋 Sample Allergy & Immunology rows:', allergyRows.slice(0, 3).map(row => row.specialty));
+    }
+  }
+
+  if (rawData.length === 0) return [];
+
+  // Create column mapping lookup for this survey source
+  const columnMappingLookup = new Map();
+  columnMappings.forEach(mapping => {
+    mapping.sourceColumns.forEach((column: any) => {
+      if (column.surveySource === surveySource) {
+        columnMappingLookup.set(column.name, mapping.standardizedName);
+      }
+    });
+  });
+
+  // Create specialty mapping lookup for this survey source
+  const specialtyMappingLookup = new Map();
+  specialtyMappings.forEach(mapping => {
+    mapping.sourceSpecialties.forEach((specialty: any) => {
+      if (specialty.surveySource === surveySource) {
+        specialtyMappingLookup.set(specialty.specialty.toLowerCase(), mapping.standardizedName);
+      }
+    });
+  });
+
+  console.log('📋 Column mapping lookup for', surveySource, ':', Object.fromEntries(columnMappingLookup));
+  console.log('📋 Specialty mapping lookup for', surveySource, ':', Object.fromEntries(specialtyMappingLookup));
+  
+  // Special debugging for SullivanCotter Allergy & Immunology
+  if (surveySource === 'SullivanCotter') {
+    console.log('🔍 Checking SullivanCotter specialty mappings for Allergy & Immunology...');
+    const allergyMappings = Array.from(specialtyMappingLookup.entries()).filter(([key, value]) => 
+      key.includes('allergy') || key.includes('immunology') || value.includes('Allergy') || value.includes('Immunology')
+    );
+    console.log('📋 Allergy & Immunology mappings for SullivanCotter:', allergyMappings);
+  }
+  
+  // Debug: Show all available survey sources in mappings
+  const allSurveySources = new Set();
+  specialtyMappings.forEach(mapping => {
+    mapping.sourceSpecialties.forEach((specialty: any) => {
+      allSurveySources.add(specialty.surveySource);
+    });
+  });
+  console.log('📋 All available survey sources in mappings:', Array.from(allSurveySources));
+  console.log('🔍 Looking for survey source:', surveySource);
+  
+
+
+  return rawData.map(row => {
+    const transformedRow: any = {
+      surveySource,
+      specialty: row.specialty || row.normalizedSpecialty || '',
+      originalSpecialty: row.specialty || '', // Keep the original specialty name
+      // Carry through non-metric identity fields from common column names
+      providerType: (row as any).providerType || (row as any).provider_type || '',
+      geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || '',
+      n_orgs: 0,
+      n_incumbents: 0,
+      tcc_p25: 0,
+      tcc_p50: 0,
+      tcc_p75: 0,
+      tcc_p90: 0,
+      wrvu_p25: 0,
+      wrvu_p50: 0,
+      wrvu_p75: 0,
+      wrvu_p90: 0,
+      cf_p25: 0,
+      cf_p50: 0,
+      cf_p75: 0,
+      cf_p90: 0,
+    };
+
+    // Apply specialty mapping
+    const originalSpecialty = String(row.specialty || '').toLowerCase();
+    let standardizedSpecialty = specialtyMappingLookup.get(originalSpecialty);
+    
+    // Special debugging for Allergy & Immunology
+    if (row.specialty && (row.specialty.toLowerCase().includes('allergy') || row.specialty.toLowerCase().includes('immunology'))) {
+      console.log(`🔍 Processing Allergy/Immunology specialty: "${row.specialty}" (normalized: "${originalSpecialty}")`);
+      console.log(`📋 Available mappings for ${surveySource}:`, Array.from(specialtyMappingLookup.entries()));
+      console.log(`🔍 Looking for mapping: "${originalSpecialty}"`);
+      console.log(`🔍 Found mapping: ${standardizedSpecialty || 'NOT FOUND'}`);
+    }
+    
+    // Debug: Log all specialties being processed
+    if (originalSpecialty && !standardizedSpecialty) {
+      console.log(`🔍 Processing specialty: "${row.specialty}" (normalized: "${originalSpecialty}")`);
+      console.log(`📋 Available mappings for ${surveySource}:`, Array.from(specialtyMappingLookup.entries()));
+    }
+    
+    // If no direct match, try fuzzy matching
+    if (!standardizedSpecialty) {
+      Array.from(specialtyMappingLookup.entries()).forEach(([key, value]) => {
+        if (fuzzyMatchSpecialty(originalSpecialty, key)) {
+          standardizedSpecialty = value;
+          console.log(`🔄 Fuzzy mapped specialty: "${row.specialty}" → "${standardizedSpecialty}" (matched "${key}")`);
+        }
+      });
+    }
+    
+    if (standardizedSpecialty) {
+      transformedRow.specialty = standardizedSpecialty;
+      transformedRow.originalSpecialty = row.specialty || ''; // Keep original for fallback matching
+      console.log(`✅ Mapped specialty: "${row.specialty}" → "${standardizedSpecialty}"`);
+    } else {
+      console.log(`❌ No mapping found for specialty: "${row.specialty}" (normalized: "${originalSpecialty}")`);
+      console.log('📋 Available mappings for this survey source:', Array.from(specialtyMappingLookup.entries()));
+      // Keep the original specialty if no mapping found
+      transformedRow.specialty = row.specialty || '';
+      transformedRow.originalSpecialty = row.specialty || '';
+    }
+
+    // Apply column mappings
+    Object.keys(row).forEach(originalColumn => {
+      const standardizedName = columnMappingLookup.get(originalColumn);
+      if (standardizedName) {
+        // Map the value to the standardized column name
+        const value = row[originalColumn];
+        
+        // Handle different metric types
+        if (standardizedName.toLowerCase().includes('tcc')) {
+          if (standardizedName.toLowerCase().includes('p25')) transformedRow.tcc_p25 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p50')) transformedRow.tcc_p50 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p75')) transformedRow.tcc_p75 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p90')) transformedRow.tcc_p90 = Number(value) || 0;
+        } else if (standardizedName.toLowerCase().includes('wrvu')) {
+          if (standardizedName.toLowerCase().includes('p25')) transformedRow.wrvu_p25 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p50')) transformedRow.wrvu_p50 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p75')) transformedRow.wrvu_p75 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p90')) transformedRow.wrvu_p90 = Number(value) || 0;
+        } else if (standardizedName.toLowerCase().includes('cf')) {
+          if (standardizedName.toLowerCase().includes('p25')) transformedRow.cf_p25 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p50')) transformedRow.cf_p50 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p75')) transformedRow.cf_p75 = Number(value) || 0;
+          else if (standardizedName.toLowerCase().includes('p90')) transformedRow.cf_p90 = Number(value) || 0;
+        } else if (standardizedName.toLowerCase().includes('orgs')) {
+          transformedRow.n_orgs = Number(value) || 0;
+        } else if (standardizedName.toLowerCase().includes('incumbents')) {
+          transformedRow.n_incumbents = Number(value) || 0;
+        }
+      }
+    });
+
+    return transformedRow;
+  });
+};
+
 const SurveyAnalytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +287,44 @@ const SurveyAnalytics: React.FC = () => {
     surveySource: ''
   });
 
+  // React Hook Form for Region dropdown
+  const { control, handleSubmit, reset, watch } = useForm({
+    defaultValues: {
+      region: ''
+    }
+  });
+
+  const watchedRegion = watch('region');
+
   const mappingService = useMemo(() => new SpecialtyMappingService(new LocalStorageService()), []);
+  const columnMappingService = useMemo(() => new ColumnMappingService(new LocalStorageService()), []);
   const storageService = useMemo(() => new LocalStorageService(), []);
+  const backendService = useMemo(() => BackendService.getInstance(), []);
+
+  // Build chain map: standardizedName -> surveySource -> [source specialties]
+  const chainByStandardized = useMemo(() => {
+    const result = new Map<string, Map<string, string[]>>();
+    mappings.forEach(m => {
+      const bySource = new Map<string, string[]>();
+      m.sourceSpecialties.forEach(src => {
+        const list = bySource.get(src.surveySource) || [];
+        list.push(src.specialty);
+        bySource.set(src.surveySource, list);
+      });
+      result.set(m.standardizedName, bySource);
+    });
+    return result;
+  }, [mappings]);
+
+  // Survey counts by source for quick diagnostics
+  const surveyCountsBySource = useMemo(() => {
+    const counts = new Map<string, number>();
+    Object.values(surveys).forEach(rows => {
+      const source = String(rows[0]?.surveySource || 'unknown');
+      counts.set(source, (counts.get(source) || 0) + 1);
+    });
+    return counts;
+  }, [surveys]);
 
   // Get unique values for filters
   const uniqueValues = useMemo(() => {
@@ -103,25 +335,68 @@ const SurveyAnalytics: React.FC = () => {
       surveySources: new Set<string>()
     };
 
-    // Get all standardized names from mappings
+    // Get all standardized names from actual mappings (not just initial mappings)
     mappings.forEach(mapping => {
       if (mapping.standardizedName) {
         values.specialties.add(mapping.standardizedName);
-        console.log('Added specialty:', mapping.standardizedName);
+        console.log('Added specialty from mapping:', mapping.standardizedName);
       }
     });
 
-    // Get provider types, regions, and survey sources from survey data
-    Object.values(surveys).forEach(surveyRows => {
+    // Build cascading sets based on current selections (specialty/survey source)
+    console.log('Extracting unique values from surveys with cascading filters:', filters, Object.keys(surveys));
+
+    // Pre-compute selected mapping and source names per survey for specialty cascade
+    const selectedMapping = mappings.find(m => m.standardizedName === filters.specialty);
+    const sourceNamesBySurvey = new Map<string, string[]>();
+    if (selectedMapping) {
+      selectedMapping.sourceSpecialties.forEach(src => {
+        const list = sourceNamesBySurvey.get(src.surveySource) || [];
+        list.push(src.specialty);
+        sourceNamesBySurvey.set(src.surveySource, list);
+      });
+    }
+
+    Object.entries(surveys).forEach(([surveyId, surveyRows]) => {
+      console.log(`Processing survey ${surveyId} with ${surveyRows.length} rows`);
       surveyRows.forEach(row => {
-        if (row.providerType) values.providerTypes.add(String(row.providerType));
-        if (row.geographicRegion) values.regions.add(String(row.geographicRegion));
-        if (row.surveySource) values.surveySources.add(String(row.surveySource));
+        const surveySource = String(row.surveySource || '');
+        // Respect survey source filter
+        if (filters.surveySource && surveySource.toLowerCase() !== filters.surveySource.toLowerCase()) return;
+
+        // Respect specialty filter using standardized or source names
+        if (filters.specialty) {
+          const rowSpec = String(row.specialty || '');
+          const direct = rowSpec.toLowerCase() === filters.specialty.toLowerCase();
+          const srcList = sourceNamesBySurvey.get(surveySource) || [];
+          const viaSource = srcList.some(name => fuzzyMatchSpecialty(rowSpec, name));
+          if (!direct && !viaSource) return;
+        }
+
+        if (row.providerType) {
+          values.providerTypes.add(String(row.providerType));
+          console.log('Added provider type:', row.providerType);
+        }
+        const region = (row as any).geographicRegion || (row as any).geographic_region;
+        if (region) {
+          values.regions.add(String(region));
+          console.log('Added region:', region);
+        }
+        if (row.surveySource) {
+          values.surveySources.add(String(row.surveySource));
+          console.log('Added survey source:', row.surveySource);
+        }
       });
     });
 
     console.log('Total specialties found:', values.specialties.size);
     console.log('All specialties:', Array.from(values.specialties));
+    console.log('Total survey sources found:', values.surveySources.size);
+    console.log('All survey sources:', Array.from(values.surveySources));
+    console.log('Total provider types found:', values.providerTypes.size);
+    console.log('All provider types:', Array.from(values.providerTypes));
+    console.log('Total regions found:', values.regions.size);
+    console.log('All regions:', Array.from(values.regions));
 
     return {
       specialties: Array.from(values.specialties).sort(),
@@ -135,40 +410,110 @@ const SurveyAnalytics: React.FC = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // First get all mappings directly
+        // Load specialty mappings from the actual service (not just initial mappings)
         const allMappings = await mappingService.getAllMappings();
-        console.log('Loaded mappings:', allMappings.length, 'mappings found');
+        console.log('Loaded specialty mappings:', allMappings.length, 'mappings found');
+        console.log('Available standardized names:', allMappings.map(m => m.standardizedName));
+        
+
         
         setMappings(allMappings);
 
-        // Then get survey data
-        const uploadedSurveys = await storageService.listSurveys();
-        console.log('Found surveys:', uploadedSurveys.map(s => ({
+        // Load column mappings
+        const columnMappings = await columnMappingService.getAllMappings();
+        console.log('Loaded column mappings:', columnMappings.length, 'mappings found');
+
+        // Then get survey data from backend
+        const uploadedSurveys = await backendService.getAllSurveys();
+        console.log('📊 Found surveys:', uploadedSurveys.map(s => ({
           id: s.id,
-          type: s.metadata.surveyType,
-          totalRows: s.metadata.totalRows
+          type: (s as any).type,
+          totalRows: (s as any).rowCount,
+          fileName: (s as any).fileName,
+          uploadDate: (s as any).uploadDate
         })));
+        
+        if (uploadedSurveys.length === 0) {
+          console.error('❌ No surveys found! This is the problem.');
+          setError('No surveys found. Please upload some survey data first.');
+          return;
+        }
         
         const surveyData: Record<string, ISurveyRow[]> = {};
         
         for (const survey of uploadedSurveys) {
           try {
-            console.log(`Loading data for survey ${survey.id} (${survey.metadata.surveyType})`);
-            const data = await storageService.getSurveyData(survey.id);
+            const surveyType = (survey as any).type;
+            console.log(`🔍 Loading data for survey ${survey.id} (${surveyType})`);
+            // CRITICAL: Request sufficient rows to get all data, including specialties that appear later in the dataset
+        // See docs/ALLERGY_IMMUNOLOGY_FIX.md for details on why this is necessary
+        const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 }); // Request up to 10,000 rows to get all data
             if (data && data.rows) {
               // Log the column names from the first row
               if (data.rows.length > 0) {
-                console.log('Available columns:', Object.keys(data.rows[0]));
+                console.log('📋 Available columns:', Object.keys(data.rows[0]));
               }
 
-              surveyData[survey.id] = data.rows.map(row => {
+
+
+              // Apply column mappings to transform the data
+              console.log(`🔄 Transforming ${data.rows.length} rows for survey ${survey.id} (${surveyType})`);
+              console.log('📋 Available column mappings:', columnMappings.map(m => ({
+                standardizedName: m.standardizedName,
+                sourceColumns: m.sourceColumns.map(c => `${c.name} (${c.surveySource})`)
+              })));
+              
+
+              
+              console.log(`🔄 About to transform ${data.rows.length} rows for survey ${survey.id} (${surveyType})`);
+              const transformedRows = transformSurveyData(data.rows, columnMappings, allMappings, surveyType);
+              console.log(`✅ Transformed ${transformedRows.length} rows for survey ${survey.id}`);
+              
+              // Special debugging for SullivanCotter transformed data
+              if (surveyType === 'SullivanCotter') {
+                const allergyTransformedRows = transformedRows.filter(row => 
+                  row.specialty && (row.specialty.toLowerCase().includes('allergy') || row.specialty.toLowerCase().includes('immunology'))
+                );
+                console.log('🔍 Found', allergyTransformedRows.length, 'Allergy & Immunology rows in SullivanCotter transformed data');
+                if (allergyTransformedRows.length > 0) {
+                  console.log('📋 Sample transformed Allergy & Immunology rows:', allergyTransformedRows.slice(0, 3).map(row => row.specialty));
+                }
+              }
+              
+              // Check if any specialties were actually transformed
+              const originalSpecialties = data.rows.slice(0, 5).map(row => row.specialty);
+              const transformedSpecialties = transformedRows.slice(0, 5).map(row => row.specialty);
+              console.log(`📋 Original specialties (first 5):`, originalSpecialties);
+              console.log(`📋 Transformed specialties (first 5):`, transformedSpecialties);
+              
+
+              
+              // Log some sample specialties from the raw data
+              if (data.rows.length > 0) {
+                const sampleSpecialties = data.rows.slice(0, 5).map(row => row.specialty);
+                console.log(`📋 Sample specialties from ${surveyType}:`, sampleSpecialties);
+              }
+              
+              if (transformedRows.length > 0) {
+                console.log('Sample transformed row:', {
+                  surveySource: transformedRows[0].surveySource,
+                  specialty: transformedRows[0].specialty,
+                  tcc_p50: transformedRows[0].tcc_p50,
+                  wrvu_p50: transformedRows[0].wrvu_p50,
+                  cf_p50: transformedRows[0].cf_p50
+                });
+              }
+              
+              surveyData[survey.id] = transformedRows.map(row => {
                 // Ensure all required fields are present and properly typed
                 const processedRow = {
                   ...row,
-                  surveySource: survey.metadata.surveyType,
+                  surveySource: surveyType,
                   specialty: row.specialty || row.normalizedSpecialty || '',
-                  providerType: row.providerType || '',
-                  geographicRegion: row.geographicRegion || '',
+                  originalSpecialty: row.originalSpecialty || row.specialty || row.normalizedSpecialty || '',
+                  // Normalize provider type and region fields from possible snake_case inputs
+                  providerType: (row as any).providerType || (row as any).provider_type || '',
+                  geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || '',
                   n_orgs: Number(row.n_orgs) || 0,
                   n_incumbents: Number(row.n_incumbents) || 0,
                   tcc_p25: Number(row.tcc_p25) || 0,
@@ -186,8 +531,8 @@ const SurveyAnalytics: React.FC = () => {
                 };
 
                 // Log the first row of each survey to verify data
-                if (data.rows.indexOf(row) === 0) {
-                  console.log('Sample processed row:', {
+                if (transformedRows.indexOf(row) === 0) {
+                  console.log('Sample transformed row:', {
                     surveySource: processedRow.surveySource,
                     specialty: processedRow.specialty,
                     providerType: processedRow.providerType,
@@ -208,12 +553,48 @@ const SurveyAnalytics: React.FC = () => {
         }
 
         console.log('Total surveys loaded:', Object.keys(surveyData).length);
+        console.log('Survey data keys:', Object.keys(surveyData));
+        
+        // Collect all specialties from all surveys to see what's available
+        const allSpecialties: string[] = [];
         Object.entries(surveyData).forEach(([id, rows]) => {
+          const surveySpecialties = Array.from(new Set(rows.map(r => String(r.specialty || '')).filter(Boolean)));
+          allSpecialties.push(...surveySpecialties);
+          
           console.log(`Survey ${id}:`, {
             rowCount: rows.length,
-            specialties: Array.from(new Set(rows.map(r => r.specialty))),
-            hasData: rows.some(r => r.tcc_p50 > 0 || r.wrvu_p50 > 0)
+            surveySource: rows[0]?.surveySource,
+            specialties: surveySpecialties,
+            hasData: rows.some(r => r.tcc_p50 > 0 || r.wrvu_p50 > 0),
+            sampleRow: rows[0]
           });
+        });
+        
+        // Check for Allergy & Immunology specifically
+        const uniqueSpecialties = Array.from(new Set(allSpecialties));
+        console.log('📋 All unique specialties across all surveys:', uniqueSpecialties);
+        
+        const allergySpecialties = uniqueSpecialties.filter(s => 
+          String(s).toLowerCase().includes('allergy') || String(s).toLowerCase().includes('immunology')
+        );
+        console.log('🎯 Allergy & Immunology related specialties found:', allergySpecialties);
+        
+        // Check if any survey has Allergy & Immunology rows
+        Object.entries(surveyData).forEach(([id, rows]) => {
+          const allergyRows = rows.filter(row => 
+            row.specialty && 
+            (String(row.specialty).toLowerCase().includes('allergy') || 
+             String(row.specialty).toLowerCase().includes('immunology'))
+          );
+          if (allergyRows.length > 0) {
+            console.log(`✅ Survey ${id} has ${allergyRows.length} Allergy & Immunology rows:`, 
+              allergyRows.slice(0, 3).map(row => ({
+                specialty: row.specialty,
+                originalSpecialty: row.originalSpecialty,
+                surveySource: row.surveySource
+              }))
+            );
+          }
         });
 
         setSurveys(surveyData);
@@ -234,100 +615,127 @@ const SurveyAnalytics: React.FC = () => {
     const selectedMapping = mappings.find(
       m => m.standardizedName === filters.specialty
     );
-    if (!selectedMapping) return [];
+    if (!selectedMapping) {
+      console.log('❌ No mapping found for specialty:', filters.specialty);
+      console.log('📋 Available mappings:', mappings.map(m => m.standardizedName));
+      return [];
+    }
 
-    console.log('Selected mapping:', selectedMapping);
-    console.log('Available surveys:', Object.keys(surveys));
-    console.log('First survey data sample:', Object.values(surveys)[0]?.[0]);
+    console.log('✅ Selected mapping:', selectedMapping);
+    console.log('📊 Available surveys:', Object.keys(surveys));
     
-    // For each mapped survey specialty, create a row
-    const rows: AggregatedData[] = [];
+    // Collect ALL matching rows from ALL surveys for this standardized specialty
+    const allMatchingRows: ISurveyRow[] = [];
+    
+    // Look through ALL surveys for data matching the selected standardized specialty
+    Object.entries(surveys).forEach(([surveyId, surveyRows]) => {
+      if (!surveyRows || !surveyRows.length) {
+        console.log(`❌ No data found for survey ${surveyId}`);
+        return;
+      }
 
-    selectedMapping.sourceSpecialties.forEach(sourceSpec => {
-      // Find all matching rows from surveys
-      const matchingRows: ISurveyRow[] = [];
+      const surveySource = surveyRows[0]?.surveySource;
+      console.log(`🔍 Checking survey ${surveyId} (${surveySource}) for specialty "${filters.specialty}"`);
       
-      // Look through all surveys
-      Object.entries(surveys).forEach(([surveyId, surveyRows]) => {
-        if (!surveyRows || !surveyRows.length) {
-          console.log(`No data found for survey ${surveyId}`);
-          return;
-        }
-
-        // Check if this survey matches the source
-        const surveySource = surveyRows[0]?.surveySource;
-        if (surveySource !== sourceSpec.surveySource) {
-          console.log(`Survey ${surveyId} source ${surveySource} doesn't match ${sourceSpec.surveySource}`);
-          return;
-        }
+      
+      
+      // Show what source specialties this mapping expects for this survey source
+      const expectedSourceSpecialties = selectedMapping.sourceSpecialties
+        .filter(src => src.surveySource === surveySource)
+        .map(src => src.specialty);
+      console.log(`🎯 Expected source specialties for ${surveySource}:`, expectedSourceSpecialties);
+      
+      // Filter rows that match the selected standardized specialty
+      const filtered = surveyRows.filter(row => {
+        if (!row) return false;
         
-        console.log(`Checking survey ${surveyId} for specialty "${sourceSpec.specialty}" from "${sourceSpec.surveySource}"`);
-        console.log('Sample row from survey:', surveyRows[0]);
+        // Use the transformed specialty name (which should already be standardized)
+        const rowSpecialty = String(row.specialty || '').trim();
+        const selectedSpecialty = selectedMapping.standardizedName.trim();
         
-        // Filter rows that match this source specialty
-        const filtered = surveyRows.filter(row => {
-          if (!row) return false;
-          
-          const rowSpecialty = String(row.specialty || '').toLowerCase().trim();
-          const sourceSpecialty = sourceSpec.specialty.toLowerCase().trim();
-          
-          // Exact match on specialty and source
-          const specialtyMatch = rowSpecialty === sourceSpecialty;
-          const sourceMatch = row.surveySource === sourceSpec.surveySource;
-          const providerTypeMatch = !filters.providerType || 
-            String(row.providerType || '').toLowerCase().trim() === filters.providerType.toLowerCase().trim();
-          const regionMatch = !filters.region || 
-            String(row.geographicRegion || '').toLowerCase().trim() === filters.region.toLowerCase().trim();
-          
-          const matches = specialtyMatch && sourceMatch && providerTypeMatch && regionMatch;
-          if (matches) {
-            console.log('Found matching row:', {
-              rowSpecialty,
-              sourceSpecialty,
-              surveySource: row.surveySource,
-              providerType: row.providerType,
-              region: row.geographicRegion,
-              metrics: {
-                tcc: { p25: row.tcc_p25, p50: row.tcc_p50, p75: row.tcc_p75, p90: row.tcc_p90 },
-                wrvu: { p25: row.wrvu_p25, p50: row.wrvu_p50, p75: row.wrvu_p75, p90: row.wrvu_p90 },
-                cf: { p25: row.cf_p25, p50: row.cf_p50, p75: row.cf_p75, p90: row.cf_p90 }
-              }
-            });
+        // Check if the row specialty matches the selected standardized specialty
+        const specialtyMatch = rowSpecialty.toLowerCase() === selectedSpecialty.toLowerCase();
+        
+        // If no direct match, check if this row's original specialty maps to the selected specialty
+        if (!specialtyMatch && row.originalSpecialty) {
+          const originalSpecialty = String(row.originalSpecialty).toLowerCase();
+          const mappingForThisSource = selectedMapping.sourceSpecialties.find(
+            src => src.surveySource === surveySource && src.specialty.toLowerCase() === originalSpecialty
+          );
+          if (mappingForThisSource) {
+            console.log(`✅ Found mapping match: "${row.originalSpecialty}" → "${selectedSpecialty}"`);
+            return true;
           }
-          
-          return matches;
-        });
-
-        if (filtered.length > 0) {
-          console.log(`Found ${filtered.length} matching rows in survey ${surveyId} for specialty "${sourceSpec.specialty}"`);
-          matchingRows.push(...filtered);
         }
+        
+        // Apply other filters
+        const providerTypeMatch = !filters.providerType || 
+          String((row as any).providerType || (row as any).provider_type || '').toLowerCase().trim() === filters.providerType.toLowerCase().trim();
+        const regionMatch = !filters.region || 
+          String((row as any).geographicRegion || (row as any).geographic_region || '').toLowerCase().trim() === filters.region.toLowerCase().trim();
+        const surveySourceMatch = !filters.surveySource || 
+          String(row.surveySource || '').toLowerCase().trim() === filters.surveySource.toLowerCase().trim();
+        
+        const matches = specialtyMatch && providerTypeMatch && regionMatch && surveySourceMatch;
+        
+        if (specialtyMatch) {
+          console.log(`✅ Found matching row: "${rowSpecialty}" matches "${selectedSpecialty}"`);
+        } else {
+          console.log(`❌ No direct match: "${rowSpecialty}" != "${selectedSpecialty}"`);
+          // Debug: Show what the row actually contains
+          console.log(`🔍 Row details:`, {
+            surveySource: row.surveySource,
+            specialty: row.specialty,
+            originalSpecialty: (row as any).originalSpecialty,
+            providerType: row.providerType,
+            geographicRegion: row.geographicRegion
+          });
+        }
+        
+        return matches;
       });
 
-      if (matchingRows.length > 0) {
-        console.log(`Processing ${matchingRows.length} matching rows for ${sourceSpec.specialty} from ${sourceSpec.surveySource}`);
-        
-        // For each unique combination of provider type and region, create a row
-        const groupedRows = new Map<string, ISurveyRow[]>();
-        matchingRows.forEach(row => {
-          const key = `${row.providerType || ''}-${row.geographicRegion || ''}`;
-          if (!groupedRows.has(key)) {
-            groupedRows.set(key, []);
-          }
-          groupedRows.get(key)?.push(row);
-        });
+      if (filtered.length > 0) {
+        console.log(`✅ Found ${filtered.length} matching rows in survey ${surveyId} (${surveySource}) for specialty "${filters.specialty}"`);
+        allMatchingRows.push(...filtered);
+      } else {
+        console.log(`❌ No matching rows found in survey ${surveyId} (${surveySource}) for specialty "${filters.specialty}"`);
+      }
+    });
 
-        // Create aggregated rows for each group
-        groupedRows.forEach((groupRows, key) => {
-          // Use the first row as base for metadata
-          const row = groupRows[0];
-          
-          // Calculate metrics including averages
-          const metrics = {
-            n_orgs: groupRows.reduce((sum, r) => sum + (Number(r.n_orgs) || 0), 0),
-            n_incumbents: groupRows.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0),
-            // Simple averages
-            tcc_avg: calculateAverage([
+    console.log(`📊 Total matching rows found across all surveys: ${allMatchingRows.length}`);
+
+    if (allMatchingRows.length === 0) {
+      console.log('❌ No matching rows found for any survey');
+      console.log('📋 Available specialties in mappings:', mappings.map(m => m.standardizedName));
+      console.log('🎯 Selected specialty:', filters.specialty);
+      return [];
+    }
+
+    // Group rows by survey source, provider type, and region
+    const groupedRows = new Map<string, ISurveyRow[]>();
+    allMatchingRows.forEach(row => {
+      const key = `${row.surveySource || ''}-${row.providerType || ''}-${row.geographicRegion || ''}`;
+      if (!groupedRows.has(key)) {
+        groupedRows.set(key, []);
+      }
+      groupedRows.get(key)?.push(row);
+    });
+
+    console.log(`Grouped into ${groupedRows.size} unique combinations`);
+
+    // Create aggregated rows for each group
+    const rows: AggregatedData[] = [];
+    groupedRows.forEach((groupRows, key) => {
+      // Use the first row as base for metadata
+      const row = groupRows[0];
+      
+      // Calculate metrics including averages
+      const metrics = {
+        n_orgs: groupRows.reduce((sum, r) => sum + (Number(r.n_orgs) || 0), 0),
+        n_incumbents: groupRows.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0),
+        // Simple averages
+        tcc_avg: calculateAverage([
               ...groupRows.map(r => Number(r.tcc_p25) || 0),
               ...groupRows.map(r => Number(r.tcc_p50) || 0),
               ...groupRows.map(r => Number(r.tcc_p75) || 0),
@@ -375,16 +783,25 @@ const SurveyAnalytics: React.FC = () => {
 
           rows.push({
             standardizedName: selectedMapping.standardizedName,
-            surveySource: sourceSpec.surveySource,
-            surveySpecialty: sourceSpec.specialty,
-            geographicRegion: row.geographicRegion || '',
-            ...metrics
+            surveySource: String(row.surveySource || ''),
+            surveySpecialty: String(row.specialty || ''),
+            geographicRegion: String(row.geographicRegion || ''),
+            n_orgs: metrics.n_orgs,
+            n_incumbents: metrics.n_incumbents,
+            tcc_p25: metrics.tcc_p25,
+            tcc_p50: metrics.tcc_p50,
+            tcc_p75: metrics.tcc_p75,
+            tcc_p90: metrics.tcc_p90,
+            wrvu_p25: metrics.wrvu_p25,
+            wrvu_p50: metrics.wrvu_p50,
+            wrvu_p75: metrics.wrvu_p75,
+            wrvu_p90: metrics.wrvu_p90,
+            cf_p25: metrics.cf_p25,
+            cf_p50: metrics.cf_p50,
+            cf_p75: metrics.cf_p75,
+            cf_p90: metrics.cf_p90
           });
         });
-      } else {
-        console.log(`No matching rows found for ${sourceSpec.specialty} from ${sourceSpec.surveySource}`);
-      }
-    });
 
     console.log('Generated rows:', rows);
     return rows;
@@ -422,11 +839,41 @@ const SurveyAnalytics: React.FC = () => {
   }, [aggregatedData, filters, surveys]);
 
   const handleFilterChange = (filterName: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterName]: value
-    }));
+    setFilters(prev => {
+      const newFilters = { ...prev, [filterName]: value };
+      
+      // Cascading logic: when specialty changes, reset other filters
+      if (filterName === 'specialty') {
+        newFilters.providerType = '';
+        newFilters.region = '';
+        newFilters.surveySource = '';
+        reset({ region: '' }); // Reset react-hook-form
+      }
+      
+      // When survey source changes, reset provider type and region
+      if (filterName === 'surveySource') {
+        newFilters.providerType = '';
+        newFilters.region = '';
+        reset({ region: '' }); // Reset react-hook-form
+      }
+      
+      // When provider type changes, reset region
+      if (filterName === 'providerType') {
+        newFilters.region = '';
+        reset({ region: '' }); // Reset react-hook-form
+      }
+      
+      console.log('Filter changed:', filterName, 'to', value, 'New filters:', newFilters);
+      return newFilters;
+    });
   };
+
+  // Handle region change from react-hook-form
+  useEffect(() => {
+    if (watchedRegion !== filters.region) {
+      handleFilterChange('region', watchedRegion);
+    }
+  }, [watchedRegion]);
 
   // Add function to group data by standardized specialty
   const groupBySpecialty = (data: AggregatedData[]): Record<string, AggregatedData[]> => {
@@ -490,9 +937,11 @@ const SurveyAnalytics: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <CircularProgress />
-      </Box>
+      <LoadingSpinner 
+        message="Loading survey analytics..." 
+        fullScreen={true}
+        size="lg"
+      />
     );
   }
 
@@ -506,86 +955,195 @@ const SurveyAnalytics: React.FC = () => {
 
   return (
     <Box p={3}>
-      <Box sx={{ 
-        display: 'flex', 
-        gap: 2, 
-        mb: 3,
-        '& .MuiFormControl-root': {
-          backgroundColor: 'white',
-          borderRadius: 1,
-          '& .MuiOutlinedInput-root': {
-            backgroundColor: 'white'
-          }
-        }
-      }}>
-        <FormControl fullWidth>
-          <InputLabel id="specialty-label">Specialty</InputLabel>
-          <Select
-            labelId="specialty-label"
-            value={filters.specialty}
-            label="Specialty"
-            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('specialty', e.target.value as string)}
-          >
-            <MenuItem value="">All Specialties</MenuItem>
-            {uniqueValues.specialties.map((specialty) => (
-              <MenuItem key={specialty} value={specialty}>
-                {specialty}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+      {/* Filter Section with Different Libraries */}
+      <div className="flex gap-3 mb-4 items-end">
+        {/* 1. Headless UI Listbox for Specialty */}
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Specialty
+          </label>
+          <Listbox value={filters.specialty} onChange={(value) => handleFilterChange('specialty', value)}>
+            <div className="relative">
+              <Listbox.Button className="relative w-full cursor-default rounded-md bg-white py-2.5 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
+                <span className="block truncate">
+                  {filters.specialty || "Select a Specialty"}
+                </span>
+                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                  <ChevronDownIcon className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                </span>
+              </Listbox.Button>
+              <Transition
+                as={React.Fragment}
+                leave="transition ease-in duration-100"
+                leaveFrom="opacity-100"
+                leaveTo="opacity-0"
+              >
+                <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <Listbox.Option
+                    className={({ active }) =>
+                      `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                        active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
+                      }`
+                    }
+                    value=""
+                  >
+                    {({ selected }) => (
+                      <>
+                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                          All Specialties
+                        </span>
+                        {selected ? (
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
+                            <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </Listbox.Option>
+                  {uniqueValues.specialties.map((specialty) => (
+                    <Listbox.Option
+                      key={specialty}
+                      className={({ active }) =>
+                        `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                          active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
+                        }`
+                      }
+                      value={specialty}
+                    >
+                      {({ selected }) => (
+                        <>
+                          <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                            {specialty}
+                          </span>
+                          {selected ? (
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
+                              <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </Listbox.Option>
+                  ))}
+                </Listbox.Options>
+              </Transition>
+            </div>
+          </Listbox>
+        </div>
 
-        <FormControl fullWidth>
-          <InputLabel id="survey-source-label">Survey Source</InputLabel>
-          <Select
-            labelId="survey-source-label"
+        {/* 2. Custom HTML Select for Survey Source */}
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Survey Source
+          </label>
+          <select
             value={filters.surveySource}
-            label="Survey Source"
-            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('surveySource', e.target.value as string)}
+            onChange={(e) => handleFilterChange('surveySource', e.target.value)}
+            className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 h-10"
           >
-            <MenuItem value="">All Sources</MenuItem>
+            <option value="">All Sources</option>
             {uniqueValues.surveySources.map((source) => (
-              <MenuItem key={source} value={source}>
+              <option key={source} value={source}>
                 {source}
-              </MenuItem>
+              </option>
             ))}
-          </Select>
-        </FormControl>
+          </select>
+        </div>
 
-        <FormControl fullWidth>
-          <InputLabel id="provider-type-label">Provider Type</InputLabel>
-          <Select
-            labelId="provider-type-label"
-            value={filters.providerType}
-            label="Provider Type"
-            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('providerType', e.target.value as string)}
-          >
-            <MenuItem value="">All Types</MenuItem>
-            {uniqueValues.providerTypes.map((type) => (
-              <MenuItem key={type} value={type}>
-                {type}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        {/* 3. Material-UI Select for Provider Type */}
+        <div className="flex-1">
+          <FormControl fullWidth size="small">
+            <InputLabel id="provider-type-label">Provider Type</InputLabel>
+            <Select
+              labelId="provider-type-label"
+              value={filters.providerType}
+              label="Provider Type"
+              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('providerType', e.target.value as string)}
+              sx={{
+                backgroundColor: 'white',
+                height: '40px',
+                '& .MuiOutlinedInput-root': {
+                  fontSize: '0.875rem',
+                  height: '40px',
+                  borderRadius: '6px',
+                },
+                '& .MuiSelect-select': {
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                }
+              }}
+            >
+              <MenuItem value="">All Types</MenuItem>
+              {uniqueValues.providerTypes.map((type) => (
+                <MenuItem key={type} value={type}>
+                  {type}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </div>
 
-        <FormControl fullWidth>
-          <InputLabel id="region-label">Region</InputLabel>
-          <Select
-            labelId="region-label"
-            value={filters.region}
-            label="Region"
-            onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
+        {/* 4. React Hook Form for Region */}
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Region
+          </label>
+          <Controller
+            name="region"
+            control={control}
+            render={({ field }) => (
+              <select
+                {...field}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 h-10"
+              >
+                <option value="">All Regions</option>
+                {uniqueValues.regions.map((region) => (
+                  <option key={region} value={region}>
+                    {region}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
+        </div>
+
+        {/* Clear Filters Button */}
+        <div className="flex items-end">
+          <button
+            onClick={() => {
+              setFilters({ specialty: '', providerType: '', region: '', surveySource: '' });
+              reset({ region: '' });
+            }}
+            className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 h-10"
+            title="Clear all filters"
           >
-            <MenuItem value="">All Regions</MenuItem>
-            {uniqueValues.regions.map((region) => (
-              <MenuItem key={region} value={region}>
-                {region}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
+            <div className="relative w-4 h-4 mr-2">
+              {/* Funnel Icon */}
+              <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+              </svg>
+              {/* X Overlay - Only show when filters are active */}
+              {(filters.specialty || filters.providerType || filters.region || filters.surveySource) && (
+                <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              )}
+            </div>
+            <span className="text-xs">Clear Filters</span>
+          </button>
+        </div>
+      </div>
+
+      {SHOW_DEBUG && (
+        <Box sx={{ mb: 2, p: 1, border: '1px dashed #e5e7eb', borderRadius: 1, background: '#fafafa' }}>
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>Diagnostics (dev)</Typography>
+          <Box sx={{ display: 'flex', gap: 3, mt: 1, flexWrap: 'wrap' }}>
+            <Typography variant="caption">Surveys loaded: {Object.keys(surveys).length} ({Array.from(surveyCountsBySource.entries()).map(([k,v])=>`${k}:${v}`).join(', ') || 'none'})</Typography>
+            <Typography variant="caption">Selected: {filters.specialty || '—'}</Typography>
+            <Typography variant="caption">Rows after filters: {filteredData.length}</Typography>
+            <Typography variant="caption">Chain per source: {filters.specialty && chainByStandardized.get(filters.specialty) ? Array.from(chainByStandardized.get(filters.specialty)!.entries()).map(([src,list])=>`${src}=[${list.join('|')}]`).join(' | ') : '—'}</Typography>
+          </Box>
+        </Box>
+      )}
 
       <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2, border: '1px solid #ccc' }}>
         <Table size="small" sx={{ minWidth: 1400 }}>

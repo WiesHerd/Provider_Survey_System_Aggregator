@@ -9,7 +9,6 @@ import {
   Chip,
   Typography,
   Alert,
-  CircularProgress,
   InputAdornment,
   Paper,
   Tabs,
@@ -36,6 +35,7 @@ import { ISpecialtyMapping, IUnmappedSpecialty, IAutoMappingConfig } from '../ty
 import MappedSpecialties from './MappedSpecialties';
 import AutoMapSpecialties from './AutoMapSpecialties';
 import AutoMapDialog from './shared/AutoMapDialog';
+import LoadingSpinner from './ui/loading-spinner';
 
 interface SpecialtyCardProps {
   specialty: IUnmappedSpecialty;
@@ -46,14 +46,14 @@ interface SpecialtyCardProps {
 const SpecialtyCard: React.FC<SpecialtyCardProps> = ({ specialty, isSelected, onSelect }) => (
   <button
     onClick={() => onSelect(specialty)}
-    className={`w-full p-3 mb-2 text-left rounded-lg transition-all ${
+    className={`w-full p-2 mb-1.5 text-left rounded-md transition-all text-sm ${
       isSelected 
         ? 'bg-indigo-100 border-2 border-indigo-500' 
         : 'bg-white hover:bg-gray-50 border border-gray-200'
     }`}
   >
-    <div className="font-medium">{specialty.name}</div>
-    <div className="text-sm text-gray-500">Frequency: {specialty.frequency}</div>
+    <div className="font-medium text-sm">{specialty.name}</div>
+    <div className="text-xs text-gray-500">Frequency: {specialty.frequency}</div>
   </button>
 );
 
@@ -217,9 +217,11 @@ const SpecialtyMapping: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <CircularProgress />
-      </div>
+      <LoadingSpinner 
+        message="Loading specialty mappings..." 
+        fullScreen={true}
+        size="lg"
+      />
     );
   }
 
@@ -273,32 +275,45 @@ const SpecialtyMapping: React.FC = () => {
           )}
 
           {/* Tabs and Action Buttons */}
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <Tabs 
                 value={activeTab} 
                 onChange={(_event: React.SyntheticEvent, newValue: 'unmapped' | 'mapped' | 'learned') => setActiveTab(newValue)}
+                sx={{ 
+                  '& .MuiTab-root': { 
+                    fontSize: '0.875rem', 
+                    fontWeight: 500,
+                    textTransform: 'none',
+                    minHeight: '40px',
+                    padding: '8px 16px'
+                  }
+                }}
               >
                 <Tab label="Unmapped Specialties" value="unmapped" />
                 <Tab label="Mapped Specialties" value="mapped" />
                 <Tab label="Learned Mappings" value="learned" />
               </Tabs>
-              <div className="flex space-x-4">
+              <div className="flex space-x-2">
                 {activeTab !== 'learned' && (
                   <>
                     <Button
                       variant="contained"
                       color="primary"
                       onClick={() => setIsAutoMapOpen(true)}
-                      startIcon={<BoltIcon className="h-5 w-5" />}
+                      startIcon={<BoltIcon className="h-4 w-4" />}
+                      size="small"
+                      sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                     >
                       Auto-Map Specialties
                     </Button>
                     <Button
                       variant="contained"
                       onClick={handleCreateMapping}
-                      startIcon={<AddIcon className="h-5 w-5" />}
+                      startIcon={<AddIcon className="h-4 w-4" />}
                       disabled={selectedSpecialties.length === 0}
+                      size="small"
+                      sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                     >
                       Create Mapping
                     </Button>
@@ -318,7 +333,9 @@ const SpecialtyMapping: React.FC = () => {
                         });
                       }
                     }}
-                    startIcon={<DeleteSweepIcon className="h-5 w-5" />}
+                    startIcon={<DeleteSweepIcon className="h-4 w-4" />}
+                    size="small"
+                    sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                   >
                     Clear All
                   </Button>
@@ -327,19 +344,26 @@ const SpecialtyMapping: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-4">
             {activeTab === 'unmapped' ? (
               <>
-                <div className="mb-6">
+                <div className="mb-4">
                   <TextField
                     fullWidth
                     placeholder="Search across all surveys..."
                     value={searchTerm}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                    size="small"
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        fontSize: '0.875rem',
+                        height: '40px'
+                      }
+                    }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                          <SearchIcon className="h-4 w-4 text-gray-400" />
                         </InputAdornment>
                       ),
                     }}
@@ -347,8 +371,8 @@ const SpecialtyMapping: React.FC = () => {
                 </div>
 
                 {selectedSpecialties.length > 0 && (
-                  <div className="mb-6">
-                    <Typography variant="subtitle2" className="mb-2">
+                  <div className="mb-4">
+                    <Typography variant="subtitle2" className="mb-2 text-sm">
                       Selected Specialties:
                     </Typography>
                     <div className="flex flex-wrap gap-2">
@@ -358,13 +382,15 @@ const SpecialtyMapping: React.FC = () => {
                           label={`${specialty.name} (${specialty.surveySource})`}
                           onDelete={() => handleSpecialtySelect(specialty)}
                           color="primary"
+                          size="small"
+                          sx={{ fontSize: '0.75rem' }}
                         />
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
                     const color = source === 'SullivanCotter' ? '#818CF8' :
                                 source === 'MGMA' ? '#34D399' :
@@ -373,14 +399,14 @@ const SpecialtyMapping: React.FC = () => {
                                 source === 'AMGA' ? '#60A5FA' : '#9CA3AF';
                     
                     return (
-                      <Paper key={source} className="p-4 relative overflow-hidden">
-                        <Typography variant="h6" className="mb-4 flex items-center justify-between">
+                      <Paper key={source} className="p-3 relative overflow-hidden">
+                        <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
                           <span style={{ color }}>{source}</span>
-                          <Typography variant="caption" color="textSecondary">
+                          <Typography variant="caption" color="textSecondary" className="text-xs">
                             {specialties.length} specialties
                           </Typography>
                         </Typography>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {specialties.map((specialty) => (
                             <SpecialtyCard
                               key={specialty.id}
@@ -390,19 +416,19 @@ const SpecialtyMapping: React.FC = () => {
                             />
                           ))}
                         </div>
-                        <div className="absolute bottom-0 inset-x-0 h-1.5" style={{ backgroundColor: color }} />
+                        <div className="absolute bottom-0 inset-x-0 h-1" style={{ backgroundColor: color }} />
                       </Paper>
                     );
                   })}
                 </div>
 
                 {Array.from(specialtiesBySurvey.entries()).length === 0 && (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl">
-                    <WarningIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <Typography variant="h6" color="textSecondary" className="mb-2">
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <WarningIcon className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+                    <Typography variant="h6" color="textSecondary" className="mb-2 text-sm">
                       No Unmapped Specialties Found
                     </Typography>
-                    <Typography variant="body2" color="textSecondary" className="mb-4">
+                    <Typography variant="body2" color="textSecondary" className="mb-3 text-sm">
                       {searchTerm 
                         ? "No specialties match your search criteria"
                         : "All specialties have been mapped or no survey data is available"
@@ -412,7 +438,9 @@ const SpecialtyMapping: React.FC = () => {
                       <Button
                         variant="outlined"
                         onClick={() => loadData()}
-                        startIcon={<BoltIcon className="h-5 w-5" />}
+                        startIcon={<BoltIcon className="h-4 w-4" />}
+                        size="small"
+                        sx={{ fontSize: '0.875rem', textTransform: 'none' }}
                       >
                         Refresh Data
                       </Button>
@@ -421,24 +449,31 @@ const SpecialtyMapping: React.FC = () => {
                 )}
               </>
             ) : activeTab === 'mapped' ? (
-              <div className="space-y-6">
-                <div className="mb-6">
+              <div className="space-y-4">
+                <div className="mb-4">
                   <TextField
                     fullWidth
                     placeholder="Search mapped specialties..."
                     value={mappedSearchTerm}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
+                    size="small"
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        fontSize: '0.875rem',
+                        height: '40px'
+                      }
+                    }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                          <SearchIcon className="h-4 w-4 text-gray-400" />
                         </InputAdornment>
                       ),
                     }}
                   />
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {filteredMappings.map((mapping) => (
                     <MappedSpecialties
                       key={mapping.id}
@@ -449,8 +484,8 @@ const SpecialtyMapping: React.FC = () => {
                 </div>
                 
                 {filteredMappings.length === 0 && (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 text-sm">
                       {mappedSearchTerm 
                         ? "No mapped specialties match your search"
                         : "No mapped specialties yet"}
@@ -460,17 +495,24 @@ const SpecialtyMapping: React.FC = () => {
               </div>
             ) : (
               // Learned Mappings View
-              <div className="space-y-6">
-                <div className="mb-6">
+              <div className="space-y-4">
+                <div className="mb-4">
                   <TextField
                     fullWidth
                     placeholder="Search learned mappings..."
                     value={mappedSearchTerm}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
+                    size="small"
+                    sx={{ 
+                      '& .MuiOutlinedInput-root': {
+                        fontSize: '0.875rem',
+                        height: '40px'
+                      }
+                    }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                          <SearchIcon className="h-4 w-4 text-gray-400" />
                         </InputAdornment>
                       ),
                     }}

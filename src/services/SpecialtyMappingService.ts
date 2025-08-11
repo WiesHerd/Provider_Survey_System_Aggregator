@@ -3,7 +3,6 @@ import { stringSimilarity } from 'string-similarity-js';
 import { LocalStorageService } from './StorageService';
 import BackendService from './BackendService';
 import { ISurveyRow } from '../types/survey';
-import BackendService from './BackendService';
 
 export class SpecialtyMappingService {
   private readonly MAPPINGS_KEY = 'specialty-mappings';
@@ -163,17 +162,17 @@ export class SpecialtyMappingService {
         
         // Convert per-survey counts into unmapped entries (one per survey source)
         batchResults.forEach(({ surveySource, counts }) => {
-          counts.forEach((count, specialty) => {
-            const key = specialty.toLowerCase();
-            if (!mappedNames.has(key)) {
-              unmappedSpecialties.push({
-                id: crypto.randomUUID(),
-                name: specialty,
-                surveySource,
-                frequency: count
-              });
-            }
-          });
+                      counts.forEach((count, specialty) => {
+              const key = specialty.toLowerCase();
+              if (!mappedNames.has(key)) {
+                unmappedSpecialties.push({
+                  id: `${surveySource}-${specialty}`,
+                  name: specialty,
+                  surveySource,
+                  frequency: count
+                });
+              }
+            });
         });
       }
 
@@ -492,19 +491,28 @@ export class SpecialtyMappingService {
       updatedAt: new Date()
     };
 
-    mappings[index] = updatedMapping;
-    await this.storageService.setItem(this.MAPPINGS_KEY, mappings);
+    // Update via backend API
+    await fetch(`http://localhost:3001/api/mappings/specialty/${mappingId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedMapping)
+    });
+
     return updatedMapping;
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    const mappings = await this.getMappings();
-    const filteredMappings = mappings.filter(m => m.id !== mappingId);
-    await this.storageService.setItem(this.MAPPINGS_KEY, filteredMappings);
+    // Delete via backend API
+    await fetch(`http://localhost:3001/api/mappings/specialty/${mappingId}`, {
+      method: 'DELETE'
+    });
   }
 
   async clearAllMappings(): Promise<void> {
-    await this.storageService.setItem(this.MAPPINGS_KEY, []);
+    // Clear via backend API
+    await fetch('http://localhost:3001/api/mappings/specialty', {
+      method: 'DELETE'
+    });
     await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, {});
   }
 

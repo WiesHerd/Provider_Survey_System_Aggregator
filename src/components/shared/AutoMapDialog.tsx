@@ -6,13 +6,13 @@ import {
   FormControlLabel,
   Switch,
   Button,
-  CircularProgress,
   Alert,
   Box,
   Chip,
   Divider
 } from '@mui/material';
 import { BoltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
+import { ButtonSpinner } from '../ui/loading-spinner';
 
 interface AutoMapDialogProps {
   title: string;
@@ -34,7 +34,7 @@ const AutoMapDialog: React.FC<AutoMapDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState({
-    confidenceThreshold: 0.8,
+    confidenceThreshold: 0.9,
     useExistingMappings: true,
     enableFuzzyMatching: true
   });
@@ -148,7 +148,7 @@ const AutoMapDialog: React.FC<AutoMapDialogProps> = ({
           variant="contained"
           onClick={handleAutoMap}
           disabled={loading}
-          startIcon={loading ? <CircularProgress size={20} /> : <BoltIcon className="h-5 w-5" />}
+          startIcon={loading ? <ButtonSpinner size="sm" /> : <BoltIcon className="h-5 w-5" />}
         >
           {loading ? 'Auto-Mapping...' : 'Start Auto-Mapping'}
         </Button>

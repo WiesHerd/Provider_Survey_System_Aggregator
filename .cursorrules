@@ -3,6 +3,39 @@
 ## 🎯 Project Overview
 This is a **world-class, enterprise-grade survey data aggregation system** designed for healthcare compensation administrators. Think **Silicon Valley startup quality** - clean, scalable, performant, and user-centric.
 
+## 🚨 CRITICAL DEVELOPMENT RULES - NEVER VIOLATE
+
+### **API Contract & Backward Compatibility**
+- **NEVER change existing API method signatures** without analyzing ALL callers
+- **NEVER make synchronous methods async** without updating ALL consumers
+- **ALWAYS test API changes** with existing frontend components before committing
+- **ALWAYS verify method return types** match what callers expect
+- **NEVER assume "it's just a small change"** - small changes can break entire systems
+
+### **System Impact Analysis**
+- **BEFORE making ANY change**, analyze:
+  1. What components call this method/API?
+  2. What is the expected behavior (sync vs async)?
+  3. What data structure is expected?
+  4. What happens if this fails?
+- **ALWAYS test the complete flow** from UI → Service → API → Database
+- **NEVER implement changes** without understanding the full system impact
+
+### **Error Prevention Checklist**
+- [ ] **API Contract**: Does this change break existing callers?
+- [ ] **Async/Sync**: Am I changing the fundamental behavior?
+- [ ] **Data Types**: Do return types match expectations?
+- [ ] **Error Handling**: What happens if this fails?
+- [ ] **Testing**: Can I test this change end-to-end?
+- [ ] **Rollback**: Can I easily undo this change?
+
+### **Code Review Standards**
+- **EVERY change** must pass the "30-year developer" test:
+  - Would a senior developer approve this?
+  - Does this follow established patterns?
+  - Is this maintainable and debuggable?
+  - Are there edge cases I'm missing?
+
 ## 🏗️ Architecture & Tech Stack
 
 ### Frontend (React 18+)
@@ -246,6 +279,8 @@ AZURE_SQL_PASSWORD=your-password
 - [ ] Accessibility considerations
 - [ ] Mobile responsiveness
 - [ ] Performance impact assessed
+- [ ] **API contract maintained**
+- [ ] **System impact analyzed**
 
 ### Component Standards
 - [ ] Proper TypeScript interfaces
@@ -340,6 +375,8 @@ src/
 - ❌ Console.log in production code
 - ❌ Large bundle sizes without code splitting
 - ❌ No error boundaries or loading states
+- ❌ **Changing API contracts without analysis**
+- ❌ **Making sync methods async without updating callers**
 
 ### Backend
 - ❌ SQL injection vulnerabilities
@@ -348,6 +385,8 @@ src/
 - ❌ No error logging
 - ❌ Synchronous file operations
 - ❌ No rate limiting
+- ❌ **Breaking API contracts**
+- ❌ **Adding endpoints without testing**
 
 ### General
 - ❌ Inconsistent naming conventions
@@ -355,6 +394,8 @@ src/
 - ❌ No tests
 - ❌ Poor error messages
 - ❌ No accessibility considerations
+- ❌ **Assuming "small changes" are safe**
+- ❌ **Not testing complete flows**
 
 ## 🎯 Success Metrics
 
@@ -375,8 +416,12 @@ src/
 - **TypeScript Coverage**: 100%
 - **ESLint Score**: 0 warnings
 - **Code Review Time**: < 30 minutes
+- **Zero API contract violations**
+- **Zero breaking changes**
 
 ---
 
 **Remember**: This is a **world-class, enterprise-grade application**. Every line of code should reflect Silicon Valley quality standards. Think like you're building for Google, Facebook, or Apple - clean, scalable, performant, and user-centric.
+
+**CRITICAL**: Never make changes without understanding the full system impact. Every change must pass the "30-year developer" test.
 
