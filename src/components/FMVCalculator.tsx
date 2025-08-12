@@ -40,6 +40,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, specialty: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Specialties</MenuItem>
         {uniqueValues.specialties.map(option => (
@@ -55,6 +60,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, providerType: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Types</MenuItem>
         {uniqueValues.providerTypes.map(option => (
@@ -70,6 +80,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, region: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Regions</MenuItem>
         {uniqueValues.regions.map(option => (
@@ -85,6 +100,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, surveySource: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Sources</MenuItem>
         {uniqueValues.surveySources.map(option => (
@@ -98,6 +118,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         label="Year"
         value={filters.year}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, year: e.target.value }))}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
         fullWidth
         size="small"
       >

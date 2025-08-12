@@ -17,7 +17,7 @@ import 'ag-grid-community/styles/ag-theme-alpine.css';
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
-  const { displayName, onPinColumn, colId, isSpecialty } = props;
+  const { displayName, onPinColumn, colId, isSpecialty, isNumeric } = props;
   const [isPinned, setIsPinned] = useState(false);
   
   const handlePinClick = () => {
@@ -26,8 +26,8 @@ const CustomHeader = (props: any) => {
   };
 
   return (
-    <div className="flex items-center justify-between w-full">
-      <span className={`truncate ${isSpecialty ? 'font-semibold' : ''}`}>{displayName}</span>
+    <div className={`flex items-center w-full ${isNumeric ? 'justify-end' : 'justify-between'}`}>
+      <span className={`truncate ${isSpecialty ? 'font-semibold' : ''} ${isNumeric ? 'text-right' : ''}`}>{displayName}</span>
       <button
         onClick={handlePinClick}
         className={`ml-2 p-1 rounded hover:bg-gray-100 transition-colors ${
@@ -348,7 +348,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               state: [{ colId, pinned: isPinned ? null : 'left' }]
             });
           },
-          isSpecialty: isSpecialty
+          isSpecialty: isSpecialty,
+          isNumeric: isNumeric
         },
         valueGetter: (params: any) => {
           const raw = params.data[key];
@@ -470,6 +471,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onChange={handleFilterChange}
               label="Specialty"
               className="h-10"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.specialties.map(specialty => (
@@ -486,6 +492,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onChange={handleFilterChange}
               label="Provider Type"
               className="h-10"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.providerTypes.map(type => (
@@ -502,6 +513,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onChange={handleFilterChange}
               label="Geographic Region"
               className="h-10"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.regions.map(region => (
@@ -513,7 +529,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       </Box>
 
       {/* Data Table - AG Grid as primary */}
-      <div className="ag-theme-alpine relative" style={{ height: 520, width: '100%' }}>
+      <div className="ag-theme-alpine relative px-4 py-2 rounded-lg border border-gray-200" style={{ height: 520, width: '100%' }}>
         {/* Subtle refreshing overlay */}
         {isRefreshing && (
           <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
@@ -560,7 +576,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           <div className="flex items-center space-x-2">
             {/* First page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(1)}
               disabled={currentPage <= 1}
               title="Go to first page"
@@ -572,7 +588,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
             {/* Previous page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage <= 1}
               title="Previous page"
@@ -604,7 +620,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                     }
                   }
                 }}
-                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 title={`Enter page number (1-${totalPages})`}
               />
               <span className="text-sm text-gray-500">of {totalPages}</span>
@@ -612,7 +628,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
             {/* Next page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
               title="Next page"
@@ -624,7 +640,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
             {/* Last page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage >= totalPages}
               title="Go to last page"

@@ -15,8 +15,7 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { Listbox, Transition } from '@headlessui/react';
-import { useForm, Controller } from 'react-hook-form';
+
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import { ColumnMappingService } from '../services/ColumnMappingService';
 import { IStorageService, LocalStorageService } from '../services/StorageService';
@@ -287,14 +286,7 @@ const SurveyAnalytics: React.FC = () => {
     surveySource: ''
   });
 
-  // React Hook Form for Region dropdown
-  const { control, handleSubmit, reset, watch } = useForm({
-    defaultValues: {
-      region: ''
-    }
-  });
 
-  const watchedRegion = watch('region');
 
   const mappingService = useMemo(() => new SpecialtyMappingService(new LocalStorageService()), []);
   const columnMappingService = useMemo(() => new ColumnMappingService(new LocalStorageService()), []);
@@ -847,20 +839,17 @@ const SurveyAnalytics: React.FC = () => {
         newFilters.providerType = '';
         newFilters.region = '';
         newFilters.surveySource = '';
-        reset({ region: '' }); // Reset react-hook-form
       }
       
       // When survey source changes, reset provider type and region
       if (filterName === 'surveySource') {
         newFilters.providerType = '';
         newFilters.region = '';
-        reset({ region: '' }); // Reset react-hook-form
       }
       
       // When provider type changes, reset region
       if (filterName === 'providerType') {
         newFilters.region = '';
-        reset({ region: '' }); // Reset react-hook-form
       }
       
       console.log('Filter changed:', filterName, 'to', value, 'New filters:', newFilters);
@@ -868,12 +857,7 @@ const SurveyAnalytics: React.FC = () => {
     });
   };
 
-  // Handle region change from react-hook-form
-  useEffect(() => {
-    if (watchedRegion !== filters.region) {
-      handleFilterChange('region', watchedRegion);
-    }
-  }, [watchedRegion]);
+
 
   // Add function to group data by standardized specialty
   const groupBySpecialty = (data: AggregatedData[]): Record<string, AggregatedData[]> => {
@@ -954,99 +938,73 @@ const SurveyAnalytics: React.FC = () => {
   }
 
   return (
-    <Box p={3}>
+    <Box sx={{ width: '100%' }}>
       {/* Filter Section with Different Libraries */}
       <div className="flex gap-3 mb-4 items-end">
-        {/* 1. Headless UI Listbox for Specialty */}
+        {/* 1. Material-UI Select for Specialty */}
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Specialty
-          </label>
-          <Listbox value={filters.specialty} onChange={(value) => handleFilterChange('specialty', value)}>
-            <div className="relative">
-              <Listbox.Button className="relative w-full cursor-default rounded-md bg-white py-2.5 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm h-10">
-                <span className="block truncate">
-                  {filters.specialty || "Select a Specialty"}
-                </span>
-                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                  <ChevronDownIcon className="h-4 w-4 text-gray-400" aria-hidden="true" />
-                </span>
-              </Listbox.Button>
-              <Transition
-                as={React.Fragment}
-                leave="transition ease-in duration-100"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
-              >
-                <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                  <Listbox.Option
-                    className={({ active }) =>
-                      `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                        active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
-                      }`
-                    }
-                    value=""
-                  >
-                    {({ selected }) => (
-                      <>
-                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                          All Specialties
-                        </span>
-                        {selected ? (
-                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
-                            <CheckIcon className="h-4 w-4" aria-hidden="true" />
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </Listbox.Option>
-                  {uniqueValues.specialties.map((specialty) => (
-                    <Listbox.Option
-                      key={specialty}
-                      className={({ active }) =>
-                        `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                          active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
-                        }`
-                      }
-                      value={specialty}
-                    >
-                      {({ selected }) => (
-                        <>
-                          <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                            {specialty}
-                          </span>
-                          {selected ? (
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
-                              <CheckIcon className="h-4 w-4" aria-hidden="true" />
-                            </span>
-                          ) : null}
-                        </>
-                      )}
-                    </Listbox.Option>
-                  ))}
-                </Listbox.Options>
-              </Transition>
-            </div>
-          </Listbox>
+          <FormControl fullWidth size="small">
+            <InputLabel id="specialty-label">Specialty</InputLabel>
+            <Select
+              labelId="specialty-label"
+              value={filters.specialty}
+              label="Specialty"
+              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('specialty', e.target.value as string)}
+              sx={{
+                backgroundColor: 'white',
+                height: '40px',
+                '& .MuiOutlinedInput-root': {
+                  fontSize: '0.875rem',
+                  height: '40px',
+                  borderRadius: '8px',
+                },
+                '& .MuiSelect-select': {
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                }
+              }}
+            >
+              <MenuItem value="">All Specialties</MenuItem>
+              {uniqueValues.specialties.map((specialty) => (
+                <MenuItem key={specialty} value={specialty}>
+                  {specialty}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </div>
 
-        {/* 2. Custom HTML Select for Survey Source */}
+        {/* 2. Material-UI Select for Survey Source */}
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Survey Source
-          </label>
-          <select
-            value={filters.surveySource}
-            onChange={(e) => handleFilterChange('surveySource', e.target.value)}
-            className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 h-10"
-          >
-            <option value="">All Sources</option>
-            {uniqueValues.surveySources.map((source) => (
-              <option key={source} value={source}>
-                {source}
-              </option>
-            ))}
-          </select>
+          <FormControl fullWidth size="small">
+            <InputLabel id="survey-source-label">Survey Source</InputLabel>
+            <Select
+              labelId="survey-source-label"
+              value={filters.surveySource}
+              label="Survey Source"
+              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('surveySource', e.target.value as string)}
+              sx={{
+                backgroundColor: 'white',
+                height: '40px',
+                '& .MuiOutlinedInput-root': {
+                  fontSize: '0.875rem',
+                  height: '40px',
+                  borderRadius: '8px',
+                },
+                '& .MuiSelect-select': {
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                }
+              }}
+            >
+              <MenuItem value="">All Sources</MenuItem>
+              {uniqueValues.surveySources.map((source) => (
+                <MenuItem key={source} value={source}>
+                  {source}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </div>
 
         {/* 3. Material-UI Select for Provider Type */}
@@ -1064,7 +1022,7 @@ const SurveyAnalytics: React.FC = () => {
                 '& .MuiOutlinedInput-root': {
                   fontSize: '0.875rem',
                   height: '40px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                 },
                 '& .MuiSelect-select': {
                   paddingTop: '8px',
@@ -1082,28 +1040,37 @@ const SurveyAnalytics: React.FC = () => {
           </FormControl>
         </div>
 
-        {/* 4. React Hook Form for Region */}
+        {/* 4. Material-UI Select for Region */}
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Region
-          </label>
-          <Controller
-            name="region"
-            control={control}
-            render={({ field }) => (
-              <select
-                {...field}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 h-10"
-              >
-                <option value="">All Regions</option>
-                {uniqueValues.regions.map((region) => (
-                  <option key={region} value={region}>
-                    {region}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
+          <FormControl fullWidth size="small">
+            <InputLabel id="region-label">Region</InputLabel>
+            <Select
+              labelId="region-label"
+              value={filters.region}
+              label="Region"
+              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
+              sx={{
+                backgroundColor: 'white',
+                height: '40px',
+                '& .MuiOutlinedInput-root': {
+                  fontSize: '0.875rem',
+                  height: '40px',
+                  borderRadius: '8px',
+                },
+                '& .MuiSelect-select': {
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                }
+              }}
+            >
+              <MenuItem value="">All Regions</MenuItem>
+              {uniqueValues.regions.map((region) => (
+                <MenuItem key={region} value={region}>
+                  {region}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </div>
 
         {/* Clear Filters Button */}
@@ -1111,7 +1078,6 @@ const SurveyAnalytics: React.FC = () => {
           <button
             onClick={() => {
               setFilters({ specialty: '', providerType: '', region: '', surveySource: '' });
-              reset({ region: '' });
             }}
             className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 h-10"
             title="Clear all filters"
@@ -1133,20 +1099,8 @@ const SurveyAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {SHOW_DEBUG && (
-        <Box sx={{ mb: 2, p: 1, border: '1px dashed #e5e7eb', borderRadius: 1, background: '#fafafa' }}>
-          <Typography variant="caption" sx={{ fontWeight: 600 }}>Diagnostics (dev)</Typography>
-          <Box sx={{ display: 'flex', gap: 3, mt: 1, flexWrap: 'wrap' }}>
-            <Typography variant="caption">Surveys loaded: {Object.keys(surveys).length} ({Array.from(surveyCountsBySource.entries()).map(([k,v])=>`${k}:${v}`).join(', ') || 'none'})</Typography>
-            <Typography variant="caption">Selected: {filters.specialty || '—'}</Typography>
-            <Typography variant="caption">Rows after filters: {filteredData.length}</Typography>
-            <Typography variant="caption">Chain per source: {filters.specialty && chainByStandardized.get(filters.specialty) ? Array.from(chainByStandardized.get(filters.specialty)!.entries()).map(([src,list])=>`${src}=[${list.join('|')}]`).join(' | ') : '—'}</Typography>
-          </Box>
-        </Box>
-      )}
-
-      <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2, border: '1px solid #ccc' }}>
-        <Table size="small" sx={{ minWidth: 1400 }}>
+      <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2, border: '1px solid #ccc', width: '100%', borderRadius: '8px' }}>
+        <Table size="small" sx={{ width: '100%' }}>
           <TableHead>
             <TableRow>
               <TableCell colSpan={5} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
@@ -1167,26 +1121,26 @@ const SurveyAnalytics: React.FC = () => {
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Source</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Specialty</TableCell>
               <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Region</TableCell>
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Orgs</TableCell>
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }} align="right"># Incumbents</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold', textAlign: 'right' }}># Orgs</TableCell>
+              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold', textAlign: 'right' }}># Incumbents</TableCell>
               
               {/* TCC Headers */}
-              <TableCell sx={{ backgroundColor: '#e3f2fd', borderLeft: '2px solid #ccc' }} align="right">P25</TableCell>
-              <TableCell sx={{ backgroundColor: '#e3f2fd' }} align="right">P50</TableCell>
-              <TableCell sx={{ backgroundColor: '#e3f2fd' }} align="right">P75</TableCell>
-              <TableCell sx={{ backgroundColor: '#e3f2fd' }} align="right">P90</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd', borderLeft: '2px solid #ccc', textAlign: 'right' }}>P25</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd', textAlign: 'right' }}>P50</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd', textAlign: 'right' }}>P75</TableCell>
+              <TableCell sx={{ backgroundColor: '#e3f2fd', textAlign: 'right' }}>P90</TableCell>
               
               {/* wRVU Headers */}
-              <TableCell sx={{ backgroundColor: '#e8f5e9', borderLeft: '2px solid #ccc' }} align="right">P25</TableCell>
-              <TableCell sx={{ backgroundColor: '#e8f5e9' }} align="right">P50</TableCell>
-              <TableCell sx={{ backgroundColor: '#e8f5e9' }} align="right">P75</TableCell>
-              <TableCell sx={{ backgroundColor: '#e8f5e9' }} align="right">P90</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9', borderLeft: '2px solid #ccc', textAlign: 'right' }}>P25</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9', textAlign: 'right' }}>P50</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9', textAlign: 'right' }}>P75</TableCell>
+              <TableCell sx={{ backgroundColor: '#e8f5e9', textAlign: 'right' }}>P90</TableCell>
               
               {/* CF Headers */}
-              <TableCell sx={{ backgroundColor: '#fff3e0', borderLeft: '2px solid #ccc' }} align="right">P25</TableCell>
-              <TableCell sx={{ backgroundColor: '#fff3e0' }} align="right">P50</TableCell>
-              <TableCell sx={{ backgroundColor: '#fff3e0' }} align="right">P75</TableCell>
-              <TableCell sx={{ backgroundColor: '#fff3e0' }} align="right">P90</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0', borderLeft: '2px solid #ccc', textAlign: 'right' }}>P25</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0', textAlign: 'right' }}>P50</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0', textAlign: 'right' }}>P75</TableCell>
+              <TableCell sx={{ backgroundColor: '#fff3e0', textAlign: 'right' }}>P90</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

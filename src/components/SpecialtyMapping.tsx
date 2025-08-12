@@ -46,7 +46,7 @@ interface SpecialtyCardProps {
 const SpecialtyCard: React.FC<SpecialtyCardProps> = ({ specialty, isSelected, onSelect }) => (
   <button
     onClick={() => onSelect(specialty)}
-    className={`w-full p-2 mb-1.5 text-left rounded-md transition-all text-sm ${
+    className={`w-full p-2 mb-1.5 text-left rounded-lg transition-all text-sm ${
       isSelected 
         ? 'bg-indigo-100 border-2 border-indigo-500' 
         : 'bg-white hover:bg-gray-50 border border-gray-200'

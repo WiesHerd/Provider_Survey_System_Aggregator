@@ -73,4 +73,31 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* AG Grid custom styles for numeric alignment */
+.ag-right-aligned-header {
+  text-align: right !important;
+}
+
+.ag-right-aligned-cell {
+  text-align: right !important;
+}
+
+/* Global rounded corners for form elements */
+input, select, textarea, button {
+  border-radius: 8px !important;
+}
+
+/* Material-UI components rounded corners */
+.MuiOutlinedInput-root {
+  border-radius: 8px !important;
+}
+
+.MuiButton-root {
+  border-radius: 8px !important;
+}
+
+.MuiPaper-root {
+  border-radius: 8px !important;
 } 

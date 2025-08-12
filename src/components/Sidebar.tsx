@@ -14,6 +14,7 @@ import {
   MapIcon,
   CalculatorIcon,
   InformationCircleIcon,
+  ChartPieIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -36,18 +37,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   
   const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
-    {
-      name: 'Survey Processing',
-      icon: ClipboardDocumentListIcon,
-      path: '/upload',
-      children: [
-        { name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
-        { name: 'Specialty Mapping', icon: LinkIcon, path: '/specialty-mapping' },
-        { name: 'Column Mapping', icon: TableCellsIcon, path: '/column-mapping' },
-      ]
-    },
+    { name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
+    { name: 'Specialty Mapping', icon: LinkIcon, path: '/specialty-mapping' },
+    { name: 'Column Mapping', icon: TableCellsIcon, path: '/column-mapping' },
     { name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
     { name: 'Regional Analytics', icon: MapIcon, path: '/regional-analytics' },
+    { name: 'Data Visualization', icon: ChartPieIcon, path: '/charts' },
     { name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
     { name: 'Instructions', icon: InformationCircleIcon, path: '/instructions' },
   ];
@@ -119,7 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
   return (
     <div
-      className={`fixed left-0 top-0 h-screen bg-white transition-all duration-300 ease-in-out 
+      className={`fixed left-0 top-0 h-screen bg-white transition-all duration-300 ease-in-out z-40
         ${isOpen ? 'w-64' : 'w-20'} flex flex-col border-r border-gray-100`}
     >
       {/* Branding */}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, MapIcon, DocumentArrowDownIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
@@ -184,17 +185,33 @@ export const RegionalAnalytics: React.FC = () => {
       <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="max-w-5xl mx-auto">
           <div className="mb-8">
-            <label className="font-semibold block mb-2">Specialty:</label>
-            <select
-              className="border rounded px-3 py-2 min-w-[220px]"
-              value={selectedSpecialty}
-              onChange={e => setSelectedSpecialty(e.target.value)}
-            >
-              <option value="">Select a specialty</option>
-              {specialties.map((s: string) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+            <FormControl sx={{ minWidth: 220 }}>
+              <InputLabel id="specialty-label">Specialty</InputLabel>
+              <Select
+                labelId="specialty-label"
+                value={selectedSpecialty}
+                label="Specialty"
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedSpecialty(e.target.value as string)}
+                sx={{
+                  backgroundColor: 'white',
+                  height: '40px',
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    height: '40px',
+                    borderRadius: '8px',
+                  },
+                  '& .MuiSelect-select': {
+                    paddingTop: '8px',
+                    paddingBottom: '8px',
+                  }
+                }}
+              >
+                <MenuItem value="">Select a specialty</MenuItem>
+                {specialties.map((s: string) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </div>
           {selectedSpecialty && (
             <RegionalComparison data={regionalComparisonData} />

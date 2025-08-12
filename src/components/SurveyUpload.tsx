@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, XMarkIcon, CalendarIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import DataPreview from './DataPreview';
 import BackendService from '../services/BackendService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
@@ -223,8 +224,8 @@ const SurveyUpload: React.FC = () => {
     setSelectedSurvey(null);
   };
 
-  const handleSurveyTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
+  const handleSurveyTypeChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+    const value = e.target.value as string;
     setIsCustom(value === 'custom');
     setSurveyType(value);
     // Clear any selected file when survey type changes
@@ -417,30 +418,38 @@ const SurveyUpload: React.FC = () => {
                 <div className="grid grid-cols-12 gap-4">
                 {/* Survey Type Selection */}
                 <div className="col-span-4">
-                  <label htmlFor="surveyType" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Type
                   </label>
-                  <div className="relative">
-                    <select
-                      id="surveyType"
+                  <FormControl fullWidth>
+                    <Select
                       value={surveyType}
                       onChange={handleSurveyTypeChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        bg-white text-sm transition-colors duration-200"
+                      displayEmpty
+                      sx={{
+                        backgroundColor: 'white',
+                        height: '40px',
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px',
+                          borderRadius: '8px',
+                        },
+                        '& .MuiSelect-select': {
+                          paddingTop: '8px',
+                          paddingBottom: '8px',
+                          textAlign: 'left',
+                        }
+                      }}
                     >
-                      <option value="">Select a survey type</option>
+                      <MenuItem value="" disabled>
+                        Select a survey type
+                      </MenuItem>
                       {SURVEY_OPTIONS.map(option => (
-                        <option key={option} value={option}>{option}</option>
+                        <MenuItem key={option} value={option}>{option}</MenuItem>
                       ))}
-                      <option value="custom">Custom Survey Type</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
+                      <MenuItem value="custom">Custom Survey Type</MenuItem>
+                    </Select>
+                  </FormControl>
                   {isCustom && (
                     <input
                       type="text"
@@ -484,7 +493,7 @@ const SurveyUpload: React.FC = () => {
 
                     {/* Simple Year Picker Dropdown */}
                     {isYearPickerOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60" ref={yearPickerRef}>
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60" ref={yearPickerRef}>
                         <div className="overflow-y-auto max-h-56">
                           {years.map(year => (
                             <button
@@ -519,30 +528,26 @@ const SurveyUpload: React.FC = () => {
                     <input {...getInputProps()} />
                     <button
                       type="button"
-                      className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                      className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 flex items-center justify-center h-10"
                     >
-                      <span className="flex items-center justify-center">
-                        <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                        Select File
-                      </span>
+                      <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                      Select File
                     </button>
                   </div>
                   <button
                     type="button"
                     onClick={handleSurveyUpload}
                     disabled={files.length === 0 || !surveyType || !surveyYear || isUploading}
-                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
                   >
-                    <span className="flex items-center justify-center">
-                      {isUploading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Uploading...
-                        </>
-                      ) : (
-                        'Upload Survey'
-                      )}
-                    </span>
+                    {isUploading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Uploading...
+                      </>
+                    ) : (
+                      'Upload Survey'
+                    )}
                   </button>
                 </div>
 

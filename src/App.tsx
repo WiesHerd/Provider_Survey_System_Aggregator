@@ -10,6 +10,7 @@ import PageHeader from './components/PageHeader';
 import { RegionalAnalytics } from './components/RegionalAnalytics';
 import { SurveyRegionalAnalytics } from './components/SurveyRegionalAnalytics';
 import FairMarketValue from './components/FairMarketValue';
+import Charts from './components/Charts';
 import { StorageProvider } from './contexts/StorageContext';
 import { MappingProvider } from './contexts/MappingContext';
 import { InformationCircleIcon, ArrowUpTrayIcon, LinkIcon, TableCellsIcon, PresentationChartLineIcon, CalculatorIcon, PrinterIcon } from '@heroicons/react/24/outline';
@@ -58,6 +59,11 @@ const PageContent = () => {
         return {
           title: 'Survey Regional Analytics',
           description: 'Analyze regional survey data with detailed filtering'
+        };
+      case '/charts':
+        return {
+          title: 'Data Visualization',
+          description: 'Explore data through interactive charts and graphs'
         };
       case '/fair-market-value':
         return {
@@ -139,6 +145,7 @@ const PageContent = () => {
             <Route path="/analytics" element={<SurveyAnalytics />} />
             <Route path="/regional-analytics" element={<RegionalAnalytics />} />
             <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />
+            <Route path="/charts" element={<Charts />} />
             <Route path="/fair-market-value" element={<FairMarketValue />} />
             <Route path="/instructions" element={
               <div className="p-4 max-w-2xl mx-auto">
