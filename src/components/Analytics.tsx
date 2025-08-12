@@ -7,7 +7,7 @@ import { Download, BarChart3, LineChart, PieChart } from "lucide-react";
 import { useToast } from "./ui/use-toast";
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useSurveyData } from '../hooks/useSurveyData';
-import RegionalComparison from './RegionalComparison';
+import { RegionalComparison } from '../features/regional';
 import LoadingSpinner from './ui/loading-spinner';
 
 const Analytics: React.FC = () => {

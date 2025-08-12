@@ -24,7 +24,7 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   Sort as SortIcon
 } from '@mui/icons-material';
-import { AnalyticsTableProps, AnalyticsTableRow } from '../types/analytics';
+import { AnalyticsTableProps, AnalyticsTableRow, AggregatedData } from '../types/analytics';
 import { formatCurrency, formatNumber } from '@/shared/utils';
 
 /**
@@ -120,7 +120,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   ], []);
 
   // Event handlers
-  const handleSort = (column: keyof AnalyticsTableRow) => {
+  const handleSort = (column: keyof AggregatedData) => {
     if (!onSort) return;
     
     const currentDirection = config.sorting?.column === column ? config.sorting.direction : 'asc';
@@ -151,7 +151,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   };
 
   // Render sort icon
-  const renderSortIcon = (column: keyof AnalyticsTableRow) => {
+  const renderSortIcon = (column: keyof AggregatedData) => {
     if (!config.sorting || config.sorting.column !== column) {
       return <SortIcon fontSize="small" color="disabled" />;
     }
@@ -218,7 +218,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     {column.sortable && (
                       <IconButton
                         size="small"
-                        onClick={(e) => {
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                           e.stopPropagation();
                           handleSort(column.key);
                         }}
@@ -274,12 +274,12 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           component="div"
           count={config.pagination.total}
           page={config.pagination.page - 1}
-          onPageChange={(_, newPage) => {
+          onPageChange={(_: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
             // Handle page change
             console.log('Page changed to:', newPage + 1);
           }}
           rowsPerPage={config.pagination.pageSize}
-          onRowsPerPageChange={(event) => {
+          onRowsPerPageChange={(event: React.ChangeEvent<HTMLInputElement>) => {
             // Handle rows per page change
             console.log('Rows per page changed to:', event.target.value);
           }}

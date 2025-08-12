@@ -3,7 +3,7 @@
  * This component orchestrates all analytics functionality and components
  */
 
-import React, { memo } from 'react';
+import React, { memo, useEffect } from 'react';
 import { Box, Alert, Typography } from '@mui/material';
 import { AnalyticsProps } from '../types/analytics';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
@@ -78,6 +78,13 @@ export const SurveyAnalytics: React.FC<AnalyticsProps> = memo(({
     filters
   };
 
+  // Data Change Callback
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange(filteredData);
+    }
+  }, [filteredData, onDataChange]);
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Page Header */}
@@ -142,9 +149,6 @@ export const SurveyAnalytics: React.FC<AnalyticsProps> = memo(({
       />
 
       {/* Data Change Callback */}
-      {onDataChange && React.useEffect(() => {
-        onDataChange(filteredData);
-      }, [filteredData, onDataChange])}
     </Box>
   );
 });

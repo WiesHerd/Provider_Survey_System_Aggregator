@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AggregatedData, AnalyticsFilters, AnalyticsSummary } from '../types/analytics';
+import { ProviderType, GeographicRegion, SurveySource } from '@/shared/types';
 import { 
   calculateAnalyticsSummary, 
   applyAnalyticsFilters, 
@@ -38,9 +39,9 @@ interface UseAnalyticsDataReturn {
   // Computed values
   availableOptions: {
     specialties: string[];
-    providerTypes: string[];
-    regions: string[];
-    surveySources: string[];
+    providerTypes: ProviderType[];
+    regions: GeographicRegion[];
+    surveySources: SurveySource[];
     years: string[];
   };
   
@@ -119,9 +120,9 @@ export const useAnalyticsData = (
 
   const availableOptions = useMemo(() => {
     const specialties = [...new Set(data.map(row => row.surveySpecialty))].sort();
-    const providerTypes = [...new Set(data.map(row => row.providerType))].sort();
-    const regions = [...new Set(data.map(row => row.geographicRegion))].sort();
-    const surveySources = [...new Set(data.map(row => row.surveySource))].sort();
+    const providerTypes = [...new Set(data.map(row => row.providerType))].sort() as ProviderType[];
+    const regions = [...new Set(data.map(row => row.geographicRegion))].sort() as GeographicRegion[];
+    const surveySources = [...new Set(data.map(row => row.surveySource))].sort() as SurveySource[];
     const years = [...new Set(data.map(row => row.surveyYear))].sort();
 
     return {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -7,13 +7,17 @@ import {
   Box
 } from '@mui/material';
 import BackendService from '../services/BackendService';
-// removed toggle UI
-// AG Grid (advanced table)
-// @ts-ignore - types provided by package
-import { AgGridReact } from 'ag-grid-react';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
-// Types from ag-grid-community can be used if available. Fallback to any to avoid build-time type resolution issues.
+
+// Lazy load AG Grid to reduce initial bundle size
+const AgGridWrapper = lazy(() => import('./AgGridWrapper'));
+
+// Loading component for AG Grid
+const AgGridLoadingSpinner = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+    <span className="ml-2 text-gray-600">Loading data table...</span>
+  </div>
+);
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
@@ -539,25 +543,33 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             </div>
           </div>
         )}
-        <AgGridReact
-          onGridReady={(params: any) => {
-            setGridApi(params.api);
-            setColumnApi(params.columnApi);
-          }}
-          rowData={filteredData.map((row) => {
-            const obj: Record<string, string> = {};
-            (previewData[0] || []).forEach((header, idx) => {
-              obj[header] = row[idx];
-            });
-            return obj;
-          })}
-          columnDefs={createColumnDefs()}
-          defaultColDef={{ sortable: true, filter: true, resizable: true }}
-          suppressRowClickSelection={true}
-          components={{
-            CustomHeader: CustomHeader
-          }}
-        />
+        <Suspense fallback={<AgGridLoadingSpinner />}>
+          <AgGridWrapper
+            onGridReady={(params: any) => {
+              setGridApi(params.api);
+              setColumnApi(params.columnApi);
+            }}
+            rowData={filteredData.map((row) => {
+              const obj: Record<string, string> = {};
+              (previewData[0] || []).forEach((header, idx) => {
+                obj[header] = row[idx];
+              });
+              return obj;
+            })}
+            columnDefs={createColumnDefs()}
+            defaultColDef={{ sortable: true, filter: true, resizable: true }}
+            suppressRowClickSelection={true}
+            components={{
+              CustomHeader: CustomHeader
+            }}
+            pagination={false}
+            domLayout="autoHeight"
+            suppressRowHoverHighlight={true}
+            rowHeight={40}
+            suppressColumnVirtualisation={false}
+            suppressHorizontalScroll={false}
+          />
+        </Suspense>
       </div>
       {/* Modern Server-side pagination controls */}
       {totalPages > 1 && (

@@ -16,6 +16,7 @@ import {
   Typography,
   Chip
 } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { PROVIDER_TYPES, GEOGRAPHIC_REGIONS, SURVEY_SOURCES } from '@/shared/constants';
 
@@ -70,7 +71,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               labelId="specialty-filter-label"
               value={filters.specialty || ''}
               label="Specialty"
-              onChange={(e) => handleFilterChange('specialty', e.target.value)}
+              onChange={(e: SelectChangeEvent<string>) => handleFilterChange('specialty', e.target.value)}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -97,7 +98,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               labelId="provider-type-filter-label"
               value={filters.providerType || ''}
               label="Provider Type"
-              onChange={(e) => handleFilterChange('providerType', e.target.value)}
+              onChange={(e: SelectChangeEvent<string>) => handleFilterChange('providerType', e.target.value)}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -124,7 +125,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               labelId="region-filter-label"
               value={filters.region || ''}
               label="Region"
-              onChange={(e) => handleFilterChange('region', e.target.value)}
+              onChange={(e: SelectChangeEvent<string>) => handleFilterChange('region', e.target.value)}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -151,7 +152,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               labelId="survey-source-filter-label"
               value={filters.surveySource || ''}
               label="Survey Source"
-              onChange={(e) => handleFilterChange('surveySource', e.target.value)}
+              onChange={(e: SelectChangeEvent<string>) => handleFilterChange('surveySource', e.target.value)}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -178,7 +179,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               labelId="year-filter-label"
               value={filters.year || ''}
               label="Year"
-              onChange={(e) => handleFilterChange('year', e.target.value)}
+              onChange={(e: SelectChangeEvent<string>) => handleFilterChange('year', e.target.value)}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
@@ -205,7 +206,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
             label="Search"
             placeholder="Search specialties, regions..."
             value={filters.search || ''}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFilterChange('search', e.target.value)}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: '8px',

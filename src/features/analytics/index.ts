@@ -17,9 +17,9 @@ export { useAnalyticsData } from './hooks/useAnalyticsData';
 // Types
 export type {
   AggregatedData,
-  AnalyticsFilters,
+  AnalyticsFilters as AnalyticsFiltersType,
   AnalyticsTableRow,
-  AnalyticsSummary,
+  AnalyticsSummary as AnalyticsSummaryType,
   AnalyticsChartData,
   AnalyticsTableColumn,
   AnalyticsTableConfig,

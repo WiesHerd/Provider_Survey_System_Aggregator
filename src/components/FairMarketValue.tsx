@@ -1,5 +1,5 @@
 import React from 'react';
-import FMVCalculator from './FMVCalculator';
+import { FMVCalculator } from '../features/fmv';
 
 const FairMarketValue: React.FC = () => (
   <FMVCalculator />

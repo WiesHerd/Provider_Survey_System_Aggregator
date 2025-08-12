@@ -623,7 +623,7 @@ export class SpecialtyMappingService {
           if (similarity >= config.confidenceThreshold) {
             const key = mapping.standardizedName;
             const group = groups.get(key) || [];
-            group.push({ name: specialty.name, surveySource: specialty.surveySource });
+            group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
             groups.set(key, group);
             foundMatch = true;
             break;
@@ -639,7 +639,7 @@ export class SpecialtyMappingService {
           if (!matched) {
             const similarity = calculateSimilarity(specialty.name, key);
             if (similarity >= config.confidenceThreshold) {
-              group.push({ name: specialty.name, surveySource: specialty.surveySource });
+              group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
               matched = true;
             }
           }
@@ -647,7 +647,7 @@ export class SpecialtyMappingService {
 
         if (!matched) {
           // Create new group
-          groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource }]);
+          groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource as any }]);
         }
       }
     });
