@@ -11,24 +11,33 @@ const rateLimit = require('express-rate-limit');
 const sql = require('mssql');
 const dotenv = require('dotenv');
 
-// Load environment (azure creds live in env.local by convention)
-dotenv.config({ path: path.join(__dirname, 'env.local') });
+// Load environment variables
+// Priority: env.local (local dev) > env.production (Azure) > .env (fallback)
+const envPath = process.env.NODE_ENV === 'production' 
+  ? path.join(__dirname, 'env.production')
+  : path.join(__dirname, 'env.local');
 
-// Optional Azure SQL helpers
+dotenv.config({ path: envPath });
+
+// Azure SQL Database configuration
 let getConnection, initializeDatabase;
 let azureEnabled = false;
+
 try {
   ({ getConnection, initializeDatabase } = require('./config/database'));
-  azureEnabled = process.env.ENABLE_AZURE_SQL === 'true' && 
-                 process.env.AZURE_SQL_SERVER && 
+  
+  // Check if Azure SQL is configured
+  azureEnabled = process.env.AZURE_SQL_SERVER && 
                  process.env.AZURE_SQL_DATABASE && 
                  process.env.AZURE_SQL_USER && 
                  process.env.AZURE_SQL_PASSWORD;
   
   if (azureEnabled) {
-    console.log('🔗 Azure SQL enabled - will attempt dual-write');
+    console.log('🔗 Azure SQL Database configured');
+    console.log(`   Server: ${process.env.AZURE_SQL_SERVER}`);
+    console.log(`   Database: ${process.env.AZURE_SQL_DATABASE}`);
   } else {
-    console.log('📝 Azure SQL disabled - using SQLite only');
+    console.log('📝 Azure SQL Database not configured - using SQLite only');
   }
 } catch (error) {
   console.log('⚠️ Azure SQL configuration not available - using SQLite only');
