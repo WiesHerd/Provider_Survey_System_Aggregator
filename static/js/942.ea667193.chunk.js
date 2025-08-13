@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunksurvey_data_processing_system=self.webpackChunksurvey_data_processing_system||[]).push([[942],{2942:(s,e,a)=>{a.r(e),a.d(e,{SurveyRegionalAnalytics:()=>c});a(5043);var n=a(579);const c=()=>(0,n.jsxs)("div",{className:"p-4",children:[(0,n.jsx)("h2",{className:"text-2xl font-semibold mb-4",children:"Survey Regional Analytics"}),(0,n.jsx)("p",{className:"text-gray-600",children:"Survey regional analytics functionality coming soon."})]})}}]);
+//# sourceMappingURL=942.ea667193.chunk.js.map
