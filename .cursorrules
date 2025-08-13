@@ -1,0 +1,523 @@
+# Cursor Project Rules: Survey Aggregator - Enterprise Refactoring Standards
+
+## 🎯 Project Overview
+This is a **world-class, enterprise-grade survey data aggregation system** undergoing comprehensive refactoring to achieve Silicon Valley quality standards. The goal is to transform a monolithic codebase into a modular, maintainable, and scalable architecture.
+
+## 🚨 CRITICAL REFACTORING RULES - NEVER VIOLATE
+
+### **Architecture & Structure**
+- **NEVER create components > 300 lines** - Break them down immediately
+- **NEVER mix business logic with UI components** - Separate concerns
+- **NEVER place feature-specific code in shared directories** - Use feature-based structure
+- **ALWAYS follow the established directory structure** defined in REFACTORING_PLAN.md
+- **ALWAYS create barrel exports (index.ts)** for clean imports
+
+### **Code Quality Standards**
+- **NEVER use `any` types** - Use proper TypeScript interfaces
+- **NEVER duplicate utility functions** - Extract to shared/utils
+- **NEVER create circular dependencies** - Maintain clear import hierarchy
+- **ALWAYS write JSDoc comments** for public APIs and complex functions
+- **ALWAYS use semantic naming** - Function names should describe what they do
+
+### **Performance & Maintainability**
+- **NEVER import entire libraries** - Use specific imports
+- **NEVER create deeply nested components** - Keep component tree shallow
+- **ALWAYS use React.memo()** for expensive components
+- **ALWAYS implement proper error boundaries** for each feature
+- **ALWAYS use lazy loading** for route-based code splitting
+
+## 🏗️ Directory Structure Standards
+
+### **Feature-Based Architecture**
+```
+src/
+├── app/                          # Application-level concerns only
+│   ├── App.tsx                   # Main app component
+│   ├── Sidebar.tsx               # Navigation
+│   ├── routing/                  # Route definitions
+│   └── providers/                # Context providers
+├── features/                     # Feature-based modules
+│   ├── analytics/                # Survey Analytics feature
+│   │   ├── components/           # Feature-specific components
+│   │   ├── hooks/                # Custom hooks
+│   │   ├── services/             # Feature services
+│   │   ├── types/                # Feature types
+│   │   ├── utils/                # Feature utilities
+│   │   └── index.ts              # Public API (barrel export)
+│   ├── upload/                   # Survey Upload feature
+│   ├── regional/                 # Regional Analytics feature
+│   ├── fmv/                      # Fair Market Value feature
+│   ├── mapping/                  # Specialty/Column Mapping feature
+│   └── dashboard/                # Dashboard feature
+├── shared/                       # Shared resources only
+│   ├── components/               # Reusable UI components
+│   ├── hooks/                    # Shared custom hooks
+│   ├── utils/                    # Shared utilities
+│   ├── types/                    # Shared type definitions
+│   ├── constants/                # Application constants
+│   └── services/                 # Shared services
+└── styles/                       # Global styles
+```
+
+### **File Naming Conventions**
+- **Components**: PascalCase (e.g., `AnalyticsTable.tsx`)
+- **Hooks**: camelCase with `use` prefix (e.g., `useAnalyticsData.ts`)
+- **Utilities**: camelCase (e.g., `analyticsCalculations.ts`)
+- **Types**: camelCase (e.g., `analytics.ts`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `API_ENDPOINTS.ts`)
+
+## 📝 Component Standards
+
+### **Component Structure Template**
+```typescript
+// src/features/analytics/components/AnalyticsTable.tsx
+import React, { memo } from 'react';
+import { useAnalyticsData } from '../hooks/useAnalyticsData';
+import { AnalyticsTableProps } from '../types/analytics';
+
+/**
+ * AnalyticsTable component for displaying survey analytics data
+ * 
+ * @param data - The analytics data to display
+ * @param filters - Active filters to apply
+ * @param onRowClick - Callback when a row is clicked
+ */
+export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({ 
+  data, 
+  filters,
+  onRowClick 
+}) => {
+  // Custom hooks at the top
+  const { loading, error, refetch } = useAnalyticsData();
+  
+  // Event handlers
+  const handleRowClick = (rowData: any) => {
+    onRowClick?.(rowData);
+  };
+  
+  // Early returns for loading/error states
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} onRetry={refetch} />;
+  
+  // Main render
+  return (
+    <div className="analytics-table">
+      {/* JSX here */}
+    </div>
+  );
+});
+
+AnalyticsTable.displayName = 'AnalyticsTable';
+```
+
+### **Component Size Limits**
+- **Small Components**: < 100 lines (simple UI components)
+- **Medium Components**: 100-200 lines (complex UI components)
+- **Large Components**: 200-300 lines (container components)
+- **CRITICAL**: Never exceed 300 lines - break down immediately
+
+## 🪝 Custom Hook Standards
+
+### **Hook Structure Template**
+```typescript
+// src/features/analytics/hooks/useAnalyticsData.ts
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { AnalyticsData, AnalyticsFilters } from '../types/analytics';
+import { fetchAnalyticsData } from '../services/analyticsService';
+
+interface UseAnalyticsDataReturn {
+  data: AnalyticsData[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+  updateFilters: (filters: AnalyticsFilters) => void;
+}
+
+/**
+ * Custom hook for managing analytics data
+ * 
+ * @param initialFilters - Initial filters to apply
+ * @returns Object containing data, loading state, error, and actions
+ */
+export const useAnalyticsData = (
+  initialFilters: AnalyticsFilters = {}
+): UseAnalyticsDataReturn => {
+  // State declarations
+  const [data, setData] = useState<AnalyticsData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState(initialFilters);
+  
+  // Memoized values
+  const filteredData = useMemo(() => {
+    return applyFilters(data, filters);
+  }, [data, filters]);
+  
+  // Event handlers
+  const refetch = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await fetchAnalyticsData(filters);
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+  
+  const updateFilters = useCallback((newFilters: AnalyticsFilters) => {
+    setFilters(newFilters);
+  }, []);
+  
+  // Effects
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+  
+  // Return object
+  return {
+    data: filteredData,
+    loading,
+    error,
+    refetch,
+    updateFilters
+  };
+};
+```
+
+## 🛠️ Utility Function Standards
+
+### **Utility Structure Template**
+```typescript
+// src/features/analytics/utils/analyticsCalculations.ts
+import { AnalyticsData } from '../types/analytics';
+
+/**
+ * Calculates the percentile value from an array of numbers
+ * 
+ * @param numbers - Array of numbers to calculate percentile from
+ * @param percentile - Percentile to calculate (0-100)
+ * @returns The percentile value
+ * 
+ * @example
+ * ```typescript
+ * const p50 = calculatePercentile([1, 2, 3, 4, 5], 50); // Returns 3
+ * ```
+ */
+export const calculatePercentile = (
+  numbers: number[], 
+  percentile: number
+): number => {
+  // Input validation
+  if (!Array.isArray(numbers) || numbers.length === 0) {
+    return 0;
+  }
+  
+  if (percentile < 0 || percentile > 100) {
+    throw new Error('Percentile must be between 0 and 100');
+  }
+  
+  // Implementation
+  const sortedNumbers = [...numbers].sort((a, b) => a - b);
+  const index = Math.floor((percentile / 100) * sortedNumbers.length);
+  return sortedNumbers[index] || 0;
+};
+
+/**
+ * Formats a number as currency
+ * 
+ * @param value - Number to format
+ * @param decimals - Number of decimal places (default: 0)
+ * @returns Formatted currency string
+ */
+export const formatCurrency = (
+  value: number, 
+  decimals: number = 0
+): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+};
+```
+
+## 📊 Type Definition Standards
+
+### **Type Structure Template**
+```typescript
+// src/features/analytics/types/analytics.ts
+
+/**
+ * Base interface for analytics data
+ */
+export interface AnalyticsData {
+  id: string;
+  standardizedName: string;
+  surveySource: string;
+  surveySpecialty: string;
+  geographicRegion: string;
+  n_orgs: number;
+  n_incumbents: number;
+  tcc_p25: number;
+  tcc_p50: number;
+  tcc_p75: number;
+  tcc_p90: number;
+  wrvu_p25: number;
+  wrvu_p50: number;
+  wrvu_p75: number;
+  wrvu_p90: number;
+  cf_p25: number;
+  cf_p50: number;
+  cf_p75: number;
+  cf_p90: number;
+}
+
+/**
+ * Filters for analytics data
+ */
+export interface AnalyticsFilters {
+  specialty?: string;
+  providerType?: string;
+  region?: string;
+  surveySource?: string;
+  year?: string;
+}
+
+/**
+ * Props for AnalyticsTable component
+ */
+export interface AnalyticsTableProps {
+  data: AnalyticsData[];
+  filters: AnalyticsFilters;
+  onRowClick?: (row: AnalyticsData) => void;
+  onFilterChange?: (filters: AnalyticsFilters) => void;
+  loading?: boolean;
+  error?: string | null;
+}
+
+/**
+ * Response from analytics API
+ */
+export interface AnalyticsApiResponse {
+  data: AnalyticsData[];
+  total: number;
+  page: number;
+  pageSize: number;
+  filters: AnalyticsFilters;
+}
+```
+
+## 🔄 Import/Export Standards
+
+### **Barrel Export Pattern**
+```typescript
+// src/features/analytics/index.ts
+// Public API for the analytics feature
+
+// Components
+export { AnalyticsTable } from './components/AnalyticsTable';
+export { AnalyticsFilters } from './components/AnalyticsFilters';
+export { AnalyticsCharts } from './components/AnalyticsCharts';
+
+// Hooks
+export { useAnalyticsData } from './hooks/useAnalyticsData';
+export { useAnalyticsFilters } from './hooks/useAnalyticsFilters';
+
+// Types
+export type { 
+  AnalyticsData, 
+  AnalyticsFilters, 
+  AnalyticsTableProps 
+} from './types/analytics';
+
+// Utilities (only export what's needed externally)
+export { formatCurrency, calculatePercentile } from './utils/analyticsCalculations';
+```
+
+### **Import Order**
+```typescript
+// 1. React and external libraries
+import React, { useState, useEffect } from 'react';
+import { Table, TableBody, TableCell } from '@mui/material';
+
+// 2. Shared imports
+import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
+import { formatCurrency } from '@/shared/utils/formatters';
+
+// 3. Feature imports
+import { useAnalyticsData } from '../hooks/useAnalyticsData';
+import { AnalyticsTableProps } from '../types/analytics';
+
+// 4. Relative imports
+import './AnalyticsTable.css';
+```
+
+## 🧪 Testing Standards
+
+### **Component Test Template**
+```typescript
+// src/features/analytics/components/__tests__/AnalyticsTable.test.tsx
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { AnalyticsTable } from '../AnalyticsTable';
+import { mockAnalyticsData } from '../../../__mocks__/analyticsData';
+
+describe('AnalyticsTable', () => {
+  const defaultProps = {
+    data: mockAnalyticsData,
+    filters: {},
+    onRowClick: jest.fn(),
+  };
+
+  it('renders table with data', () => {
+    render(<AnalyticsTable {...defaultProps} />);
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  it('calls onRowClick when row is clicked', () => {
+    render(<AnalyticsTable {...defaultProps} />);
+    const firstRow = screen.getByRole('row', { name: /allergy/i });
+    fireEvent.click(firstRow);
+    expect(defaultProps.onRowClick).toHaveBeenCalledWith(mockAnalyticsData[0]);
+  });
+
+  it('shows loading state', () => {
+    render(<AnalyticsTable {...defaultProps} loading={true} />);
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+  });
+
+  it('shows error state', () => {
+    const errorMessage = 'Failed to load data';
+    render(<AnalyticsTable {...defaultProps} error={errorMessage} />);
+    expect(screen.getByText(errorMessage)).toBeInTheDocument();
+  });
+});
+```
+
+## 🚨 Performance Standards
+
+### **Bundle Size Limits**
+- **Initial Bundle**: < 500KB
+- **Feature Chunks**: < 200KB each
+- **Shared Chunks**: < 100KB each
+
+### **Performance Metrics**
+- **Time to Interactive**: < 3 seconds
+- **Lighthouse Score**: > 90 in all categories
+- **Bundle Analysis**: Run after each major change
+
+### **Code Splitting Rules**
+```typescript
+// Route-based code splitting
+const Analytics = lazy(() => import('@/features/analytics'));
+
+// Component-based code splitting for heavy components
+const AnalyticsCharts = lazy(() => import('./AnalyticsCharts'));
+
+// Dynamic imports for utilities
+const loadChartLibrary = () => import('@/shared/utils/chartLibrary');
+```
+
+## 🔒 Error Handling Standards
+
+### **Error Boundary Template**
+```typescript
+// src/features/analytics/components/AnalyticsErrorBoundary.tsx
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class AnalyticsErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Analytics Error Boundary caught an error:', error, errorInfo);
+    // Log to error reporting service
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="error-boundary">
+          <h2>Something went wrong</h2>
+          <p>Please try refreshing the page</p>
+          <button onClick={() => this.setState({ hasError: false })}>
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+## 📋 Code Review Checklist
+
+### **Before Committing Refactored Code:**
+- [ ] Component size < 300 lines
+- [ ] All imports follow established patterns
+- [ ] TypeScript strict mode passes
+- [ ] ESLint passes with no warnings
+- [ ] Unit tests written and passing
+- [ ] JSDoc comments added for public APIs
+- [ ] Error boundaries implemented
+- [ ] Performance impact assessed
+- [ ] Bundle size analyzed
+- [ ] Code review completed
+
+### **Refactoring Quality Gates:**
+- [ ] No breaking changes to existing APIs
+- [ ] All existing functionality preserved
+- [ ] New feature-based structure implemented
+- [ ] Shared utilities properly extracted
+- [ ] Custom hooks created for complex state
+- [ ] Import/export patterns established
+- [ ] Documentation updated
+
+## 🎯 Success Metrics
+
+### **Code Quality:**
+- **Component Size**: 100% of components < 300 lines
+- **TypeScript Coverage**: 100% strict mode compliance
+- **Test Coverage**: > 80% for new components
+- **Documentation**: 100% of public APIs documented
+
+### **Performance:**
+- **Bundle Size**: < 500KB initial load
+- **Build Time**: < 30 seconds
+- **Development Build**: < 10 seconds
+- **Lighthouse Score**: > 90
+
+### **Maintainability:**
+- **Cyclomatic Complexity**: < 10 per function
+- **Import Clarity**: Clear dependency chains
+- **Code Reusability**: 80%+ shared components
+- **Feature Isolation**: No cross-feature dependencies
+
+---
+
+**Remember**: This is a **world-class, enterprise-grade application**. Every line of refactored code should reflect Silicon Valley quality standards. Think like you're building for Google, Facebook, or Apple - clean, scalable, performant, and maintainable.
+
+**CRITICAL**: Never compromise on code quality during refactoring. If a component is too large, break it down. If logic is mixed, separate it. If types are unclear, define them properly.
+

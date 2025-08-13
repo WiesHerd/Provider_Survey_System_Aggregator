@@ -6,11 +6,12 @@ interface PageHeaderProps {
   description: string;
   showDownloadButton?: boolean;
   titleClassName?: string; // optional override for title size/style
+  className?: string; // optional override for header container
 }
 
-const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloadButton, titleClassName }) => {
+const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloadButton, titleClassName, className }) => {
   return (
-    <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-8 mb-6">
+    <header className={`h-16 border-b border-gray-100 bg-white flex items-center justify-between px-8 mb-6 ${className || ''}`}>
       <div>
         <h1 className={`${titleClassName ?? 'text-xl'} font-semibold bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent`}>
           {title}

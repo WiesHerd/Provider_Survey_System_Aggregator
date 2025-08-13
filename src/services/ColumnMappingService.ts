@@ -1,4 +1,5 @@
 import { LocalStorageService } from './StorageService';
+import BackendService from './BackendService';
 import { IColumnMapping, IColumnInfo, IAutoMappingConfig } from '../types/column';
 
 export class ColumnMappingService {
@@ -11,42 +12,42 @@ export class ColumnMappingService {
   }
 
   async createMapping(standardizedName: string, sourceColumns: IColumnInfo[]): Promise<IColumnMapping> {
-    const mapping: IColumnMapping = {
-      id: crypto.randomUUID(),
-      standardizedName,
-      sourceColumns,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    const mappings = await this.getAllMappings();
-    await this.saveMappings([...mappings, mapping]);
-    return mapping;
+    const payload = { standardizedName, sourceColumns };
+    const res = await fetch('http://localhost:3001/api/mappings/column', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const saved = await res.json();
+    return saved as IColumnMapping;
   }
 
   async getAllMappings(): Promise<IColumnMapping[]> {
     try {
-      const result = await this.storage.getItem(this.MAPPINGS_KEY);
-      return result || [];
+      const res = await fetch('http://localhost:3001/api/mappings/column');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      return data as IColumnMapping[];
     } catch {
       return [];
     }
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    const mappings = await this.getAllMappings();
-    const filteredMappings = mappings.filter(m => m.id !== mappingId);
-    await this.saveMappings(filteredMappings);
+    await fetch(`http://localhost:3001/api/mappings/column/${mappingId}`, { method: 'DELETE' });
   }
 
   async clearAllMappings(): Promise<void> {
-    await this.saveMappings([]);
-    await this.storage.setItem(this.LEARNED_MAPPINGS_KEY, {});
+    console.log('Clearing all column mappings from database...');
+    const response = await fetch('http://localhost:3001/api/mappings/column', { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error(`Failed to clear mappings: ${response.status} ${response.statusText}`);
+    }
+    const result = await response.json();
+    console.log('Clear all mappings result:', result);
   }
 
-  private async saveMappings(mappings: IColumnMapping[]): Promise<void> {
-    await this.storage.setItem(this.MAPPINGS_KEY, mappings);
-  }
+  private async saveMappings(_mappings: IColumnMapping[]): Promise<void> {}
 
   async autoMapColumns(config: IAutoMappingConfig): Promise<Array<{
     standardizedName: string;
@@ -54,6 +55,8 @@ export class ColumnMappingService {
     confidence: number;
   }>> {
     const unmappedColumns = await this.getUnmappedColumns();
+    console.log('Auto-mapping columns:', unmappedColumns.map(c => c.name));
+    
     const suggestions: Array<{
       standardizedName: string;
       columns: IColumnInfo[];
@@ -72,12 +75,18 @@ export class ColumnMappingService {
           column: c,
           similarity: this.calculateSimilarity(column.name, c.name, c.dataType, column.dataType, config)
         }))
-        .filter(match => match.similarity >= config.confidenceThreshold)
+        .filter(match => {
+          console.log(`Similarity between "${column.name}" and "${match.column.name}": ${match.similarity}`);
+          return match.similarity >= config.confidenceThreshold;
+        })
         .sort((a, b) => b.similarity - a.similarity);
 
       if (matches.length > 0) {
         const matchedColumns = matches.map(m => m.column);
         matchedColumns.forEach(c => processedColumns.add(c.id));
+
+        console.log(`Creating mapping for "${column.name}" with ${matchedColumns.length} columns:`, 
+          matchedColumns.map(c => c.name));
 
         suggestions.push({
           standardizedName: this.generateStandardizedName(matchedColumns),
@@ -87,6 +96,12 @@ export class ColumnMappingService {
       }
     }
 
+    console.log('Final auto-mapping suggestions:', suggestions.map(s => ({
+      name: s.standardizedName,
+      columns: s.columns.map(c => c.name),
+      confidence: s.confidence
+    })));
+
     return suggestions.sort((a, b) => b.confidence - a.confidence);
   }
 
@@ -95,7 +110,36 @@ export class ColumnMappingService {
     const normalized1 = name1.toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalized2 = name2.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // Calculate Levenshtein distance
+    // Exact match gets highest score
+    if (normalized1 === normalized2) {
+      return 1.0;
+    }
+
+    // Check for exact prefix match (e.g., "wrvu_p50" vs "wrvu_p90" should NOT match)
+    const prefix1 = normalized1.replace(/[0-9]/g, '');
+    const prefix2 = normalized2.replace(/[0-9]/g, '');
+    
+    // If prefixes don't match, return very low similarity
+    if (prefix1 !== prefix2) {
+      return 0.1;
+    }
+
+    // For same prefix, check if numbers are different (e.g., p50 vs p90)
+    const numbers1 = normalized1.match(/[0-9]+/g) || [];
+    const numbers2 = normalized2.match(/[0-9]+/g) || [];
+    
+    // If numbers are different, this is likely a different metric (p50 vs p90, p25 vs p75, etc.)
+    if (numbers1.length > 0 && numbers2.length > 0) {
+      const hasDifferentNumbers = numbers1.some(n1 => 
+        numbers2.some(n2 => n1 !== n2)
+      );
+      if (hasDifferentNumbers) {
+        console.log(`Different numbers detected: "${name1}" vs "${name2}" - returning 0.2 similarity`);
+        return 0.2; // Very low similarity for different percentiles/metrics
+      }
+    }
+
+    // Calculate Levenshtein distance for remaining cases
     const distance = this.levenshteinDistance(normalized1, normalized2);
     const maxLength = Math.max(normalized1.length, normalized2.length);
     let similarity = 1 - distance / maxLength;
@@ -106,6 +150,7 @@ export class ColumnMappingService {
       similarity = typeMatch ? similarity : similarity * 0.8;
     }
 
+    console.log(`Similarity calculation: "${name1}" vs "${name2}" = ${similarity}`);
     return similarity;
   }
 
@@ -149,30 +194,48 @@ export class ColumnMappingService {
 
   async getUnmappedColumns(): Promise<IColumnInfo[]> {
     const mappings = await this.getAllMappings();
-    const mappedColumnIds = new Set(
-      mappings.flatMap(m => m.sourceColumns.map(c => c.id))
-    );
-
-    const surveys = await this.storage.listSurveys();
-    const columns: IColumnInfo[] = [];
+    console.log('Current mappings count:', mappings.length);
     
-    for (const survey of surveys) {
-      if (!survey.metadata.fileContent) continue;
+    // Create a set of mapped column names by survey source
+    const mappedColumns = new Set<string>();
+    mappings.forEach(mapping => {
+      mapping.sourceColumns.forEach(column => {
+        // Use name + surveySource as the unique identifier
+        const key = `${column.name}-${column.surveySource}`;
+        mappedColumns.add(key);
+        console.log('Mapped column key:', key);
+      });
+    });
 
-      const headers = survey.metadata.fileContent.split('\n')[0].split(',');
+    // Prefer backend source of truth so every uploaded survey appears
+    const backend = (await import('./BackendService')).default.getInstance();
+    const surveys = await backend.getAllSurveys();
+    const columns: IColumnInfo[] = [];
+
+    for (const survey of surveys as Array<any>) {
+      const meta = await backend.getSurveyMeta(survey.id).catch(() => ({} as any));
+      const headers: string[] = Array.isArray(meta?.columns) && meta.columns.length > 0
+        ? meta.columns
+        : [];
       headers.forEach((header: string, index: number) => {
-        const columnId = `${survey.metadata.surveyType}-${index}`;
-        if (!mappedColumnIds.has(columnId)) {
+        const columnName = String(header || '').trim();
+        const surveySource = survey.type || survey.name || 'Unknown';
+        const uniqueKey = `${columnName}-${surveySource}`;
+        
+        if (!mappedColumns.has(uniqueKey)) {
           columns.push({
-            id: columnId,
-            name: header.trim(),
-            surveySource: survey.metadata.surveyType,
-            dataType: this.inferDataType(survey.metadata.fileContent, index)
+            id: `${surveySource}-${columnName}-${index}`, // Use consistent ID based on source and name
+            name: columnName,
+            surveySource: surveySource,
+            dataType: 'string'
           });
+        } else {
+          console.log('Column already mapped:', uniqueKey);
         }
       });
     }
 
+    console.log('Total unmapped columns found:', columns.length);
     return columns;
   }
 

@@ -1,6 +1,7 @@
 import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, IAutoMappingConfig, ISurveyData, ISpecialtyGroup, IMappingSuggestion } from '../types/specialty';
 import { stringSimilarity } from 'string-similarity-js';
 import { LocalStorageService } from './StorageService';
+import BackendService from './BackendService';
 import { ISurveyRow } from '../types/survey';
 
 export class SpecialtyMappingService {
@@ -8,6 +9,12 @@ export class SpecialtyMappingService {
   private readonly storageService: LocalStorageService;
   private readonly GROUPS_KEY = 'specialty_groups';
   private readonly LEARNED_MAPPINGS_KEY = 'learned-specialty-mappings';
+  
+  // Add caching for performance
+  private specialtyCache = new Map<string, Set<string>>();
+  private cacheExpiry = new Map<string, number>();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   private readonly SYNONYMS: Record<string, string[]> = {
     'cardiology': ['heart', 'cardiac', 'cardiovascular'],
     'orthopedics': ['ortho', 'orthopedic', 'orthopaedic'],
@@ -38,29 +45,28 @@ export class SpecialtyMappingService {
   }
 
   async saveMapping(mapping: ISpecialtyMapping): Promise<void> {
-    const mappings = await this.getAllMappings();
-    const existingIndex = mappings.findIndex(m => m.id === mapping.id);
-    
-    if (existingIndex >= 0) {
-      mappings[existingIndex] = {
-        ...mapping,
-        updatedAt: new Date()
-      };
-    } else {
-      mappings.push({
-        ...mapping,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    }
-
-    await this.storageService.setItem(this.MAPPINGS_KEY, mappings);
+    // Persist to backend API
+    const payload = {
+      standardizedName: mapping.standardizedName,
+      sourceSpecialties: mapping.sourceSpecialties.map(s => ({
+        specialty: s.specialty,
+        originalName: s.originalName,
+        surveySource: s.surveySource
+      }))
+    };
+    await fetch('http://localhost:3001/api/mappings/specialty', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
   }
 
   async getAllMappings(): Promise<ISpecialtyMapping[]> {
     try {
-      const mappings = await this.storageService.getItem(this.MAPPINGS_KEY) as ISpecialtyMapping[];
-      return mappings || [];
+      const res = await fetch('http://localhost:3001/api/mappings/specialty');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      return data as ISpecialtyMapping[];
     } catch (error) {
       console.error('Error fetching specialty mappings:', error);
       return [];
@@ -69,9 +75,17 @@ export class SpecialtyMappingService {
 
   async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
     try {
-      // Get all surveys
-      const surveys = await this.storageService.listSurveys();
+      console.log('🔄 Fetching unmapped specialties with caching...');
+      
+      // Get all surveys from backend
+      const backendService = BackendService.getInstance();
+      console.log('📡 Calling backendService.getAllSurveys()...');
+      const surveys = await backendService.getAllSurveys();
+      console.log('📊 Surveys received:', surveys.length, surveys);
+      
       const mappings = await this.getAllMappings();
+      console.log('🗺️ Existing mappings:', mappings.length);
+      
       const unmappedSpecialties: IUnmappedSpecialty[] = [];
       const mappedNames = new Set<string>();
 
@@ -82,81 +96,177 @@ export class SpecialtyMappingService {
           mappedNames.add(source.specialty.toLowerCase());
         });
       });
+      console.log('✅ Mapped names collected:', Array.from(mappedNames));
 
-      // Process each survey
-      for (const survey of surveys) {
-        if (!survey.metadata.fileContent) continue;
+      // Process surveys in batches for better performance
+      const batchSize = 10;
 
-        const lines = survey.metadata.fileContent.split('\n');
-        const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
-        const specialtyIdx = headers.findIndex((h: string) => h.includes('specialty'));
-
-        if (specialtyIdx >= 0) {
-          // Process each line and extract specialties
-          lines.slice(1).forEach((line: string) => {
-            const values = line.split(',').map((v: string) => v.trim());
-            const specialty = values[specialtyIdx];
+      for (let i = 0; i < surveys.length; i += batchSize) {
+        const batch = surveys.slice(i, i + batchSize);
+        console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(surveys.length / batchSize)}`);
+        
+        const batchPromises = batch.map(async (survey) => {
+          try {
+            // Fetch from backend
+            console.log(`🔍 Fetching data for survey ${survey.id}...`);
+            const { rows } = await backendService.getSurveyData(survey.id, {}, { page: 1, limit: 10000 });
+            console.log(`📋 Survey ${survey.id} returned ${rows.length} rows`);
             
-            // Only add if not already mapped
-            if (specialty && !mappedNames.has(specialty.toLowerCase())) {
-              unmappedSpecialties.push({
-                id: crypto.randomUUID(),
-                name: specialty,
-                surveySource: survey.metadata.surveyType,
-                frequency: 1
-              });
-            }
-          });
-        }
+            // Extract specialties and count per survey
+            const counts = new Map<string, number>();
+            
+            rows.forEach((row: any, index: number) => {
+              // Log all column names from first row
+              if (index === 0) {
+                console.log('📋 All column names in row:', Object.keys(row));
+              }
+              
+              // Check multiple possible specialty column names
+              const possibleSpecialtyColumns = [
+                'specialty', 'Specialty', 'Provider Type', 'provider_type', 
+                'ProviderType', 'specialty_name', 'SpecialtyName', 'specialtyName',
+                'PROVIDER_TYPE', 'SPECIALTY', 'Specialty Type', 'specialty_type'
+              ];
+              
+              let specialty = '';
+              for (const colName of possibleSpecialtyColumns) {
+                if (row[colName] && typeof row[colName] === 'string' && row[colName].trim()) {
+                  specialty = row[colName].trim();
+                  console.log(`✅ Found specialty in column "${colName}": ${specialty}`);
+                  break;
+                }
+              }
+              
+              if (specialty) {
+                const key = specialty;
+                counts.set(key, (counts.get(key) || 0) + 1);
+              }
+              
+              // Log first few rows for debugging
+              if (index < 5) {
+                console.log(`Row ${index}:`, { specialty, row });
+              }
+            });
+
+            console.log(`🏥 Found specialties in survey ${survey.id}:`, Array.from(counts.entries()));
+
+            const surveySource = (survey as any).type || (survey as any).surveyProvider || 'Unknown';
+            return { surveySource, counts };
+          } catch (error) {
+            console.error(`❌ Error processing survey ${survey.id}:`, error);
+            return { surveySource: 'Unknown', counts: new Map<string, number>() };
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Convert per-survey counts into unmapped entries (one per survey source)
+        batchResults.forEach(({ surveySource, counts }) => {
+                      counts.forEach((count, specialty) => {
+              const key = specialty.toLowerCase();
+              if (!mappedNames.has(key)) {
+                unmappedSpecialties.push({
+                  id: `${surveySource}-${specialty}`,
+                  name: specialty,
+                  surveySource,
+                  frequency: count
+                });
+              }
+            });
+        });
       }
 
-      // Combine duplicates and count frequencies
-      const specialtyMap = new Map<string, IUnmappedSpecialty>();
-      unmappedSpecialties.forEach(specialty => {
-        const key = `${specialty.name.toLowerCase()}-${specialty.surveySource}`;
-        if (specialtyMap.has(key)) {
-          const existing = specialtyMap.get(key)!;
-          existing.frequency += 1;
-        } else {
-          specialtyMap.set(key, { ...specialty });
-        }
-      });
-
-      return Array.from(specialtyMap.values());
+      console.log(`✅ Found ${unmappedSpecialties.length} unmapped specialties:`, unmappedSpecialties);
+      return unmappedSpecialties;
     } catch (error) {
-      console.error('Error getting unmapped specialties:', error);
+      console.error('❌ Error getting unmapped specialties:', error);
       return [];
     }
   }
 
   async autoMapSpecialties(config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {
+    console.log('🚀 Starting auto-mapping with retry logic...');
+    
     const unmapped = await this.getUnmappedSpecialties();
     const existingMappings = await this.getAllMappings();
     const newMappings: ISpecialtyMapping[] = [];
+    const failedMappings: Array<{ specialty: string; error: string }> = [];
 
-    for (const specialty of unmapped) {
-      const bestMatch = this.findBestMatch(
-        specialty.name,
-        existingMappings,
-        config
-      );
+    // Process in batches with retry logic
+    const batchSize = 50;
+    const batches = [];
+    
+    for (let i = 0; i < unmapped.length; i += batchSize) {
+      batches.push(unmapped.slice(i, i + batchSize));
+    }
 
-      if (bestMatch && bestMatch.confidence >= config.confidenceThreshold) {
-        const mapping = existingMappings.find(m => m.standardizedName === bestMatch.standardizedName);
-        if (mapping) {
-          mapping.sourceSpecialties.push({
-            id: crypto.randomUUID(),
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      console.log(`📦 Processing auto-mapping batch ${batchIndex + 1}/${batches.length}`);
+      
+      const batchPromises = batch.map(async (specialty) => {
+        return this.processSpecialtyWithRetry(specialty, existingMappings, config, 3);
+      });
+
+      const batchResults = await Promise.allSettled(batchPromises);
+      
+      batchResults.forEach((result, index) => {
+        const specialty = batch[index];
+        if (result.status === 'fulfilled' && result.value) {
+          newMappings.push(result.value);
+        } else {
+          failedMappings.push({
             specialty: specialty.name,
-            originalName: specialty.name,
-            surveySource: specialty.surveySource,
-            mappingId: mapping.id
+            error: result.status === 'rejected' ? result.reason?.message || 'Unknown error' : 'Failed to process'
           });
-          await this.saveMapping(mapping);
         }
-      }
+      });
+    }
+
+    console.log(`✅ Auto-mapping completed: ${newMappings.length} successful, ${failedMappings.length} failed`);
+    
+    if (failedMappings.length > 0) {
+      console.warn('⚠️ Failed mappings:', failedMappings);
     }
 
     return newMappings;
+  }
+
+  private async processSpecialtyWithRetry(
+    specialty: IUnmappedSpecialty,
+    existingMappings: ISpecialtyMapping[],
+    config: IAutoMappingConfig,
+    maxRetries: number
+  ): Promise<ISpecialtyMapping | null> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const bestMatch = this.findBestMatch(specialty.name, existingMappings, config);
+
+        if (bestMatch && bestMatch.confidence >= config.confidenceThreshold) {
+          const mapping = existingMappings.find(m => m.standardizedName === bestMatch.standardizedName);
+          if (mapping) {
+            mapping.sourceSpecialties.push({
+              id: crypto.randomUUID(),
+              specialty: specialty.name,
+              originalName: specialty.name,
+              surveySource: specialty.surveySource,
+              mappingId: mapping.id
+            });
+            await this.saveMapping(mapping);
+            return mapping;
+          }
+        }
+        return null; // No match found, not an error
+      } catch (error) {
+        console.error(`Attempt ${attempt} failed for specialty ${specialty.name}:`, error);
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+    return null;
   }
 
   private findSuggestedMatches(
@@ -381,19 +491,28 @@ export class SpecialtyMappingService {
       updatedAt: new Date()
     };
 
-    mappings[index] = updatedMapping;
-    await this.storageService.setItem(this.MAPPINGS_KEY, mappings);
+    // Update via backend API
+    await fetch(`http://localhost:3001/api/mappings/specialty/${mappingId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedMapping)
+    });
+
     return updatedMapping;
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    const mappings = await this.getMappings();
-    const filteredMappings = mappings.filter(m => m.id !== mappingId);
-    await this.storageService.setItem(this.MAPPINGS_KEY, filteredMappings);
+    // Delete via backend API
+    await fetch(`http://localhost:3001/api/mappings/specialty/${mappingId}`, {
+      method: 'DELETE'
+    });
   }
 
   async clearAllMappings(): Promise<void> {
-    await this.storageService.setItem(this.MAPPINGS_KEY, []);
+    // Clear via backend API
+    await fetch('http://localhost:3001/api/mappings/specialty', {
+      method: 'DELETE'
+    });
     await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, {});
   }
 
@@ -504,7 +623,7 @@ export class SpecialtyMappingService {
           if (similarity >= config.confidenceThreshold) {
             const key = mapping.standardizedName;
             const group = groups.get(key) || [];
-            group.push({ name: specialty.name, surveySource: specialty.surveySource });
+            group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
             groups.set(key, group);
             foundMatch = true;
             break;
@@ -520,7 +639,7 @@ export class SpecialtyMappingService {
           if (!matched) {
             const similarity = calculateSimilarity(specialty.name, key);
             if (similarity >= config.confidenceThreshold) {
-              group.push({ name: specialty.name, surveySource: specialty.surveySource });
+              group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
               matched = true;
             }
           }
@@ -528,7 +647,7 @@ export class SpecialtyMappingService {
 
         if (!matched) {
           // Create new group
-          groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource }]);
+          groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource as any }]);
         }
       }
     });

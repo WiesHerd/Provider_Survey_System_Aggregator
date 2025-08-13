@@ -6,13 +6,13 @@ import {
   FormControlLabel,
   Switch,
   Button,
-  CircularProgress,
-  Alert,
   Box,
+  Alert,
   Chip,
-  Divider
+  Divider,
 } from '@mui/material';
 import { BoltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
+import { ButtonSpinner } from './ui/loading-spinner';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import { LocalStorageService } from '../services/StorageService';
 import { IAutoMappingConfig, IMappingSuggestion } from '../types/specialty';
@@ -112,7 +112,7 @@ const AutoMapSpecialties: React.FC<AutoMapSpecialtiesProps> = ({ onClose, onMapp
               </Typography>
               <Slider
                 value={confidenceThreshold}
-                onChange={(_, value) => setConfidenceThreshold(value as number)}
+                onChange={(_event: Event, value: number | number[]) => setConfidenceThreshold(value as number)}
                 min={0.5}
                 max={1}
                 step={0.05}
@@ -127,7 +127,7 @@ const AutoMapSpecialties: React.FC<AutoMapSpecialtiesProps> = ({ onClose, onMapp
                 control={
                   <Switch
                     checked={useExistingMappings}
-                    onChange={(e) => setUseExistingMappings(e.target.checked)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUseExistingMappings(e.target.checked)}
                     disabled={isProcessing}
                   />
                 }
@@ -137,7 +137,7 @@ const AutoMapSpecialties: React.FC<AutoMapSpecialtiesProps> = ({ onClose, onMapp
                 control={
                   <Switch
                     checked={useFuzzyMatching}
-                    onChange={(e) => setUseFuzzyMatching(e.target.checked)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUseFuzzyMatching(e.target.checked)}
                     disabled={isProcessing}
                   />
                 }
@@ -192,7 +192,7 @@ const AutoMapSpecialties: React.FC<AutoMapSpecialtiesProps> = ({ onClose, onMapp
           color="primary"
           onClick={handleAutoMap}
           disabled={isProcessing}
-          startIcon={isProcessing ? <CircularProgress size={20} /> : <BoltIcon className="h-5 w-5" />}
+          startIcon={isProcessing ? <ButtonSpinner size="sm" /> : <BoltIcon className="h-5 w-5" />}
         >
           {isProcessing ? 'Processing...' : 'Start Auto-Mapping'}
         </Button>

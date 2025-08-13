@@ -11,14 +11,38 @@ const rateLimit = require('express-rate-limit');
 const sql = require('mssql');
 const dotenv = require('dotenv');
 
-// Load environment (azure creds live in env.local by convention)
-dotenv.config({ path: path.join(__dirname, 'env.local') });
+// Load environment variables
+// Priority: env.local (local dev) > env.production (Azure) > .env (fallback)
+const envPath = process.env.NODE_ENV === 'production' 
+  ? path.join(__dirname, 'env.production')
+  : path.join(__dirname, 'env.local');
 
-// Optional Azure SQL helpers
+dotenv.config({ path: envPath });
+
+// Azure SQL Database configuration
 let getConnection, initializeDatabase;
+let azureEnabled = false;
+
 try {
   ({ getConnection, initializeDatabase } = require('./config/database'));
-} catch {}
+  
+  // Check if Azure SQL is configured
+  azureEnabled = process.env.AZURE_SQL_SERVER && 
+                 process.env.AZURE_SQL_DATABASE && 
+                 process.env.AZURE_SQL_USER && 
+                 process.env.AZURE_SQL_PASSWORD;
+  
+  if (azureEnabled) {
+    console.log('🔗 Azure SQL Database configured');
+    console.log(`   Server: ${process.env.AZURE_SQL_SERVER}`);
+    console.log(`   Database: ${process.env.AZURE_SQL_DATABASE}`);
+  } else {
+    console.log('📝 Azure SQL Database not configured - using SQLite only');
+  }
+} catch (error) {
+  console.log('⚠️ Azure SQL configuration not available - using SQLite only');
+  azureEnabled = false;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,12 +53,18 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
+// Rate limiting (relax/disable for local dev to avoid 429s during bulk requests)
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || (process.env.NODE_ENV === 'development' ? '100000' : '300'), 10);
+const DISABLE_RATE_LIMIT = process.env.DISABLE_RATE_LIMIT === 'true' || process.env.NODE_ENV === 'development';
+if (!DISABLE_RATE_LIMIT) {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: RATE_LIMIT_MAX
+  });
+  app.use(limiter);
+} else {
+  console.log('⚙️  Rate limiting disabled for this environment');
+}
 
 // Database setup (SQLite primary for local dev; optional Azure dual-write when enabled)
 const dbPath = path.join(__dirname, 'survey_data.db');
@@ -88,6 +118,40 @@ db.serialize(() => {
     mappedSpecialty TEXT,
     createdDate TEXT
   )`);
+
+  // New normalized mappings schema (v2)
+  db.run(`CREATE TABLE IF NOT EXISTS specialty_mappings_v2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    standardized_name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS specialty_mapping_sources_v2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mapping_id INTEGER NOT NULL,
+    source_specialty TEXT NOT NULL,
+    source_survey TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (mapping_id) REFERENCES specialty_mappings_v2(id)
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS column_mappings_v2 (
+    id TEXT PRIMARY KEY,
+    standardizedName TEXT NOT NULL,
+    createdAt TEXT,
+    updatedAt TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS column_mapping_sources_v2 (
+    id TEXT PRIMARY KEY,
+    mappingId TEXT NOT NULL,
+    name TEXT,
+    surveySource TEXT,
+    dataType TEXT,
+    createdAt TEXT,
+    FOREIGN KEY (mappingId) REFERENCES column_mappings_v2 (id)
+  )`);
 });
 
 // File upload configuration
@@ -128,10 +192,19 @@ app.get('/api/health', (req, res) => {
 
 // Upload survey
 app.post('/api/upload', upload.single('file'), async (req, res) => {
+  // Set a timeout for the entire upload process
+  const uploadTimeout = setTimeout(() => {
+    console.error('⏰ Upload timeout - process taking too long');
+    res.status(408).json({ error: 'Upload timeout - please try again with a smaller file' });
+  }, 300000); // 5 minutes timeout
+
   try {
     if (!req.file) {
+      clearTimeout(uploadTimeout);
       return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    console.log(`📁 Starting upload: ${req.file.originalname} (${req.file.size} bytes)`);
 
     const { name, year, type } = req.body;
     const surveyId = uuidv4();
@@ -157,6 +230,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         if (data.geographic_region || data.Region) regions.add(data.geographic_region || data.Region);
       })
       .on('end', async () => {
+        clearTimeout(uploadTimeout); // Clear timeout on successful end
         try {
           // Insert survey metadata
           const metadata = JSON.stringify({
@@ -190,48 +264,47 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                   VALUES (@id, @name, @year, @type, @uploadDate, @rowCount, @specialtyCount, @dataPoints, @colorAccent, @metadata)
                 `);
 
-              // Prepared statement for survey_data rows
-              const ps = new sql.PreparedStatement(pool);
-              ps.input('id', sql.NVarChar);
-              ps.input('surveyId', sql.NVarChar);
-              ps.input('specialty', sql.NVarChar);
-              ps.input('providerType', sql.NVarChar);
-              ps.input('region', sql.NVarChar);
-              ps.input('tcc', sql.Float);
-              ps.input('cf', sql.Float);
-              ps.input('wrvu', sql.Float);
-              ps.input('count', sql.Int);
-              ps.input('rawData', sql.NVarChar);
-              await ps.prepare(`
-                INSERT INTO survey_data (id, surveyId, specialty, providerType, region, tcc, cf, wrvu, count, rawData)
-                VALUES (@id, @surveyId, @specialty, @providerType, @region, @tcc, @cf, @wrvu, @count, @rawData)
-              `);
-
-              for (const row of results) {
-                const dataId = uuidv4();
-                const specialty = row.specialty || row.Specialty || '';
-                const providerType = row.provider_type || row['Provider Type'] || '';
-                const region = row.geographic_region || row.Region || '';
-                const tcc = Number.parseFloat(row.tcc_p50) || Number.parseFloat(row.TCC) || 0;
-                const cf = Number.parseFloat(row.cf_p50) || Number.parseFloat(row.CF) || 0;
-                const wrvu = Number.parseFloat(row.wrvu_p50) || Number.parseFloat(row.wRVU) || 0;
-                const count = Number.parseInt(row.n_incumbents) || Number.parseInt(row.Count) || 0;
-                await ps.execute({
-                  id: dataId,
-                  surveyId,
-                  specialty,
-                  providerType,
-                  region,
-                  tcc,
-                  cf,
-                  wrvu,
-                  count,
-                  rawData: JSON.stringify(row)
-                });
+              // Batch insert for survey_data rows (much faster than individual inserts)
+              const batchSize = 100;
+              const batches = [];
+              
+              for (let i = 0; i < results.length; i += batchSize) {
+                batches.push(results.slice(i, i + batchSize));
               }
 
-              await ps.unprepare();
-              console.log('✅ Azure SQL: upload stored');
+              console.log(`📊 Processing ${results.length} rows in ${batches.length} batches...`);
+
+              for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                console.log(`📦 Processing batch ${i + 1}/${batches.length} (${batch.length} rows)`);
+                
+                try {
+                  const values = batch.map((row, index) => {
+                    const dataId = uuidv4();
+                    const specialty = row.specialty || row.Specialty || '';
+                    const providerType = row.provider_type || row['Provider Type'] || '';
+                    const region = row.geographic_region || row.Region || '';
+                    const tcc = Number.parseFloat(row.tcc_p50) || Number.parseFloat(row.TCC) || 0;
+                    const cf = Number.parseFloat(row.cf_p50) || Number.parseFloat(row.CF) || 0;
+                    const wrvu = Number.parseFloat(row.wrvu_p50) || Number.parseFloat(row.wRVU) || 0;
+                    const count = Number.parseInt(row.n_incumbents) || Number.parseInt(row.Count) || 0;
+                    
+                    return `('${dataId}', '${surveyId}', '${specialty.replace(/'/g, "''")}', '${providerType.replace(/'/g, "''")}', '${region.replace(/'/g, "''")}', ${tcc}, ${cf}, ${wrvu}, ${count}, '${JSON.stringify(row).replace(/'/g, "''")}')`;
+                  }).join(', ');
+
+                  await pool.request().query(`
+                    INSERT INTO survey_data (id, surveyId, specialty, providerType, region, tcc, cf, wrvu, count, rawData)
+                    VALUES ${values}
+                  `);
+                  
+                  console.log(`✅ Batch ${i + 1} completed successfully`);
+                } catch (batchError) {
+                  console.error(`❌ Error in batch ${i + 1}:`, batchError.message);
+                  throw batchError; // Re-throw to be caught by outer try-catch
+                }
+              }
+
+              console.log('✅ Azure SQL: upload stored successfully');
             } catch (azureErr) {
               console.error('⚠️ Azure SQL write failed (continuing with local SQLite):', azureErr.message);
             }
@@ -286,12 +359,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                 stmt.finalize((err) => {
                   if (err) {
                     console.error('Error finalizing data insert:', err);
+                    clearTimeout(uploadTimeout);
                     return res.status(500).json({ error: 'Data insertion error' });
                   }
 
                   // Clean up uploaded file
                   fs.unlinkSync(req.file.path);
 
+                  clearTimeout(uploadTimeout);
                   res.json({
                     success: true,
                     surveyId,
@@ -457,6 +532,257 @@ app.get('/api/survey/:id/filters', (req, res) => {
   });
 });
 
+// ------------------------
+// Mapping persistence APIs
+// ------------------------
+
+// Helper to run SQLite queries as promises
+function runAsync(sqlText, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sqlText, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
+  });
+}
+
+function allAsync(sqlText, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sqlText, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+}
+
+// Specialty mappings
+app.get('/api/mappings/specialty', async (req, res) => {
+  try {
+    const mappings = await allAsync('SELECT * FROM specialty_mappings_v2');
+    const result = [];
+    for (const m of mappings) {
+      const sources = await allAsync('SELECT * FROM specialty_mapping_sources_v2 WHERE mapping_id = ?', [m.id]);
+      result.push({
+        id: m.id,
+        standardizedName: m.standardized_name,
+        sourceSpecialties: sources.map(s => ({
+          id: s.id,
+          specialty: s.source_specialty,
+          originalName: s.source_specialty,
+          surveySource: s.source_survey,
+          mappingId: m.id
+        })),
+        createdAt: m.created_at,
+        updatedAt: m.updated_at
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Error listing specialty mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/mappings/specialty', async (req, res) => {
+  try {
+    const { standardizedName, sourceSpecialties = [] } = req.body || {};
+    if (!standardizedName || !Array.isArray(sourceSpecialties)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    const now = new Date().toISOString();
+    const result = await runAsync('INSERT INTO specialty_mappings_v2 (standardized_name, created_at, updated_at) VALUES (?, ?, ?)', [standardizedName, now, now]);
+    const id = result.lastID;
+    for (const s of sourceSpecialties) {
+      await runAsync('INSERT INTO specialty_mapping_sources_v2 (mapping_id, source_specialty, source_survey, created_at) VALUES (?, ?, ?, ?)', [id, s.specialty || s.name || '', s.surveySource || '', now]);
+    }
+    // Best-effort Azure dual-write
+    if (azureEnabled && getConnection) {
+      getConnection().then(async pool => {
+        try {
+          // Generate UUID for Azure SQL
+          const azureId = uuidv4();
+          await pool.request()
+            .input('id', sql.NVarChar, azureId)
+            .input('standardizedName', sql.NVarChar, standardizedName)
+            .input('createdAt', sql.NVarChar, now)
+            .input('updatedAt', sql.NVarChar, now)
+            .query('INSERT INTO specialty_mappings_v2 (id, standardizedName, createdAt, updatedAt) VALUES (@id, @standardizedName, @createdAt, @updatedAt)');
+          for (const s of sourceSpecialties) {
+            const sid = uuidv4();
+            await pool.request()
+              .input('id', sql.NVarChar, sid)
+              .input('mappingId', sql.NVarChar, azureId)
+              .input('specialty', sql.NVarChar, s.specialty || s.name || '')
+              .input('originalName', sql.NVarChar, s.originalName || s.name || '')
+              .input('surveySource', sql.NVarChar, s.surveySource || '')
+              .input('createdAt', sql.NVarChar, now)
+              .query('INSERT INTO specialty_mapping_sources_v2 (id, mappingId, specialty, originalName, surveySource, createdAt) VALUES (@id, @mappingId, @specialty, @originalName, @surveySource, @createdAt)');
+          }
+        } catch (e) {
+          console.warn('Azure dual-write (specialty mappings) failed:', e.message);
+        }
+      });
+    }
+    res.status(201).json({ id, standardizedName, sourceSpecialties, createdAt: now, updatedAt: now });
+  } catch (err) {
+    console.error('Error creating specialty mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/mappings/specialty/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { standardizedName, sourceSpecialties = [] } = req.body || {};
+    if (!standardizedName) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    const now = new Date().toISOString();
+    
+    // Update SQLite
+    await runAsync('UPDATE specialty_mappings_v2 SET standardized_name = ?, updated_at = ? WHERE id = ?', [standardizedName, now, id]);
+    await runAsync('DELETE FROM specialty_mapping_sources_v2 WHERE mapping_id = ?', [id]);
+    for (const s of sourceSpecialties) {
+      const sid = uuidv4();
+      await runAsync('INSERT INTO specialty_mapping_sources_v2 (id, mapping_id, source_specialty, source_survey, created_at) VALUES (?, ?, ?, ?, ?)', [sid, id, s.specialty || '', s.surveySource || '', now]);
+    }
+    
+    // Update Azure SQL if enabled
+    if (azureEnabled && getConnection) {
+      getConnection().then(async pool => {
+        try {
+          // For updates, we need to find the Azure ID by matching the standardized name
+          // This is a limitation of having different ID systems
+          await pool.request()
+            .input('standardizedName', sql.NVarChar, standardizedName)
+            .input('updatedAt', sql.NVarChar, now)
+            .query('UPDATE specialty_mappings_v2 SET standardizedName = @standardizedName, updatedAt = @updatedAt WHERE standardizedName = @standardizedName');
+          
+          // Delete and recreate source specialties
+          await pool.request().input('standardizedName', sql.NVarChar, standardizedName).query('DELETE FROM specialty_mapping_sources_v2 WHERE mappingId IN (SELECT id FROM specialty_mappings_v2 WHERE standardizedName = @standardizedName)');
+          
+          for (const s of sourceSpecialties) {
+            const sid = uuidv4();
+            await pool.request()
+              .input('id', sql.NVarChar, sid)
+              .input('standardizedName', sql.NVarChar, standardizedName)
+              .input('specialty', sql.NVarChar, s.specialty || '')
+              .input('originalName', sql.NVarChar, s.originalName || '')
+              .input('surveySource', sql.NVarChar, s.surveySource || '')
+              .input('createdAt', sql.NVarChar, now)
+              .query('INSERT INTO specialty_mapping_sources_v2 (id, mappingId, specialty, originalName, surveySource, createdAt) VALUES (@id, (SELECT id FROM specialty_mappings_v2 WHERE standardizedName = @standardizedName), @specialty, @originalName, @surveySource, @createdAt)');
+          }
+        } catch (e) {
+          console.warn('Azure dual-update (specialty mappings) failed:', e.message);
+        }
+      });
+    }
+    
+    res.json({ id, standardizedName, sourceSpecialties, updatedAt: now });
+  } catch (err) {
+    console.error('Error updating specialty mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/specialty/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runAsync('DELETE FROM specialty_mapping_sources_v2 WHERE mapping_id = ?', [id]);
+    await runAsync('DELETE FROM specialty_mappings_v2 WHERE id = ?', [id]);
+    if (azureEnabled && getConnection) {
+      getConnection().then(async pool => {
+        try {
+          await pool.request().input('id', sql.NVarChar, id).query('DELETE FROM specialty_mapping_sources_v2 WHERE mappingId = @id');
+          await pool.request().input('id', sql.NVarChar, id).query('DELETE FROM specialty_mappings_v2 WHERE id = @id');
+        } catch (e) {
+          console.warn('Azure dual-delete (specialty mappings) failed:', e.message);
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting specialty mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/specialty', async (req, res) => {
+  try {
+    await runAsync('DELETE FROM specialty_mapping_sources_v2');
+    await runAsync('DELETE FROM specialty_mappings_v2');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing specialty mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Column mappings
+app.get('/api/mappings/column', async (req, res) => {
+  try {
+    const mappings = await allAsync('SELECT * FROM column_mappings_v2');
+    const result = [];
+    for (const m of mappings) {
+      const sources = await allAsync('SELECT * FROM column_mapping_sources_v2 WHERE mappingId = ?', [m.id]);
+      result.push({
+        id: m.id,
+        standardizedName: m.standardizedName,
+        sourceColumns: sources.map(s => ({ id: s.id, name: s.name, surveySource: s.surveySource, dataType: s.dataType, mappingId: m.id })),
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Error listing column mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/mappings/column', async (req, res) => {
+  try {
+    const { standardizedName, sourceColumns = [] } = req.body || {};
+    if (!standardizedName || !Array.isArray(sourceColumns)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    await runAsync('INSERT INTO column_mappings_v2 (id, standardizedName, createdAt, updatedAt) VALUES (?, ?, ?, ?)', [id, standardizedName, now, now]);
+    for (const c of sourceColumns) {
+      const cid = uuidv4();
+      await runAsync('INSERT INTO column_mapping_sources_v2 (id, mappingId, name, surveySource, dataType, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [cid, id, c.name || '', c.surveySource || '', c.dataType || 'string', now]);
+    }
+    res.status(201).json({ id, standardizedName, sourceColumns, createdAt: now, updatedAt: now });
+  } catch (err) {
+    console.error('Error creating column mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/column/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runAsync('DELETE FROM column_mapping_sources_v2 WHERE mappingId = ?', [id]);
+    await runAsync('DELETE FROM column_mappings_v2 WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting column mapping:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/mappings/column', async (req, res) => {
+  try {
+    await runAsync('DELETE FROM column_mapping_sources_v2');
+    await runAsync('DELETE FROM column_mappings_v2');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing column mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Delete survey
 app.delete('/api/survey/:id', (req, res) => {
   const { id } = req.params;
@@ -476,6 +802,44 @@ app.delete('/api/survey/:id', (req, res) => {
       res.json({ success: true, message: 'Survey deleted successfully' });
     });
   });
+});
+
+// Delete all surveys
+app.delete('/api/surveys', async (req, res) => {
+  try {
+    // Delete from SQLite
+    db.run('DELETE FROM survey_data', function(err) {
+      if (err) {
+        console.error('Error deleting all survey data:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      db.run('DELETE FROM surveys', function(err) {
+        if (err) {
+          console.error('Error deleting all surveys:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Also delete from Azure SQL if enabled
+        if (azureEnabled && getConnection) {
+          getConnection().then(pool => {
+            return pool.request().query('DELETE FROM survey_data');
+          }).then(() => {
+            return getConnection().then(pool => pool.request().query('DELETE FROM surveys'));
+          }).then(() => {
+            console.log('✅ Azure SQL: all surveys deleted');
+          }).catch(azureErr => {
+            console.error('⚠️ Azure SQL delete failed (continuing):', azureErr.message);
+          });
+        }
+        
+        res.json({ success: true, message: 'All surveys deleted successfully' });
+      });
+    });
+  } catch (error) {
+    console.error('Error in delete all surveys:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Export survey data

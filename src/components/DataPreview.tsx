@@ -1,24 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import {
   FormControl,
   InputLabel,
   MenuItem,
   Select,
-  Box,
-  SelectChangeEvent
+  Box
 } from '@mui/material';
 import BackendService from '../services/BackendService';
-// removed toggle UI
-// AG Grid (advanced table)
-// @ts-ignore - types provided by package
-import { AgGridReact } from 'ag-grid-react';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
-// Types from ag-grid-community can be used if available. Fallback to any to avoid build-time type resolution issues.
+
+// Lazy load AG Grid to reduce initial bundle size
+const AgGridWrapper = lazy(() => import('./AgGridWrapper'));
+
+// Loading component for AG Grid
+const AgGridLoadingSpinner = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+    <span className="ml-2 text-gray-600">Loading data table...</span>
+  </div>
+);
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
-  const { displayName, onPinColumn, colId, isSpecialty } = props;
+  const { displayName, onPinColumn, colId, isSpecialty, isNumeric } = props;
   const [isPinned, setIsPinned] = useState(false);
   
   const handlePinClick = () => {
@@ -27,8 +30,8 @@ const CustomHeader = (props: any) => {
   };
 
   return (
-    <div className="flex items-center justify-between w-full">
-      <span className={`truncate ${isSpecialty ? 'font-semibold' : ''}`}>{displayName}</span>
+    <div className={`flex items-center w-full ${isNumeric ? 'justify-end' : 'justify-between'}`}>
+      <span className={`truncate ${isSpecialty ? 'font-semibold' : ''} ${isNumeric ? 'text-right' : ''}`}>{displayName}</span>
       <button
         onClick={handlePinClick}
         className={`ml-2 p-1 rounded hover:bg-gray-100 transition-colors ${
@@ -83,6 +86,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [pageSize] = useState(100);
   const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; pages: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const rowsPerPage = 10;
   const [gridApi, setGridApi] = useState<any | null>(null);
   const [columnApi, setColumnApi] = useState<any | null>(null);
@@ -94,7 +98,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [serverProviderTypes, setServerProviderTypes] = useState<string[]>([]);
   const [serverRegions, setServerRegions] = useState<string[]>([]);
 
-  const handleFilterChange = (event: SelectChangeEvent<string>) => {
+  const handleFilterChange = (
+    event: React.ChangeEvent<{ name?: string; value: unknown }> | any
+  ) => {
     onFilterChange(event.target.name, event.target.value);
   };
 
@@ -102,7 +108,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let isCancelled = false;
     const loadSurveyData = async () => {
       try {
-        setIsLoading(true);
+        // Only show loading on initial load or page change, not filter changes
+        if (currentPage === 1 && !originalData.length) {
+          setIsLoading(true);
+        }
+        
         const backendService = BackendService.getInstance();
         
         // Pass current filters to server for server-side filtering
@@ -163,7 +173,85 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return () => {
       isCancelled = true;
     };
-  }, [file.id, currentPage, pageSize, globalFilters]);
+  }, [file.id, currentPage, pageSize]); // Removed globalFilters dependency to prevent flickering
+
+  // Separate effect for filter changes with debouncing
+  useEffect(() => {
+    let isCancelled = false;
+    let timeoutId: NodeJS.Timeout;
+    
+    const loadFilteredData = async () => {
+      try {
+        setIsRefreshing(true);
+        const backendService = BackendService.getInstance();
+        
+        const filters = {
+          specialty: globalFilters.specialty || undefined,
+          providerType: globalFilters.providerType || undefined,
+          region: globalFilters.region || undefined
+        };
+        
+        const { rows: surveyData, pagination } = await backendService.getSurveyData(
+          file.id,
+          filters,
+          { page: 1, limit: pageSize } // Reset to page 1 when filters change
+        );
+        
+        if (!isCancelled && surveyData.length > 0) {
+          setOriginalData(surveyData);
+          
+          // Reuse existing headers if available
+          let headers: string[] = [];
+          if (previewData[0] && previewData[0].length > 0) {
+            headers = previewData[0];
+          } else {
+            try {
+              const meta = await BackendService.getInstance().getSurveyMeta(file.id);
+              if (Array.isArray(meta.columns) && meta.columns.length > 0) {
+                headers = meta.columns;
+              } else {
+                headers = Object.keys(surveyData[0]);
+              }
+            } catch {
+              headers = Object.keys(surveyData[0]);
+            }
+          }
+          
+          headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+          const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+          
+          setStats({
+            columnNames: headers,
+            totalRows: surveyData.length,
+            uniqueSpecialties: new Set(surveyData.map(row => row.specialty)).size,
+            totalDataPoints: surveyData.length * headers.length
+          });
+          setPreviewData([headers, ...rows]);
+          setCurrentPage(1); // Reset to first page
+        }
+        if (!isCancelled && pagination) {
+          setPagination(pagination);
+        }
+        if (!isCancelled) setIsRefreshing(false);
+      } catch (error) {
+        console.error('Error loading filtered data:', error);
+        onError('Error loading filtered data from backend');
+        if (!isCancelled) setIsRefreshing(false);
+      }
+    };
+
+    // Debounce filter changes to prevent rapid API calls
+    timeoutId = setTimeout(() => {
+      if (file.id) {
+        loadFilteredData();
+      }
+    }, 300); // 300ms debounce
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [globalFilters.specialty, globalFilters.providerType, globalFilters.region, file.id, pageSize]);
 
   // Load global filter options from server (not paginated)
   useEffect(() => {
@@ -264,7 +352,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               state: [{ colId, pinned: isPinned ? null : 'left' }]
             });
           },
-          isSpecialty: isSpecialty
+          isSpecialty: isSpecialty,
+          isNumeric: isNumeric
         },
         valueGetter: (params: any) => {
           const raw = params.data[key];
@@ -289,11 +378,47 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   if (isLoading) {
     return (
       <div className="w-full bg-white shadow-sm">
-        <div className="animate-pulse">
-          <div className="h-[400px] bg-gray-50">
-            <div className="h-10 bg-gray-200 mb-4" />
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-8 bg-gray-100 mb-2" />
+        {/* Keep the filter controls visible during loading */}
+        <Box sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          p: 2, 
+          borderBottom: 1, 
+          borderColor: 'divider'
+        }}>
+          {/* Header with Clear Filter Button */}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Survey Preview</h3>
+            <button
+              disabled
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 cursor-not-allowed"
+              title="Clear all filters"
+            >
+              <div className="relative w-4 h-4 mr-2">
+                <svg className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+                </svg>
+              </div>
+              <span className="text-xs">Clear Filters</span>
+            </button>
+          </div>
+
+          {/* Filter Dropdowns - Disabled during loading */}
+          <div className="grid grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="h-10 bg-gray-200 rounded-md"></div>
+              </div>
+            ))}
+          </div>
+        </Box>
+
+        {/* Data Table Loading State */}
+        <div className="ag-theme-alpine" style={{ height: 520, width: '100%' }}>
+          <div className="animate-pulse">
+            <div className="h-10 bg-gray-200 mb-2"></div>
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="h-8 bg-gray-100 mb-1"></div>
             ))}
           </div>
         </div>
@@ -350,6 +475,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onChange={handleFilterChange}
               label="Specialty"
               className="h-10"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.specialties.map(specialty => (
@@ -366,6 +496,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onChange={handleFilterChange}
               label="Provider Type"
               className="h-10"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.providerTypes.map(type => (
@@ -382,6 +517,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onChange={handleFilterChange}
               label="Geographic Region"
               className="h-10"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.regions.map(region => (
@@ -393,26 +533,43 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       </Box>
 
       {/* Data Table - AG Grid as primary */}
-      <div className="ag-theme-alpine" style={{ height: 520, width: '100%' }}>
-        <AgGridReact
-          onGridReady={(params: any) => {
-            setGridApi(params.api);
-            setColumnApi(params.columnApi);
-          }}
-          rowData={filteredData.map((row) => {
-            const obj: Record<string, string> = {};
-            (previewData[0] || []).forEach((header, idx) => {
-              obj[header] = row[idx];
-            });
-            return obj;
-          })}
-          columnDefs={createColumnDefs()}
-          defaultColDef={{ sortable: true, filter: true, resizable: true }}
-          suppressRowClickSelection={true}
-          components={{
-            CustomHeader: CustomHeader
-          }}
-        />
+      <div className="ag-theme-alpine relative px-4 py-2 rounded-lg border border-gray-200" style={{ height: 520, width: '100%' }}>
+        {/* Subtle refreshing overlay */}
+        {isRefreshing && (
+          <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
+            <div className="flex items-center space-x-2 text-gray-600">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+              <span className="text-sm">Updating data...</span>
+            </div>
+          </div>
+        )}
+        <Suspense fallback={<AgGridLoadingSpinner />}>
+          <AgGridWrapper
+            onGridReady={(params: any) => {
+              setGridApi(params.api);
+              setColumnApi(params.columnApi);
+            }}
+            rowData={filteredData.map((row) => {
+              const obj: Record<string, string> = {};
+              (previewData[0] || []).forEach((header, idx) => {
+                obj[header] = row[idx];
+              });
+              return obj;
+            })}
+            columnDefs={createColumnDefs()}
+            defaultColDef={{ sortable: true, filter: true, resizable: true }}
+            suppressRowClickSelection={true}
+            components={{
+              CustomHeader: CustomHeader
+            }}
+            pagination={false}
+            domLayout="autoHeight"
+            suppressRowHoverHighlight={true}
+            rowHeight={40}
+            suppressColumnVirtualisation={false}
+            suppressHorizontalScroll={false}
+          />
+        </Suspense>
       </div>
       {/* Modern Server-side pagination controls */}
       {totalPages > 1 && (
@@ -431,7 +588,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           <div className="flex items-center space-x-2">
             {/* First page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(1)}
               disabled={currentPage <= 1}
               title="Go to first page"
@@ -443,7 +600,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
             {/* Previous page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage <= 1}
               title="Previous page"
@@ -475,7 +632,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                     }
                   }
                 }}
-                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 title={`Enter page number (1-${totalPages})`}
               />
               <span className="text-sm text-gray-500">of {totalPages}</span>
@@ -483,7 +640,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
             {/* Next page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
               title="Next page"
@@ -495,7 +652,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
             {/* Last page */}
             <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage >= totalPages}
               title="Go to last page"

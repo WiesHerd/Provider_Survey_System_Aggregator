@@ -37,9 +37,14 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         select
         label="Specialty"
         value={filters.specialty}
-        onChange={e => setFilters((f: any) => ({ ...f, specialty: e.target.value }))}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, specialty: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Specialties</MenuItem>
         {uniqueValues.specialties.map(option => (
@@ -52,9 +57,14 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         select
         label="Provider Type"
         value={filters.providerType}
-        onChange={e => setFilters((f: any) => ({ ...f, providerType: e.target.value }))}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, providerType: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Types</MenuItem>
         {uniqueValues.providerTypes.map(option => (
@@ -67,9 +77,14 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         select
         label="Region"
         value={filters.region}
-        onChange={e => setFilters((f: any) => ({ ...f, region: e.target.value }))}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, region: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Regions</MenuItem>
         {uniqueValues.regions.map(option => (
@@ -82,9 +97,14 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         select
         label="Survey Source"
         value={filters.surveySource}
-        onChange={e => setFilters((f: any) => ({ ...f, surveySource: e.target.value }))}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, surveySource: e.target.value }))}
         fullWidth
         size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
       >
         <MenuItem value="">All Sources</MenuItem>
         {uniqueValues.surveySources.map(option => (
@@ -97,7 +117,12 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         select
         label="Year"
         value={filters.year}
-        onChange={e => setFilters((f: any) => ({ ...f, year: e.target.value }))}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, year: e.target.value }))}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
         fullWidth
         size="small"
       >
@@ -112,7 +137,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
         label="FTE"
         type="number"
         value={filters.fte}
-        onChange={e => setFilters((f: any) => ({ ...f, fte: Math.max(0, Math.min(1, Number(e.target.value))) }))}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, fte: Math.max(0, Math.min(1, Number(e.target.value))) }))}
         fullWidth
         size="small"
         inputProps={{ min: 0, max: 1, step: 0.01 }}
@@ -140,7 +165,7 @@ const CompareTypeSelector: React.FC<{ compareType: string, setCompareType: (type
         row
         id="comparison-type-radio-group"
         value={compareType}
-        onChange={e => setCompareType(e.target.value as 'TCC' | 'wRVUs' | 'CFs')}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCompareType(e.target.value as 'TCC' | 'wRVUs' | 'CFs')}
         sx={{ gap: 4 }}
       >
         <FormControlLabel value="TCC" control={<Radio />} label="Total Cash Compensation" />
@@ -186,7 +211,7 @@ const TCCItemization: React.FC<{
                 label="Amount"
                 type="number"
                 value={c.amount}
-                onChange={e => updateComponent(idx, 'amount', e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateComponent(idx, 'amount', e.target.value)}
                 fullWidth
                 size="small"
                 InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
@@ -196,7 +221,7 @@ const TCCItemization: React.FC<{
               <TextField
                 label="Notes"
                 value={c.notes}
-                onChange={e => updateComponent(idx, 'notes', e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateComponent(idx, 'notes', e.target.value)}
                 size="small"
                 sx={{ flex: 1, mr: 2 }}
               />
@@ -244,11 +269,11 @@ const WRVUsInput: React.FC<{
     <Paper sx={{ p: 2, mb: 2 }}>
       <FormControl fullWidth>
         <Typography variant="subtitle1" sx={{ mb: 1 }}>Work RVUs</Typography>
-        <TextField
+          <TextField
           label="Annual wRVUs"
           type="number"
           value={value}
-          onChange={e => onChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
           size="small"
           InputProps={{ endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> }}
           sx={{ mb: 1, width: 220 }}
@@ -278,11 +303,11 @@ const CFInput: React.FC<{
     <Paper sx={{ p: 2, mb: 2, border: '1.5px solid #b0b4bb', boxShadow: 'none' }}>
       <FormControl fullWidth>
         <Typography variant="subtitle1" sx={{ mb: 1 }}>Conversion Factor ($/wRVU)</Typography>
-        <TextField
+          <TextField
           label="Conversion Factor"
           type="number"
           value={value}
-          onChange={e => onChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
           size="small"
           InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>, endAdornment: <InputAdornment position="end">/wRVU</InputAdornment> }}
           sx={{ mb: 1, width: 220 }}

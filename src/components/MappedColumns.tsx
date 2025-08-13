@@ -34,29 +34,29 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
   };
 
   return (
-    <Paper className="p-6 relative">
+    <Paper className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
       {/* Header with standardized name and actions */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-center mb-2">
         <div>
-          <Typography variant="h6" className="font-medium text-gray-900">
+          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
             {mapping.standardizedName}
           </Typography>
-          <Typography variant="caption" className="text-gray-500">
+          <Typography variant="caption" className="text-gray-500 text-xs">
             Last updated: {formatDate(mapping.updatedAt)}
           </Typography>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex space-x-1">
           {onEdit && (
             <Tooltip title="Edit mapping">
               <IconButton onClick={onEdit} size="small">
-                <EditIcon className="h-5 w-5 text-gray-500" />
+                <EditIcon className="h-4 w-4 text-gray-500" />
               </IconButton>
             </Tooltip>
           )}
           {onDelete && (
             <Tooltip title="Delete mapping">
               <IconButton onClick={onDelete} size="small">
-                <DeleteIcon className="h-5 w-5 text-gray-500" />
+                <DeleteIcon className="h-4 w-4 text-gray-500" />
               </IconButton>
             </Tooltip>
           )}
@@ -64,32 +64,31 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
       </div>
 
       {/* Connected columns display */}
-      <div className="relative mt-6">
-        {/* Visual connector line */}
-        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
-        
-        {/* Source columns */}
-        <div className="space-y-3">
-          {mapping.sourceColumns.map((column) => (
-            <div key={column.id} className="flex items-center ml-8 relative">
-              {/* Connector line to main vertical line */}
-              <div className="absolute -left-4 top-1/2 h-0.5 w-4 bg-gray-200" />
+      <div className="relative mt-2">
+        {/* Source columns in horizontal layout */}
+        <div className="flex flex-wrap gap-2 ml-6">
+          {mapping.sourceColumns.map((column, index) => (
+            <div key={column.id} className="relative">
+              {/* Connector line to main column */}
+              {index > 0 && (
+                <div className="absolute -left-1 top-1/2 h-0.5 w-2 bg-gray-200" />
+              )}
               
               {/* Column card */}
               <div 
-                className="flex-1 p-3 rounded-lg border border-gray-200"
-                style={{ borderLeftColor: getSourceColor(column.surveySource), borderLeftWidth: '4px' }}
+                className="p-2 rounded border border-gray-200 min-w-0 bg-white hover:bg-gray-50 transition-colors duration-150 shadow-sm hover:shadow-md"
+                style={{ borderLeftColor: getSourceColor(column.surveySource), borderLeftWidth: '3px' }}
               >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <Typography className="font-medium">
+                <div className="flex justify-between items-center gap-2">
+                  <div className="min-w-0">
+                    <Typography className="font-medium text-sm truncate">
                       {column.name}
                     </Typography>
-                    <Typography variant="caption" className="text-gray-500">
+                    <Typography variant="caption" className="text-gray-500 text-xs">
                       Type: {column.dataType}
                     </Typography>
                   </div>
-                  <Typography variant="caption" style={{ color: getSourceColor(column.surveySource) }}>
+                  <Typography variant="caption" style={{ color: getSourceColor(column.surveySource) }} className="text-xs font-medium whitespace-nowrap">
                     {column.surveySource}
                   </Typography>
                 </div>

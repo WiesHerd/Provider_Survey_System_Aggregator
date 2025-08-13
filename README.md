@@ -93,6 +93,19 @@ This project uses:
 - Quick access to main features
 - Responsive design for mobile devices
 
+## 🚨 Critical Issues & Fixes
+
+### Allergy & Immunology Data Issue
+**Problem**: Analytics screen showed no data for "Allergy & Immunology" despite data existing in database.
+
+**Root Cause**: Backend API defaulted to 100-row limit, frontend wasn't requesting more rows.
+
+**Fix**: Modified frontend to request 10,000 rows per survey.
+
+**Documentation**: See `docs/ALLERGY_IMMUNOLOGY_FIX.md` for complete details.
+
+**Prevention**: Always test with full datasets and check API limits.
+
 ## Contributing
 
 1. Fork the repository

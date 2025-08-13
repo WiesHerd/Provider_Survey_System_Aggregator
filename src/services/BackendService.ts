@@ -92,6 +92,8 @@ class BackendService {
   }
 
   // Get survey data with filters
+  // CRITICAL: Always pass options.limit for large datasets to avoid missing data
+  // See docs/ALLERGY_IMMUNOLOGY_FIX.md for details on the 100-row default limit issue
   public async getSurveyData(
     surveyId: string,
     filters?: {
