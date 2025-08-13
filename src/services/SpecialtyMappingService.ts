@@ -54,7 +54,7 @@ export class SpecialtyMappingService {
         surveySource: s.surveySource
       }))
     };
-    await fetch('http://localhost:3001/api/mappings/specialty', {
+    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/specialty`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -63,7 +63,7 @@ export class SpecialtyMappingService {
 
   async getAllMappings(): Promise<ISpecialtyMapping[]> {
     try {
-      const res = await fetch('http://localhost:3001/api/mappings/specialty');
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/specialty`);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       return data as ISpecialtyMapping[];
@@ -492,7 +492,7 @@ export class SpecialtyMappingService {
     };
 
     // Update via backend API
-    await fetch(`http://localhost:3001/api/mappings/specialty/${mappingId}`, {
+    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/specialty/${mappingId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedMapping)
@@ -503,14 +503,14 @@ export class SpecialtyMappingService {
 
   async deleteMapping(mappingId: string): Promise<void> {
     // Delete via backend API
-    await fetch(`http://localhost:3001/api/mappings/specialty/${mappingId}`, {
+    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/specialty/${mappingId}`, {
       method: 'DELETE'
     });
   }
 
   async clearAllMappings(): Promise<void> {
     // Clear via backend API
-    await fetch('http://localhost:3001/api/mappings/specialty', {
+    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/specialty`, {
       method: 'DELETE'
     });
     await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, {});

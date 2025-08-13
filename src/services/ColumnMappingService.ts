@@ -13,7 +13,7 @@ export class ColumnMappingService {
 
   async createMapping(standardizedName: string, sourceColumns: IColumnInfo[]): Promise<IColumnMapping> {
     const payload = { standardizedName, sourceColumns };
-    const res = await fetch('http://localhost:3001/api/mappings/column', {
+    const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -24,7 +24,7 @@ export class ColumnMappingService {
 
   async getAllMappings(): Promise<IColumnMapping[]> {
     try {
-      const res = await fetch('http://localhost:3001/api/mappings/column');
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column`);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       return data as IColumnMapping[];
@@ -34,12 +34,12 @@ export class ColumnMappingService {
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    await fetch(`http://localhost:3001/api/mappings/column/${mappingId}`, { method: 'DELETE' });
+    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column/${mappingId}`, { method: 'DELETE' });
   }
 
   async clearAllMappings(): Promise<void> {
     console.log('Clearing all column mappings from database...');
-    const response = await fetch('http://localhost:3001/api/mappings/column', { method: 'DELETE' });
+    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column`, { method: 'DELETE' });
     if (!response.ok) {
       throw new Error(`Failed to clear mappings: ${response.status} ${response.statusText}`);
     }
