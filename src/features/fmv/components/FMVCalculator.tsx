@@ -1,11 +1,4 @@
 import React, { useRef } from 'react';
-import { 
-  Card, 
-  Typography, 
-  Divider, 
-  Box, 
-  Button 
-} from '@mui/material';
 import { useReactToPrint } from 'react-to-print';
 import { useFMVData } from '../hooks/useFMVData';
 import { FMVFilters } from './FMVFilters';
@@ -67,95 +60,109 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   return (
     <>
       {/* Main App Content */}
-      <div id="main-app-content" className="w-full bg-gray-50 min-h-screen">
-        <Card sx={{
-          p: 3,
-          maxWidth: '90vw',
-          width: '100%',
-          margin: '40px auto 0 auto',
-          boxShadow: 2,
-          background: '#fff',
-          borderRadius: 2,
-          px: { xs: 2, sm: 4, md: 8 },
-        }}>
-          {/* Print Button */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-            <Button 
-              variant="contained" 
-              color="primary"
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto py-6">
+          {/* Print Button Section */}
+          <div className="flex justify-end mb-6">
+            <button
               onClick={handlePrintClick}
-              sx={{
-                borderRadius: '8px',
-              }}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
             >
-              Print
-            </Button>
-          </Box>
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Report
+            </button>
+          </div>
 
-          {/* Header */}
-          <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
-            Make your selections below to filter market data
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-
-          {/* Filters */}
-          <Box sx={{ mb: 5 }}>
+          {/* Filters Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">Market Data Filters</h2>
+              <p className="text-sm text-gray-600">Select criteria to filter the market data for comparison</p>
+            </div>
             <FMVFilters 
               filters={filters}
               onFiltersChange={updateFilters}
               uniqueValues={uniqueValues}
             />
-          </Box>
+          </div>
 
           {/* Comparison Type Selector */}
-          <CompareTypeSelector 
-            compareType={compareType}
-            onCompareTypeChange={setCompareType}
-          />
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">Comparison Type</h2>
+              <p className="text-sm text-gray-600">Choose what type of compensation data you want to compare</p>
+            </div>
+            <CompareTypeSelector 
+              compareType={compareType}
+              onCompareTypeChange={setCompareType}
+            />
+          </div>
 
           {/* Input Components based on comparison type */}
           {compareType === 'TCC' && (
-            <TCCItemization 
-              components={compComponents}
-              onComponentsChange={setCompComponents}
-            />
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Total Cash Compensation</h2>
+                <p className="text-sm text-gray-600">Enter your compensation components for analysis</p>
+              </div>
+              <TCCItemization 
+                components={compComponents}
+                onComponentsChange={setCompComponents}
+              />
+            </div>
           )}
           
           {compareType === 'wRVUs' && (
-            <WRVUsInput 
-              value={wrvus}
-              onChange={setWRVUs}
-              fte={filters.fte}
-            />
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Work RVUs</h2>
+                <p className="text-sm text-gray-600">Enter your Work RVU data for productivity analysis</p>
+              </div>
+              <WRVUsInput 
+                value={wrvus}
+                onChange={setWRVUs}
+                fte={filters.fte}
+              />
+            </div>
           )}
           
           {compareType === 'CFs' && (
-            <CFInput 
-              value={cf}
-              onChange={setCF}
-              fte={filters.fte}
-            />
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Conversion Factor</h2>
+                <p className="text-sm text-gray-600">Enter your conversion factor for analysis</p>
+              </div>
+              <CFInput 
+                value={cf}
+                onChange={setCF}
+                fte={filters.fte}
+              />
+            </div>
           )}
 
           {/* Results Panel */}
-          <ResultsPanel 
-            compareType={compareType}
-            marketData={marketData}
-            percentiles={percentiles}
-            inputValue={
-              compareType === 'TCC' ? tccFTEAdjusted : 
-              compareType === 'wRVUs' ? wrvusFTEAdjusted : 
-              Number(cf)
-            }
-            rawValue={
-              compareType === 'TCC' ? Number(tcc) : 
-              compareType === 'wRVUs' ? Number(wrvus) : 
-              Number(cf)
-            }
-            fte={filters.fte}
-            onResetFilters={resetFilters}
-          />
-        </Card>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <ResultsPanel 
+              compareType={compareType}
+              marketData={marketData}
+              percentiles={percentiles}
+              inputValue={
+                compareType === 'TCC' ? tccFTEAdjusted : 
+                compareType === 'wRVUs' ? wrvusFTEAdjusted : 
+                Number(cf)
+              }
+              rawValue={
+                compareType === 'TCC' ? Number(tcc) : 
+                compareType === 'wRVUs' ? Number(wrvus) : 
+                Number(cf)
+              }
+              fte={filters.fte}
+              onResetFilters={resetFilters}
+            />
+          </div>
+        </div>
 
         {/* Hidden printable component for react-to-print */}
         <div style={{ position: 'absolute', left: '-9999px', top: 0, visibility: 'hidden' }}>

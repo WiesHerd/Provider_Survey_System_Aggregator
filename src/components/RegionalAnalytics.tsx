@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowDownIcon, ArrowUpIcon, MapIcon, DocumentArrowDownIcon, PrinterIcon } from '@heroicons/react/24/outline';
-import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { FormControl, Select, MenuItem } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import BackendService from '../services/BackendService';
 import RegionalComparison from './RegionalComparison';
+import LoadingSpinner from './ui/loading-spinner';
 
 const REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
 
@@ -13,10 +13,12 @@ export const RegionalAnalytics: React.FC = () => {
   const [normalizedRows, setNormalizedRows] = useState<ISurveyRow[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [mappings, setMappings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
         const storageService = new LocalStorageService();
         const mappingService = new SpecialtyMappingService(storageService);
         const backendService = BackendService.getInstance();
@@ -81,6 +83,8 @@ export const RegionalAnalytics: React.FC = () => {
         setNormalizedRows(allRows);
       } catch (error) {
         console.error('Error loading data for Regional Analytics:', error);
+      } finally {
+        setLoading(false);
       }
     };
     loadData();
@@ -180,43 +184,146 @@ export const RegionalAnalytics: React.FC = () => {
     return result;
   }, [filtered]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-12">
+            <LoadingSpinner 
+              message="Analyzing compensation data across regions..."
+              size="lg"
+              variant="primary"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full overflow-x-hidden">
-      <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="mb-8">
-            <FormControl sx={{ minWidth: 220 }}>
-              <InputLabel id="specialty-label">Specialty</InputLabel>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Specialty Selection Card */}
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">Select Specialty</h3>
+              <p className="text-gray-600 text-sm">Choose a specialty to analyze regional compensation patterns</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {specialties.length} Available
+              </span>
+            </div>
+          </div>
+          
+          <div className="relative">
+            <FormControl sx={{ width: '100%' }}>
               <Select
-                labelId="specialty-label"
                 value={selectedSpecialty}
-                label="Specialty"
                 onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedSpecialty(e.target.value as string)}
+                displayEmpty
                 sx={{
-                  backgroundColor: 'white',
-                  height: '40px',
+                  backgroundColor: 'rgba(249, 250, 251, 0.5)',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '12px',
                   '& .MuiOutlinedInput-root': {
                     fontSize: '0.875rem',
-                    height: '40px',
-                    borderRadius: '8px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                      borderColor: '#9ca3af',
+                    },
+                    '&.Mui-focused': {
+                      backgroundColor: 'white',
+                      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
+                      borderColor: '#3b82f6',
+                    }
                   },
                   '& .MuiSelect-select': {
-                    paddingTop: '8px',
-                    paddingBottom: '8px',
+                    paddingTop: '12px',
+                    paddingBottom: '12px',
+                    paddingLeft: '16px',
+                    paddingRight: '16px',
+                  }
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                      maxHeight: '300px'
+                    }
                   }
                 }}
               >
-                <MenuItem value="">Select a specialty</MenuItem>
+                <MenuItem value="" sx={{ 
+                  color: '#6b7280',
+                  fontStyle: 'italic',
+                  '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' }
+                }}>
+                  Select a specialty to begin analysis
+                </MenuItem>
                 {specialties.map((s: string) => (
-                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                  <MenuItem key={s} value={s} sx={{ 
+                    '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                    '&.Mui-selected': { 
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
+                    }
+                  }}>
+                    {s}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </div>
+
+          {/* Status Messages */}
           {selectedSpecialty && (
-            <RegionalComparison data={regionalComparisonData} />
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-800">
+                    Analyzing: {selectedSpecialty}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                    {filtered.length} data points
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
         </div>
+
+        {/* Regional Comparison Data */}
+        {selectedSpecialty && regionalComparisonData.length > 0 && (
+          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6">
+            <RegionalComparison data={regionalComparisonData} />
+          </div>
+        )}
+
+        {/* Empty State */}
+        {selectedSpecialty && regionalComparisonData.length === 0 && (
+          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-12 text-center">
+            <div className="w-16 h-16 bg-gradient-to-r from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Regional Data Found</h3>
+            <p className="text-gray-600">No compensation data available for {selectedSpecialty} across the selected regions.</p>
+          </div>
+        )}
       </div>
     </div>
   );

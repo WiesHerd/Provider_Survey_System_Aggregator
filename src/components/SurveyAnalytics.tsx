@@ -14,7 +14,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Stack,
 } from '@mui/material';
+import { 
+  DocumentTextIcon
+} from '@heroicons/react/24/outline';
 
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import { ColumnMappingService } from '../services/ColumnMappingService';
@@ -275,6 +279,72 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
 };
 
 const SurveyAnalytics: React.FC = () => {
+  // Export functions
+  const exportToExcel = () => {
+    const headers = [
+      'Survey Source',
+      'Survey Specialty', 
+      'Geographic Region',
+      '# Organizations',
+      '# Incumbents',
+      'TCC P25',
+      'TCC P50',
+      'TCC P75',
+      'TCC P90',
+      'wRVU P25',
+      'wRVU P50',
+      'wRVU P75',
+      'wRVU P90',
+      'CF P25',
+      'CF P50',
+      'CF P75',
+      'CF P90'
+    ];
+
+    const csvData = filteredData.map(row => [
+      row.surveySource,
+      row.surveySpecialty,
+      row.geographicRegion,
+      row.n_orgs,
+      row.n_incumbents,
+      row.tcc_p25,
+      row.tcc_p50,
+      row.tcc_p75,
+      row.tcc_p90,
+      row.wrvu_p25,
+      row.wrvu_p50,
+      row.wrvu_p75,
+      row.wrvu_p90,
+      row.cf_p25,
+      row.cf_p50,
+      row.cf_p75,
+      row.cf_p90
+    ]);
+
+    // Add headers
+    csvData.unshift(headers);
+
+    // Convert to CSV string
+    const csvContent = csvData
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `survey-analytics-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToCSV = () => {
+    exportToExcel(); // Same function for now
+  };
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mappings, setMappings] = useState<ISpecialtyMapping[]>([]);
@@ -938,322 +1008,395 @@ const SurveyAnalytics: React.FC = () => {
   }
 
   return (
-    <Box sx={{ width: '100%' }}>
-      {/* Filter Section with Different Libraries */}
-      <div className="flex gap-3 mb-4 items-end">
-        {/* 1. Material-UI Select for Specialty */}
-        <div className="flex-1">
-          <FormControl fullWidth size="small">
-            <InputLabel id="specialty-label">Specialty</InputLabel>
-            <Select
-              labelId="specialty-label"
-              value={filters.specialty}
-              label="Specialty"
-              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('specialty', e.target.value as string)}
-              sx={{
-                backgroundColor: 'white',
-                height: '40px',
-                '& .MuiOutlinedInput-root': {
-                  fontSize: '0.875rem',
-                  height: '40px',
-                  borderRadius: '8px',
-                },
-                '& .MuiSelect-select': {
-                  paddingTop: '8px',
-                  paddingBottom: '8px',
-                }
-              }}
+    <div className="min-h-screen bg-gray-50">
+      {/* Filters Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 mt-4">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">Data Filters</h3>
+            <p className="text-sm text-gray-600 mt-1">Refine your survey analytics view</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            {/* Download Button */}
+            <button
+              onClick={exportToCSV}
+              disabled={filteredData.length === 0}
+              className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-all duration-200"
             >
-              <MenuItem value="">All Specialties</MenuItem>
-              {uniqueValues.specialties.map((specialty) => (
-                <MenuItem key={specialty} value={specialty}>
-                  {specialty}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              <DocumentTextIcon className="h-4 w-4 mr-2" />
+              Download to Excel
+            </button>
+          </div>
         </div>
 
-        {/* 2. Material-UI Select for Survey Source */}
-        <div className="flex-1">
-          <FormControl fullWidth size="small">
-            <InputLabel id="survey-source-label">Survey Source</InputLabel>
-            <Select
-              labelId="survey-source-label"
-              value={filters.surveySource}
-              label="Survey Source"
-              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('surveySource', e.target.value as string)}
-              sx={{
-                backgroundColor: 'white',
-                height: '40px',
-                '& .MuiOutlinedInput-root': {
-                  fontSize: '0.875rem',
-                  height: '40px',
+        {/* Filter Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          {/* Specialty Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Specialty
+            </label>
+            <FormControl fullWidth size="small">
+              <Select
+                value={filters.specialty}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('specialty', e.target.value as string)}
+                sx={{
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
                   borderRadius: '8px',
-                },
-                '& .MuiSelect-select': {
-                  paddingTop: '8px',
-                  paddingBottom: '8px',
-                }
-              }}
-            >
-              <MenuItem value="">All Sources</MenuItem>
-              {uniqueValues.surveySources.map((source) => (
-                <MenuItem key={source} value={source}>
-                  {source}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </div>
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    borderRadius: '8px',
+                  },
+                  '&:hover': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused': {
+                    borderColor: '#3b82f6',
+                  }
+                }}
+                displayEmpty
+              >
+                <MenuItem value="">All Specialties</MenuItem>
+                {uniqueValues.specialties.map((specialty) => (
+                  <MenuItem key={specialty} value={specialty}>
+                    {specialty}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
 
-        {/* 3. Material-UI Select for Provider Type */}
-        <div className="flex-1">
-          <FormControl fullWidth size="small">
-            <InputLabel id="provider-type-label">Provider Type</InputLabel>
-            <Select
-              labelId="provider-type-label"
-              value={filters.providerType}
-              label="Provider Type"
-              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('providerType', e.target.value as string)}
-              sx={{
-                backgroundColor: 'white',
-                height: '40px',
-                '& .MuiOutlinedInput-root': {
-                  fontSize: '0.875rem',
-                  height: '40px',
+          {/* Survey Source Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Survey Source
+            </label>
+            <FormControl fullWidth size="small">
+              <Select
+                value={filters.surveySource}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('surveySource', e.target.value as string)}
+                sx={{
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
                   borderRadius: '8px',
-                },
-                '& .MuiSelect-select': {
-                  paddingTop: '8px',
-                  paddingBottom: '8px',
-                }
-              }}
-            >
-              <MenuItem value="">All Types</MenuItem>
-              {uniqueValues.providerTypes.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </div>
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    borderRadius: '8px',
+                  },
+                  '&:hover': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused': {
+                    borderColor: '#3b82f6',
+                  }
+                }}
+                displayEmpty
+              >
+                <MenuItem value="">All Sources</MenuItem>
+                {uniqueValues.surveySources.map((source) => (
+                  <MenuItem key={source} value={source}>
+                    {source}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
 
-        {/* 4. Material-UI Select for Region */}
-        <div className="flex-1">
-          <FormControl fullWidth size="small">
-            <InputLabel id="region-label">Region</InputLabel>
-            <Select
-              labelId="region-label"
-              value={filters.region}
-              label="Region"
-              onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
-              sx={{
-                backgroundColor: 'white',
-                height: '40px',
-                '& .MuiOutlinedInput-root': {
-                  fontSize: '0.875rem',
-                  height: '40px',
+          {/* Provider Type Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Provider Type
+            </label>
+            <FormControl fullWidth size="small">
+              <Select
+                value={filters.providerType}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('providerType', e.target.value as string)}
+                sx={{
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
                   borderRadius: '8px',
-                },
-                '& .MuiSelect-select': {
-                  paddingTop: '8px',
-                  paddingBottom: '8px',
-                }
-              }}
-            >
-              <MenuItem value="">All Regions</MenuItem>
-              {uniqueValues.regions.map((region) => (
-                <MenuItem key={region} value={region}>
-                  {region}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    borderRadius: '8px',
+                  },
+                  '&:hover': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused': {
+                    borderColor: '#3b82f6',
+                  }
+                }}
+                displayEmpty
+              >
+                <MenuItem value="">All Types</MenuItem>
+                {uniqueValues.providerTypes.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
+
+          {/* Region Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Region
+            </label>
+            <FormControl fullWidth size="small">
+              <Select
+                value={filters.region}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
+                sx={{
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    borderRadius: '8px',
+                  },
+                  '&:hover': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused': {
+                    borderColor: '#3b82f6',
+                  }
+                }}
+                displayEmpty
+              >
+                <MenuItem value="">All Regions</MenuItem>
+                {uniqueValues.regions.map((region) => (
+                  <MenuItem key={region} value={region}>
+                    {region}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
         </div>
 
         {/* Clear Filters Button */}
-        <div className="flex items-end">
-          <button
-            onClick={() => {
-              setFilters({ specialty: '', providerType: '', region: '', surveySource: '' });
-            }}
-            className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 h-10"
-            title="Clear all filters"
-          >
-            <div className="relative w-4 h-4 mr-2">
-              {/* Funnel Icon */}
-              <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
-              </svg>
-              {/* X Overlay - Only show when filters are active */}
-              {(filters.specialty || filters.providerType || filters.region || filters.surveySource) && (
+        {(filters.specialty || filters.providerType || filters.region || filters.surveySource) && (
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setFilters({ specialty: '', providerType: '', region: '', surveySource: '' });
+              }}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              title="Clear all filters"
+            >
+              <div className="relative w-4 h-4 mr-2">
+                <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+                </svg>
                 <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
-              )}
-            </div>
-            <span className="text-xs">Clear Filters</span>
-          </button>
-        </div>
+              </div>
+              Clear Filters
+            </button>
+          </div>
+        )}
       </div>
 
-      <TableContainer component={Paper} sx={{ overflowX: 'auto', mt: 2, border: '1px solid #ccc', width: '100%', borderRadius: '8px' }}>
-        <Table size="small" sx={{ width: '100%' }}>
-          <TableHead>
-            <TableRow>
-              <TableCell colSpan={5} sx={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
-                Survey Information
-              </TableCell>
-              <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#e3f2fd', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
-                Total Cash Compensation (TCC)
-              </TableCell>
-              <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#e8f5e9', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
-                Work RVUs (wRVU)
-              </TableCell>
-              <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#fff3e0', fontWeight: 'bold', borderLeft: '2px solid #ccc' }}>
-                Conversion Factor (CF)
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              {/* Survey Info Headers */}
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Source</TableCell>
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Survey Specialty</TableCell>
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>Region</TableCell>
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold', textAlign: 'right' }}># Orgs</TableCell>
-              <TableCell sx={{ backgroundColor: '#fafafa', fontWeight: 'bold', textAlign: 'right' }}># Incumbents</TableCell>
-              
-              {/* TCC Headers */}
-              <TableCell sx={{ backgroundColor: '#e3f2fd', borderLeft: '2px solid #ccc', textAlign: 'right' }}>P25</TableCell>
-              <TableCell sx={{ backgroundColor: '#e3f2fd', textAlign: 'right' }}>P50</TableCell>
-              <TableCell sx={{ backgroundColor: '#e3f2fd', textAlign: 'right' }}>P75</TableCell>
-              <TableCell sx={{ backgroundColor: '#e3f2fd', textAlign: 'right' }}>P90</TableCell>
-              
-              {/* wRVU Headers */}
-              <TableCell sx={{ backgroundColor: '#e8f5e9', borderLeft: '2px solid #ccc', textAlign: 'right' }}>P25</TableCell>
-              <TableCell sx={{ backgroundColor: '#e8f5e9', textAlign: 'right' }}>P50</TableCell>
-              <TableCell sx={{ backgroundColor: '#e8f5e9', textAlign: 'right' }}>P75</TableCell>
-              <TableCell sx={{ backgroundColor: '#e8f5e9', textAlign: 'right' }}>P90</TableCell>
-              
-              {/* CF Headers */}
-              <TableCell sx={{ backgroundColor: '#fff3e0', borderLeft: '2px solid #ccc', textAlign: 'right' }}>P25</TableCell>
-              <TableCell sx={{ backgroundColor: '#fff3e0', textAlign: 'right' }}>P50</TableCell>
-              <TableCell sx={{ backgroundColor: '#fff3e0', textAlign: 'right' }}>P75</TableCell>
-              <TableCell sx={{ backgroundColor: '#fff3e0', textAlign: 'right' }}>P90</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredData.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={17} align="center">
-                  No data available for the selected filters
-                </TableCell>
-              </TableRow>
-            ) : (
-              Object.entries(groupBySpecialty(filteredData)).map(([specialty, rows]) => (
-                <React.Fragment key={specialty}>
-                  {rows.map((row, idx) => (
-                    <TableRow 
-                      key={`${specialty}-${idx}`}
-                      sx={{ '&:nth-of-type(odd)': { backgroundColor: '#fafafa' } }}
-                    >
-                      <TableCell>{row.surveySource}</TableCell>
-                      <TableCell>{row.surveySpecialty}</TableCell>
-                      <TableCell>{row.geographicRegion || 'N/A'}</TableCell>
-                      <TableCell align="right">{row.n_orgs}</TableCell>
-                      <TableCell align="right">{row.n_incumbents}</TableCell>
-                      
-                      {/* TCC Values */}
-                      <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.tcc_p50)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.tcc_p75)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.tcc_p90)}</TableCell>
-                      
-                      {/* wRVU Values */}
-                      <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatNumber(row.wrvu_p25)}</TableCell>
-                      <TableCell align="right">{formatNumber(row.wrvu_p50)}</TableCell>
-                      <TableCell align="right">{formatNumber(row.wrvu_p75)}</TableCell>
-                      <TableCell align="right">{formatNumber(row.wrvu_p90)}</TableCell>
-                      
-                      {/* CF Values */}
-                      <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
-                      <TableCell align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
-                    </TableRow>
+      {/* Data Table Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold text-gray-900">Survey Analytics Data</h3>
+        </div>
+
+        {filteredData.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No data available</h3>
+            <p className="text-gray-500">Try adjusting your filters to see results</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <TableContainer 
+              component={Paper} 
+              sx={{ 
+                overflowX: 'auto', 
+                overflowY: 'hidden',
+                border: '1px solid #e5e7eb', 
+                borderRadius: '12px',
+                '& .MuiTable-root': {
+                  minWidth: '100%'
+                },
+                '&::-webkit-scrollbar': {
+                  height: '8px'
+                },
+                '&::-webkit-scrollbar-track': {
+                  background: '#f1f1f1',
+                  borderRadius: '4px'
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  background: '#cbd5e1',
+                  borderRadius: '4px',
+                  '&:hover': {
+                    background: '#94a3b8'
+                  }
+                }
+              }}
+            >
+              <Table size="small" sx={{ width: '100%' }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell colSpan={5} sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', borderBottom: '2px solid #e2e8f0' }}>
+                      Survey Information
+                    </TableCell>
+                    <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#dbeafe', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
+                      Total Cash Compensation (TCC)
+                    </TableCell>
+                    <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#dcfce7', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
+                      Work RVUs (wRVU)
+                    </TableCell>
+                    <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#fef3c7', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
+                      Conversion Factor (CF)
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    {/* Survey Info Headers */}
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem' }}>Survey Source</TableCell>
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem' }}>Survey Specialty</TableCell>
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem' }}>Region</TableCell>
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right' }}># Orgs</TableCell>
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right' }}># Incumbents</TableCell>
+                    
+                    {/* TCC Headers */}
+                    <TableCell sx={{ backgroundColor: '#dbeafe', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem' }}>P90</TableCell>
+                    
+                    {/* wRVU Headers */}
+                    <TableCell sx={{ backgroundColor: '#dcfce7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem' }}>P90</TableCell>
+                    
+                    {/* CF Headers */}
+                    <TableCell sx={{ backgroundColor: '#fef3c7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem' }}>P90</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {Object.entries(groupBySpecialty(filteredData)).map(([specialty, rows]) => (
+                    <React.Fragment key={specialty}>
+                      {rows.map((row, idx) => (
+                        <TableRow 
+                          key={`${specialty}-${idx}`}
+                          sx={{ 
+                            '&:nth-of-type(odd)': { backgroundColor: '#f8fafc' },
+                            '&:hover': { backgroundColor: '#f1f5f9' },
+                            transition: 'background-color 0.2s'
+                          }}
+                        >
+                          <TableCell sx={{ fontSize: '0.875rem' }}>{row.surveySource}</TableCell>
+                          <TableCell sx={{ fontSize: '0.875rem' }}>{row.surveySpecialty}</TableCell>
+                          <TableCell sx={{ fontSize: '0.875rem' }}>{row.geographicRegion || 'N/A'}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{row.n_orgs.toLocaleString()}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{row.n_incumbents.toLocaleString()}</TableCell>
+                          
+                          {/* TCC Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.tcc_p50)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.tcc_p75)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.tcc_p90)}</TableCell>
+                          
+                          {/* wRVU Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatNumber(row.wrvu_p25)}</TableCell>
+                          <TableCell align="right">{formatNumber(row.wrvu_p50)}</TableCell>
+                          <TableCell align="right">{formatNumber(row.wrvu_p75)}</TableCell>
+                          <TableCell align="right">{formatNumber(row.wrvu_p90)}</TableCell>
+                          
+                          {/* CF Values */}
+                          <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {/* Summary Rows */}
+                      {(() => {
+                        const { simple, weighted } = calculateSummaryRows(rows);
+                        return (
+                          <>
+                            <TableRow sx={{ 
+                              backgroundColor: '#f1f5f9',
+                              borderTop: '2px solid #e2e8f0'
+                            }}>
+                              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Simple Average</TableCell>
+                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
+                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
+                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{simple.n_orgs}</TableCell>
+                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{simple.n_incumbents}</TableCell>
+                              
+                              {/* TCC Values */}
+                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(simple.tcc_p25)}</TableCell>
+                              <TableCell align="right">{formatCurrency(simple.tcc_p50)}</TableCell>
+                              <TableCell align="right">{formatCurrency(simple.tcc_p75)}</TableCell>
+                              <TableCell align="right">{formatCurrency(simple.tcc_p90)}</TableCell>
+                              
+                              {/* wRVU Values */}
+                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatNumber(simple.wrvu_p25)}</TableCell>
+                              <TableCell align="right">{formatNumber(simple.wrvu_p50)}</TableCell>
+                              <TableCell align="right">{formatNumber(simple.wrvu_p75)}</TableCell>
+                              <TableCell align="right">{formatNumber(simple.wrvu_p90)}</TableCell>
+                              
+                              {/* CF Values */}
+                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(simple.cf_p25, 2)}</TableCell>
+                              <TableCell align="right">{formatCurrency(simple.cf_p50, 2)}</TableCell>
+                              <TableCell align="right">{formatCurrency(simple.cf_p75, 2)}</TableCell>
+                              <TableCell align="right">{formatCurrency(simple.cf_p90, 2)}</TableCell>
+                            </TableRow>
+                            <TableRow sx={{ 
+                              backgroundColor: '#dbeafe',
+                              borderBottom: '2px solid #e2e8f0'
+                            }}>
+                              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Weighted Average</TableCell>
+                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
+                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
+                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{weighted.n_orgs}</TableCell>
+                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{weighted.n_incumbents}</TableCell>
+                              
+                              {/* TCC Values */}
+                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(weighted.tcc_p25)}</TableCell>
+                              <TableCell align="right">{formatCurrency(weighted.tcc_p50)}</TableCell>
+                              <TableCell align="right">{formatCurrency(weighted.tcc_p75)}</TableCell>
+                              <TableCell align="right">{formatCurrency(weighted.tcc_p90)}</TableCell>
+                              
+                              {/* wRVU Values */}
+                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatNumber(weighted.wrvu_p25)}</TableCell>
+                              <TableCell align="right">{formatNumber(weighted.wrvu_p50)}</TableCell>
+                              <TableCell align="right">{formatNumber(weighted.wrvu_p75)}</TableCell>
+                              <TableCell align="right">{formatNumber(weighted.wrvu_p90)}</TableCell>
+                              
+                              {/* CF Values */}
+                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(weighted.cf_p25, 2)}</TableCell>
+                              <TableCell align="right">{formatCurrency(weighted.cf_p50, 2)}</TableCell>
+                              <TableCell align="right">{formatCurrency(weighted.cf_p75, 2)}</TableCell>
+                              <TableCell align="right">{formatCurrency(weighted.cf_p90, 2)}</TableCell>
+                            </TableRow>
+                          </>
+                        );
+                      })()}
+                    </React.Fragment>
                   ))}
-                  {/* Summary Rows */}
-                  {(() => {
-                    const { simple, weighted } = calculateSummaryRows(rows);
-                    return (
-                      <>
-                        <TableRow sx={{ 
-                          backgroundColor: '#f5f5f5',
-                          borderTop: '2px solid #ccc'
-                        }}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Simple Average</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell align="right">{simple.n_orgs}</TableCell>
-                          <TableCell align="right">{simple.n_incumbents}</TableCell>
-                          
-                          {/* TCC Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(simple.tcc_p25)}</TableCell>
-                          <TableCell align="right">{formatCurrency(simple.tcc_p50)}</TableCell>
-                          <TableCell align="right">{formatCurrency(simple.tcc_p75)}</TableCell>
-                          <TableCell align="right">{formatCurrency(simple.tcc_p90)}</TableCell>
-                          
-                          {/* wRVU Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatNumber(simple.wrvu_p25)}</TableCell>
-                          <TableCell align="right">{formatNumber(simple.wrvu_p50)}</TableCell>
-                          <TableCell align="right">{formatNumber(simple.wrvu_p75)}</TableCell>
-                          <TableCell align="right">{formatNumber(simple.wrvu_p90)}</TableCell>
-                          
-                          {/* CF Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(simple.cf_p25, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(simple.cf_p50, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(simple.cf_p75, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(simple.cf_p90, 2)}</TableCell>
-                        </TableRow>
-                        <TableRow sx={{ 
-                          backgroundColor: '#e3f2fd',
-                          borderBottom: '2px solid #ccc'
-                        }}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Weighted Average</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell align="right">{weighted.n_orgs}</TableCell>
-                          <TableCell align="right">{weighted.n_incumbents}</TableCell>
-                          
-                          {/* TCC Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(weighted.tcc_p25)}</TableCell>
-                          <TableCell align="right">{formatCurrency(weighted.tcc_p50)}</TableCell>
-                          <TableCell align="right">{formatCurrency(weighted.tcc_p75)}</TableCell>
-                          <TableCell align="right">{formatCurrency(weighted.tcc_p90)}</TableCell>
-                          
-                          {/* wRVU Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatNumber(weighted.wrvu_p25)}</TableCell>
-                          <TableCell align="right">{formatNumber(weighted.wrvu_p50)}</TableCell>
-                          <TableCell align="right">{formatNumber(weighted.wrvu_p75)}</TableCell>
-                          <TableCell align="right">{formatNumber(weighted.wrvu_p90)}</TableCell>
-                          
-                          {/* CF Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #ccc' }} align="right">{formatCurrency(weighted.cf_p25, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(weighted.cf_p50, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(weighted.cf_p75, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(weighted.cf_p90, 2)}</TableCell>
-                        </TableRow>
-                      </>
-                    );
-                  })()}
-                </React.Fragment>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Box>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

@@ -100,4 +100,43 @@ input, select, textarea, button {
 
 .MuiPaper-root {
   border-radius: 8px !important;
+}
+
+/* Ensure main content area doesn't overflow into sidebar */
+.main-content {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Force the main layout to contain overflow */
+body {
+  overflow-x: hidden;
+}
+
+/* Ensure the app container doesn't overflow */
+#root {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Table container overflow fix */
+.table-container-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  position: relative;
+}
+
+/* Force table to stay within bounds */
+.table-container-wrapper .MuiTableContainer-root {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+/* Ensure main content doesn't overflow */
+.main-content-area {
+  overflow-x: hidden !important;
+  width: 100% !important;
+  max-width: 100% !important;
 } 

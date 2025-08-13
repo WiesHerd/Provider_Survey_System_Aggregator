@@ -14,7 +14,7 @@ import {
   Divider
 } from '@mui/material';
 import { AnalyticsSummaryProps } from '../types/analytics';
-import { formatCurrency, formatNumber } from '@/shared/utils';
+import { formatCurrency, formatNumber } from '../../../shared/utils';
 
 /**
  * Analytics Summary component for displaying key statistics

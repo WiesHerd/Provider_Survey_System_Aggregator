@@ -4,12 +4,18 @@
  */
 
 import React, { memo, useEffect } from 'react';
-import { Box, Alert, Typography } from '@mui/material';
+import { Box, Alert, Typography, Button, Stack } from '@mui/material';
+import { 
+  DocumentArrowDownIcon,
+  TableCellsIcon,
+  DocumentTextIcon
+} from '@heroicons/react/24/outline';
 import { AnalyticsProps } from '../types/analytics';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { AnalyticsFilters } from './AnalyticsFilters';
 import { AnalyticsSummary } from './AnalyticsSummary';
 import { AnalyticsTable } from './AnalyticsTable';
+import { exportToExcel, exportToCSV } from '../utils/exportUtils';
 
 /**
  * Main Survey Analytics component that orchestrates all analytics functionality
@@ -62,6 +68,21 @@ export const SurveyAnalytics: React.FC<AnalyticsProps> = memo(({
     console.log('Row clicked:', row);
   };
 
+  // Export handlers
+  const handleExportExcel = () => {
+    exportToExcel(filteredData, filters, {
+      includeFilters: true,
+      includeSummary: true
+    });
+  };
+
+  const handleExportCSV = () => {
+    exportToCSV(filteredData, filters, {
+      includeFilters: true,
+      includeSummary: true
+    });
+  };
+
   // Table configuration
   const tableConfig = {
     columns: [], // Will be handled by AnalyticsTable component
@@ -88,9 +109,41 @@ export const SurveyAnalytics: React.FC<AnalyticsProps> = memo(({
   return (
     <Box sx={{ p: 3 }}>
       {/* Page Header */}
-      <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
-        Survey Analytics
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Survey Analytics
+        </Typography>
+        
+        {/* Export Buttons */}
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="outlined"
+            startIcon={<TableCellsIcon className="h-4 w-4" />}
+            onClick={handleExportExcel}
+            disabled={filteredData.length === 0}
+            sx={{ 
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500
+            }}
+          >
+            Export to Excel
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DocumentTextIcon className="h-4 w-4" />}
+            onClick={handleExportCSV}
+            disabled={filteredData.length === 0}
+            sx={{ 
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500
+            }}
+          >
+            Export to CSV
+          </Button>
+        </Stack>
+      </Box>
 
       {/* Validation Warnings */}
       {validation.warnings.length > 0 && (

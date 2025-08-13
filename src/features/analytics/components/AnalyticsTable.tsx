@@ -25,7 +25,7 @@ import {
   Sort as SortIcon
 } from '@mui/icons-material';
 import { AnalyticsTableProps, AnalyticsTableRow, AggregatedData } from '../types/analytics';
-import { formatCurrency, formatNumber } from '@/shared/utils';
+import { formatCurrency, formatNumber } from '../../../shared/utils';
 
 /**
  * Analytics Table component for displaying survey data

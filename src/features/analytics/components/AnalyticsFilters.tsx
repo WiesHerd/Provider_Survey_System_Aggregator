@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { AnalyticsFiltersProps } from '../types/analytics';
-import { PROVIDER_TYPES, GEOGRAPHIC_REGIONS, SURVEY_SOURCES } from '@/shared/constants';
+import { PROVIDER_TYPES, GEOGRAPHIC_REGIONS, SURVEY_SOURCES } from '../../../shared/constants';
 
 /**
  * Analytics Filters component for filtering survey data

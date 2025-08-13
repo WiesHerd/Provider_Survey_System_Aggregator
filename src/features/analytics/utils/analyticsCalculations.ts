@@ -7,7 +7,7 @@ import {
   calculatePercentile, 
   calculateAverage, 
   calculateWeightedAverage 
-} from '@/shared/utils';
+} from '../../../shared/utils';
 import { AggregatedData, AnalyticsSummary, AnalyticsFilters } from '../types/analytics';
 
 /**
