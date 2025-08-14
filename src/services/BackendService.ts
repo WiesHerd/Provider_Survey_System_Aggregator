@@ -3,7 +3,7 @@ import {
   ISurveyRow 
 } from '../types/survey';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = 'https://survey-aggregator-backend.azurewebsites.net/api';
 
 class BackendService {
   private static instance: BackendService;

@@ -45,3 +45,4 @@ jobs:
         sleep 30
         curl -f https://survey-aggregator-frontend.azurestaticapps.net || exit 1
 
+

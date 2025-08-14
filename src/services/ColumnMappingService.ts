@@ -2,6 +2,8 @@ import { LocalStorageService } from './StorageService';
 import BackendService from './BackendService';
 import { IColumnMapping, IColumnInfo, IAutoMappingConfig } from '../types/column';
 
+const API_BASE_URL = 'https://survey-aggregator-backend.azurewebsites.net/api';
+
 export class ColumnMappingService {
   private readonly MAPPINGS_KEY = 'column_mappings';
   private readonly LEARNED_MAPPINGS_KEY = 'learned-column-mappings';
@@ -13,7 +15,7 @@ export class ColumnMappingService {
 
   async createMapping(standardizedName: string, sourceColumns: IColumnInfo[]): Promise<IColumnMapping> {
     const payload = { standardizedName, sourceColumns };
-    const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column`, {
+    const res = await fetch(`${API_BASE_URL}/mappings/column`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -24,7 +26,7 @@ export class ColumnMappingService {
 
   async getAllMappings(): Promise<IColumnMapping[]> {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column`);
+      const res = await fetch(`${API_BASE_URL}/mappings/column`);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       return data as IColumnMapping[];
@@ -34,12 +36,12 @@ export class ColumnMappingService {
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column/${mappingId}`, { method: 'DELETE' });
+    await fetch(`${API_BASE_URL}/mappings/column/${mappingId}`, { method: 'DELETE' });
   }
 
   async clearAllMappings(): Promise<void> {
     console.log('Clearing all column mappings from database...');
-    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/mappings/column`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/mappings/column`, { method: 'DELETE' });
     if (!response.ok) {
       throw new Error(`Failed to clear mappings: ${response.status} ${response.statusText}`);
     }

@@ -12,12 +12,23 @@ const sql = require('mssql');
 const dotenv = require('dotenv');
 
 // Load environment variables
-// Priority: env.local (local dev) > env.production (Azure) > .env (fallback)
-const envPath = process.env.NODE_ENV === 'production' 
-  ? path.join(__dirname, 'env.production')
-  : path.join(__dirname, 'env.local');
+// Priority: Azure App Settings > env.production > .env (fallback)
+let envPath = null;
 
-dotenv.config({ path: envPath });
+// Only load from env.production if we're not in Azure (where env vars are set via App Settings)
+if (process.env.NODE_ENV === 'production' && !process.env.AZURE_SQL_SERVER) {
+  envPath = path.join(__dirname, 'env.production');
+  console.log('📝 Loading from env.production file');
+} else if (process.env.NODE_ENV !== 'production') {
+  envPath = path.join(__dirname, 'env.local');
+  console.log('📝 Loading from env.local file');
+}
+
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  console.log('☁️ Using Azure App Settings for environment variables');
+}
 
 // Azure SQL Database configuration
 let getConnection, initializeDatabase;
@@ -49,7 +60,20 @@ const PORT = process.env.PORT || 3001;
 
 // Security middleware
 app.use(helmet());
-app.use(cors());
+
+// CORS configuration - use Azure App Settings or fallback to defaults
+const corsOrigins = process.env.CORS_ALLOWED_ORIGINS 
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:3000', 'http://localhost:5173', 'https://thankful-flower-0c7ea4310-preview.centralus.2.azurestaticapps.net'];
+
+console.log('🌐 CORS origins:', corsOrigins);
+
+app.use(cors({
+  origin: corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
