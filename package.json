@@ -52,11 +52,9 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "set NODE_OPTIONS=--openssl-legacy-provider && set DISABLE_ESLINT_PLUGIN=true && react-scripts build",
+    "build": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build && cp build/index.html build/404.html",
-    "deploy": "gh-pages -d build --repo=https://x-access-token:${GH_TOKEN}@github.com/wiesherd/Provider_Survey_System_Aggregator.git"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
