@@ -46,12 +46,11 @@ jobs:
       run: npm ci
     
     - name: Build frontend (skip linting)
-      run: |
-        export CI=false
-        export DISABLE_ESLINT_PLUGIN=true
-        npm run build
+      run: npm run build:ci
       env:
         REACT_APP_API_URL: https://survey-aggregator-backend.azurewebsites.net/api
+        CI: false
+        DISABLE_ESLINT_PLUGIN: true
     
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1

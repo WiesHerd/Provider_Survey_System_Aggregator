@@ -53,6 +53,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts build",
+    "build:ci": "set NODE_OPTIONS=--openssl-legacy-provider && set CI=false && set DISABLE_ESLINT_PLUGIN=true && set GENERATE_SOURCEMAP=false && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
