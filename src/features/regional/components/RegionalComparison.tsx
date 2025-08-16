@@ -1,14 +1,10 @@
-import React, { useMemo } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridOptions } from 'ag-grid-community';
+import React from 'react';
 import { Box, Typography, Alert } from '@mui/material';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { RegionalComparisonProps, RegionalData } from '../types/regional';
 import { REGIONAL_METRICS, PERCENTILES } from '../utils/regionalCalculations';
 
 /**
- * Regional Comparison component for displaying regional data in AG Grid tables
+ * Regional Comparison component for displaying regional data in HTML tables
  * 
  * @param data - Regional data array
  * @param onRegionClick - Callback when a region is clicked
@@ -30,94 +26,6 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
     return { min, max };
   };
 
-  // Create AG Grid column definitions for each metric
-  const createColumnDefs = (metric: typeof REGIONAL_METRICS[0]): ColDef[] => {
-    const baseColDef: ColDef = {
-      sortable: true,
-      filter: true,
-      resizable: true,
-      headerClass: 'font-semibold text-gray-700',
-    };
-
-    const cols: ColDef[] = [
-      {
-        headerName: 'Percentile',
-        field: 'percentile',
-        pinned: 'left',
-        width: 150,
-        cellClass: 'font-medium text-gray-600',
-        ...baseColDef,
-      },
-    ];
-
-    // Add region columns
-    regionNames.forEach(region => {
-      cols.push({
-        headerName: region,
-        field: region,
-        flex: 1,
-        cellRenderer: (params: any) => {
-          const value = params.value;
-          const values = data.map(r => r[`${metric.key}_${params.data.percentileKey}` as keyof RegionalData] as number);
-          const { min, max } = getMinMax(values);
-          
-          let cellClass = '';
-          let tooltip = '';
-          
-          if (value === max) {
-            cellClass = 'bg-green-50 font-bold';
-            tooltip = 'Highest value';
-          } else if (value === min) {
-            cellClass = 'bg-red-50 font-bold';
-            tooltip = 'Lowest value';
-          }
-          
-          return (
-            <div className={`${cellClass}`} title={tooltip}>
-              <div>{metric.format(value)}</div>
-            </div>
-          );
-        },
-        ...baseColDef,
-      });
-    });
-
-    return cols;
-  };
-
-  // Create row data for each metric
-  const createRowData = (metric: typeof REGIONAL_METRICS[0]) => {
-    return PERCENTILES.map(p => {
-      const row: any = {
-        percentile: p.label,
-        percentileKey: p.key,
-      };
-      
-      regionNames.forEach(region => {
-        const regionData = data.find(d => d.region === region);
-        if (regionData) {
-          row[region] = regionData[`${metric.key}_${p.key}` as keyof RegionalData] as number;
-        }
-      });
-      
-      return row;
-    });
-  };
-
-  // Grid options
-  const gridOptions: GridOptions = {
-    defaultColDef: {
-      sortable: true,
-      filter: true,
-      resizable: true,
-    },
-    domLayout: 'autoHeight',
-    suppressRowHoverHighlight: false,
-    rowHeight: 50,
-    suppressColumnVirtualisation: true,
-    suppressHorizontalScroll: true,
-  };
-
   // Early return if no data
   if (!data || data.length === 0) {
     return (
@@ -129,24 +37,108 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
 
   return (
     <Box className={`space-y-8 ${className}`}>
-      <Typography variant="h5" component="h2" className="text-gray-800 mb-6">
-        Regional Comparison Tables
-      </Typography>
-
       {REGIONAL_METRICS.map(metric => (
-        <Box key={metric.key} className="bg-white rounded-lg shadow-lg p-6">
-          <Typography variant="h6" component="h3" className="text-xl font-semibold mb-6 text-gray-800">
-            {metric.label}
-          </Typography>
-          <div className="ag-theme-alpine w-full overflow-visible">
-            <AgGridReact
-              columnDefs={createColumnDefs(metric)}
-              rowData={createRowData(metric)}
-              gridOptions={gridOptions}
-              suppressCellFocus={true}
-              suppressRowClickSelection={true}
-            />
+        <Box key={metric.key} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          {/* Table Header */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                {metric.key === 'tcc' ? (
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                ) : metric.key === 'cf' ? (
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <Typography variant="h6" className="text-gray-900 font-semibold">
+                  {metric.label}
+                </Typography>
+                <Typography variant="body2" className="text-gray-600">
+                  Regional comparison across percentiles
+                </Typography>
+              </div>
+            </div>
           </div>
+
+          {/* Table Content */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm uppercase tracking-wide">
+                    Percentile
+                  </th>
+                  {regionNames.map(region => (
+                    <th key={region} className="text-center py-4 px-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">
+                      {region}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PERCENTILES.map((p, index) => {
+                  const values = data.map(r => r[`${metric.key}_${p.key}` as keyof RegionalData] as number);
+                  const { min, max } = getMinMax(values);
+                  
+                  return (
+                    <tr 
+                      key={p.key} 
+                      className={`border-b border-gray-100 transition-colors duration-150 ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                      } hover:bg-blue-50`}
+                    >
+                      <td className="py-4 px-6 font-medium text-gray-900">
+                        {p.label}
+                      </td>
+                      {regionNames.map(region => {
+                        const regionData = data.find(d => d.region === region);
+                        const value = regionData ? regionData[`${metric.key}_${p.key}` as keyof RegionalData] as number : 0;
+                        
+                        let cellClass = 'text-center py-4 px-4 font-medium';
+                        let tooltip = '';
+                        let badgeClass = '';
+                        
+                        if (value === max) {
+                          cellClass += ' text-green-700';
+                          badgeClass = 'bg-green-100 text-green-800 border-green-200';
+                          tooltip = 'Highest value';
+                        } else if (value === min) {
+                          cellClass += ' text-red-700';
+                          badgeClass = 'bg-red-100 text-red-800 border-red-200';
+                          tooltip = 'Lowest value';
+                        } else {
+                          cellClass += ' text-gray-900';
+                          badgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
+                        }
+                        
+                        return (
+                          <td 
+                            key={region} 
+                            className={cellClass}
+                            title={tooltip}
+                          >
+                            <span className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-semibold border ${badgeClass}`}>
+                              {metric.format(value)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+
         </Box>
       ))}
     </Box>

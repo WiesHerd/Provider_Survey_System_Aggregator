@@ -15,6 +15,7 @@ import {
   Box
 } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
+import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 
 interface SurveyTableProps {
   data: ISurveyRow[];
@@ -73,7 +74,9 @@ export const SurveyTable: React.FC<SurveyTableProps> = ({ data }) => {
           >
             <MenuItem value="">All</MenuItem>
             {uniqueSpecialties.map(specialty => (
-              <MenuItem key={specialty} value={specialty}>{specialty}</MenuItem>
+              <MenuItem key={specialty} value={specialty}>
+                {formatSpecialtyForDisplay(specialty)}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>

@@ -24,6 +24,7 @@ import {
 } from '@heroicons/react/24/outline';
 import BackendService from '../services/BackendService';
 import LoadingSpinner from './ui/loading-spinner';
+import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 
 interface ChartData {
   name: string;
@@ -393,7 +394,7 @@ const Charts: React.FC<ChartsProps> = ({
                   <MenuItem value="">All Specialties</MenuItem>
                   {uniqueValues.specialties.map((specialty) => (
                     <MenuItem key={specialty} value={specialty}>
-                      {specialty}
+                      {formatSpecialtyForDisplay(specialty)}
                     </MenuItem>
                   ))}
                 </Select>

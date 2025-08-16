@@ -190,3 +190,155 @@ export const capitalizeWords = (text: string): string => {
     txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
   );
 };
+
+/**
+ * Formats a specialty name for display in dropdowns and UI components
+ * Converts raw specialty names into properly formatted, readable versions
+ * 
+ * @param specialty - Raw specialty name to format
+ * @returns Formatted specialty name for display
+ * 
+ * @example
+ * ```typescript
+ * formatSpecialtyForDisplay('cardiology & heart surgery'); // Returns "Cardiology & Heart Surgery"
+ * formatSpecialtyForDisplay('family medicine (with ob)'); // Returns "Family Medicine (with OB)"
+ * formatSpecialtyForDisplay('emergency medicine'); // Returns "Emergency Medicine"
+ * ```
+ */
+export const formatSpecialtyForDisplay = (specialty: string): string => {
+  if (!specialty) return '';
+  
+  // Handle common abbreviations and special cases
+  const specialCases: Record<string, string> = {
+    'ob': 'OB',
+    'gyn': 'GYN',
+    'ent': 'ENT',
+    'gi': 'GI',
+    'ir': 'IR',
+    'pmr': 'PM&R',
+    'cc': 'CC',
+    'icu': 'ICU',
+    'er': 'ER',
+    'ed': 'ED',
+    'id': 'ID',
+    'heme': 'Heme',
+    'onc': 'Onc',
+    'peds': 'Peds',
+    'derm': 'Derm',
+    'psych': 'Psych',
+    'neuro': 'Neuro',
+    'ortho': 'Ortho',
+    'cardio': 'Cardio',
+    'pulm': 'Pulm',
+    'neph': 'Neph',
+    'endo': 'Endo',
+    'rheum': 'Rheum',
+    'allergy': 'Allergy',
+    'immuno': 'Immuno',
+    'path': 'Path',
+    'rad': 'Rad',
+    'surg': 'Surg',
+    'anesth': 'Anesth',
+    'em': 'EM',
+    'im': 'IM',
+    'fm': 'FM'
+  };
+
+  // First, handle special cases in parentheses
+  let formatted = specialty;
+  
+  // Handle parentheses content
+  formatted = formatted.replace(/\(([^)]+)\)/g, (match, content) => {
+    const lowerContent = content.toLowerCase();
+    if (specialCases[lowerContent]) {
+      return `(${specialCases[lowerContent]})`;
+    }
+    // Capitalize first letter of each word in parentheses
+    return `(${content.split(' ').map((word: string) => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ')})`;
+  });
+
+  // Handle main specialty name
+  const words = formatted.split(' ');
+  const formattedWords = words.map(word => {
+    const lowerWord = word.toLowerCase();
+    
+    // Handle special cases
+    if (specialCases[lowerWord]) {
+      return specialCases[lowerWord];
+    }
+    
+    // Handle common medical terms
+    if (lowerWord === 'and') return '&';
+    if (lowerWord === 'with') return 'with';
+    if (lowerWord === 'without') return 'without';
+    
+    // Capitalize first letter, lowercase the rest
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  return formattedWords.join(' ');
+};
+
+/**
+ * Sorts specialties in a logical order for dropdowns
+ * Common specialties first, then alphabetical
+ * 
+ * @param specialties - Array of specialty names to sort
+ * @returns Sorted array of specialty names
+ */
+export const sortSpecialtiesForDisplay = (specialties: string[]): string[] => {
+  const prioritySpecialties = [
+    'Family Medicine',
+    'Internal Medicine',
+    'Emergency Medicine',
+    'Pediatrics',
+    'Obstetrics & Gynecology',
+    'Cardiology',
+    'Orthopedics',
+    'General Surgery',
+    'Anesthesiology',
+    'Radiology',
+    'Psychiatry',
+    'Dermatology',
+    'Neurology',
+    'Oncology',
+    'Gastroenterology',
+    'Pulmonology',
+    'Urology',
+    'Ophthalmology',
+    'Otolaryngology',
+    'Pathology',
+    'Allergy & Immunology',
+    'Rheumatology',
+    'Endocrinology',
+    'Nephrology',
+    'Infectious Disease',
+    'Physical Medicine & Rehabilitation',
+    'Hematology',
+    'Hematology/Oncology'
+  ];
+
+  const sorted = [...specialties].sort((a, b) => {
+    const aFormatted = formatSpecialtyForDisplay(a);
+    const bFormatted = formatSpecialtyForDisplay(b);
+    
+    const aPriority = prioritySpecialties.indexOf(aFormatted);
+    const bPriority = prioritySpecialties.indexOf(bFormatted);
+    
+    // If both are in priority list, sort by priority
+    if (aPriority !== -1 && bPriority !== -1) {
+      return aPriority - bPriority;
+    }
+    
+    // If only one is in priority list, prioritize it
+    if (aPriority !== -1) return -1;
+    if (bPriority !== -1) return 1;
+    
+    // Otherwise, sort alphabetically
+    return aFormatted.localeCompare(bFormatted);
+  });
+
+  return sorted;
+};

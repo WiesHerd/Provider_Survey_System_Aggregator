@@ -8,6 +8,7 @@ import {
   TextField,
   Stack
 } from '@mui/material';
+import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 
 interface TableFiltersProps {
   specialties: string[];
@@ -60,7 +61,7 @@ export const TableFilters: React.FC<TableFiltersProps> = ({
             <MenuItem value="">All Specialties</MenuItem>
             {specialties.map((specialty) => (
               <MenuItem key={specialty} value={specialty}>
-                {specialty}
+                {formatSpecialtyForDisplay(specialty)}
               </MenuItem>
             ))}
           </Select>

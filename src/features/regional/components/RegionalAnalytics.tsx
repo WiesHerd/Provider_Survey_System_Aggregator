@@ -6,6 +6,7 @@ import { LocalStorageService } from '../../../services/StorageService';
 import { SpecialtyMappingService } from '../../../services/SpecialtyMappingService';
 import BackendService from '../../../services/BackendService';
 import { RegionalComparison } from './RegionalComparison';
+import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 const REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
 
@@ -146,7 +147,9 @@ export const RegionalAnalytics: React.FC = () => {
               >
                 <MenuItem value="">Select a specialty</MenuItem>
                 {specialties.map((s: string) => (
-                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                  <MenuItem key={s} value={s}>
+                    {formatSpecialtyForDisplay(s)}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>

@@ -7,6 +7,7 @@ import {
   Box
 } from '@mui/material';
 import BackendService from '../services/BackendService';
+import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 
 // Lazy load AG Grid to reduce initial bundle size
 const AgGridWrapper = lazy(() => import('./AgGridWrapper'));
@@ -480,7 +481,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             >
               <MenuItem value="">All</MenuItem>
               {cascadingFilterOptions.specialties.map(specialty => (
-                <MenuItem key={specialty} value={specialty}>{specialty}</MenuItem>
+                <MenuItem key={specialty} value={specialty}>
+                  {formatSpecialtyForDisplay(specialty)}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>

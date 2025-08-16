@@ -4,8 +4,9 @@ import { ISurveyRow } from '../types/survey';
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import BackendService from '../services/BackendService';
-import RegionalComparison from './RegionalComparison';
+import { RegionalComparison } from '../features/regional';
 import LoadingSpinner from './ui/loading-spinner';
+import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 
 const REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
 
@@ -206,9 +207,9 @@ export const RegionalAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-12">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
             <LoadingSpinner 
               message="Analyzing compensation data across regions..."
               size="lg"
@@ -221,10 +222,10 @@ export const RegionalAnalytics: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Specialty Selection Card */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-semibold text-gray-900">Select Specialty</h3>
@@ -296,52 +297,33 @@ export const RegionalAnalytics: React.FC = () => {
                       '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
                     }
                   }}>
-                    {s}
+                    {formatSpecialtyForDisplay(s)}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </div>
 
-          {/* Status Messages */}
-          {selectedSpecialty && (
-            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-sm font-medium text-gray-800">
-                    Analyzing: {selectedSpecialty}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
-                    {filtered.length} data points
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
 
         {/* Regional Comparison Data */}
         {selectedSpecialty && regionalComparisonData.length > 0 && (
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6">
+          <div className="mt-6">
             <RegionalComparison data={regionalComparisonData} />
           </div>
         )}
 
         {/* Empty State */}
         {selectedSpecialty && regionalComparisonData.length === 0 && (
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-12 text-center">
-            <div className="w-16 h-16 bg-gradient-to-r from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Regional Data Found</h3>
-            <p className="text-gray-600">No compensation data available for {selectedSpecialty} across the selected regions.</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Regional Data Found</h3>
+            <p className="text-gray-600">No compensation data available for {formatSpecialtyForDisplay(selectedSpecialty)} across the selected regions.</p>
           </div>
         )}
       </div>

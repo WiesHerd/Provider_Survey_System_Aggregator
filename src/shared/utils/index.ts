@@ -22,7 +22,9 @@ export {
   formatFileSize,
   formatPhoneNumber,
   truncateText,
-  capitalizeWords
+  capitalizeWords,
+  formatSpecialtyForDisplay,
+  sortSpecialtiesForDisplay
 } from './formatters';
 
 // Specialty matching utilities

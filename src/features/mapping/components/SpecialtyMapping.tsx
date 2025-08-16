@@ -41,6 +41,10 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
     error,
     activeTab,
     
+    // Search state
+    searchTerm,
+    mappedSearchTerm,
+    
     // Computed values
     filteredUnmapped,
     filteredMappings,
@@ -234,7 +238,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
                 <UnmappedSpecialties
                   unmappedSpecialties={filteredUnmapped}
                   selectedSpecialties={selectedSpecialties}
-                  searchTerm=""
+                  searchTerm={searchTerm}
                   onSearchChange={setSearchTerm}
                   onSpecialtySelect={selectSpecialty}
                   onRefresh={loadData}
@@ -243,7 +247,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
               {activeTab === 'mapped' && (
                 <MappedSpecialties
                   mappings={filteredMappings}
-                  searchTerm=""
+                  searchTerm={mappedSearchTerm}
                   onSearchChange={setMappedSearchTerm}
                   onDeleteMapping={deleteMapping}
                 />
@@ -251,7 +255,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
               {activeTab === 'learned' && (
                 <LearnedMappings
                   learnedMappings={filteredLearned}
-                  searchTerm=""
+                  searchTerm={mappedSearchTerm}
                   onSearchChange={setMappedSearchTerm}
                   onRemoveMapping={handleRemoveLearnedMapping}
                 />

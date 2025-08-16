@@ -6,6 +6,7 @@ import {
   InputAdornment 
 } from '@mui/material';
 import { FMVFiltersProps } from '../types/fmv';
+import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 /**
  * FMV Filters component for filtering market data
@@ -55,7 +56,9 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
           >
             <MenuItem value="">All Specialties</MenuItem>
             {uniqueValues.specialties.map(option => (
-              <MenuItem key={option} value={option}>{option}</MenuItem>
+              <MenuItem key={option} value={option}>
+                {formatSpecialtyForDisplay(option)}
+              </MenuItem>
             ))}
           </TextField>
         </div>

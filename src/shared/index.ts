@@ -18,5 +18,7 @@ export {
   formatPercentage,
   normalizeSpecialty,
   fuzzyMatchSpecialty,
-  standardizeSpecialty
+  standardizeSpecialty,
+  formatSpecialtyForDisplay,
+  sortSpecialtiesForDisplay
 } from './utils';

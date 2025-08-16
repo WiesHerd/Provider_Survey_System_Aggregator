@@ -33,6 +33,10 @@ interface UseMappingDataReturn {
   error: string | null;
   activeTab: 'unmapped' | 'mapped' | 'learned';
   
+  // Search state
+  searchTerm: string;
+  mappedSearchTerm: string;
+  
   // Computed values
   filteredUnmapped: NewIUnmappedSpecialty[];
   specialtiesBySurvey: Map<string, NewIUnmappedSpecialty[]>;
@@ -362,6 +366,10 @@ export const useMappingData = (): UseMappingDataReturn => {
     loading,
     error,
     activeTab,
+    
+    // Search state
+    searchTerm,
+    mappedSearchTerm,
     
     // Computed values
     filteredUnmapped,

@@ -32,6 +32,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { UploadedSurveysProps } from '../types/upload';
 import { formatDate } from '@/shared/utils';
+import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 /**
  * Uploaded Surveys component for displaying and managing uploaded surveys
@@ -145,7 +146,7 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
                     </MenuItem>
                     {specialtyOptions.map((specialty) => (
                       <MenuItem key={specialty} value={specialty}>
-                        {specialty}
+                        {formatSpecialtyForDisplay(specialty)}
                       </MenuItem>
                     ))}
                   </Select>

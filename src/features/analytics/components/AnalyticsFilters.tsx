@@ -19,6 +19,7 @@ import {
 import { SelectChangeEvent } from '@mui/material/Select';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { PROVIDER_TYPES, GEOGRAPHIC_REGIONS, SURVEY_SOURCES } from '../../../shared/constants';
+import { formatSpecialtyForDisplay, sortSpecialtiesForDisplay } from '../../../shared/utils';
 
 /**
  * Analytics Filters component for filtering survey data
@@ -81,9 +82,9 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               <MenuItem value="">
                 <em>All Specialties</em>
               </MenuItem>
-              {availableOptions.specialties.map((specialty) => (
+              {sortSpecialtiesForDisplay(availableOptions.specialties).map((specialty: string) => (
                 <MenuItem key={specialty} value={specialty}>
-                  {specialty}
+                  {formatSpecialtyForDisplay(specialty)}
                 </MenuItem>
               ))}
             </Select>

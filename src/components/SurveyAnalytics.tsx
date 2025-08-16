@@ -15,6 +15,8 @@ import {
   Select,
   MenuItem,
   Stack,
+  Autocomplete,
+  TextField,
 } from '@mui/material';
 import { 
   DocumentTextIcon
@@ -28,6 +30,7 @@ import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
 import LoadingSpinner from './ui/loading-spinner';
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 const SHOW_DEBUG = true;
 
 interface AggregatedData {
@@ -1036,35 +1039,48 @@ const SurveyAnalytics: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Specialty
             </label>
-            <FormControl fullWidth size="small">
-              <Select
-                value={filters.specialty}
-                onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('specialty', e.target.value as string)}
-                sx={{
-                  backgroundColor: 'white',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    fontSize: '0.875rem',
-                    borderRadius: '8px',
-                  },
-                  '&:hover': {
-                    borderColor: '#9ca3af',
-                  },
-                  '&.Mui-focused': {
-                    borderColor: '#3b82f6',
-                  }
-                }}
-                displayEmpty
-              >
-                <MenuItem value="">All Specialties</MenuItem>
-                {uniqueValues.specialties.map((specialty) => (
-                  <MenuItem key={specialty} value={specialty}>
-                    {specialty}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete<string>
+              value={filters.specialty}
+              onChange={(event: any, newValue: string | null) => handleFilterChange('specialty', newValue || '')}
+              options={['', ...uniqueValues.specialties]}
+              getOptionLabel={(option: string) => option === '' ? 'All Specialties' : formatSpecialtyForDisplay(option)}
+              renderInput={(params: any) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  placeholder="Search specialties..."
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      fontSize: '0.875rem',
+                      borderRadius: '8px',
+                      backgroundColor: 'white',
+                      border: '1px solid #d1d5db',
+                      '&:hover': {
+                        borderColor: '#9ca3af',
+                      },
+                      '&.Mui-focused': {
+                        borderColor: '#3b82f6',
+                      }
+                    }
+                  }}
+                />
+              )}
+              renderOption={(props: any, option: string) => (
+                <li {...props}>
+                  {option === '' ? 'All Specialties' : formatSpecialtyForDisplay(option)}
+                </li>
+              )}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                if (inputValue === '') {
+                  return options;
+                }
+                return options.filter((option: string) => 
+                  option === '' || 
+                  formatSpecialtyForDisplay(option).toLowerCase().includes(inputValue.toLowerCase()) ||
+                  option.toLowerCase().includes(inputValue.toLowerCase())
+                );
+              }}
+            />
           </div>
 
           {/* Survey Source Filter */}
