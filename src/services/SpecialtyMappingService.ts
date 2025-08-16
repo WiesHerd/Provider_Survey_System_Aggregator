@@ -4,7 +4,7 @@ import { LocalStorageService } from './StorageService';
 import BackendService from './BackendService';
 import { ISurveyRow } from '../types/survey';
 
-const API_BASE_URL = 'https://survey-aggregator-backend.azurewebsites.net/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 export class SpecialtyMappingService {
   private readonly MAPPINGS_KEY = 'specialty-mappings';

@@ -1,8 +1,5 @@
 import React from 'react';
 import { 
-  Paper, 
-  Box, 
-  Typography, 
   RadioGroup, 
   FormControlLabel, 
   Radio 
@@ -20,53 +17,73 @@ export const CompareTypeSelector: React.FC<CompareTypeSelectorProps> = ({
   onCompareTypeChange 
 }) => {
   return (
-    <Paper sx={{ 
-      p: 2, 
-      mb: 3, 
-      background: '#f8fafc', 
-      boxShadow: 'none', 
-      border: '1.5px solid #b0b4bb' 
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-        <Typography
-          variant="subtitle1"
-          sx={{ 
-            fontWeight: 600, 
-            color: 'text.primary', 
-            mb: 0, 
-            minWidth: 180 
-          }}
-          component="label"
-          htmlFor="comparison-type-radio-group"
-        >
-          Comparison Type
-        </Typography>
-        <RadioGroup
-          row
-          id="comparison-type-radio-group"
-          value={compareType}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-            onCompareTypeChange(e.target.value as 'TCC' | 'wRVUs' | 'CFs')
+    <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
+      <RadioGroup
+        row
+        value={compareType}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+          onCompareTypeChange(e.target.value as 'TCC' | 'wRVUs' | 'CFs')
+        }
+        className="flex flex-col sm:flex-row gap-6"
+      >
+        <FormControlLabel 
+          value="TCC" 
+          control={
+            <Radio 
+              sx={{
+                color: '#6b7280',
+                '&.Mui-checked': {
+                  color: '#3b82f6',
+                },
+              }}
+            />
+          } 
+          label={
+            <span className="text-sm font-medium text-gray-900">
+              Total Cash Compensation
+            </span>
           }
-          sx={{ gap: 4 }}
-        >
-          <FormControlLabel 
-            value="TCC" 
-            control={<Radio />} 
-            label="Total Cash Compensation" 
-          />
-          <FormControlLabel 
-            value="wRVUs" 
-            control={<Radio />} 
-            label="Work RVUs" 
-          />
-          <FormControlLabel 
-            value="CFs" 
-            control={<Radio />} 
-            label="Conversion Factors" 
-          />
-        </RadioGroup>
-      </Box>
-    </Paper>
+          className="flex-1"
+        />
+        <FormControlLabel 
+          value="wRVUs" 
+          control={
+            <Radio 
+              sx={{
+                color: '#6b7280',
+                '&.Mui-checked': {
+                  color: '#3b82f6',
+                },
+              }}
+            />
+          } 
+          label={
+            <span className="text-sm font-medium text-gray-900">
+              Work RVUs
+            </span>
+          }
+          className="flex-1"
+        />
+        <FormControlLabel 
+          value="CFs" 
+          control={
+            <Radio 
+              sx={{
+                color: '#6b7280',
+                '&.Mui-checked': {
+                  color: '#3b82f6',
+                },
+              }}
+            />
+          } 
+          label={
+            <span className="text-sm font-medium text-gray-900">
+              Conversion Factors
+            </span>
+          }
+          className="flex-1"
+        />
+      </RadioGroup>
+    </div>
   );
 };

@@ -79,8 +79,8 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
       {/* Header with real logo */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <img src={process.env.PUBLIC_URL + '/Icon.png'} alt="BenchPoint Logo" style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 16 }} />
-          <Typography sx={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, fontFamily: 'inherit' }}>BenchPoint</Typography>
+          <img src={process.env.PUBLIC_URL + '/contract-hub-icon.svg'} alt="Contract Hub Logo" style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 16 }} />
+                      <Typography sx={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, fontFamily: 'inherit' }}>Contract Hub</Typography>
         </Box>
         <Box textAlign="right">
           <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'black', mb: 0.5 }}>Fair Market Value Report</Typography>

@@ -1,11 +1,7 @@
 import React from 'react';
 import { 
-  Paper, 
-  FormControl, 
-  Typography, 
   TextField, 
-  InputAdornment, 
-  FormHelperText 
+  InputAdornment 
 } from '@mui/material';
 import { WRVUsInputProps } from '../types/fmv';
 import { applyFTEAdjustment } from '../utils/fmvCalculations';
@@ -25,41 +21,49 @@ export const WRVUsInput: React.FC<WRVUsInputProps> = ({
   const normalized = applyFTEAdjustment(Number(value), fte);
 
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
-      <FormControl fullWidth>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>
-          Work RVUs
-        </Typography>
+    <div className="space-y-4">
+      <div className="max-w-md">
         <TextField
           label="Annual wRVUs"
           type="number"
           value={value}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+          fullWidth
           size="small"
           InputProps={{ 
             endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> 
           }}
-          sx={{ 
-            mb: 1, 
-            width: 220,
+          sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '8px',
-            }
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#3b82f6',
+              },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#3b82f6',
+                borderWidth: '2px',
+              },
+            },
+            '& .MuiInputLabel-root.Mui-focused': {
+              color: '#3b82f6',
+            },
           }}
         />
-        <FormHelperText>
-          <span style={{ fontWeight: 500, color: '#333' }}>
+      </div>
+      
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="text-sm">
+          <div className="font-medium text-blue-900 mb-1">
             FTE-adjusted: {normalized.toLocaleString(undefined, { 
               minimumFractionDigits: 2, 
               maximumFractionDigits: 2 
             })} wRVUs
-          </span>
-          <br />
-          <span style={{ color: '#888' }}>
+          </div>
+          <div className="text-blue-700">
             Your value will be annualized to 1.0 FTE for market comparison.
-          </span>
-        </FormHelperText>
-      </FormControl>
-    </Paper>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

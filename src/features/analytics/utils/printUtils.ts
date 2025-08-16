@@ -1,5 +1,6 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// Temporarily disabled due to build issues
+// import jsPDF from 'jspdf';
+// import autoTable from 'jspdf-autotable';
 import { AggregatedData, AnalyticsFilters } from '../types/analytics';
 
 interface PrintOptions {
@@ -10,162 +11,27 @@ interface PrintOptions {
 }
 
 /**
- * Generate PDF from analytics data
+ * Generate PDF from analytics data (temporarily disabled)
  */
 export const generateAnalyticsPDF = (
   data: AggregatedData[],
   filters: AnalyticsFilters,
   options: PrintOptions = {}
 ) => {
-  const {
-    includeFilters = true,
-    includeSummary = true,
-    orientation = 'landscape',
-    title = 'Survey Analytics Report'
-  } = options;
-
-  // Create PDF document
-  const doc = new jsPDF(orientation);
-  
-  let yPosition = 20;
-  
-  // Add title
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.text(title, 20, yPosition);
-  yPosition += 15;
-  
-  // Add generation date
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 20, yPosition);
-  yPosition += 10;
-  
-  // Add filters if requested
-  if (includeFilters) {
-    const activeFilters = Object.entries(filters)
-      .filter(([_, value]) => value && value !== '')
-      .map(([key, value]) => `${key}: ${value}`);
-    
-    if (activeFilters.length > 0) {
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Active Filters:', 20, yPosition);
-      yPosition += 8;
-      
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      activeFilters.forEach(filter => {
-        doc.text(`• ${filter}`, 25, yPosition);
-        yPosition += 6;
-      });
-      yPosition += 5;
-    }
-  }
-  
-  // Add summary if requested
-  if (includeSummary) {
-    const totalRecords = data.length;
-    const totalOrgs = data.reduce((sum, row) => sum + row.n_orgs, 0);
-    const totalIncumbents = data.reduce((sum, row) => sum + row.n_incumbents, 0);
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Summary:', 20, yPosition);
-    yPosition += 8;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`• Total Records: ${totalRecords.toLocaleString()}`, 25, yPosition);
-    yPosition += 6;
-    doc.text(`• Total Organizations: ${totalOrgs.toLocaleString()}`, 25, yPosition);
-    yPosition += 6;
-    doc.text(`• Total Incumbents: ${totalIncumbents.toLocaleString()}`, 25, yPosition);
-    yPosition += 10;
-  }
-  
-  // Prepare table data
-  const tableData = data.map(row => [
-    row.surveySource,
-    row.surveySpecialty,
-    row.geographicRegion,
-    row.n_orgs.toLocaleString(),
-    row.n_incumbents.toLocaleString(),
-    `$${row.tcc_p25.toLocaleString()}`,
-    `$${row.tcc_p50.toLocaleString()}`,
-    `$${row.tcc_p75.toLocaleString()}`,
-    `$${row.tcc_p90.toLocaleString()}`,
-    row.wrvu_p25.toLocaleString(),
-    row.wrvu_p50.toLocaleString(),
-    row.wrvu_p75.toLocaleString(),
-    row.wrvu_p90.toLocaleString()
-  ]);
-  
-  // Add table
-  autoTable(doc, {
-    head: [
-      [
-        'Survey Source',
-        'Specialty',
-        'Region',
-        '# Orgs',
-        '# Incumbents',
-        'TCC P25',
-        'TCC P50',
-        'TCC P75',
-        'TCC P90',
-        'wRVU P25',
-        'wRVU P50',
-        'wRVU P75',
-        'wRVU P90'
-      ]
-    ],
-    body: tableData,
-    startY: yPosition,
-    styles: { 
-      fontSize: 8,
-      cellPadding: 2
-    },
-    headStyles: { 
-      fillColor: [66, 139, 202],
-      textColor: 255,
-      fontStyle: 'bold'
-    },
-    columnStyles: {
-      0: { cellWidth: 25 }, // Survey Source
-      1: { cellWidth: 25 }, // Specialty
-      2: { cellWidth: 20 }, // Region
-      3: { cellWidth: 15, halign: 'right' }, // # Orgs
-      4: { cellWidth: 20, halign: 'right' }, // # Incumbents
-      5: { cellWidth: 18, halign: 'right' }, // TCC P25
-      6: { cellWidth: 18, halign: 'right' }, // TCC P50
-      7: { cellWidth: 18, halign: 'right' }, // TCC P75
-      8: { cellWidth: 18, halign: 'right' }, // TCC P90
-      9: { cellWidth: 18, halign: 'right' }, // wRVU P25
-      10: { cellWidth: 18, halign: 'right' }, // wRVU P50
-      11: { cellWidth: 18, halign: 'right' }, // wRVU P75
-      12: { cellWidth: 18, halign: 'right' }  // wRVU P90
-    },
-    alternateRowStyles: {
-      fillColor: [245, 245, 245]
-    },
-    margin: { top: 10, right: 10, bottom: 10, left: 10 }
-  });
-  
-  return doc;
+  // Temporarily return null until jspdf issues are resolved
+  console.warn('PDF generation temporarily disabled');
+  return null;
 };
 
 /**
- * Download PDF
+ * Download PDF (temporarily disabled)
  */
 export const downloadAnalyticsPDF = (
   data: AggregatedData[],
   filters: AnalyticsFilters,
   options: PrintOptions = {}
 ) => {
-  const doc = generateAnalyticsPDF(data, filters, options);
-  const filename = `survey-analytics-${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(filename);
+  console.warn('PDF download temporarily disabled');
 };
 
 /**

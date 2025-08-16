@@ -1,9 +1,5 @@
 import React from 'react';
 import { 
-  Paper, 
-  Typography, 
-  Grid, 
-  Box, 
   Button 
 } from '@mui/material';
 import { keyframes } from '@mui/system';
@@ -12,9 +8,9 @@ import { formatFMVValue } from '../utils/fmvCalculations';
 
 // CSS keyframes for marker pulse animation
 const markerPulse = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 `;
 
 /**
@@ -54,21 +50,29 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
   const noMarketData = !percentileData;
 
   return (
-    <Paper sx={{ 
-      p: 2, 
-      mt: 3, 
-      border: '1.5px solid #b0b4bb', 
-      boxShadow: 'none' 
-    }}>
-      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>
-        Market Comparison
-      </Typography>
+    <div className="space-y-6">
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          Market Comparison
+        </h2>
+        <p className="text-sm text-gray-600">
+          Compare your values against market benchmarks
+        </p>
+      </div>
       
       {noMarketData ? (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            No market data available for these filters.
-          </Typography>
+        <div className="text-center py-12">
+          <div className="text-gray-500 mb-4">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div className="text-gray-900 font-medium mb-2">
+            No market data available
+          </div>
+          <div className="text-gray-600 mb-6">
+            Try adjusting your filters to find matching market data.
+          </div>
           {onResetFilters && (
             <Button 
               variant="outlined" 
@@ -76,106 +80,83 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
               onClick={onResetFilters}
               sx={{
                 borderRadius: '8px',
+                borderColor: '#3b82f6',
+                color: '#3b82f6',
+                '&:hover': {
+                  borderColor: '#2563eb',
+                  backgroundColor: '#eff6ff',
+                },
               }}
             >
               Reset Filters
             </Button>
           )}
-        </Box>
+        </div>
       ) : (
         <>
           {/* Percentile Cards */}
-          <Grid container spacing={2} sx={{ mb: 3 }}>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {['25th', '50th', '75th', '90th'].map((percentile) => {
               const key = `p${percentile.slice(0, 2)}` as keyof typeof percentileData;
               return (
-                <Grid item xs={12} sm={6} md={3} key={percentile}>
-                  <Paper sx={{ 
-                    p: 1.5, 
-                    textAlign: 'center', 
-                    background: '#f8fafc', 
-                    boxShadow: 2, 
-                    border: '1.5px solid #b0b4bb' 
-                  }}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      {percentile} Percentile
-                    </Typography>
-                    <Typography variant="h6">
-                      {percentileData && percentileData[key] != null
-                        ? formatFMVValue(percentileData[key], compareType)
-                        : '-'}
-                    </Typography>
-                  </Paper>
-                </Grid>
+                <div key={percentile} className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                  <div className="text-sm font-medium text-gray-600 mb-1">
+                    {percentile} Percentile
+                  </div>
+                  <div className="text-lg font-semibold text-gray-900">
+                    {percentileData && percentileData[key] != null
+                      ? formatFMVValue(percentileData[key], compareType)
+                      : '-'}
+                  </div>
+                </div>
               );
             })}
-          </Grid>
+          </div>
 
           {/* Percentile Visualization */}
-          <Box sx={{ mt: 7, mb: 2, textAlign: 'center' }}>
+          <div className="text-center space-y-4">
             {typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? (
-              <Typography
-                variant="h6"
-                gutterBottom
-                color="primary"
-                sx={{ fontWeight: 700, fontSize: '1.35rem', mb: 2 }}
-              >
+              <div className="text-2xl font-bold text-blue-600 mb-4">
                 You are in the {currentPercentile.toFixed(2)}th percentile
-              </Typography>
+              </div>
             ) : (
-              <Typography variant="h6" gutterBottom color="text.secondary" sx={{ mb: 2 }}>
+              <div className="text-lg text-gray-600 mb-4">
                 Enter a value to see your percentile
-              </Typography>
+              </div>
             )}
             
             {/* Percentile Bar */}
-            <Box sx={{ 
-              position: 'relative', 
-              height: 6, 
-              bgcolor: 'grey.200', 
-              borderRadius: 2, 
-              mt: 3 
-            }}>
-              <Box
-                sx={{
-                  position: 'absolute',
-                  left: `${typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? currentPercentile : 0}%`,
-                  top: -8,
-                  width: 24,
-                  height: 24,
-                  bgcolor: 'primary.main',
-                  border: '3px solid #fff',
-                  boxShadow: 1,
-                  borderRadius: '50%',
-                  transform: 'translateX(-50%)',
-                  zIndex: 1,
-                  animation: `${markerPulse} 1.5s infinite`,
-                }}
-              />
-              <Box sx={{ 
-                position: 'absolute', 
-                left: 0, 
-                top: 0, 
-                width: '100%', 
-                height: 6, 
-                bgcolor: 'primary.main', 
-                borderRadius: 2, 
-                opacity: 0.2 
-              }} />
-            </Box>
+            <div className="relative">
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-600 rounded-full transition-all duration-500 ease-out"
+                  style={{ 
+                    width: `${typeof currentPercentile === 'number' && !isNaN(currentPercentile) ? currentPercentile : 0}%` 
+                  }}
+                />
+              </div>
+              
+              {/* Percentile Marker */}
+              {typeof currentPercentile === 'number' && !isNaN(currentPercentile) && (
+                <div
+                  className="absolute top-1/2 transform -translate-y-1/2 w-6 h-6 bg-blue-600 border-4 border-white rounded-full shadow-lg"
+                  style={{ 
+                    left: `${Math.min(currentPercentile, 100)}%`,
+                    transform: 'translate(-50%, -50%)',
+                    animation: `${markerPulse} 2s infinite`,
+                  }}
+                />
+              )}
+            </div>
             
             {/* Percentile Labels */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                0th
-              </Typography>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                100th
-              </Typography>
-            </Box>
-          </Box>
+            <div className="flex justify-between text-sm font-medium text-gray-600">
+              <span>0th</span>
+              <span>100th</span>
+            </div>
+          </div>
         </>
       )}
-    </Paper>
+    </div>
   );
 };

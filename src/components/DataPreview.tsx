@@ -82,12 +82,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [previewData, setPreviewData] = useState<string[][]>([]);
   const [originalData, setOriginalData] = useState<any[]>([]);
   const [stats, setStats] = useState<FileStats | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(100);
-  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; pages: number } | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const rowsPerPage = 10;
+
   const [gridApi, setGridApi] = useState<any | null>(null);
   const [columnApi, setColumnApi] = useState<any | null>(null);
   // Removed table-level quick search to rely on existing dropdown filters
@@ -108,8 +106,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let isCancelled = false;
     const loadSurveyData = async () => {
       try {
-        // Only show loading on initial load or page change, not filter changes
-        if (currentPage === 1 && !originalData.length) {
+        // Only show loading on initial load, not filter changes
+        if (!originalData.length) {
           setIsLoading(true);
         }
         
@@ -122,10 +120,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           region: globalFilters.region || undefined
         };
         
-        const { rows: surveyData, pagination } = await backendService.getSurveyData(
+        const { rows: surveyData } = await backendService.getSurveyData(
           file.id,
           filters,
-          { page: currentPage, limit: pageSize }
+          { limit: 10000 } // Fetch all data (up to 10,000 rows)
         );
         
         if (!isCancelled && surveyData.length > 0) {
@@ -156,9 +154,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           });
           setPreviewData([headers, ...rows]);
         }
-        if (!isCancelled && pagination) {
-          setPagination(pagination);
-        }
+
         if (!isCancelled) setIsLoading(false);
       } catch (error) {
         console.error('Error loading survey data:', error);
@@ -173,7 +169,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return () => {
       isCancelled = true;
     };
-  }, [file.id, currentPage, pageSize]); // Removed globalFilters dependency to prevent flickering
+  }, [file.id]); // Removed globalFilters dependency to prevent flickering
 
   // Separate effect for filter changes with debouncing
   useEffect(() => {
@@ -191,10 +187,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           region: globalFilters.region || undefined
         };
         
-        const { rows: surveyData, pagination } = await backendService.getSurveyData(
+        const { rows: surveyData } = await backendService.getSurveyData(
           file.id,
           filters,
-          { page: 1, limit: pageSize } // Reset to page 1 when filters change
+          { limit: 10000 } // Fetch all data (up to 10,000 rows)
         );
         
         if (!isCancelled && surveyData.length > 0) {
@@ -227,11 +223,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             totalDataPoints: surveyData.length * headers.length
           });
           setPreviewData([headers, ...rows]);
-          setCurrentPage(1); // Reset to first page
+
         }
-        if (!isCancelled && pagination) {
-          setPagination(pagination);
-        }
+
         if (!isCancelled) setIsRefreshing(false);
       } catch (error) {
         console.error('Error loading filtered data:', error);
@@ -251,7 +245,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       isCancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [globalFilters.specialty, globalFilters.providerType, globalFilters.region, file.id, pageSize]);
+  }, [globalFilters.specialty, globalFilters.providerType, globalFilters.region, file.id]);
 
   // Load global filter options from server (not paginated)
   useEffect(() => {
@@ -296,13 +290,15 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     // Server is now handling the filtering, so just convert to display format
     if (originalData.length > 0 && previewData[0]) {
       const headers = previewData[0];
-      return originalData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+      const data = originalData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+      console.log('Filtered data:', data.length, 'rows');
+      return data;
     }
 
     return [];
   }, [originalData, stats, previewData]);
 
-  const totalPages = pagination?.pages ?? 1;
+
 
   // Formatting helpers
   const formatCurrency = (value: any, decimals: number) => {
@@ -319,6 +315,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const createColumnDefs = () => {
     // If we have the server-derived headers, use them; otherwise fall back to previewData detection
     const headers = previewData[0] || [];
+    console.log('Creating column defs for headers:', headers);
     return headers
       .filter((header: string) => {
         const lower = String(header).toLowerCase();
@@ -444,7 +441,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               onFilterChange('specialty', '');
               onFilterChange('providerType', '');
               onFilterChange('region', '');
-              setCurrentPage(1);
+
             }}
             className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
             title="Clear all filters"
@@ -533,7 +530,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       </Box>
 
       {/* Data Table - AG Grid as primary */}
-      <div className="ag-theme-alpine relative px-4 py-2 rounded-lg border border-gray-200" style={{ height: 520, width: '100%' }}>
+      <div className="relative mt-6 p-4" style={{ width: '100%', height: '600px' }}>
         {/* Subtle refreshing overlay */}
         {isRefreshing && (
           <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
@@ -557,162 +554,20 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               return obj;
             })}
             columnDefs={createColumnDefs()}
+            pagination={filteredData.length > 0}
             defaultColDef={{ sortable: true, filter: true, resizable: true }}
             suppressRowClickSelection={true}
             components={{
               CustomHeader: CustomHeader
             }}
-            pagination={false}
-            domLayout="autoHeight"
+            domLayout="normal"
             suppressRowHoverHighlight={true}
-            rowHeight={40}
+            rowHeight={36}
             suppressColumnVirtualisation={false}
             suppressHorizontalScroll={false}
           />
         </Suspense>
       </div>
-      {/* Modern Server-side pagination controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
-          {/* Left side - Page info and page size */}
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-600">
-              Showing page <span className="font-medium text-gray-900">{currentPage}</span> of <span className="font-medium text-gray-900">{totalPages}</span>
-            </div>
-            <div className="text-sm text-gray-500">
-              ({pagination?.total?.toLocaleString() || 0} total records)
-            </div>
-          </div>
-
-          {/* Center - Page navigation */}
-          <div className="flex items-center space-x-2">
-            {/* First page */}
-            <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage <= 1}
-              title="Go to first page"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M15.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L11.414 9H17a1 1 0 110 2h-5.586l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-
-            {/* Previous page */}
-            <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              title="Previous page"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            </button>
-
-            {/* Page input */}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500">Page</span>
-              <input
-                type="number"
-                min="1"
-                max={totalPages}
-                value={currentPage}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value);
-                  if (value >= 1 && value <= totalPages) {
-                    setCurrentPage(value);
-                  }
-                }}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    const value = parseInt(e.currentTarget.value);
-                    if (value >= 1 && value <= totalPages) {
-                      setCurrentPage(value);
-                    }
-                  }
-                }}
-                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                title={`Enter page number (1-${totalPages})`}
-              />
-              <span className="text-sm text-gray-500">of {totalPages}</span>
-            </div>
-
-            {/* Next page */}
-            <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-              title="Next page"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-            </button>
-
-            {/* Last page */}
-            <button
-              className="inline-flex items-center px-2.5 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage >= totalPages}
-              title="Go to last page"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L8.586 11H3a1 1 0 110-2h5.586L4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Right side - Quick navigation */}
-          <div className="flex items-center space-x-2">
-            {/* Quick jump buttons */}
-            {currentPage > 5 && (
-              <button
-                className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors duration-200"
-                onClick={() => setCurrentPage(1)}
-              >
-                1
-              </button>
-            )}
-            {currentPage > 5 && (
-              <span className="text-gray-400">...</span>
-            )}
-            
-            {/* Page numbers around current page */}
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
-              if (pageNum > totalPages) return null;
-              
-              return (
-                <button
-                  key={pageNum}
-                  className={`px-2 py-1 text-xs rounded transition-colors duration-200 ${
-                    pageNum === currentPage
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setCurrentPage(pageNum)}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            
-            {currentPage < totalPages - 4 && (
-              <span className="text-gray-400">...</span>
-            )}
-            {currentPage < totalPages - 4 && (
-              <button
-                className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors duration-200"
-                onClick={() => setCurrentPage(totalPages)}
-              >
-                {totalPages}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-      
     </div>
   );
 };

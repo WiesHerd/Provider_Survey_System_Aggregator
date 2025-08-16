@@ -121,12 +121,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
           <div className="w-12 h-12 flex items-center justify-center">
-            <img src={process.env.PUBLIC_URL + '/Icon.png'} alt="BenchPoint Logo" className="w-10 h-10 object-contain" />
+            <img src="/contract-hub-icon.svg" alt="Contract Hub - Survey Aggregator" className="w-10 h-10 object-contain" onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              console.log('Image failed to load:', target.src);
+              target.style.display = 'none';
+            }} />
           </div>
           {isOpen && (
-            <span className="ml-3 font-bold text-2xl flex items-center" style={{ letterSpacing: 0.5 }}>
-              <span className="text-gray-900">Bench</span>
-              <span className="text-indigo-600">Point</span>
+            <span className="ml-3 font-bold text-xl flex items-center" style={{ letterSpacing: 0.5 }}>
+              <span className="text-gray-900">Contract</span>
+              <span className="text-indigo-600">Hub</span>
             </span>
           )}
         </div>

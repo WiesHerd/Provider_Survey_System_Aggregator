@@ -1,8 +1,11 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridOptions } from 'ag-grid-community';
+import { ColDef, GridOptions, ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+// Register AG Grid modules
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 interface RegionalData {
   region: string;
@@ -74,6 +77,7 @@ const getMinMax = (values: number[]) => {
 };
 
 const RegionalComparison: React.FC<RegionalComparisonProps> = ({ data }) => {
+  console.log('📊 RegionalComparison received data:', data);
   const regionNames = data.map(region => region.region);
 
   // Create AG Grid column definitions for each metric

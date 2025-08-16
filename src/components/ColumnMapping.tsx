@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { 
   PlusIcon as AddIcon,
   MagnifyingGlassIcon as SearchIcon,
@@ -9,6 +9,7 @@ import {
   ArrowPathIcon as RefreshIcon,
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
+import { Dialog } from '@mui/material';
 import { ColumnMappingService } from '../services/ColumnMappingService';
 import { LocalStorageService } from '../services/StorageService';
 import { IColumnMapping, IColumnInfo } from '../types/column';
@@ -181,45 +182,63 @@ const ColumnMapping: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped'>('unmapped');
   const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false); // Prevent multiple simultaneous loads
 
-  const mappingService = new ColumnMappingService(new LocalStorageService());
+  const mappingService = useMemo(() => new ColumnMappingService(new LocalStorageService()), []);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Smart tab selection based on data availability
-  useEffect(() => {
-    if (!loading) {
-      // If there are mappings, default to mapped tab
-      if (mappings.length > 0) {
-        setActiveTab('mapped');
-      }
-      // If there are unmapped columns and no mappings, default to unmapped tab
-      else if (unmappedColumns.length > 0) {
-        setActiveTab('unmapped');
-      }
-      // Otherwise, keep current tab or default to unmapped
+  const loadData = useCallback(async () => {
+    // Prevent multiple simultaneous data loads
+    if (isLoadingData) {
+      console.log('Data load already in progress, skipping...');
+      return;
     }
-  }, [loading, mappings.length, unmappedColumns.length]);
 
-  const loadData = async () => {
     try {
+      setIsLoadingData(true);
       setLoading(true);
+      setError(null);
+      
+      console.log('Starting data load...');
       const [mappingsData, unmappedData] = await Promise.all([
         mappingService.getAllMappings(),
         mappingService.getUnmappedColumns()
       ]);
+      
+      console.log('Data load completed:', { 
+        mappings: mappingsData.length, 
+        unmapped: unmappedData.length 
+      });
+      
       setMappings(mappingsData);
       setUnmappedColumns(unmappedData);
-      setError(null);
     } catch (err) {
-      setError('Failed to load column data');
       console.error('Error loading data:', err);
+      setError('Failed to load column data. Please check your connection and try again.');
+      // Don't clear existing data on error to prevent flickering
     } finally {
       setLoading(false);
+      setIsLoadingData(false);
     }
-  };
+  }, [mappingService]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Smart tab selection based on data availability
+  useEffect(() => {
+    if (!loading && !isLoadingData) {
+      // If there are mappings, default to mapped tab
+      if (mappings.length > 0 && activeTab === 'unmapped') {
+        setActiveTab('mapped');
+      }
+      // If there are unmapped columns and no mappings, default to unmapped tab
+      else if (unmappedColumns.length > 0 && mappings.length === 0 && activeTab === 'mapped') {
+        setActiveTab('unmapped');
+      }
+      // Otherwise, keep current tab
+    }
+  }, [loading, isLoadingData, mappings.length, unmappedColumns.length, activeTab]);
 
   const filteredUnmapped = useMemo(() => {
     return unmappedColumns.filter(column => 
@@ -256,23 +275,37 @@ const ColumnMapping: React.FC = () => {
       const standardizedName = prompt('Enter standardized column name:');
       if (!standardizedName) return;
 
+      setLoading(true);
+      setError(null);
+      
       await mappingService.createMapping(standardizedName, selectedColumns);
       setSelectedColumns([]);
+      
+      // Refresh data without showing loading spinner for better UX
       await loadData();
       setActiveTab('mapped');
     } catch (error) {
       console.error('Error creating mapping:', error);
-      setError('Failed to create mapping');
+      setError('Failed to create mapping. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDelete = async (mappingId: string) => {
     try {
+      setLoading(true);
+      setError(null);
+      
       await mappingService.deleteMapping(mappingId);
+      
+      // Refresh data without showing loading spinner for better UX
       await loadData();
     } catch (error) {
       console.error('Error deleting mapping:', error);
-      setError('Failed to delete mapping');
+      setError('Failed to delete mapping. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -283,9 +316,24 @@ const ColumnMapping: React.FC = () => {
   }) => {
     try {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await loadData();
+      setError(null);
       
+      // Call the auto-mapping service
+      const suggestions = await mappingService.autoMapColumns({
+        confidenceThreshold: config.confidenceThreshold,
+        includeDataTypeMatching: config.enableFuzzyMatching
+      });
+
+      // Create mappings from suggestions
+      for (const suggestion of suggestions) {
+        await mappingService.createMapping(
+          suggestion.standardizedName,
+          suggestion.columns
+        );
+      }
+
+      // Refresh data and close dialog
+      await loadData();
       setActiveTab('mapped');
       setIsAutoMapOpen(false);
     } catch (error) {
@@ -472,20 +520,21 @@ const ColumnMapping: React.FC = () => {
         </div>
 
         {/* Auto-Mapping Dialog */}
-        {isAutoMapOpen && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
-                <AutoMapDialog
-                  title="Auto-Map Columns"
-                  description="Automatically map columns based on similarity and data types."
-                  onClose={() => setIsAutoMapOpen(false)}
-                  onAutoMap={handleAutoMap}
-                />
-              </Suspense>
-            </div>
-          </div>
-        )}
+        <Dialog
+          open={isAutoMapOpen}
+          onClose={() => setIsAutoMapOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
+            <AutoMapDialog
+              title="Auto-Map Columns"
+              description="Automatically map columns based on similarity and data types."
+              onClose={() => setIsAutoMapOpen(false)}
+              onAutoMap={handleAutoMap}
+            />
+          </Suspense>
+        </Dialog>
       </div>
     </div>
   );

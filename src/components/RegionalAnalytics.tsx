@@ -50,7 +50,7 @@ export const RegionalAnalytics: React.FC = () => {
             const surveySource = (survey as any).type || 'Survey'; // Use 'Survey' as fallback
             const transformedRows = data.rows.map((row: any) => {
               // The backend already parsed the JSON data, so we can use it directly
-              return {
+              const transformedRow = {
                 ...row,
                 surveySource: surveySource,
                 specialty: row.specialty || row.normalizedSpecialty || '',
@@ -69,7 +69,20 @@ export const RegionalAnalytics: React.FC = () => {
                 wrvu_p75: row.wrvu_p75,
                 wrvu_p90: row.wrvu_p90,
               };
+              
+              return transformedRow;
             });
+            
+            // Debug: Log a sample row to see the data structure
+            if (allRows.length === 0 && transformedRows.length > 0) {
+              console.log(`🔍 Sample row structure:`, {
+                original: data.rows[0],
+                transformed: transformedRows[0],
+                hasTCC: !!data.rows[0].tcc_p50,
+                hasCF: !!data.rows[0].cf_p50,
+                hasWRVU: !!data.rows[0].wrvu_p50
+              });
+            }
             
             allRows = allRows.concat(transformedRows);
             console.log(`📊 Running total: ${allRows.length} rows`);
@@ -140,11 +153,20 @@ export const RegionalAnalytics: React.FC = () => {
     const uniqueRegions = Array.from(new Set(filtered.map(r => r.geographicRegion)));
     console.log(`🔍 Unique regions in filtered data:`, uniqueRegions);
     
+    // Filter out any rows with invalid data
+    const validRows = filtered.filter(r => {
+      const hasValidTCC = r.tcc_p25 && r.tcc_p50 && r.tcc_p75 && r.tcc_p90;
+      const hasValidCF = r.cf_p25 && r.cf_p50 && r.cf_p75 && r.cf_p90;
+      return hasValidTCC || hasValidCF;
+    });
+    
+    console.log(`✅ Valid rows with data: ${validRows.length} out of ${filtered.length}`);
+    
     const result = REGION_NAMES.map(regionName => {
-      // For 'National', use all filtered rows
+      // For 'National', use all valid filtered rows
       const regionRows = regionName === 'National'
-        ? filtered
-        : filtered.filter(r => r.geographicRegion === regionName);
+        ? validRows
+        : validRows.filter(r => r.geographicRegion === regionName);
       
       console.log(`🔍 Filtering for region "${regionName}": found ${regionRows.length} rows`);
       if (regionRows.length > 0) {
@@ -152,10 +174,8 @@ export const RegionalAnalytics: React.FC = () => {
           specialty: r.specialty,
           region: r.geographicRegion,
           tcc_p50: r.tcc_p50,
-          raw_tcc_p50: r.tcc_p50,
-          has_data_property: !!r.data,
-          data_type: typeof r.data,
-          parsed_data_keys: r.data ? Object.keys(r.data) : 'no data'
+          cf_p50: r.cf_p50,
+          wrvu_p50: r.wrvu_p50
         })));
       }
       
@@ -175,7 +195,7 @@ export const RegionalAnalytics: React.FC = () => {
         wrvus_p90: avg(regionRows.map(r => Number(r.wrvu_p90) || 0)),
       };
       
-      console.log(`📋 ${regionName}: ${regionRows.length} rows, TCC P50: $${regionData.tcc_p50.toLocaleString()}`);
+      console.log(`📋 ${regionName}: ${regionRows.length} rows, TCC P50: $${regionData.tcc_p50.toLocaleString()}, CF P50: $${regionData.cf_p50.toLocaleString()}`);
       
       return regionData;
     });

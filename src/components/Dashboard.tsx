@@ -105,7 +105,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                 {/* BenchPoint Branding */}
+                 {/* Contract Hub Branding */}
          <motion.div
            initial={{ opacity: 0, y: -20 }}
            animate={{ opacity: 1, y: 0 }}
@@ -114,34 +114,30 @@ const Dashboard: React.FC = () => {
          >
            {/* Logo and Brand */}
            <div className="flex items-center justify-center mb-6">
-             <div className="flex items-center space-x-3">
+             <div className="flex items-center space-x-4">
                {/* Logo */}
                <div className="relative">
-                 <svg className="w-12 h-12 text-gray-800" viewBox="0 0 48 48" fill="none">
-                   {/* Teardrop/Shield shape */}
-                   <path d="M24 2C24 2 36 8 36 20C36 32 24 46 24 46C24 46 12 32 12 20C12 8 24 2 24 2Z" stroke="currentColor" strokeWidth="2" fill="none"/>
-                   {/* Target circle */}
-                   <circle cx="24" cy="24" r="8" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                   {/* Crosshairs */}
-                   <line x1="24" y1="16" x2="24" y2="20" stroke="currentColor" strokeWidth="1.5"/>
-                   <line x1="24" y1="28" x2="24" y2="32" stroke="currentColor" strokeWidth="1.5"/>
-                   <line x1="16" y1="24" x2="20" y2="24" stroke="currentColor" strokeWidth="1.5"/>
-                   <line x1="28" y1="24" x2="32" y2="24" stroke="currentColor" strokeWidth="1.5"/>
-                   {/* Dollar sign */}
-                   <text x="24" y="28" textAnchor="middle" fill="currentColor" fontSize="8" fontWeight="bold">$</text>
-                 </svg>
+                 <img 
+                   src="/contract-hub-icon.svg" 
+                   alt="Contract Hub Logo" 
+                   className="w-16 h-16 object-contain"
+                   onError={(e) => {
+                     console.log('Dashboard logo failed to load:', (e.target as HTMLImageElement).src);
+                     (e.target as HTMLImageElement).style.display = 'none';
+                   }}
+                 />
                </div>
                {/* Brand Name */}
-               <div className="text-2xl font-bold">
-                 <span className="text-gray-800">Bench</span>
-                 <span className="text-indigo-600">Point</span>
+               <div className="text-3xl font-bold">
+                 <span className="text-gray-800">Contract</span>
+                 <span className="text-indigo-600">Hub</span>
                </div>
              </div>
            </div>
            
            {/* Welcome Message */}
            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-             Welcome to BenchPoint
+             Welcome to Contract Hub
            </h2>
            <p className="text-sm text-gray-600">
              Get started by selecting an option below.
@@ -212,7 +208,7 @@ const Dashboard: React.FC = () => {
           className="text-center mt-12"
         >
           <p className="text-sm text-gray-500">
-            © 2024 BenchPoint. All rights reserved.
+            © 2024 Contract Hub. All rights reserved.
           </p>
         </motion.div>
       </div>

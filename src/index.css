@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import custom AG Grid styling */
+@import './styles/ag-grid-custom.css';
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -90,53 +93,12 @@ input, select, textarea, button {
 }
 
 /* Material-UI components rounded corners */
-.MuiOutlinedInput-root {
-  border-radius: 8px !important;
-}
-
-.MuiButton-root {
-  border-radius: 8px !important;
-}
-
 .MuiPaper-root {
-  border-radius: 8px !important;
+  border-radius: 12px !important;
 }
 
-/* Ensure main content area doesn't overflow into sidebar */
-.main-content {
-  overflow-x: hidden;
-  width: 100%;
+.MuiCard-root {
+  border-radius: 12px !important;
 }
 
-/* Force the main layout to contain overflow */
-body {
-  overflow-x: hidden;
-}
-
-/* Ensure the app container doesn't overflow */
-#root {
-  overflow-x: hidden;
-  width: 100%;
-}
-
-/* Table container overflow fix */
-.table-container-wrapper {
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-width: 100%;
-  position: relative;
-}
-
-/* Force table to stay within bounds */
-.table-container-wrapper .MuiTableContainer-root {
-  max-width: 100% !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-}
-
-/* Ensure main content doesn't overflow */
-.main-content-area {
-  overflow-x: hidden !important;
-  width: 100% !important;
-  max-width: 100% !important;
-} 
+/* AG Grid styling is now handled by ag-grid-custom.css */ 

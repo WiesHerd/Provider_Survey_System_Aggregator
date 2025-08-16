@@ -1,0 +1,112 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#F3F4F6" stroke="#E5E7EB" stroke-width="2"/>
+  
+  <!-- Central hexagonal hub -->
+  <g transform="translate(256, 256)">
+    <!-- Outer hexagon -->
+    <polygon points="0,-120 104,-60 104,60 0,120 -104,60 -104,-60" 
+             fill="#1F2937" 
+             stroke="#374151" 
+             stroke-width="3"/>
+    
+    <!-- Inner hexagon -->
+    <polygon points="0,-80 69,-40 69,40 0,80 -69,40 -69,-40" 
+             fill="white" 
+             stroke="#D1D5DB" 
+             stroke-width="2"/>
+    
+    <!-- Central data visualization element -->
+    <g transform="translate(0, -10)">
+      <!-- Bar chart elements -->
+      <rect x="-30" y="20" width="8" height="40" fill="#6B7280" rx="2"/>
+      <rect x="-15" y="30" width="8" height="30" fill="#9CA3AF" rx="2"/>
+      <rect x="0" y="15" width="8" height="45" fill="#6B7280" rx="2"/>
+      <rect x="15" y="25" width="8" height="35" fill="#9CA3AF" rx="2"/>
+      <rect x="30" y="10" width="8" height="50" fill="#6B7280" rx="2"/>
+    </g>
+    
+    <!-- Healthcare cross symbol -->
+    <g transform="translate(0, -60)" opacity="0.8">
+      <rect x="-2" y="-8" width="4" height="16" fill="#374151" rx="1"/>
+      <rect x="-8" y="-2" width="16" height="4" fill="#374151" rx="1"/>
+    </g>
+  </g>
+  
+  <!-- Contract streams flowing into the hub -->
+  <!-- Stream 1 (top-left) -->
+  <path d="M 80 80 Q 150 150 200 200 Q 220 220 256 256" 
+        stroke="#6B7280" 
+        stroke-width="8" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Stream 2 (top-right) -->
+  <path d="M 432 80 Q 362 150 312 200 Q 292 220 256 256" 
+        stroke="#9CA3AF" 
+        stroke-width="8" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Stream 3 (bottom-left) -->
+  <path d="M 80 432 Q 150 362 200 312 Q 220 292 256 256" 
+        stroke="#D1D5DB" 
+        stroke-width="8" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Stream 4 (bottom-right) -->
+  <path d="M 432 432 Q 362 362 312 312 Q 292 292 256 256" 
+        stroke="#6B7280" 
+        stroke-width="8" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Contract document symbols at stream origins -->
+  <!-- Document 1 -->
+  <g transform="translate(80, 80)">
+    <rect x="-12" y="-16" width="24" height="32" fill="white" stroke="#6B7280" stroke-width="2" rx="3"/>
+    <line x1="-8" y1="-8" x2="8" y2="-8" stroke="#6B7280" stroke-width="1.5"/>
+    <line x1="-8" y1="-2" x2="6" y2="-2" stroke="#6B7280" stroke-width="1.5"/>
+    <line x1="-8" y1="4" x2="8" y2="4" stroke="#6B7280" stroke-width="1.5"/>
+    <line x1="-8" y1="10" x2="4" y2="10" stroke="#6B7280" stroke-width="1.5"/>
+  </g>
+  
+  <!-- Document 2 -->
+  <g transform="translate(432, 80)">
+    <rect x="-12" y="-16" width="24" height="32" fill="white" stroke="#9CA3AF" stroke-width="2" rx="3"/>
+    <line x1="-8" y1="-8" x2="8" y2="-8" stroke="#9CA3AF" stroke-width="1.5"/>
+    <line x1="-8" y1="-2" x2="6" y2="-2" stroke="#9CA3AF" stroke-width="1.5"/>
+    <line x1="-8" y1="4" x2="8" y2="4" stroke="#9CA3AF" stroke-width="1.5"/>
+    <line x1="-8" y1="10" x2="4" y2="10" stroke="#9CA3AF" stroke-width="1.5"/>
+  </g>
+  
+  <!-- Document 3 -->
+  <g transform="translate(80, 432)">
+    <rect x="-12" y="-16" width="24" height="32" fill="white" stroke="#D1D5DB" stroke-width="2" rx="3"/>
+    <line x1="-8" y1="-8" x2="8" y2="-8" stroke="#D1D5DB" stroke-width="1.5"/>
+    <line x1="-8" y1="-2" x2="6" y2="-2" stroke="#D1D5DB" stroke-width="1.5"/>
+    <line x1="-8" y1="4" x2="8" y2="4" stroke="#D1D5DB" stroke-width="1.5"/>
+    <line x1="-8" y1="10" x2="4" y2="10" stroke="#D1D5DB" stroke-width="1.5"/>
+  </g>
+  
+  <!-- Document 4 -->
+  <g transform="translate(432, 432)">
+    <rect x="-12" y="-16" width="24" height="32" fill="white" stroke="#6B7280" stroke-width="2" rx="3"/>
+    <line x1="-8" y1="-8" x2="8" y2="-8" stroke="#6B7280" stroke-width="1.5"/>
+    <line x1="-8" y1="-2" x2="6" y2="-2" stroke="#6B7280" stroke-width="1.5"/>
+    <line x1="-8" y1="4" x2="8" y2="4" stroke="#6B7280" stroke-width="1.5"/>
+    <line x1="-8" y1="10" x2="4" y2="10" stroke="#6B7280" stroke-width="1.5"/>
+  </g>
+  
+  <!-- Data connection dots along streams -->
+  <circle cx="150" cy="150" r="4" fill="#6B7280"/>
+  <circle cx="362" cy="150" r="4" fill="#9CA3AF"/>
+  <circle cx="150" cy="362" r="4" fill="#D1D5DB"/>
+  <circle cx="362" cy="362" r="4" fill="#6B7280"/>
+  
+  <!-- Central connection point -->
+  <circle cx="256" cy="256" r="6" fill="#1F2937" stroke="white" stroke-width="2"/>
+</svg>
+
+

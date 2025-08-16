@@ -1,11 +1,6 @@
 import React from 'react';
 import { 
-  Paper, 
-  Typography, 
-  Grid, 
   TextField, 
-  Box, 
-  Button, 
   InputAdornment 
 } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -40,20 +35,13 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
   const total = calculateTotalTCC(components);
 
   return (
-    <Paper sx={{ 
-      p: 2, 
-      mb: 3, 
-      border: '1.5px solid #b0b4bb', 
-      boxShadow: 'none' 
-    }}>
-      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>
-        Compensation Components
-      </Typography>
-      
-      <Grid container spacing={2} alignItems="center">
+    <div className="space-y-6">
+      {/* Component Rows */}
+      <div className="space-y-4">
         {components.map((component, idx) => (
-          <React.Fragment key={idx}>
-            <Grid item xs={12} md={3}>
+          <div key={idx} className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+            {/* Type Field */}
+            <div className="lg:col-span-3">
               <Autocomplete
                 freeSolo
                 options={["Base Salary", "Bonus", "Incentive", "Other"]}
@@ -68,14 +56,25 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: '8px',
-                      }
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#3b82f6',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '2px',
+                        },
+                      },
+                      '& .MuiInputLabel-root.Mui-focused': {
+                        color: '#3b82f6',
+                      },
                     }}
                   />
                 )}
               />
-            </Grid>
+            </div>
             
-            <Grid item xs={12} md={3}>
+            {/* Amount Field */}
+            <div className="lg:col-span-3">
               <TextField
                 label="Amount"
                 type="number"
@@ -91,74 +90,78 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: '8px',
-                  }
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#3b82f6',
+                  },
                 }}
               />
-            </Grid>
+            </div>
             
-            <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}>
+            {/* Notes Field */}
+            <div className="lg:col-span-5">
               <TextField
                 label="Notes"
                 value={component.notes}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
                   updateComponent(idx, 'notes', e.target.value)
                 }
+                fullWidth
                 size="small"
-                sx={{ 
-                  flex: 1, 
-                  mr: 2,
+                sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: '8px',
-                  }
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#3b82f6',
+                  },
                 }}
               />
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                minWidth: 120, 
-                justifyContent: 'flex-end' 
-              }}>
-                <Button
-                  onClick={() => removeComponent(idx)}
-                  color="error"
-                  size="small"
-                  sx={{ minWidth: 0, p: 1, mr: 1 }}
-                  aria-label="Remove"
-                >
-                  <TrashIcon className="h-5 w-5 text-gray-500" />
-                </Button>
-              </Box>
-            </Grid>
-          </React.Fragment>
+            </div>
+            
+            {/* Remove Button */}
+            <div className="lg:col-span-1 flex justify-center">
+              <button
+                onClick={() => removeComponent(idx)}
+                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                aria-label="Remove component"
+              >
+                <TrashIcon className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         ))}
-      </Grid>
+      </div>
       
       {/* Total TCC and Add Component Button */}
-      <Box sx={{ 
-        mt: 2, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between' 
-      }}>
-        <Typography sx={{ 
-          fontWeight: 700, 
-          fontSize: '1.1rem', 
-          textAlign: 'left' 
-        }}>
-          Total TCC: ${total.toLocaleString()}
-        </Typography>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<span style={{ fontWeight: 'bold', fontSize: '1.2em' }}>+</span>}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-gray-200">
+        <div className="text-lg font-semibold text-gray-900">
+          Total TCC: <span className="text-blue-600">${total.toLocaleString()}</span>
+        </div>
+        <button
           onClick={addComponent}
-          sx={{
-            borderRadius: '8px',
-          }}
+          className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-sm"
         >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
           Add Component
-        </Button>
-      </Box>
-    </Paper>
+        </button>
+      </div>
+    </div>
   );
 };

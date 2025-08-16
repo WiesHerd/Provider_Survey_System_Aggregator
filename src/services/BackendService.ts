@@ -3,7 +3,7 @@ import {
   ISurveyRow 
 } from '../types/survey';
 
-const API_BASE_URL = 'https://survey-aggregator-backend.azurewebsites.net/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 class BackendService {
   private static instance: BackendService;
@@ -74,20 +74,29 @@ class BackendService {
       throw new Error('Failed to fetch surveys');
     }
 
-    const surveys = await response.json();
+    const data = await response.json();
     
-    // Transform backend format to frontend format
+    // Handle SQLite API response format
+    const surveys = data.surveys || data;
+    
+    // Transform SQLite format to frontend format
     return surveys.map((survey: any) => ({
       id: survey.id,
-      name: survey.name,
-      year: survey.year.toString(),
-      type: survey.type,
-      uploadDate: survey.uploadDate,
-      rowCount: survey.rowCount ?? survey.row_count ?? 0,
-      specialtyCount: survey.specialtyCount ?? survey.specialty_count ?? 0,
-      dataPoints: survey.dataPoints ?? survey.data_points ?? 0,
-      colorAccent: survey.colorAccent || '#6366F1',
-      metadata: survey.metadata
+      name: survey.filename,
+      year: survey.surveyYear || new Date(survey.createdAt).getFullYear().toString(),
+      type: survey.surveyType || 'Compensation',
+      uploadDate: new Date(survey.createdAt),
+      rowCount: survey.rowCount || 0,
+      specialtyCount: 0, // Will be calculated when data is loaded
+      dataPoints: survey.rowCount || 0,
+      colorAccent: '#6366F1',
+      metadata: {
+        totalRows: survey.rowCount || 0,
+        uniqueSpecialties: [],
+        uniqueProviderTypes: [],
+        uniqueRegions: [],
+        columnMappings: {}
+      }
     }));
   }
 
@@ -119,8 +128,8 @@ class BackendService {
     const data = await response.json();
     
     // Transform backend format to frontend format
-    // Backend returns { data: [...], pagination: {...} }
-    const surveyData = data.data || data;
+    // Backend returns { rows: [...], pagination: {...} }
+    const surveyData = data.rows || data;
     // Keep all keys so the grid can render every original column.
     const rows = surveyData.map((row: any) => ({ ...row }));
     const pagination = data.pagination

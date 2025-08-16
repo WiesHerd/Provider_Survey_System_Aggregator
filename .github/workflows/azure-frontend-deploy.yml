@@ -46,3 +46,6 @@ jobs:
         curl -f https://survey-aggregator-frontend.azurestaticapps.net || exit 1
 
 
+
+
+

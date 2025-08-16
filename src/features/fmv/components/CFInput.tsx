@@ -1,11 +1,7 @@
 import React from 'react';
 import { 
-  Paper, 
-  FormControl, 
-  Typography, 
   TextField, 
-  InputAdornment, 
-  FormHelperText 
+  InputAdornment 
 } from '@mui/material';
 import { CFInputProps } from '../types/fmv';
 
@@ -24,42 +20,47 @@ export const CFInput: React.FC<CFInputProps> = ({
   percentile 
 }) => {
   return (
-    <Paper sx={{ 
-      p: 2, 
-      mb: 2, 
-      border: '1.5px solid #b0b4bb', 
-      boxShadow: 'none' 
-    }}>
-      <FormControl fullWidth>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>
-          Conversion Factor ($/wRVU)
-        </Typography>
+    <div className="space-y-4">
+      <div className="max-w-md">
         <TextField
           label="Conversion Factor"
           type="number"
           value={value}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+          fullWidth
           size="small"
           InputProps={{ 
             startAdornment: <InputAdornment position="start">$</InputAdornment>, 
             endAdornment: <InputAdornment position="end">/wRVU</InputAdornment> 
           }}
-          sx={{ 
-            mb: 1, 
-            width: 220,
+          sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '8px',
-            }
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#3b82f6',
+              },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#3b82f6',
+                borderWidth: '2px',
+              },
+            },
+            '& .MuiInputLabel-root.Mui-focused': {
+              color: '#3b82f6',
+            },
           }}
         />
-        <FormHelperText>
-          Enter your conversion factor, or calculate as TCC / wRVUs.
-          <br />
-          <span style={{ color: '#888' }}>
-            FTE does not affect this value.
-          </span>
-        </FormHelperText>
-      </FormControl>
-    </Paper>
+      </div>
+      
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="text-sm">
+          <div className="font-medium text-gray-900 mb-1">
+            Conversion Factor ($/wRVU)
+          </div>
+          <div className="text-gray-700">
+            Enter your conversion factor, or calculate as TCC / wRVUs. FTE does not affect this value.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

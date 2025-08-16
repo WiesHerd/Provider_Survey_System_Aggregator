@@ -15,7 +15,7 @@ const SurveyAnalytics = lazy(() => import('./components/SurveyAnalytics'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const SurveyRegionalAnalytics = lazy(() => import('./components/SurveyRegionalAnalytics').then(module => ({ default: module.SurveyRegionalAnalytics })));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
-const Charts = lazy(() => import('./components/ChartsWrapper'));
+const ChartsWrapper = lazy(() => import('./components/ChartsWrapper'));
 
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
@@ -82,7 +82,7 @@ const PageContent = () => {
       case '/instructions':
         return {
           title: 'Instructions',
-          description: 'How to use the BenchPoint Survey Aggregator and Market Analytics App'
+          description: 'How to use the Contract Hub Survey Aggregator and Market Analytics App'
         };
       case '/reports':
         return {
@@ -156,7 +156,7 @@ const PageContent = () => {
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />
-              <Route path="/charts" element={<Charts />} />
+              <Route path="/charts" element={<ChartsWrapper />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
               <Route path="/instructions" element={
                 <div className="min-h-screen bg-gray-50">

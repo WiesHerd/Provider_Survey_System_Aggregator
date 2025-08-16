@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
+    },
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/contract-hub-icon.svg",
+      "dest": "/contract-hub-icon.svg"
+    },
+    {
+      "src": "/contract-hub-favicon-16x16.svg",
+      "dest": "/contract-hub-favicon-16x16.svg"
+    },
+    {
+      "src": "/contract-hub-favicon-32x32.svg",
+      "dest": "/contract-hub-favicon-32x32.svg"
+    },
+    {
+      "src": "/contract-hub-app-icon.svg",
+      "dest": "/contract-hub-app-icon.svg"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/favicon.ico"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/manifest.json"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
