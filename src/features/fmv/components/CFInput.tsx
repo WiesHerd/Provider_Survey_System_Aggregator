@@ -21,7 +21,7 @@ export const CFInput: React.FC<CFInputProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className="max-w-md">
+      <div className="w-48">
         <TextField
           label="Conversion Factor"
           type="number"

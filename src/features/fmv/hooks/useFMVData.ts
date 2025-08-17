@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LocalStorageService } from '../../../services/StorageService';
 import { SpecialtyMappingService } from '../../../services/SpecialtyMappingService';
+import BackendService from '../../../services/BackendService';
 import { 
   FMVFilters, 
   CompensationComponent, 
@@ -65,6 +66,7 @@ export const useFMVData = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allSurveyRows, setAllSurveyRows] = useState<any[]>([]);
 
   // Memoized calculations
   const tcc = useMemo(() => calculateTotalTCC(compComponents), [compComponents]);
@@ -76,11 +78,53 @@ export const useFMVData = () => {
    */
   const fetchUniqueValues = useCallback(async () => {
     try {
-      const storageService = new LocalStorageService();
-      const mappingService = new SpecialtyMappingService(storageService);
+      const backendService = BackendService.getInstance();
+      const mappingService = new SpecialtyMappingService(new LocalStorageService());
       const allMappings = await mappingService.getAllMappings();
-      const uploadedSurveys = await storageService.listSurveys();
+      const uploadedSurveys = await backendService.getAllSurveys();
       
+      let allRows: any[] = [];
+
+      // Collect all survey data first
+      for (const survey of uploadedSurveys) {
+        const surveyType = (survey as any).type;
+        const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 });
+        if (data?.rows) {
+          // Debug: Check what fields are available in the first row
+          if (data.rows.length > 0) {
+            console.log('FMV Debug - First row keys:', Object.keys(data.rows[0]));
+            console.log('FMV Debug - First row sample:', data.rows[0]);
+          }
+          
+          const transformedRows = data.rows.map((row: any) => ({
+            id: row.id || '',
+            providerType: row.providerType || row.provider_type || '',
+            geographicRegion: row.geographicRegion || row.geographic_region || '',
+            specialty: row.specialty || row.normalizedSpecialty || '',
+            normalizedSpecialty: row.normalizedSpecialty || '',
+            surveySource: surveyType || '',
+            year: String(row.year || row.surveyYear || (survey as any).year || ''),
+            tcc_p25: Number(row.tcc_p25) || 0,
+            tcc_p50: Number(row.tcc_p50) || 0,
+            tcc_p75: Number(row.tcc_p75) || 0,
+            tcc_p90: Number(row.tcc_p90) || 0,
+            wrvu_p25: Number(row.wrvu_p25) || 0,
+            wrvu_p50: Number(row.wrvu_p50) || 0,
+            wrvu_p75: Number(row.wrvu_p75) || 0,
+            wrvu_p90: Number(row.wrvu_p90) || 0,
+            cf_p25: Number(row.cf_p25) || 0,
+            cf_p50: Number(row.cf_p50) || 0,
+            cf_p75: Number(row.cf_p75) || 0,
+            cf_p90: Number(row.cf_p90) || 0,
+          }));
+          allRows = allRows.concat(transformedRows);
+        }
+      }
+
+      // Store all rows for cascading filter calculations
+      setAllSurveyRows(allRows);
+
+      // Calculate initial unique values from all data
       const yearsSet = new Set<string>();
       const values = {
         specialties: new Set<string>(),
@@ -96,42 +140,46 @@ export const useFMVData = () => {
         }
       });
 
-      let allRows: NormalizedSurveyRow[] = [];
+      // Add values from actual data
+      allRows.forEach((row: any) => {
+        if (row.providerType) values.providerTypes.add(row.providerType);
+        if (row.geographicRegion) values.regions.add(row.geographicRegion);
+        if (row.specialty) values.specialties.add(row.specialty);
+        if (row.surveySource) values.surveySources.add(row.surveySource);
+        if (row.year) {
+          yearsSet.add(String(row.year));
+          console.log('FMV Debug - Found year:', row.year);
+        }
+      });
+      
+      console.log('FMV Debug - All years found:', Array.from(yearsSet));
 
-      // Process uploaded surveys
-      for (const survey of uploadedSurveys) {
-        let year = '';
-        if (survey.metadata?.columnMappings?.surveyYear) {
-          year = String(survey.metadata.columnMappings.surveyYear);
-        } else if (survey.metadata?.surveyYear) {
-          year = String(survey.metadata.surveyYear);
-        }
-        if (year) yearsSet.add(year);
-
-        // Add metadata values
-        if (survey.metadata.uniqueProviderTypes) {
-          survey.metadata.uniqueProviderTypes.forEach((pt: string) => values.providerTypes.add(pt));
-        }
-        if (survey.metadata.uniqueRegions) {
-          survey.metadata.uniqueRegions.forEach((r: string) => values.regions.add(r));
-        }
-        if (survey.metadata.surveyType) values.surveySources.add(survey.metadata.surveyType);
-
-        // Process survey data
-        const data = await storageService.getSurveyData(survey.id);
-        if (data?.rows) {
-          const cm = survey.metadata?.columnMappings || {};
-          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey.metadata, cm));
-          
-          normalizedRows.forEach((row: NormalizedSurveyRow) => {
-            if (row.providerType) values.providerTypes.add(row.providerType);
-            if (row.geographicRegion) values.regions.add(row.geographicRegion);
-            if (row.specialty) values.specialties.add(row.specialty);
-            if (row.year) yearsSet.add(String(row.year));
-          });
-          
-          allRows = allRows.concat(normalizedRows);
-        }
+      // Add default values if no data found
+      if (values.specialties.size === 0) {
+        values.specialties.add('Pediatrics - Endocrinology');
+        values.specialties.add('Allergy/Immunology');
+        values.specialties.add('Anesthesiology');
+      }
+      if (values.providerTypes.size === 0) {
+        values.providerTypes.add('Staff Physician');
+        values.providerTypes.add('Division Chief');
+        values.providerTypes.add('Department Chair');
+      }
+      if (values.regions.size === 0) {
+        values.regions.add('National');
+        values.regions.add('Northeast');
+        values.regions.add('North Central');
+        values.regions.add('South');
+        values.regions.add('West');
+      }
+      if (values.surveySources.size === 0) {
+        values.surveySources.add('MGMA');
+        values.surveySources.add('SullivanCotter');
+        values.surveySources.add('Gallagher');
+      }
+      if (yearsSet.size === 0) {
+        yearsSet.add('2023');
+        yearsSet.add('2022');
       }
 
       setUniqueValues({
@@ -155,22 +203,11 @@ export const useFMVData = () => {
     setError(null);
 
     try {
-      const storageService = new LocalStorageService();
-      const mappingService = new SpecialtyMappingService(storageService);
+      const mappingService = new SpecialtyMappingService(new LocalStorageService());
       const allMappings = await mappingService.getAllMappings();
-      const uploadedSurveys = await storageService.listSurveys();
       
-      let allRows: NormalizedSurveyRow[] = [];
-
-      // Collect all survey data
-      for (const survey of uploadedSurveys) {
-        const data = await storageService.getSurveyData(survey.id);
-        if (data?.rows) {
-          const cm = survey.metadata?.columnMappings || {};
-          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey.metadata, cm));
-          allRows = allRows.concat(normalizedRows);
-        }
-      }
+      // Use stored survey rows instead of fetching again
+      const allRows = allSurveyRows;
 
       // Find mapped specialties for filtering
       let mappedSpecialties: string[] = [];
@@ -207,14 +244,87 @@ export const useFMVData = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf]);
+  }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf, allSurveyRows]);
+
+  /**
+   * Calculates cascading filter values based on current filters
+   */
+  const calculateCascadingValues = useCallback((currentFilters: FMVFilters, allRows: any[]) => {
+    // For specialties, always show all available specialties
+    const allSpecialties = [...new Set(allRows.map(row => row.specialty).filter(Boolean))].sort();
+    
+    // For other filters, apply cascading logic
+    let filteredRows = allRows;
+
+    // Apply filters progressively to calculate available options for OTHER dropdowns
+    if (currentFilters.specialty) {
+      filteredRows = filteredRows.filter(row => 
+        normalizeString(row.specialty) === normalizeString(currentFilters.specialty)
+      );
+    }
+
+    if (currentFilters.providerType) {
+      filteredRows = filteredRows.filter(row => 
+        normalizeString(row.providerType) === normalizeString(currentFilters.providerType)
+      );
+    }
+
+    if (currentFilters.region) {
+      filteredRows = filteredRows.filter(row => 
+        normalizeString(row.geographicRegion) === normalizeString(currentFilters.region)
+      );
+    }
+
+    if (currentFilters.surveySource) {
+      filteredRows = filteredRows.filter(row => 
+        normalizeString(row.surveySource) === normalizeString(currentFilters.surveySource)
+      );
+    }
+
+    if (currentFilters.year) {
+      filteredRows = filteredRows.filter(row => 
+        String(row.year) === String(currentFilters.year)
+      );
+    }
+
+    // Calculate available values for each filter (except specialties)
+    const availableValues = {
+      providerTypes: new Set<string>(),
+      regions: new Set<string>(),
+      surveySources: new Set<string>(),
+      years: new Set<string>()
+    };
+
+    filteredRows.forEach(row => {
+      if (row.providerType) availableValues.providerTypes.add(row.providerType);
+      if (row.geographicRegion) availableValues.regions.add(row.geographicRegion);
+      if (row.surveySource) availableValues.surveySources.add(row.surveySource);
+      if (row.year) availableValues.years.add(String(row.year));
+    });
+
+    return {
+      specialties: allSpecialties, // Always show all specialties
+      providerTypes: Array.from(availableValues.providerTypes).sort(),
+      regions: Array.from(availableValues.regions).sort(),
+      surveySources: Array.from(availableValues.surveySources).sort(),
+      years: Array.from(availableValues.years).sort((a, b) => Number(b) - Number(a))
+    };
+  }, []);
 
   /**
    * Updates filters and triggers market data recalculation
    */
   const updateFilters = useCallback((newFilters: Partial<FMVFilters>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  }, []);
+    setFilters(prev => {
+      const updatedFilters = { ...prev, ...newFilters };
+      
+      // Update cascading filter values
+      const cascadingValues = calculateCascadingValues(updatedFilters, allSurveyRows);
+      setUniqueValues(cascadingValues);
+      
+      return updatedFilters;
+    });
+  }, [calculateCascadingValues, allSurveyRows]);
 
   /**
    * Adds a new compensation component
@@ -299,6 +409,7 @@ export const useFMVData = () => {
     uniqueValues,
     loading,
     error,
+    allSurveyRows,
     
     // Calculated values
     tcc,

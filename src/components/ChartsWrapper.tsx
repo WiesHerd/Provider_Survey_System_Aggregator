@@ -1,15 +1,8 @@
 import React, { Suspense, lazy } from 'react';
+import LoadingSpinner from './ui/loading-spinner';
 
 // Lazy load Charts component to reduce initial bundle size
 const Charts = lazy(() => import('./Charts'));
-
-// Loading component for Charts
-const ChartsLoadingSpinner = () => (
-  <div className="flex items-center justify-center h-64">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-    <span className="ml-2 text-gray-600">Loading charts...</span>
-  </div>
-);
 
 interface ChartsWrapperProps {
   data?: any[];
@@ -21,8 +14,8 @@ interface ChartsWrapperProps {
 
 const ChartsWrapper: React.FC<ChartsWrapperProps> = ({ data, title, type, xAxisKey, yAxisKey }) => {
   return (
-    <Suspense fallback={<ChartsLoadingSpinner />}>
-      <ErrorBoundary fallback={<ChartsLoadingSpinner />}>
+    <Suspense fallback={<LoadingSpinner message="Loading charts..." size="lg" variant="primary" fullScreen={true} />}>
+      <ErrorBoundary>
         <Charts data={data} title={title} type={type} xAxisKey={xAxisKey} yAxisKey={yAxisKey} />
       </ErrorBoundary>
     </Suspense>
@@ -31,10 +24,10 @@ const ChartsWrapper: React.FC<ChartsWrapperProps> = ({ data, title, type, xAxisK
 
 // Simple Error Boundary component
 class ErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
+  { children: React.ReactNode },
   { hasError: boolean }
 > {
-  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -49,7 +42,14 @@ class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback;
+      return (
+        <LoadingSpinner 
+          message="Something went wrong loading the charts. Please refresh the page." 
+          size="lg" 
+          variant="error" 
+          fullScreen={true} 
+        />
+      );
     }
 
     return this.props.children;

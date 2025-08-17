@@ -58,41 +58,28 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Main Container with proper spacing and max-width */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+    <div className="w-full min-h-screen">
+      <div className="w-full flex flex-col gap-4">
+        {/* Filters Section */}
+        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="mb-6 flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Fair Market Value Calculator
-              </h1>
-              <p className="text-lg text-gray-600">
-                Compare your compensation against market benchmarks
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Market Data Filters
+              </h2>
+              <p className="text-sm text-gray-600">
+                Select criteria to filter the market data for comparison
               </p>
             </div>
             <button
               onClick={handlePrintClick}
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-sm"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-sm"
             >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
               </svg>
               Print Report
             </button>
-          </div>
-        </div>
-
-        {/* Filters Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Market Data Filters
-            </h2>
-            <p className="text-sm text-gray-600">
-              Select criteria to filter the market data for comparison
-            </p>
           </div>
           <FMVFilters 
             filters={filters}
@@ -102,7 +89,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
         </div>
 
         {/* Comparison Type Selector */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
               Comparison Type
@@ -119,7 +106,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
 
         {/* Input Components based on comparison type */}
         {compareType === 'TCC' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
                 Total Cash Compensation
@@ -131,12 +118,14 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             <TCCItemization 
               components={compComponents}
               onComponentsChange={setCompComponents}
+              fte={filters.fte}
+              onFTEChange={(fte) => updateFilters({ fte })}
             />
           </div>
         )}
         
         {compareType === 'wRVUs' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
                 Work RVUs
@@ -149,12 +138,13 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               value={wrvus}
               onChange={setWRVUs}
               fte={filters.fte}
+              onFTEChange={(fte) => updateFilters({ fte })}
             />
           </div>
         )}
         
         {compareType === 'CFs' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
                 Conversion Factor
@@ -172,7 +162,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
         )}
 
         {/* Results Panel */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <ResultsPanel 
             compareType={compareType}
             marketData={marketData}

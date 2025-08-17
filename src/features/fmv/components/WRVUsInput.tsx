@@ -16,39 +16,74 @@ import { applyFTEAdjustment } from '../utils/fmvCalculations';
 export const WRVUsInput: React.FC<WRVUsInputProps> = ({ 
   value, 
   onChange, 
-  fte 
+  fte,
+  onFTEChange
 }) => {
   const normalized = applyFTEAdjustment(Number(value), fte);
 
   return (
     <div className="space-y-4">
-      <div className="max-w-md">
-        <TextField
-          label="Annual wRVUs"
-          type="number"
-          value={value}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-          fullWidth
-          size="small"
-          InputProps={{ 
-            endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> 
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: '8px',
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#3b82f6',
+      <div className="flex gap-4 items-center">
+        <div className="w-48">
+          <TextField
+            label="Annual wRVUs"
+            type="number"
+            value={value}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+            fullWidth
+            size="small"
+            InputProps={{ 
+              endAdornment: <InputAdornment position="end">wRVUs</InputAdornment> 
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#3b82f6',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#3b82f6',
+                  borderWidth: '2px',
+                },
               },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#3b82f6',
-                borderWidth: '2px',
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: '#3b82f6',
               },
-            },
-            '& .MuiInputLabel-root.Mui-focused': {
-              color: '#3b82f6',
-            },
-          }}
-        />
+            }}
+          />
+        </div>
+        <div className="w-24">
+          <TextField
+            label="FTE"
+            type="number"
+            value={fte}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+              onFTEChange(Number(e.target.value))
+            }
+            fullWidth
+            size="small"
+            inputProps={{ 
+              min: 0.1, 
+              max: 2.0, 
+              step: 0.1 
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#3b82f6',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#3b82f6',
+                  borderWidth: '2px',
+                },
+              },
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: '#3b82f6',
+              },
+            }}
+          />
+        </div>
       </div>
       
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

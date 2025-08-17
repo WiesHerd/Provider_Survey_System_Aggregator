@@ -11,8 +11,7 @@ import {
   ISpecialtyMapping, 
   IUnmappedSpecialty 
 } from '../../../types/specialty';
-import { SpecialtyMappingService } from '../../../services/SpecialtyMappingService';
-import { LocalStorageService } from '../../../services/StorageService';
+import { getDataService } from '../../../services/DataService';
 import { 
   filterUnmappedSpecialties,
   groupSpecialtiesBySurvey,
@@ -94,10 +93,7 @@ export const useMappingData = (): UseMappingDataReturn => {
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
   
   // Service instance
-  const mappingService = useMemo(() => 
-    new SpecialtyMappingService(new LocalStorageService()), 
-    []
-  );
+  const dataService = useMemo(() => getDataService(), []);
 
   // Load data on mount
   useEffect(() => {
@@ -166,9 +162,9 @@ export const useMappingData = (): UseMappingDataReturn => {
       
       console.log('Loading specialty mapping data...');
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
-        mappingService.getAllMappings(),
-        mappingService.getUnmappedSpecialties(),
-        mappingService.getLearnedMappings()
+        dataService.getAllSpecialtyMappings(),
+        dataService.getUnmappedSpecialties(),
+        dataService.getLearnedMappings()
       ]);
       
       console.log('Loaded data:', { 
@@ -186,7 +182,7 @@ export const useMappingData = (): UseMappingDataReturn => {
     } finally {
       setLoading(false);
     }
-  }, [mappingService]);
+  }, [dataService]);
 
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {
@@ -225,7 +221,13 @@ export const useMappingData = (): UseMappingDataReturn => {
         mappingId: ''
       }));
 
-      const mapping = await mappingService.createMapping(standardizedName, sourceSpecialties);
+      const mapping = await dataService.createSpecialtyMapping({
+        id: crypto.randomUUID(),
+        standardizedName,
+        sourceSpecialties,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
       
       // Update state
       setMappings(prev => [...prev, mapping]);
@@ -238,18 +240,18 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError('Failed to create mapping');
       console.error('Error creating mapping:', err);
     }
-  }, [selectedSpecialties, mappingService]);
+  }, [selectedSpecialties, dataService]);
 
   const deleteMapping = useCallback(async (mappingId: string) => {
     try {
       setError(null);
-      await mappingService.deleteMapping(mappingId);
+      await dataService.deleteSpecialtyMapping(mappingId);
       
       // Update state
       setMappings(prev => prev.filter(m => m.id !== mappingId));
       
       // Refresh unmapped specialties to show the deleted ones
-      const unmappedData = await mappingService.getUnmappedSpecialties();
+      const unmappedData = await dataService.getUnmappedSpecialties();
       setUnmappedSpecialties(unmappedData);
       
       // Switch to unmapped tab
@@ -258,12 +260,12 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError('Failed to delete mapping');
       console.error('Error deleting mapping:', err);
     }
-  }, [mappingService]);
+  }, [dataService]);
 
   const clearAllMappings = useCallback(async () => {
     try {
       setError(null);
-      await mappingService.clearAllMappings();
+      await dataService.clearAllSpecialtyMappings();
       
       // Reset state
       setMappings([]);
@@ -276,14 +278,12 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError('Failed to clear all mappings');
       console.error('Error clearing mappings:', err);
     }
-  }, [mappingService, loadData]);
+  }, [dataService, loadData]);
 
   const removeLearnedMapping = useCallback(async (original: string) => {
     try {
       setError(null);
-      await mappingService.removeLearnedMapping(original);
-      
-      // Update state
+      // For now, just remove from local state since learned mappings are in localStorage
       setLearnedMappings(prev => {
         const newLearnedMappings = { ...prev };
         delete newLearnedMappings[original];
@@ -293,7 +293,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError('Failed to remove learned mapping');
       console.error('Error removing learned mapping:', err);
     }
-  }, [mappingService]);
+  }, []);
 
   // Auto-mapping
   const autoMap = useCallback(async (config: IAutoMappingConfig) => {
@@ -321,16 +321,19 @@ export const useMappingData = (): UseMappingDataReturn => {
       // Create mappings from suggestions
       for (const suggestion of suggestions) {
         if (suggestion.confidence >= config.confidenceThreshold) {
-          await mappingService.createMapping(
-            suggestion.standardizedName,
-            suggestion.specialties.map(s => ({
+          await dataService.createSpecialtyMapping({
+            id: crypto.randomUUID(),
+            standardizedName: suggestion.standardizedName,
+            sourceSpecialties: suggestion.specialties.map(s => ({
               id: crypto.randomUUID(),
               specialty: s.name,
               originalName: s.name,
               surveySource: s.surveySource,
               mappingId: ''
-            }))
-          );
+            })),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
         }
       }
 
@@ -346,7 +349,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       console.error('Auto-mapping error:', err);
       throw err;
     }
-  }, [unmappedSpecialties, mappings, learnedMappings, mappingService, loadData]);
+  }, [unmappedSpecialties, mappings, learnedMappings, dataService, loadData]);
 
   // Utility functions
   const clearError = useCallback(() => {

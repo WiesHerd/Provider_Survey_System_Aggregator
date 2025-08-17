@@ -9,7 +9,7 @@ export interface FMVFilters {
   region: string;
   surveySource: string;
   year: string;
-  fte: number;
+  fte: number; // Keep FTE in filters for now since it's used in calculations
 }
 
 /**
@@ -138,6 +138,8 @@ export interface CompareTypeSelectorProps {
 export interface TCCItemizationProps {
   components: CompensationComponent[];
   onComponentsChange: (components: CompensationComponent[]) => void;
+  fte: number;
+  onFTEChange: (fte: number) => void;
 }
 
 /**
@@ -147,6 +149,7 @@ export interface WRVUsInputProps {
   value: string;
   onChange: (value: string) => void;
   fte: number;
+  onFTEChange: (fte: number) => void;
 }
 
 /**

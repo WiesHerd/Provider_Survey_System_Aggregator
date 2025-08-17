@@ -228,8 +228,10 @@ export class ColumnMappingService {
 
   async getUnmappedColumns(): Promise<IColumnInfo[]> {
     try {
+      console.log('🔍 getUnmappedColumns: Starting...');
+      
       const mappings = await this.getAllMappings();
-      console.log('Current mappings count:', mappings.length);
+      console.log('📋 Current mappings count:', mappings.length);
       
       // Create a set of mapped column names by survey source
       const mappedColumns = new Set<string>();
@@ -240,13 +242,17 @@ export class ColumnMappingService {
           mappedColumns.add(key);
         });
       });
+      console.log('🗺️ Mapped columns set size:', mappedColumns.size);
 
       // Get surveys from backend with error handling
       let surveys: any[] = [];
       try {
+        console.log('📡 Fetching surveys from backend...');
         surveys = await this.backendService.getAllSurveys();
+        console.log('📊 Surveys fetched from backend:', surveys.length);
+        console.log('📊 Survey details:', surveys.map(s => ({ id: s.id, name: s.name, type: s.type })));
       } catch (error) {
-        console.warn('Failed to fetch surveys from backend, using empty array:', error);
+        console.warn('❌ Failed to fetch surveys from backend, using empty array:', error);
         return [];
       }
 
@@ -255,10 +261,15 @@ export class ColumnMappingService {
       // Process each survey to get unmapped columns
       for (const survey of surveys) {
         try {
+          console.log(`🔍 Processing survey ${survey.id} (${survey.name || survey.type})`);
           const meta = await this.backendService.getSurveyMeta(survey.id);
+          console.log(`📋 Survey ${survey.id} metadata:`, meta);
+          
           const headers: string[] = Array.isArray(meta?.columns) && meta.columns.length > 0
             ? meta.columns
             : [];
+          
+          console.log(`📋 Survey ${survey.id} headers:`, headers);
           
           headers.forEach((header: string, index: number) => {
             const columnName = String(header || '').trim();
@@ -274,21 +285,23 @@ export class ColumnMappingService {
                 surveySource: surveySource,
                 dataType: 'string'
               });
+              console.log(`➕ Added unmapped column: ${columnName} (${surveySource})`);
             } else {
-              // Column already mapped - no need to log every single one
+              console.log(`✅ Column already mapped: ${columnName} (${surveySource})`);
             }
           });
         } catch (error) {
-          console.warn(`Failed to get metadata for survey ${survey.id}:`, error);
+          console.warn(`❌ Failed to get metadata for survey ${survey.id}:`, error);
           // Continue with other surveys instead of failing completely
           continue;
         }
       }
 
-      console.log('Total unmapped columns found:', columns.length);
+      console.log('📊 Total unmapped columns found:', columns.length);
+      console.log('📋 Unmapped columns:', columns.map(c => `${c.name} (${c.surveySource})`));
       return columns;
     } catch (error) {
-      console.error('Error getting unmapped columns:', error);
+      console.error('❌ Error getting unmapped columns:', error);
       return [];
     }
   }

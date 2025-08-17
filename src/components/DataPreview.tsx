@@ -6,19 +6,12 @@ import {
   Select,
   Box
 } from '@mui/material';
-import BackendService from '../services/BackendService';
+import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import LoadingSpinner from './ui/loading-spinner';
 
 // Lazy load AG Grid to reduce initial bundle size
 const AgGridWrapper = lazy(() => import('./AgGridWrapper'));
-
-// Loading component for AG Grid
-const AgGridLoadingSpinner = () => (
-  <div className="flex items-center justify-center h-64">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-    <span className="ml-2 text-gray-600">Loading data table...</span>
-  </div>
-);
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
@@ -80,6 +73,7 @@ interface FileStats {
 }
 
 const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange }) => {
+  const dataService = getDataService();
   const [previewData, setPreviewData] = useState<string[][]>([]);
   const [originalData, setOriginalData] = useState<any[]>([]);
   const [stats, setStats] = useState<FileStats | null>(null);
@@ -112,8 +106,6 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           setIsLoading(true);
         }
         
-        const backendService = BackendService.getInstance();
-        
         // Pass current filters to server for server-side filtering
         const filters = {
           specialty: globalFilters.specialty || undefined,
@@ -121,7 +113,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           region: globalFilters.region || undefined
         };
         
-        const { rows: surveyData } = await backendService.getSurveyData(
+        const { rows: surveyData } = await dataService.getSurveyData(
           file.id,
           filters,
           { limit: 10000 } // Fetch all data (up to 10,000 rows)
@@ -134,12 +126,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           // Prefer original CSV header order from survey metadata if available
           let headers: string[] = [];
           try {
-            const meta = await BackendService.getInstance().getSurveyMeta(file.id);
-            if (Array.isArray(meta.columns) && meta.columns.length > 0) {
-              headers = meta.columns;
-            } else {
-              headers = Object.keys(surveyData[0]);
-            }
+            // For IndexedDB, we'll use the first row's keys as headers
+            headers = Object.keys(surveyData[0]);
           } catch {
             headers = Object.keys(surveyData[0]);
           }
@@ -180,7 +168,6 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     const loadFilteredData = async () => {
       try {
         setIsRefreshing(true);
-        const backendService = BackendService.getInstance();
         
         const filters = {
           specialty: globalFilters.specialty || undefined,
@@ -188,7 +175,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           region: globalFilters.region || undefined
         };
         
-        const { rows: surveyData } = await backendService.getSurveyData(
+        const { rows: surveyData } = await dataService.getSurveyData(
           file.id,
           filters,
           { limit: 10000 } // Fetch all data (up to 10,000 rows)
@@ -203,12 +190,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             headers = previewData[0];
           } else {
             try {
-              const meta = await BackendService.getInstance().getSurveyMeta(file.id);
-              if (Array.isArray(meta.columns) && meta.columns.length > 0) {
-                headers = meta.columns;
-              } else {
-                headers = Object.keys(surveyData[0]);
-              }
+              // For IndexedDB, we'll use the first row's keys as headers
+              headers = Object.keys(surveyData[0]);
             } catch {
               headers = Object.keys(surveyData[0]);
             }
@@ -253,11 +236,17 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let cancelled = false;
     const loadFilters = async () => {
       try {
-        const f = await BackendService.getInstance().getAvailableFiltersForSurvey(file.id);
+        // For IndexedDB, we'll extract filter options from the data
+        const { rows } = await dataService.getSurveyData(file.id);
         if (cancelled) return;
-        setServerSpecialties((f.specialties || []).sort());
-        setServerProviderTypes((f.providerTypes || []).sort());
-        setServerRegions((f.regions || []).sort());
+        
+        const specialties = [...new Set(rows.map(row => String(row.specialty || row.Specialty || row['Provider Type'])).filter(Boolean))].sort();
+        const providerTypes = [...new Set(rows.map(row => String(row.providerType || row['Provider Type'])).filter(Boolean))].sort();
+        const regions = [...new Set(rows.map(row => String(row.region || row.Region || row.geographicRegion)).filter(Boolean))].sort();
+        
+        setServerSpecialties(specialties);
+        setServerProviderTypes(providerTypes);
+        setServerRegions(regions);
       } catch {}
     };
     if (file.id) loadFilters();
@@ -537,13 +526,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Subtle refreshing overlay */}
         {isRefreshing && (
           <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
-            <div className="flex items-center space-x-2 text-gray-600">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
-              <span className="text-sm">Updating data...</span>
-            </div>
+            <LoadingSpinner message="Updating data..." size="sm" variant="primary" />
           </div>
         )}
-        <Suspense fallback={<AgGridLoadingSpinner />}>
+        <Suspense fallback={<LoadingSpinner message="Loading data table..." size="lg" variant="primary" />}>
           <AgGridWrapper
             onGridReady={(params: any) => {
               setGridApi(params.api);

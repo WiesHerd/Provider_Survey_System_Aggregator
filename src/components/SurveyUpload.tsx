@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudArrowUpIcon, XMarkIcon, CalendarIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { FormControl, InputLabel, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
 import DataPreview from './DataPreview';
-import BackendService from '../services/BackendService';
+import { getDataService } from '../services/DataService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 import { TableFilters } from './TableFilters';
+import LoadingSpinner from './ui/loading-spinner';
+import IndexedDBStatus from './IndexedDBStatus';
 
 const SURVEY_OPTIONS = [
   'SullivanCotter',
@@ -59,13 +61,13 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 // See mapping logic in handleSurveyUpload for details.
 
 const SurveyUpload: React.FC = () => {
+  const dataService = getDataService();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [surveyType, setSurveyType] = useState('');
   const [customSurveyType, setCustomSurveyType] = useState('');
   const [surveyYear, setSurveyYear] = useState('');
   const [isCustom, setIsCustom] = useState(false);
-  const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,27 +98,11 @@ const SurveyUpload: React.FC = () => {
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
 
-  // Add ref for year picker click-outside handling
-  const yearPickerRef = useRef<HTMLDivElement>(null);
 
-  const backendService = React.useMemo(() => BackendService.getInstance(), []);
 
-  // Handle click outside year picker
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (yearPickerRef.current && !yearPickerRef.current.contains(event.target as Node)) {
-        setIsYearPickerOpen(false);
-      }
-    };
 
-    if (isYearPickerOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isYearPickerOpen]);
+
 
   // Update unique values when surveys change
   useEffect(() => {
@@ -160,7 +146,7 @@ const SurveyUpload: React.FC = () => {
     const loadSurveys = async () => {
       try {
         setIsLoading(true);
-        const surveys = await backendService.getAllSurveys();
+        const surveys = await dataService.getAllSurveys();
         console.log('Loaded surveys:', surveys);
         
         // Build lightweight survey list; fetch detailed rows only when a survey is selected
@@ -194,7 +180,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [backendService]);
+  }, [dataService]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -235,7 +221,7 @@ const SurveyUpload: React.FC = () => {
   const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     try {
-      await backendService.deleteSurvey(surveyId);
+      await dataService.deleteSurvey(surveyId);
       setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
       if (selectedSurvey === surveyId) {
         setSelectedSurvey(null);
@@ -257,24 +243,61 @@ const SurveyUpload: React.FC = () => {
     setUploadProgress(0);
 
     try {
-      // Simulate progress for better UX
-      // Real upload progress from XHR (front-end only). Once the file is uploaded,
-      // the modal stays with an indeterminate spinner while the server processes rows.
+      // Read the CSV file
+      const text = await file.text();
+      const rows = text.split('\n').filter(row => row.trim());
+      const headers = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const dataRows = rows.slice(1).filter(row => row.trim());
 
-      // Upload survey to backend
-      const uploadResult = await backendService.uploadSurvey(
-        file,
-        file.name,
-        parseInt(surveyYear),
-        isCustom ? customSurveyType : surveyType,
-        (p) => setUploadProgress(Math.min(p, 100))
-      );
-      // At this point the file is on the server; server-side parsing/inserts may still be running.
+      setUploadProgress(30);
+
+      // Parse CSV data
+      const parsedRows = dataRows.map(row => {
+        const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
+        const rowData: any = {};
+        headers.forEach((header, index) => {
+          rowData[header] = values[index] || '';
+        });
+        return rowData;
+      });
+
+      setUploadProgress(60);
+
+      // Create survey object
+      const surveyId = crypto.randomUUID();
+      const surveyName = file.name.replace('.csv', '');
+      const surveyTypeName = isCustom ? customSurveyType : surveyType;
+      
+      const survey = {
+        id: surveyId,
+        name: surveyName,
+        year: surveyYear,
+        type: surveyTypeName,
+        uploadDate: new Date(),
+        rowCount: parsedRows.length,
+        specialtyCount: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
+        dataPoints: parsedRows.length,
+        colorAccent: '#6366F1',
+        metadata: {
+          totalRows: parsedRows.length,
+          uniqueSpecialties: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
+          uniqueProviderTypes: new Set(parsedRows.map(row => row.providerType || row['Provider Type']).filter(Boolean)).size,
+          uniqueRegions: new Set(parsedRows.map(row => row.region || row.Region || row.geographicRegion).filter(Boolean)).size,
+          columnMappings: {}
+        }
+      };
+
+      setUploadProgress(80);
+
+      // Save survey and data to IndexedDB
+      await dataService.createSurvey(survey);
+      await dataService.saveSurveyData(surveyId, parsedRows);
+
       setUploadProgress(100);
 
       console.log('Survey uploaded successfully:', {
-        surveyId: uploadResult.surveyId,
-        rowCount: uploadResult.rowCount
+        surveyId: surveyId,
+        rowCount: parsedRows.length
       });
 
       // Update local state and select the new survey
@@ -282,17 +305,17 @@ const SurveyUpload: React.FC = () => {
         const updated = [
           ...prev,
           {
-            id: uploadResult.surveyId,
-            fileName: file.name,
-            surveyType: isCustom ? customSurveyType : surveyType,
+            id: surveyId,
+            fileName: surveyName,
+            surveyType: surveyTypeName,
             surveyYear,
             uploadDate: new Date(),
             fileContent: '',
             rows: [],
             stats: {
-              totalRows: uploadResult.rowCount,
-              uniqueSpecialties: 0,
-              totalDataPoints: uploadResult.rowCount
+              totalRows: parsedRows.length,
+              uniqueSpecialties: survey.specialtyCount,
+              totalDataPoints: parsedRows.length
             },
             columnMappings: {}
           }
@@ -300,7 +323,7 @@ const SurveyUpload: React.FC = () => {
         return updated;
       });
       
-      setSelectedSurvey(uploadResult.surveyId);
+      setSelectedSurvey(surveyId);
 
       // Clear form
       setFiles([]);
@@ -330,7 +353,7 @@ const SurveyUpload: React.FC = () => {
       if (!confirmDelete) return;
       setIsDeleting(true);
       setDeleteProgress(10);
-      await backendService.deleteAllSurveys();
+      await dataService.deleteAllSurveys();
       setDeleteProgress(90);
       setUploadedSurveys([]);
       setSelectedSurvey(null);
@@ -346,14 +369,7 @@ const SurveyUpload: React.FC = () => {
     }
   };
 
-  // Generate years from 1990 to current year + 10 (more future-proof)
-  const currentYear = new Date().getFullYear();
-  const startYear = 1990;
-  const endYear = currentYear + 10; // Extend to 10 years in the future
-  const years = Array.from(
-    { length: endYear - startYear + 1 },
-    (_, i) => endYear - i
-  );
+
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -386,6 +402,9 @@ const SurveyUpload: React.FC = () => {
     <>
       <div className="w-full min-h-screen">
         <div className="w-full flex flex-col gap-4">
+          
+          {/* IndexedDB Status */}
+          <IndexedDBStatus />
 
           {/* Upload Form Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -468,58 +487,48 @@ const SurveyUpload: React.FC = () => {
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      id="surveyYear"
-                      value={surveyYear}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        const value = e.target.value;
-                        // Allow typing numbers and basic validation
-                        if (value === '' || /^\d{4}$/.test(value)) {
-                          setSurveyYear(value);
-                        }
-                      }}
-                      onClick={() => setIsYearPickerOpen(true)}
-                      onFocus={() => setIsYearPickerOpen(true)}
-                      placeholder="Select year"
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        bg-white text-sm transition-colors duration-200"
-                    />
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                      <CalendarIcon className="h-5 w-5" />
-                    </div>
-
-                    {/* Simple Year Picker Dropdown */}
-                    {isYearPickerOpen && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60" ref={yearPickerRef}>
-                        <div className="overflow-y-auto max-h-56">
-                          {years.map(year => (
-                            <button
-                              key={year}
-                              onClick={() => {
-                                setSurveyYear(year.toString());
-                                setIsYearPickerOpen(false);
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 hover:bg-gray-50
-                                ${surveyYear === year.toString() 
-                                  ? 'bg-indigo-50 text-indigo-600 font-medium' 
-                                  : 'text-gray-700'
-                                }`}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') {
-                                  setIsYearPickerOpen(false);
-                                }
-                              }}
-                            >
-                              {year}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                  <Autocomplete
+                    freeSolo
+                    options={(() => {
+                      const currentYear = new Date().getFullYear();
+                      const years = [];
+                      for (let i = currentYear + 2; i >= currentYear - 10; i--) {
+                        years.push(i.toString());
+                      }
+                      return years;
+                    })()}
+                    value={surveyYear}
+                    onChange={(event: any, newValue: string | null) => {
+                      if (newValue && /^\d{4}$/.test(newValue)) {
+                        setSurveyYear(newValue);
+                      }
+                    }}
+                    onInputChange={(event: any, newInputValue: string) => {
+                      if (/^\d{0,4}$/.test(newInputValue)) {
+                        setSurveyYear(newInputValue);
+                      }
+                    }}
+                    renderInput={(params: any) => (
+                      <TextField
+                        {...params}
+                        placeholder="Enter year (e.g., 2024)"
+                        sx={{
+                          backgroundColor: 'white',
+                          '& .MuiOutlinedInput-root': {
+                            fontSize: '0.875rem',
+                            height: '40px',
+                            borderRadius: '8px',
+                          }
+                        }}
+                      />
                     )}
-                  </div>
+                    sx={{
+                      '& .MuiAutocomplete-input': {
+                        paddingTop: '8px !important',
+                        paddingBottom: '8px !important',
+                      }
+                    }}
+                  />
                 </div>
 
                 {/* Action Buttons */}
@@ -540,14 +549,7 @@ const SurveyUpload: React.FC = () => {
                     disabled={files.length === 0 || !surveyType || !surveyYear || isUploading}
                     className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
                   >
-                    {isUploading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Uploading...
-                      </>
-                    ) : (
-                      'Upload Survey'
-                    )}
+                    {isUploading ? 'Uploading...' : 'Upload Survey'}
                   </button>
                 </div>
 
@@ -615,10 +617,7 @@ const SurveyUpload: React.FC = () => {
             {!isUploadedSurveysCollapsed && (
               <>
                 {isLoading ? (
-                  <div className="text-center py-6">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-500">Loading surveys...</p>
-                  </div>
+                  <LoadingSpinner message="Loading surveys..." size="lg" variant="primary" />
                 ) : uploadedSurveys.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-xl">
                     <p className="text-gray-500">No surveys uploaded yet</p>
@@ -703,12 +702,9 @@ const SurveyUpload: React.FC = () => {
       {isUploading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-md p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 id="upload-modal-title" className="text-lg font-semibold text-gray-900">Uploading survey…</h3>
-                <p className="mt-1 text-sm text-gray-500">Please keep this tab open while we process your file.</p>
-              </div>
-              <div className="w-6 h-6 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" aria-hidden="true" />
+            <div>
+              <h3 id="upload-modal-title" className="text-lg font-semibold text-gray-900">Uploading survey…</h3>
+              <p className="mt-1 text-sm text-gray-500">Please keep this tab open while we process your file.</p>
             </div>
             <div className="mt-5">
               <div className="flex items-center justify-between mb-2">
@@ -734,7 +730,7 @@ const SurveyUpload: React.FC = () => {
                 <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900">Clearing surveys…</h3>
                 <p className="mt-1 text-sm text-gray-500">Deleting all surveys from Azure. This can take a few seconds.</p>
               </div>
-              <div className="w-6 h-6 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" aria-hidden="true" />
+              <LoadingSpinner size="sm" variant="primary" />
             </div>
             <div className="mt-5">
               <div className="flex items-center justify-between mb-2">

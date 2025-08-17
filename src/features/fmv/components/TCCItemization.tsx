@@ -13,10 +13,14 @@ import { calculateTotalTCC } from '../utils/fmvCalculations';
  * 
  * @param components - Array of compensation components
  * @param onComponentsChange - Callback when components change
+ * @param fte - Full-time equivalent value
+ * @param onFTEChange - Callback when FTE changes
  */
 export const TCCItemization: React.FC<TCCItemizationProps> = ({ 
   components, 
-  onComponentsChange 
+  onComponentsChange,
+  fte,
+  onFTEChange
 }) => {
   const addComponent = () => {
     onComponentsChange([...components, { type: '', amount: '', notes: '' }]);
@@ -40,6 +44,45 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
       <div className="space-y-4">
         {components.map((component, idx) => (
           <div key={idx} className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+            {/* FTE Field - Only show on first row */}
+            {idx === 0 && (
+              <div className="lg:col-span-2">
+                <TextField
+                  label="FTE"
+                  type="number"
+                  value={fte}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    onFTEChange(Number(e.target.value))
+                  }
+                  fullWidth
+                  size="small"
+                  inputProps={{ 
+                    min: 0.1, 
+                    max: 2.0, 
+                    step: 0.1 
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '8px',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#3b82f6',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#3b82f6',
+                        borderWidth: '2px',
+                      },
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  }}
+                />
+              </div>
+            )}
+            
+            {/* Empty space for other rows to align */}
+            {idx > 0 && <div className="lg:col-span-2" />}
+            
             {/* Type Field */}
             <div className="lg:col-span-3">
               <Autocomplete
@@ -106,7 +149,7 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
             </div>
             
             {/* Notes Field */}
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-3">
               <TextField
                 label="Notes"
                 value={component.notes}
@@ -147,11 +190,15 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
         ))}
       </div>
       
-      {/* Total TCC and Add Component Button */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-gray-200">
-        <div className="text-lg font-semibold text-gray-900">
-          Total TCC: <span className="text-blue-600">${total.toLocaleString()}</span>
+      {/* Total TCC Display */}
+      <div className="pt-4 border-t border-gray-200">
+        <div className="text-sm text-gray-600">
+          <p><strong>Total TCC:</strong> <span className="text-blue-600 font-semibold">${total.toLocaleString()}</span></p>
         </div>
+      </div>
+      
+      {/* Add Component Button */}
+      <div className="flex justify-end pt-4 border-t border-gray-200">
         <button
           onClick={addComponent}
           className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-sm"

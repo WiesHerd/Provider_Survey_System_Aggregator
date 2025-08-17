@@ -135,32 +135,58 @@ const SpecialtyMapping: React.FC = () => {
     useExistingMappings: boolean;
     enableFuzzyMatching: boolean;
   }) => {
-    const mappingConfig = {
-      confidenceThreshold: config.confidenceThreshold,
-      useExistingMappings: config.useExistingMappings,
-      useFuzzyMatching: config.enableFuzzyMatching
-    };
+    try {
+      console.log('🚀 Starting auto-mapping with config:', config);
+      setError(null);
+      
+      const mappingConfig = {
+        confidenceThreshold: config.confidenceThreshold,
+        useExistingMappings: config.useExistingMappings,
+        useFuzzyMatching: config.enableFuzzyMatching
+      };
 
-    const suggestions = await mappingService.generateMappingSuggestions(mappingConfig);
+      console.log('📊 Generating mapping suggestions...');
+      const suggestions = await mappingService.generateMappingSuggestions(mappingConfig);
+      console.log('✅ Generated suggestions:', suggestions.length);
 
-    // Create mappings from suggestions
-    for (const suggestion of suggestions) {
-      await mappingService.createMapping(
-        suggestion.standardizedName,
-        suggestion.specialties.map((s: { name: string; surveySource: string }) => ({
-          id: crypto.randomUUID(),
-          specialty: s.name,
-          originalName: s.name,
-          surveySource: s.surveySource,
-          mappingId: ''
-        }))
-      );
+      if (suggestions.length === 0) {
+        console.log('⚠️ No suggestions generated');
+        setError('No mapping suggestions found. Try adjusting the confidence threshold or enabling fuzzy matching.');
+        return;
+      }
+
+      // Create mappings from suggestions
+      console.log('🔨 Creating mappings from suggestions...');
+      for (const suggestion of suggestions) {
+        try {
+          console.log(`📝 Creating mapping for: ${suggestion.standardizedName}`);
+          await mappingService.createMapping(
+            suggestion.standardizedName,
+            suggestion.specialties.map((s: { name: string; surveySource: string }) => ({
+              id: crypto.randomUUID(),
+              specialty: s.name,
+              originalName: s.name,
+              surveySource: s.surveySource,
+              mappingId: ''
+            }))
+          );
+        } catch (mappingError) {
+          console.error(`❌ Error creating mapping for ${suggestion.standardizedName}:`, mappingError);
+          // Continue with other mappings even if one fails
+        }
+      }
+
+      console.log('🔄 Refreshing data...');
+      // Refresh data and close dialog
+      await loadData();
+      setActiveTab('mapped');
+      setIsAutoMapOpen(false);
+      console.log('✅ Auto-mapping completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Auto-mapping failed:', error);
+      setError(`Failed to process auto-mapping: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    // Refresh data and close dialog
-    await loadData();
-    setActiveTab('mapped');
-    setIsAutoMapOpen(false);
   };
 
   const handleCreateMapping = async () => {
@@ -201,17 +227,25 @@ const SpecialtyMapping: React.FC = () => {
 
   const handleDelete = async (mappingId: string) => {
     try {
+      console.log('🗑️ Deleting mapping:', mappingId);
       await mappingService.deleteMapping(mappingId);
+      
       // Remove from local state
       setMappings(mappings.filter(m => m.id !== mappingId));
-      // Refresh unmapped specialties to show the deleted ones
-      const unmappedData = await mappingService.getUnmappedSpecialties();
+      
+      // Force refresh unmapped specialties to show the deleted ones
+      console.log('🔄 Refreshing unmapped specialties after deletion...');
+      const unmappedData = await mappingService.refreshUnmappedSpecialties();
+      console.log('✅ Refreshed unmapped specialties:', unmappedData.length);
       setUnmappedSpecialties(unmappedData);
+      
       // Switch to unmapped tab
       setActiveTab('unmapped');
+      console.log('✅ Mapping deletion completed successfully');
+      
     } catch (err) {
+      console.error('❌ Error deleting mapping:', err);
       setError('Failed to delete mapping');
-      console.error('Error deleting mapping:', err);
     }
   };
 
@@ -323,14 +357,21 @@ const SpecialtyMapping: React.FC = () => {
                   <Button
                     variant="outlined"
                     color="error"
-                    onClick={() => {
+                    onClick={async () => {
                       if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
-                        mappingService.clearAllMappings().then(() => {
+                        try {
+                          console.log('🔄 Clearing all mappings...');
+                          await mappingService.clearAllMappings();
+                          console.log('✅ Mappings cleared successfully');
                           setMappings([]);
                           setLearnedMappings({});
                           setActiveTab('unmapped');
-                          loadData();
-                        });
+                          await loadData();
+                          console.log('✅ Data reloaded after clearing');
+                        } catch (error) {
+                          console.error('❌ Error clearing mappings:', error);
+                          alert('Failed to clear mappings. Please try again.');
+                        }
                       }
                     }}
                     startIcon={<DeleteSweepIcon className="h-4 w-4" />}

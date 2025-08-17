@@ -47,20 +47,35 @@ export class SpecialtyMappingService {
   }
 
   async saveMapping(mapping: ISpecialtyMapping): Promise<void> {
-    // Persist to backend API
-    const payload = {
-      standardizedName: mapping.standardizedName,
-      sourceSpecialties: mapping.sourceSpecialties.map(s => ({
-        specialty: s.specialty,
-        originalName: s.originalName,
-        surveySource: s.surveySource
-      }))
-    };
-    await fetch(`${API_BASE_URL}/mappings/specialty`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      console.log('💾 Saving mapping:', mapping.standardizedName);
+      
+      // Persist to backend API
+      const payload = {
+        standardizedName: mapping.standardizedName,
+        sourceSpecialties: mapping.sourceSpecialties.map(s => ({
+          specialty: s.specialty,
+          originalName: s.originalName,
+          surveySource: s.surveySource
+        }))
+      };
+      
+      const response = await fetch(`${API_BASE_URL}/mappings/specialty`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Backend API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      console.log('✅ Mapping saved successfully');
+    } catch (error) {
+      console.error('❌ Error saving mapping:', error);
+      throw error;
+    }
   }
 
   async getAllMappings(): Promise<ISpecialtyMapping[]> {
@@ -316,13 +331,6 @@ export class SpecialtyMappingService {
     const specialtyLower = specialty.toLowerCase();
     const standardizedLower = mapping.standardizedName.toLowerCase();
 
-    // Check learned mappings first
-    this.getLearnedMapping(specialty).then(learnedMapping => {
-      if (learnedMapping && learnedMapping === mapping.standardizedName) {
-        return 1.0;
-      }
-    });
-
     // Direct match check
     if (specialtyLower === standardizedLower) {
       return 1.0;
@@ -504,18 +512,64 @@ export class SpecialtyMappingService {
   }
 
   async deleteMapping(mappingId: string): Promise<void> {
-    // Delete via backend API
-    await fetch(`${API_BASE_URL}/mappings/specialty/${mappingId}`, {
-      method: 'DELETE'
-    });
+    try {
+      console.log('🗑️ Deleting mapping:', mappingId);
+      
+      // Delete via backend API
+      const response = await fetch(`${API_BASE_URL}/mappings/specialty/${mappingId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Backend API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      // Clear cache to force refresh
+      this.specialtyCache.clear();
+      this.cacheExpiry.clear();
+      
+      console.log('✅ Mapping deleted successfully');
+    } catch (error) {
+      console.error('❌ Error deleting mapping:', error);
+      throw error;
+    }
   }
 
   async clearAllMappings(): Promise<void> {
-    // Clear via backend API
-    await fetch(`${API_BASE_URL}/mappings/specialty`, {
-      method: 'DELETE'
-    });
-    await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, {});
+    console.log('🔄 SpecialtyMappingService: Clearing all mappings...');
+    try {
+      // Clear via DataService (which handles IndexedDB)
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
+      await dataService.clearAllSpecialtyMappings();
+      
+      console.log('✅ IndexedDB mappings cleared successfully');
+      
+      // Clear learned mappings from local storage
+      await this.storageService.setItem(this.LEARNED_MAPPINGS_KEY, {});
+      console.log('✅ Local storage cleared successfully');
+      
+      // Clear cache to force refresh
+      this.specialtyCache.clear();
+      this.cacheExpiry.clear();
+      
+    } catch (error) {
+      console.error('❌ Error in clearAllMappings:', error);
+      throw error;
+    }
+  }
+
+  // Force refresh unmapped specialties (bypass cache)
+  async refreshUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
+    console.log('🔄 Force refreshing unmapped specialties...');
+    
+    // Clear cache
+    this.specialtyCache.clear();
+    this.cacheExpiry.clear();
+    
+    // Fetch fresh data
+    return await this.getUnmappedSpecialties();
   }
 
   async suggestMappings(specialty: IUnmappedSpecialty, config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {

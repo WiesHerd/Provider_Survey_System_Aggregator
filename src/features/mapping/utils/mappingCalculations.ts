@@ -53,6 +53,7 @@ export const filterUnmappedSpecialties = (
 
 /**
  * Group specialties by survey source
+ * Each specialty will appear once per survey source it belongs to
  */
 export const groupSpecialtiesBySurvey = (
   specialties: IUnmappedSpecialty[]
@@ -60,8 +61,10 @@ export const groupSpecialtiesBySurvey = (
   const grouped = new Map<string, IUnmappedSpecialty[]>();
   
   specialties.forEach(specialty => {
-    const current = grouped.get(specialty.surveySource) || [];
-    grouped.set(specialty.surveySource, [...current, specialty]);
+    // Each specialty.surveySource is now a single survey name (not comma-separated)
+    const surveySource = specialty.surveySource;
+    const current = grouped.get(surveySource) || [];
+    grouped.set(surveySource, [...current, specialty]);
   });
   
   return grouped;

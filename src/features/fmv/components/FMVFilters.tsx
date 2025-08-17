@@ -25,9 +25,9 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* First Row - Specialty, Provider Type, Region */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="space-y-4">
+      {/* All filters in one row */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div>
           <TextField
             select
@@ -128,10 +128,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             ))}
           </TextField>
         </div>
-      </div>
 
-      {/* Second Row - Survey Source, Year, FTE */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <TextField
             select
@@ -196,38 +193,6 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>
-        </div>
-
-        <div>
-          <TextField
-            label="FTE"
-            type="number"
-            value={filters.fte}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-              handleFilterChange('fte', Math.max(0, Math.min(2, Number(e.target.value))))
-            }
-            fullWidth
-            size="small"
-            inputProps={{ min: 0, max: 2, step: 0.01 }}
-            InputProps={{
-              endAdornment: <InputAdornment position="end">FTE</InputAdornment>
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#3b82f6',
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#3b82f6',
-                  borderWidth: '2px',
-                },
-              },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: '#3b82f6',
-              },
-            }}
-          />
         </div>
       </div>
     </div>

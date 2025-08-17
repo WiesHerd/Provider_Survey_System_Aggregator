@@ -1,23 +1,51 @@
-# Cursor Project Rules: Survey Aggregator - Enterprise Refactoring Standards
+# Cursor Project Rules: Survey Aggregator - Enterprise Development Standards
 
 ## 🎯 Project Overview
-This is a **world-class, enterprise-grade survey data aggregation system** undergoing comprehensive refactoring to achieve Silicon Valley quality standards. The goal is to transform a monolithic codebase into a modular, maintainable, and scalable architecture.
+This is a **world-class, enterprise-grade survey data aggregation system** used by professionals for critical business decisions. Every change must be made with the precision and care of a 30-year veteran developer who understands that reliability, maintainability, and user experience are paramount.
 
-## 🚨 CRITICAL REFACTORING RULES - NEVER VIOLATE
+## 🧠 **ENTERPRISE DEVELOPMENT MINDSET**
 
-### **Architecture & Structure**
+### **Core Philosophy: Systems Thinking Over Isolated Changes**
+- **NEVER** make changes in isolation
+- **ALWAYS** consider the full application ecosystem
+- **UNDERSTAND** how changes affect data flow, state management, and user experience
+- **ANALYZE** upstream and downstream impacts before implementing
+
+### **Before Every Change, Ask:**
+1. **Data Flow Impact**: How does this affect data loading/saving across the app?
+2. **State Management Impact**: Does this affect global state or local state?
+3. **User Experience Impact**: How does this change user workflow?
+4. **Performance Impact**: Will this affect loading times or memory usage?
+5. **Integration Impact**: Does this break existing integrations?
+
+### **Critical Application Dependencies to Consider:**
+- **SurveyUpload** ↔ **DataService** ↔ **DataPreview** ↔ **Analytics**
+- **SpecialtyMapping** ↔ **DataService** ↔ **All Screens** ↔ **Reports**
+- **CustomReports** ↔ **DataService** ↔ **Chart Generation** ↔ **Export**
+- **IndexedDB** ↔ **DataService** ↔ **All Components** ↔ **Persistence**
+
+## 🚨 CRITICAL ENTERPRISE RULES - NEVER VIOLATE
+
+### **Systems Thinking & Architecture**
+- **NEVER make isolated changes** - Always consider the full application ecosystem
+- **NEVER break data consistency** - All data operations must maintain integrity
+- **NEVER ignore user workflow impact** - Changes must improve, not disrupt UX
+- **NEVER implement without error handling** - Graceful degradation is mandatory
 - **NEVER create components > 300 lines** - Break them down immediately
 - **NEVER mix business logic with UI components** - Separate concerns
 - **NEVER place feature-specific code in shared directories** - Use feature-based structure
 - **ALWAYS follow the established directory structure** defined in REFACTORING_PLAN.md
 - **ALWAYS create barrel exports (index.ts)** for clean imports
 
-### **Code Quality Standards**
+### **Enterprise Code Quality Standards**
 - **NEVER use `any` types** - Use proper TypeScript interfaces
 - **NEVER duplicate utility functions** - Extract to shared/utils
 - **NEVER create circular dependencies** - Maintain clear import hierarchy
+- **NEVER ignore data validation** - Validate all inputs and outputs
+- **NEVER skip error boundaries** - Every feature needs error handling
 - **ALWAYS write JSDoc comments** for public APIs and complex functions
 - **ALWAYS use semantic naming** - Function names should describe what they do
+- **ALWAYS consider performance implications** - Profile and optimize when needed
 
 ### **Performance & Maintainability**
 - **NEVER import entire libraries** - Use specific imports
@@ -472,19 +500,24 @@ export class AnalyticsErrorBoundary extends Component<Props, State> {
 }
 ```
 
-## 📋 Code Review Checklist
+## 📋 Enterprise Code Review Checklist
 
-### **Before Committing Refactored Code:**
-- [ ] Component size < 300 lines
-- [ ] All imports follow established patterns
-- [ ] TypeScript strict mode passes
-- [ ] ESLint passes with no warnings
-- [ ] Unit tests written and passing
-- [ ] JSDoc comments added for public APIs
-- [ ] Error boundaries implemented
-- [ ] Performance impact assessed
-- [ ] Bundle size analyzed
-- [ ] Code review completed
+### **Before Committing Any Code:**
+- [ ] **Systems Impact Analyzed**: Full application ecosystem considered
+- [ ] **Data Flow Validated**: All data operations maintain consistency
+- [ ] **User Experience Verified**: Changes improve, not disrupt workflow
+- [ ] **Error Handling Implemented**: Graceful degradation throughout
+- [ ] **Performance Assessed**: No regression in loading or memory usage
+- [ ] **Integration Tested**: All affected components work together
+- [ ] **Component size < 300 lines**
+- [ ] **All imports follow established patterns**
+- [ ] **TypeScript strict mode passes**
+- [ ] **ESLint passes with no warnings**
+- [ ] **Unit tests written and passing**
+- [ ] **JSDoc comments added for public APIs**
+- [ ] **Error boundaries implemented**
+- [ ] **Bundle size analyzed**
+- [ ] **Code review completed**
 
 ### **Refactoring Quality Gates:**
 - [ ] No breaking changes to existing APIs
@@ -495,7 +528,13 @@ export class AnalyticsErrorBoundary extends Component<Props, State> {
 - [ ] Import/export patterns established
 - [ ] Documentation updated
 
-## 🎯 Success Metrics
+## 🎯 Enterprise Success Metrics
+
+### **Systems Quality:**
+- **Data Integrity**: 100% of operations maintain consistency
+- **User Experience**: All changes improve workflow, never disrupt
+- **Error Handling**: 100% of features have graceful degradation
+- **Performance**: No regression in loading times or memory usage
 
 ### **Code Quality:**
 - **Component Size**: 100% of components < 300 lines
@@ -517,7 +556,7 @@ export class AnalyticsErrorBoundary extends Component<Props, State> {
 
 ---
 
-**Remember**: This is a **world-class, enterprise-grade application**. Every line of refactored code should reflect Silicon Valley quality standards. Think like you're building for Google, Facebook, or Apple - clean, scalable, performant, and maintainable.
+**Remember**: This is a **world-class, enterprise-grade application used by professionals for critical business decisions**. Every change must be made with the precision and care of a 30-year veteran developer who understands that reliability, maintainability, and user experience are paramount.
 
-**CRITICAL**: Never compromise on code quality during refactoring. If a component is too large, break it down. If logic is mixed, separate it. If types are unclear, define them properly.
+**CRITICAL**: Never compromise on systems thinking. Every change must consider the full application ecosystem, maintain data integrity, improve user experience, and follow enterprise-grade patterns. Think like you're building for Google, Facebook, or Apple - but with the wisdom of 30 years of enterprise development experience.
 

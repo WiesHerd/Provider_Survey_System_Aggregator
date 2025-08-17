@@ -30,30 +30,11 @@ if (envPath) {
   console.log('☁️ Using Azure App Settings for environment variables');
 }
 
-// Azure SQL Database configuration
+// Azure SQL Database configuration - DISABLED
 let getConnection, initializeDatabase;
-let azureEnabled = false;
+let azureEnabled = false; // Force disabled - using SQLite only
 
-try {
-  ({ getConnection, initializeDatabase } = require('./config/database'));
-  
-  // Check if Azure SQL is configured
-  azureEnabled = process.env.AZURE_SQL_SERVER && 
-                 process.env.AZURE_SQL_DATABASE && 
-                 process.env.AZURE_SQL_USER && 
-                 process.env.AZURE_SQL_PASSWORD;
-  
-  if (azureEnabled) {
-    console.log('🔗 Azure SQL Database configured');
-    console.log(`   Server: ${process.env.AZURE_SQL_SERVER}`);
-    console.log(`   Database: ${process.env.AZURE_SQL_DATABASE}`);
-  } else {
-    console.log('📝 Azure SQL Database not configured - using SQLite only');
-  }
-} catch (error) {
-  console.log('⚠️ Azure SQL configuration not available - using SQLite only');
-  azureEnabled = false;
-}
+console.log('📝 Using SQLite database only - Azure SQL disabled');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -709,6 +690,17 @@ app.put('/api/mappings/specialty/:id', async (req, res) => {
   }
 });
 
+app.delete('/api/mappings/specialty', async (req, res) => {
+  try {
+    await runAsync('DELETE FROM specialty_mapping_sources_v2');
+    await runAsync('DELETE FROM specialty_mappings_v2');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing specialty mappings:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.delete('/api/mappings/specialty/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -727,17 +719,6 @@ app.delete('/api/mappings/specialty/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting specialty mapping:', err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-app.delete('/api/mappings/specialty', async (req, res) => {
-  try {
-    await runAsync('DELETE FROM specialty_mapping_sources_v2');
-    await runAsync('DELETE FROM specialty_mappings_v2');
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Error clearing specialty mappings:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });
@@ -823,7 +804,23 @@ app.delete('/api/survey/:id', (req, res) => {
         return res.status(500).json({ error: 'Database error' });
       }
       
-      res.json({ success: true, message: 'Survey deleted successfully' });
+      // Clear specialty mappings when survey is deleted
+      db.run('DELETE FROM specialty_mapping_sources_v2', function(err) {
+        if (err) {
+          console.error('Error clearing specialty mappings:', err);
+          // Continue anyway - this is not critical
+        }
+        
+        db.run('DELETE FROM specialty_mappings_v2', function(err) {
+          if (err) {
+            console.error('Error clearing specialty mappings:', err);
+            // Continue anyway - this is not critical
+          }
+          
+          console.log('✅ Survey deleted and specialty mappings cleared');
+          res.json({ success: true, message: 'Survey deleted successfully' });
+        });
+      });
     });
   });
 });
@@ -844,20 +841,25 @@ app.delete('/api/surveys', async (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
         
-        // Also delete from Azure SQL if enabled
-        if (azureEnabled && getConnection) {
-          getConnection().then(pool => {
-            return pool.request().query('DELETE FROM survey_data');
-          }).then(() => {
-            return getConnection().then(pool => pool.request().query('DELETE FROM surveys'));
-          }).then(() => {
-            console.log('✅ Azure SQL: all surveys deleted');
-          }).catch(azureErr => {
-            console.error('⚠️ Azure SQL delete failed (continuing):', azureErr.message);
+        // Clear specialty mappings when all surveys are deleted
+        db.run('DELETE FROM specialty_mapping_sources_v2', function(err) {
+          if (err) {
+            console.error('Error clearing specialty mappings:', err);
+            // Continue anyway - this is not critical
+          }
+          
+          db.run('DELETE FROM specialty_mappings_v2', function(err) {
+            if (err) {
+              console.error('Error clearing specialty mappings:', err);
+              // Continue anyway - this is not critical
+            }
+            
+            // Azure SQL disabled - using SQLite only
+            
+            console.log('✅ All surveys deleted and specialty mappings cleared');
+            res.json({ success: true, message: 'All surveys deleted successfully' });
           });
-        }
-        
-        res.json({ success: true, message: 'All surveys deleted successfully' });
+        });
       });
     });
   } catch (error) {

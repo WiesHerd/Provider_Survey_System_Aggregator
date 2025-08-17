@@ -99,11 +99,11 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
             {['25th', '50th', '75th', '90th'].map((percentile) => {
               const key = `p${percentile.slice(0, 2)}` as keyof typeof percentileData;
               return (
-                <div key={percentile} className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-                  <div className="text-sm font-medium text-gray-600 mb-1">
+                <div key={percentile} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6 text-center">
+                  <div className="text-sm font-medium text-gray-600 mb-2">
                     {percentile} Percentile
                   </div>
-                  <div className="text-lg font-semibold text-gray-900">
+                  <div className="text-xl font-bold text-gray-900">
                     {percentileData && percentileData[key] != null
                       ? formatFMVValue(percentileData[key], compareType)
                       : '-'}

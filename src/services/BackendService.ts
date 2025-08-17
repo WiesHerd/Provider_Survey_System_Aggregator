@@ -80,24 +80,30 @@ class BackendService {
     const surveys = data.surveys || data;
     
     // Transform SQLite format to frontend format
-    return surveys.map((survey: any) => ({
-      id: survey.id,
-      name: survey.filename,
-      year: survey.surveyYear || new Date(survey.createdAt).getFullYear().toString(),
-      type: survey.surveyType || 'Compensation',
-      uploadDate: new Date(survey.createdAt),
-      rowCount: survey.rowCount || 0,
-      specialtyCount: 0, // Will be calculated when data is loaded
-      dataPoints: survey.rowCount || 0,
-      colorAccent: '#6366F1',
-      metadata: {
-        totalRows: survey.rowCount || 0,
-        uniqueSpecialties: [],
-        uniqueProviderTypes: [],
-        uniqueRegions: [],
-        columnMappings: {}
-      }
-    }));
+    return surveys.map((survey: any) => {
+      // Use correct column names from database
+      const year = survey.year?.toString() || new Date(survey.uploadDate || survey.createdAt).getFullYear().toString();
+      const type = survey.type || 'Unknown';
+      
+      return {
+        id: survey.id,
+        name: survey.name || survey.filename,
+        year: year,
+        type: type,
+        uploadDate: new Date(survey.uploadDate || survey.createdAt),
+        rowCount: survey.rowCount || 0,
+        specialtyCount: 0, // Will be calculated when data is loaded
+        dataPoints: survey.rowCount || 0,
+        colorAccent: '#6366F1',
+        metadata: {
+          totalRows: survey.rowCount || 0,
+          uniqueSpecialties: [],
+          uniqueProviderTypes: [],
+          uniqueRegions: [],
+          columnMappings: {}
+        }
+      };
+    });
   }
 
   // Get survey data with filters
@@ -128,8 +134,15 @@ class BackendService {
     const data = await response.json();
     
     // Transform backend format to frontend format
-    // Backend returns { rows: [...], pagination: {...} }
-    const surveyData = data.rows || data;
+    // Backend returns { data: [...], pagination: {...} }
+    const surveyData = data.data || data.rows || data;
+    
+    // Ensure surveyData is an array
+    if (!Array.isArray(surveyData)) {
+      console.error('BackendService: surveyData is not an array:', surveyData);
+      return { rows: [] };
+    }
+    
     // Keep all keys so the grid can render every original column.
     const rows = surveyData.map((row: any) => ({ ...row }));
     const pagination = data.pagination
@@ -197,6 +210,131 @@ class BackendService {
     } catch {
       return false;
     }
+  }
+
+  // Create survey
+  public async createSurvey(survey: any): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/surveys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(survey)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create survey');
+    }
+    
+    return await response.json();
+  }
+
+  // Save survey data
+  public async saveSurveyData(surveyId: string, rows: any[]): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/survey/${surveyId}/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save survey data');
+    }
+  }
+
+  // Specialty mapping methods
+  public async getAllSpecialtyMappings(): Promise<any[]> {
+    const response = await fetch(`${API_BASE_URL}/mappings/specialty`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch specialty mappings');
+    }
+    
+    return await response.json();
+  }
+
+  public async createSpecialtyMapping(mapping: any): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/mappings/specialty`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mapping)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create specialty mapping');
+    }
+    
+    return await response.json();
+  }
+
+  public async deleteSpecialtyMapping(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/mappings/specialty/${id}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete specialty mapping');
+    }
+  }
+
+  public async clearAllSpecialtyMappings(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/mappings/specialty`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to clear all specialty mappings');
+    }
+  }
+
+  // Column mapping methods
+  public async getAllColumnMappings(): Promise<any[]> {
+    const response = await fetch(`${API_BASE_URL}/mappings/column`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch column mappings');
+    }
+    
+    return await response.json();
+  }
+
+  public async createColumnMapping(mapping: any): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/mappings/column`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mapping)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create column mapping');
+    }
+    
+    return await response.json();
+  }
+
+  public async deleteColumnMapping(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/mappings/column/${id}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete column mapping');
+    }
+  }
+
+  public async clearAllColumnMappings(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/mappings/column`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to clear all column mappings');
+    }
+  }
+
+  // Utility methods
+  public async getUnmappedSpecialties(): Promise<any[]> {
+    // This would need to be implemented on the backend
+    // For now, return empty array
+    return [];
   }
 }
 
