@@ -11,13 +11,13 @@ interface SurveyInfo {
   uploadDate: Date;
 }
 
-interface IndexedDBStatus {
+interface IndexedDBStatusData {
   totalSurveys: number;
   surveys: SurveyInfo[];
 }
 
-const IndexedDBStatus: React.FC = () => {
-  const [status, setStatus] = useState<IndexedDBStatus | null>(null);
+const IndexedDBStatusComponent: React.FC = () => {
+  const [status, setStatus] = useState<IndexedDBStatusData | null>(null);
   const [loading, setLoading] = useState(false);
 
   const loadStatus = async () => {
@@ -129,4 +129,4 @@ const IndexedDBStatus: React.FC = () => {
   );
 };
 
-export default IndexedDBStatus;
+export default IndexedDBStatusComponent;

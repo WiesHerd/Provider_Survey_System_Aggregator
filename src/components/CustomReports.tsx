@@ -33,8 +33,6 @@ import {
 } from 'recharts';
 import { 
   ChartBarIcon, 
-  ChartPieIcon, 
-  ChartBarSquareIcon,
   DocumentArrowDownIcon,
   BookmarkIcon,
   BookmarkSlashIcon
@@ -417,7 +415,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       const isManyItems = chartData.length > 15;
       const chartHeight = 400; // Fixed height for all charts - enterprise standard
       const xAxisHeight = isManyItems ? 120 : 100;
-      const fontSize = isManyItems ? 10 : 12;
       
       return (
         <div className="w-full overflow-x-auto">
@@ -481,7 +478,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     const isManyItems = chartData.length > 15;
     const chartHeight = 400; // Fixed height for all charts - enterprise standard
     const xAxisHeight = isManyItems ? 120 : 100;
-    const fontSize = isManyItems ? 10 : 12;
     
     return (
       <div className="w-full overflow-x-auto">
