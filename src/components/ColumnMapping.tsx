@@ -10,8 +10,7 @@ import {
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { Dialog } from '@mui/material';
-import { ColumnMappingService } from '../services/ColumnMappingService';
-import { LocalStorageService } from '../services/StorageService';
+import { getDataService } from '../services/DataService';
 import { IColumnMapping, IColumnInfo } from '../types/column';
 import LoadingSpinner from './ui/loading-spinner';
 
@@ -184,7 +183,7 @@ const ColumnMapping: React.FC = () => {
   const [showHelp, setShowHelp] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false); // Prevent multiple simultaneous loads
 
-  const mappingService = useMemo(() => new ColumnMappingService(new LocalStorageService()), []);
+  const dataService = useMemo(() => getDataService(), []);
 
   const loadData = useCallback(async () => {
     // Prevent multiple simultaneous data loads
@@ -200,8 +199,8 @@ const ColumnMapping: React.FC = () => {
       
       console.log('Starting data load...');
       const [mappingsData, unmappedData] = await Promise.all([
-        mappingService.getAllMappings(),
-        mappingService.getUnmappedColumns()
+        dataService.getAllColumnMappings(),
+        dataService.getUnmappedColumns()
       ]);
       
       console.log('Data load completed:', { 
@@ -219,7 +218,7 @@ const ColumnMapping: React.FC = () => {
       setLoading(false);
       setIsLoadingData(false);
     }
-  }, [mappingService]);
+  }, [dataService]);
 
   useEffect(() => {
     loadData();
@@ -278,7 +277,19 @@ const ColumnMapping: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      await mappingService.createMapping(standardizedName, selectedColumns);
+      await dataService.createColumnMapping({
+        id: crypto.randomUUID(),
+        standardizedName,
+        sourceColumns: selectedColumns.map(col => ({
+          id: crypto.randomUUID(),
+          column: col.name,
+          originalName: col.name,
+          surveySource: col.surveySource,
+          mappingId: ''
+        } as any)),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
       setSelectedColumns([]);
       
       // Refresh data without showing loading spinner for better UX
@@ -297,7 +308,7 @@ const ColumnMapping: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      await mappingService.deleteMapping(mappingId);
+      await dataService.deleteColumnMapping(mappingId);
       
       // Refresh data without showing loading spinner for better UX
       await loadData();
@@ -318,23 +329,9 @@ const ColumnMapping: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Call the auto-mapping service
-      const suggestions = await mappingService.autoMapColumns({
-        confidenceThreshold: config.confidenceThreshold,
-        includeDataTypeMatching: config.enableFuzzyMatching
-      });
-
-      // Create mappings from suggestions
-      for (const suggestion of suggestions) {
-        await mappingService.createMapping(
-          suggestion.standardizedName,
-          suggestion.columns
-        );
-      }
-
-      // Refresh data and close dialog
-      await loadData();
-      setActiveTab('mapped');
+      // For now, auto-mapping is not implemented in DataService
+      // This would need to be implemented later
+      setError('Auto-mapping is not yet available with IndexedDB. Please map columns manually.');
       setIsAutoMapOpen(false);
     } catch (error) {
       console.error('Auto-mapping error:', error);
@@ -443,7 +440,7 @@ const ColumnMapping: React.FC = () => {
                     if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
                       try {
                         console.log('User confirmed clear all mappings');
-                        await mappingService.clearAllMappings();
+                        await dataService.clearAllColumnMappings();
                         console.log('Successfully cleared all mappings from database');
                         setMappings([]);
                         setActiveTab('unmapped');

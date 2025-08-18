@@ -291,6 +291,23 @@ export class DataService {
     }
   }
 
+  async getUnmappedColumns(): Promise<any[]> {
+    switch (this.mode) {
+      case StorageMode.INDEXED_DB:
+        return await this.indexedDB.getUnmappedColumns();
+      case StorageMode.BACKEND:
+        return await this.backend.getUnmappedColumns();
+      case StorageMode.HYBRID:
+        try {
+          return await this.backend.getUnmappedColumns();
+        } catch {
+          return await this.indexedDB.getUnmappedColumns();
+        }
+      default:
+        return await this.indexedDB.getUnmappedColumns();
+    }
+  }
+
   // Utility Methods
   async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
     switch (this.mode) {

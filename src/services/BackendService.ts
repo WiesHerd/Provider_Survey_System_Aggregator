@@ -336,6 +336,12 @@ class BackendService {
     // For now, return empty array
     return [];
   }
+
+  public async getUnmappedColumns(): Promise<any[]> {
+    // This would need to be implemented on the backend
+    // For now, return empty array
+    return [];
+  }
 }
 
 export default BackendService;

@@ -362,6 +362,56 @@ export class IndexedDBService {
     });
   }
 
+  async getUnmappedColumns(): Promise<any[]> {
+    const surveys = await this.getAllSurveys();
+    const mappings = await this.getAllColumnMappings();
+    
+    const mappedNames = new Set<string>();
+    mappings.forEach(mapping => {
+      mappedNames.add(mapping.standardizedName.toLowerCase());
+      mapping.sourceColumns.forEach((source: any) => {
+        mappedNames.add(source.column.toLowerCase());
+      });
+    });
+
+    const unmapped: any[] = [];
+    const columnCounts = new Map<string, { count: number; sources: Set<string>; dataType: string }>();
+
+    for (const survey of surveys) {
+      const { rows } = await this.getSurveyData(survey.id);
+      
+      if (rows.length > 0) {
+        const firstRow = rows[0];
+        const surveySource = survey.type || survey.name || 'Unknown';
+        
+        Object.keys(firstRow).forEach(columnName => {
+          if (!mappedNames.has(columnName.toLowerCase())) {
+            const key = columnName.toLowerCase();
+            const current = columnCounts.get(key) || { count: 0, sources: new Set(), dataType: typeof firstRow[columnName] };
+            current.count++;
+            current.sources.add(surveySource);
+            columnCounts.set(key, current);
+          }
+        });
+      }
+    }
+
+    // Create separate entries for each survey source
+    columnCounts.forEach((value, key) => {
+      Array.from(value.sources).forEach(surveySource => {
+        unmapped.push({
+          id: crypto.randomUUID(),
+          name: key,
+          dataType: value.dataType,
+          surveySource: surveySource,
+          frequency: value.count
+        });
+      });
+    });
+
+    return unmapped;
+  }
+
   // Utility Methods
   async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
     const surveys = await this.getAllSurveys();
