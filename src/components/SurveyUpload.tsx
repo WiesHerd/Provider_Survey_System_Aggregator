@@ -7,7 +7,7 @@ import { getDataService } from '../services/DataService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 import { TableFilters } from './TableFilters';
 import LoadingSpinner from './ui/loading-spinner';
-import IndexedDBStatus from './IndexedDBStatus';
+
 
 const SURVEY_OPTIONS = [
   'SullivanCotter',
@@ -403,8 +403,7 @@ const SurveyUpload: React.FC = () => {
       <div className="w-full min-h-screen">
         <div className="w-full flex flex-col gap-4">
           
-          {/* IndexedDB Status */}
-          <IndexedDBStatus />
+
 
           {/* Upload Form Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
