@@ -20,7 +20,11 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
   onFiltersChange, 
   uniqueValues 
 }) => {
+  console.log('FMV Debug - FMVFilters render - filters:', filters);
+  console.log('FMV Debug - FMVFilters render - uniqueValues:', uniqueValues);
   const handleFilterChange = (field: keyof typeof filters, value: string | number) => {
+    console.log('FMV Debug - Filter change:', field, value);
+    console.log('FMV Debug - Current filters:', filters);
     onFiltersChange({ ...filters, [field]: value });
   };
 
@@ -33,9 +37,10 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             select
             label="Specialty"
             value={filters.specialty}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-              handleFilterChange('specialty', e.target.value)
-            }
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              console.log('FMV Debug - Specialty dropdown change:', e.target.value);
+              handleFilterChange('specialty', e.target.value);
+            }}
             fullWidth
             size="small"
             sx={{

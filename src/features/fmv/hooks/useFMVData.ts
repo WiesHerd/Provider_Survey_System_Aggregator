@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { LocalStorageService } from '../../../services/StorageService';
-import { SpecialtyMappingService } from '../../../services/SpecialtyMappingService';
-import BackendService from '../../../services/BackendService';
+import { getDataService } from '../../../services/DataService';
 import { 
   FMVFilters, 
   CompensationComponent, 
@@ -78,18 +76,17 @@ export const useFMVData = () => {
    */
   const fetchUniqueValues = useCallback(async () => {
     try {
-      const backendService = BackendService.getInstance();
-      const mappingService = new SpecialtyMappingService(new LocalStorageService());
-      const allMappings = await mappingService.getAllMappings();
-      const uploadedSurveys = await backendService.getAllSurveys();
+      const dataService = getDataService();
+      const allMappings = await dataService.getAllSpecialtyMappings();
+      const uploadedSurveys = await dataService.getAllSurveys();
       
       let allRows: any[] = [];
 
       // Collect all survey data first
       for (const survey of uploadedSurveys) {
-        const surveyType = (survey as any).type;
-        const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 });
-        if (data?.rows) {
+        const surveyType = (survey as any).type || (survey as any).name || 'Unknown';
+        const data = await dataService.getSurveyData(survey.id);
+        if (data && data.rows && Array.isArray(data.rows)) {
           // Debug: Check what fields are available in the first row
           if (data.rows.length > 0) {
             console.log('FMV Debug - First row keys:', Object.keys(data.rows[0]));
@@ -153,19 +150,27 @@ export const useFMVData = () => {
       });
       
       console.log('FMV Debug - All years found:', Array.from(yearsSet));
+      console.log('FMV Debug - Total rows loaded:', allRows.length);
+      console.log('FMV Debug - Unique specialties found:', values.specialties.size);
+      console.log('FMV Debug - Unique provider types found:', values.providerTypes.size);
+      console.log('FMV Debug - Unique regions found:', values.regions.size);
+      console.log('FMV Debug - Unique survey sources found:', values.surveySources.size);
 
       // Add default values if no data found
       if (values.specialties.size === 0) {
+        console.log('FMV Debug - No specialties found, adding defaults');
         values.specialties.add('Pediatrics - Endocrinology');
         values.specialties.add('Allergy/Immunology');
         values.specialties.add('Anesthesiology');
       }
       if (values.providerTypes.size === 0) {
+        console.log('FMV Debug - No provider types found, adding defaults');
         values.providerTypes.add('Staff Physician');
         values.providerTypes.add('Division Chief');
         values.providerTypes.add('Department Chair');
       }
       if (values.regions.size === 0) {
+        console.log('FMV Debug - No regions found, adding defaults');
         values.regions.add('National');
         values.regions.add('Northeast');
         values.regions.add('North Central');
@@ -173,11 +178,13 @@ export const useFMVData = () => {
         values.regions.add('West');
       }
       if (values.surveySources.size === 0) {
+        console.log('FMV Debug - No survey sources found, adding defaults');
         values.surveySources.add('MGMA');
         values.surveySources.add('SullivanCotter');
         values.surveySources.add('Gallagher');
       }
       if (yearsSet.size === 0) {
+        console.log('FMV Debug - No years found, adding defaults');
         yearsSet.add('2023');
         yearsSet.add('2022');
       }
@@ -203,8 +210,8 @@ export const useFMVData = () => {
     setError(null);
 
     try {
-      const mappingService = new SpecialtyMappingService(new LocalStorageService());
-      const allMappings = await mappingService.getAllMappings();
+      const dataService = getDataService();
+      const allMappings = await dataService.getAllSpecialtyMappings();
       
       // Use stored survey rows instead of fetching again
       const allRows = allSurveyRows;
@@ -295,12 +302,24 @@ export const useFMVData = () => {
       years: new Set<string>()
     };
 
-    filteredRows.forEach(row => {
-      if (row.providerType) availableValues.providerTypes.add(row.providerType);
-      if (row.geographicRegion) availableValues.regions.add(row.geographicRegion);
-      if (row.surveySource) availableValues.surveySources.add(row.surveySource);
-      if (row.year) availableValues.years.add(String(row.year));
-    });
+    // If no filters are applied, show all available values from all data
+    if (!currentFilters.specialty && !currentFilters.providerType && 
+        !currentFilters.region && !currentFilters.surveySource && !currentFilters.year) {
+      allRows.forEach(row => {
+        if (row.providerType) availableValues.providerTypes.add(row.providerType);
+        if (row.geographicRegion) availableValues.regions.add(row.geographicRegion);
+        if (row.surveySource) availableValues.surveySources.add(row.surveySource);
+        if (row.year) availableValues.years.add(String(row.year));
+      });
+    } else {
+      // Apply cascading logic only when filters are active
+      filteredRows.forEach(row => {
+        if (row.providerType) availableValues.providerTypes.add(row.providerType);
+        if (row.geographicRegion) availableValues.regions.add(row.geographicRegion);
+        if (row.surveySource) availableValues.surveySources.add(row.surveySource);
+        if (row.year) availableValues.years.add(String(row.year));
+      });
+    }
 
     return {
       specialties: allSpecialties, // Always show all specialties
@@ -318,8 +337,12 @@ export const useFMVData = () => {
     setFilters(prev => {
       const updatedFilters = { ...prev, ...newFilters };
       
+      console.log('FMV Debug - Updating filters:', updatedFilters);
+      console.log('FMV Debug - All survey rows available:', allSurveyRows.length);
+      
       // Update cascading filter values
       const cascadingValues = calculateCascadingValues(updatedFilters, allSurveyRows);
+      console.log('FMV Debug - Cascading values calculated:', cascadingValues);
       setUniqueValues(cascadingValues);
       
       return updatedFilters;

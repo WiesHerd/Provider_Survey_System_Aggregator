@@ -16,7 +16,6 @@ const SurveyAnalytics = lazy(() => import('./components/AnalyticsWrapper'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const SurveyRegionalAnalytics = lazy(() => import('./components/SurveyRegionalAnalytics').then(module => ({ default: module.SurveyRegionalAnalytics })));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
-const ChartsWrapper = lazy(() => import('./components/ChartsWrapper'));
 const CustomReportsWrapper = lazy(() => import('./components/CustomReportsWrapper'));
 
 // Loading component for Suspense fallback
@@ -70,11 +69,6 @@ const PageContent = () => {
         return {
           title: 'Survey Regional Analytics',
           description: 'Analyze regional survey data with detailed filtering'
-        };
-      case '/charts':
-        return {
-          title: 'Data Visualization',
-          description: 'Explore data through interactive charts and graphs'
         };
       case '/custom-reports':
         return {
@@ -163,7 +157,6 @@ const PageContent = () => {
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />
-              <Route path="/charts" element={<ChartsWrapper />} />
               <Route path="/custom-reports" element={<CustomReportsWrapper />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
               <Route path="/instructions" element={

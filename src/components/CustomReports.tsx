@@ -11,7 +11,8 @@ import {
   Chip,
   Box,
   IconButton,
-  Tooltip
+  Tooltip,
+  Autocomplete
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { 
@@ -282,10 +283,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     console.log('- Current dimension:', currentConfig.dimension);
     console.log('- Current filters:', currentConfig.filters);
     
-    // For specialty dimension with many items, show all but limit others for performance
+    // For specialty dimension, require at least one specialty to be selected
     if (currentConfig.dimension === 'specialty') {
-      console.log('Specialty dimension - returning all data:', allData.length, 'items');
-      return allData; // Show all specialties
+      if (currentConfig.filters.specialties.length === 0) {
+        console.log('Specialty dimension with no filters - returning empty data');
+        return []; // Return empty data when no specialty filter is applied
+      } else {
+        console.log('Specialty dimension with filters - returning filtered data:', allData.length, 'items');
+        return allData; // Show filtered specialties
+      }
     } else {
       console.log('Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
@@ -409,25 +415,27 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
     if (currentConfig.chartType === 'line') {
       const isManyItems = chartData.length > 15;
-      const chartHeight = isManyItems ? Math.max(400, chartData.length * 20) : 400;
+      const chartHeight = 400; // Fixed height for all charts - enterprise standard
       const xAxisHeight = isManyItems ? 120 : 100;
       const fontSize = isManyItems ? 10 : 12;
-      const chartWidth = isManyItems ? Math.max(800, chartData.length * 80) : '100%';
       
       return (
-        <div className={isManyItems ? "overflow-x-auto" : ""}>
-          <div style={{ width: chartWidth, minWidth: '100%' }}>
+        <div className="w-full overflow-x-auto">
+          <div style={{ 
+            width: '100%',
+            minWidth: '100%'
+          }}>
             <ResponsiveContainer width="100%" height={chartHeight}>
               <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="name" 
-                  angle={isManyItems ? -60 : -45} 
-                  textAnchor="end" 
-                  height={xAxisHeight}
-                  tick={{ fontSize }}
-                  interval={0} // Show all labels
-                />
+                              <XAxis 
+                dataKey="name" 
+                angle={isManyItems ? -45 : -45} 
+                textAnchor="end" 
+                height={xAxisHeight}
+                tick={{ fontSize: isManyItems ? 9 : 12 }}
+                interval={isManyItems ? 2 : 0} // Show every 3rd label for many items
+              />
                 <YAxis 
                   tickFormatter={(value) => 
                     isCurrency ? `$${(value / 1000).toFixed(0)}K` : 
@@ -471,24 +479,26 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
     // Default bar chart
     const isManyItems = chartData.length > 15;
-    const chartHeight = isManyItems ? Math.max(400, chartData.length * 20) : 400;
+    const chartHeight = 400; // Fixed height for all charts - enterprise standard
     const xAxisHeight = isManyItems ? 120 : 100;
     const fontSize = isManyItems ? 10 : 12;
-    const chartWidth = isManyItems ? Math.max(800, chartData.length * 80) : '100%';
     
     return (
-      <div className={isManyItems ? "overflow-x-auto" : ""}>
-        <div style={{ width: chartWidth, minWidth: '100%' }}>
+      <div className="w-full overflow-x-auto">
+        <div style={{ 
+          width: '100%',
+          minWidth: '100%'
+        }}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="name" 
-                angle={isManyItems ? -60 : -45} 
+                angle={isManyItems ? -45 : -45} 
                 textAnchor="end" 
                 height={xAxisHeight}
-                tick={{ fontSize }}
-                interval={0} // Show all labels
+                tick={{ fontSize: isManyItems ? 9 : 12 }}
+                interval={isManyItems ? 2 : 0} // Show every 3rd label for many items
               />
               <YAxis 
                 tickFormatter={(value) => 
@@ -578,17 +588,16 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Specialty Filter */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Specialties
               </Typography>
-              <Select
+              <Autocomplete
                 multiple
                 value={currentConfig.filters.specialties}
-                onChange={(e: SelectChangeEvent<string[]>) => {
-                  const value = e.target.value as string[];
+                onChange={(event: any, newValue: string[]) => {
                   // Handle "Select All" logic
-                  if (value.includes('__select_all__')) {
+                  if (newValue.includes('__select_all__')) {
                     if (currentConfig.filters.specialties.length === availableOptions.specialties.length) {
                       // If all are selected, deselect all
                       handleFilterChange('specialties', []);
@@ -598,74 +607,82 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }
                   } else {
                     // Normal selection
-                    handleFilterChange('specialties', value);
+                    handleFilterChange('specialties', newValue);
                   }
                 }}
-                renderValue={(selected: string[]) => {
-                  if (selected.length === 0) {
-                    return <span style={{ color: '#6b7280' }}>Select specialties...</span>;
+                options={['__select_all__', ...availableOptions.specialties]}
+                getOptionLabel={(option: string) => {
+                  if (option === '__select_all__') {
+                    return `☐ Select All Specialties (${availableOptions.specialties.length})`;
                   }
-                  if (selected.length === availableOptions.specialties.length) {
-                    return <span style={{ color: '#6A5ACD', fontWeight: 500 }}>All Specialties ({selected.length})</span>;
-                  }
-                  return (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value: string) => (
-                        <Chip 
-                          key={value} 
-                          label={formatSpecialtyForDisplay(value)} 
-                          size="small"
-                          sx={{ backgroundColor: '#6A5ACD', color: 'white' }}
-                        />
-                      ))}
-                    </Box>
-                  );
+                  return formatSpecialtyForDisplay(option);
                 }}
-                sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                  }
-                }}
-              >
-                {/* Select All Option */}
-                <MenuItem 
-                  value="__select_all__"
-                  sx={{
-                    borderBottom: '1px solid #e5e7eb',
-                    backgroundColor: currentConfig.filters.specialties.length === availableOptions.specialties.length ? '#f3f4f6' : 'transparent',
-                    fontWeight: currentConfig.filters.specialties.length === availableOptions.specialties.length ? 600 : 400
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <span style={{ 
-                      color: currentConfig.filters.specialties.length === availableOptions.specialties.length ? '#6A5ACD' : '#374151',
-                      fontWeight: currentConfig.filters.specialties.length === availableOptions.specialties.length ? 600 : 400
-                    }}>
-                      {currentConfig.filters.specialties.length === availableOptions.specialties.length ? '✓' : '☐'} Select All Specialties
-                    </span>
-                    <span style={{ 
-                      fontSize: '0.75rem', 
-                      color: '#6b7280',
-                      marginLeft: 'auto'
-                    }}>
-                      ({availableOptions.specialties.length})
-                    </span>
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Search for specialties..."
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused': {
+                          backgroundColor: 'white',
+                          boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
+                          borderColor: '#3b82f6',
+                        }
+                      },
+                      '& .MuiInputBase-input': {
+                        paddingTop: '8px',
+                        paddingBottom: '8px',
+                        paddingLeft: '12px',
+                        paddingRight: '12px',
+                      }
+                    }}
+                  />
+                )}
+                renderTags={(value: string[], getTagProps: any) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {value.map((option: string, index: number) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={option}
+                        label={formatSpecialtyForDisplay(option)}
+                        size="small"
+                        sx={{ backgroundColor: '#6A5ACD', color: 'white' }}
+                      />
+                    ))}
                   </Box>
-                </MenuItem>
-                
-                {/* Individual Specialty Options */}
-                {availableOptions.specialties.map((specialty) => (
-                  <MenuItem key={specialty} value={specialty}>
-                    {formatSpecialtyForDisplay(specialty)}
-                  </MenuItem>
-                ))}
-              </Select>
+                )}
+                sx={{
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                    maxHeight: '300px'
+                  },
+                  '& .MuiAutocomplete-option': {
+                    '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                    '&.Mui-selected': { 
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
+                    }
+                  }
+                }}
+                noOptionsText="No specialties found"
+                clearOnBlur={false}
+                blurOnSelect={true}
+              />
             </FormControl>
 
             {/* Region Filter */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Regions
               </Typography>
@@ -702,7 +719,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             </FormControl>
 
             {/* Survey Source Filter */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Survey Sources
               </Typography>
@@ -750,7 +767,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Report Name */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Report Name
               </Typography>
@@ -769,7 +786,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             </FormControl>
 
             {/* Dimension Selector */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Group By (X-Axis)
               </Typography>
@@ -791,7 +808,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             </FormControl>
 
             {/* Metric Selector */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Measure (Y-Axis)
               </Typography>
@@ -822,7 +839,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             </FormControl>
 
             {/* Chart Type Selector */}
-            <FormControl fullWidth size="small">
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Chart Type
               </Typography>
@@ -903,11 +920,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               <Typography variant="h6" className="text-gray-900 font-semibold">
                 {currentConfig.name || 'Report Preview'}
               </Typography>
-              <Typography variant="body2" className="text-gray-600">
+                            <Typography variant="body2" className="text-gray-600">
                 {currentConfig.dimension.replace('_', ' ')} × {currentConfig.metric.replace('_', ' ')} ({chartData.length} items)
-                {chartData.length > 15 && (
-                  <span className="ml-2 text-blue-600 text-sm">
-                    • Chart height adjusted for {chartData.length} items
+
+                {currentConfig.dimension === 'specialty' && currentConfig.filters.specialties.length === 0 && (
+                  <span className="ml-2 text-orange-600 text-sm">
+                    • Select at least one specialty to view data
                   </span>
                 )}
               </Typography>

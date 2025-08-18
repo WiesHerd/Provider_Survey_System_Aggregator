@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { FormControl, Select, MenuItem } from '@mui/material';
+import { FormControl, Autocomplete, TextField } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
-import { LocalStorageService } from '../services/StorageService';
-import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
-import BackendService from '../services/BackendService';
+import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
 import LoadingSpinner from './ui/loading-spinner';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
@@ -20,37 +18,32 @@ export const RegionalAnalytics: React.FC = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const storageService = new LocalStorageService();
-        const mappingService = new SpecialtyMappingService(storageService);
-        const backendService = BackendService.getInstance();
+        const dataService = getDataService();
         
         // Get specialty mappings
-        const allMappings = await mappingService.getAllMappings();
+        const allMappings = await dataService.getAllSpecialtyMappings();
         console.log(`📋 Loaded ${allMappings.length} specialty mappings`);
         console.log(`🎯 Allergy & Immunology mapping:`, allMappings.find(m => m.standardizedName === 'Allergy & Immunology'));
         setMappings(allMappings);
         
-        // Get surveys from backend
-        const surveys = await backendService.getAllSurveys();
+        // Get surveys from DataService
+        const surveys = await dataService.getAllSurveys();
         console.log(`📊 Found ${surveys.length} surveys:`, surveys.map(s => ({ id: s.id, type: (s as any).type })));
         let allRows: ISurveyRow[] = [];
         
-        // Load data from each survey with sufficient limit to get all data
+        // Load data from each survey
         for (const survey of surveys) {
           console.log(`🔍 Loading data for survey: ${survey.id} (${(survey as any).type || 'Unknown'})`);
-          const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 }); // Request up to 10,000 rows
-          if (data && data.rows) { // BackendService transforms 'data' to 'rows'
+          const data = await dataService.getSurveyData(survey.id);
+          if (data && data.rows) {
             console.log(`✅ Loaded ${data.rows.length} rows from survey ${survey.id}`);
             
             // Debug: Check what specialties are in this survey
             const surveySpecialties = Array.from(new Set(data.rows.map((r: any) => r.specialty)));
             console.log(`📋 Specialties in survey ${survey.id}:`, surveySpecialties);
             
-            // Since survey type is undefined, we'll use a fallback approach
-            // For now, we'll treat all surveys as having data that should be included
             const surveySource = (survey as any).type || 'Survey'; // Use 'Survey' as fallback
             const transformedRows = data.rows.map((row: any) => {
-              // The backend already parsed the JSON data, so we can use it directly
               const transformedRow = {
                 ...row,
                 surveySource: surveySource,
@@ -240,67 +233,62 @@ export const RegionalAnalytics: React.FC = () => {
           
           <div className="relative">
             <FormControl sx={{ width: '100%' }}>
-              <Select
+              <Autocomplete
                 value={selectedSpecialty}
-                onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedSpecialty(e.target.value as string)}
-                displayEmpty
+                onChange={(event: any, newValue: string | null) => setSelectedSpecialty(newValue || '')}
+                options={specialties}
+                getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Search for a specialty..."
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgba(249, 250, 251, 0.5)',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '12px',
+                        fontSize: '0.875rem',
+                        height: '48px',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused': {
+                          backgroundColor: 'white',
+                          boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
+                          borderColor: '#3b82f6',
+                        }
+                      },
+                      '& .MuiInputBase-input': {
+                        paddingTop: '12px',
+                        paddingBottom: '12px',
+                        paddingLeft: '16px',
+                        paddingRight: '16px',
+                      }
+                    }}
+                  />
+                )}
                 sx={{
-                  backgroundColor: 'rgba(249, 250, 251, 0.5)',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '12px',
-                  '& .MuiOutlinedInput-root': {
-                    fontSize: '0.875rem',
-                    height: '48px',
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
                     borderRadius: '12px',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                      borderColor: '#9ca3af',
-                    },
-                    '&.Mui-focused': {
-                      backgroundColor: 'white',
-                      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
-                      borderColor: '#3b82f6',
-                    }
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                    maxHeight: '300px'
                   },
-                  '& .MuiSelect-select': {
-                    paddingTop: '12px',
-                    paddingBottom: '12px',
-                    paddingLeft: '16px',
-                    paddingRight: '16px',
-                  }
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(8px)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                      maxHeight: '300px'
-                    }
-                  }
-                }}
-              >
-                <MenuItem value="" sx={{ 
-                  color: '#6b7280',
-                  fontStyle: 'italic',
-                  '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' }
-                }}>
-                  Select a specialty to begin analysis
-                </MenuItem>
-                {specialties.map((s: string) => (
-                  <MenuItem key={s} value={s} sx={{ 
+                  '& .MuiAutocomplete-option': {
                     '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
                     '&.Mui-selected': { 
                       backgroundColor: 'rgba(59, 130, 246, 0.15)',
                       '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
                     }
-                  }}>
-                    {formatSpecialtyForDisplay(s)}
-                  </MenuItem>
-                ))}
-              </Select>
+                  }
+                }}
+                noOptionsText="No specialties found"
+                clearOnBlur={false}
+                blurOnSelect={true}
+              />
             </FormControl>
           </div>
 
