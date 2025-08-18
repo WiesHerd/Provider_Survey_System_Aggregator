@@ -128,29 +128,25 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
 
         {/* Survey Year Selection */}
         <Grid item xs={12} md={6}>
-          <FormControl fullWidth size="small" disabled={disabled}>
-            <InputLabel id="survey-year-label">Survey Year</InputLabel>
-            <Select
-              labelId="survey-year-label"
-              value={formState.surveyYear}
-              label="Survey Year"
-              onChange={(e: SelectChangeEvent<string>) => onFormChange('surveyYear', e.target.value)}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                }
-              }}
-            >
-              <MenuItem value="">
-                <em>Select Year</em>
-              </MenuItem>
-              {yearOptions.map((year) => (
-                <MenuItem key={year} value={year.toString()}>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <TextField
+            fullWidth
+            size="small"
+            label="Survey Year"
+            value={formState.surveyYear}
+            onChange={handleSurveyYearChange}
+            disabled={disabled}
+            placeholder="2024"
+            type="text"
+            inputProps={{
+              pattern: "[0-9]*",
+              inputMode: "numeric"
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+              }
+            }}
+          />
         </Grid>
       </Grid>
 
