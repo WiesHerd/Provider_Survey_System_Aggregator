@@ -55,7 +55,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "build:ci": "set NODE_OPTIONS=--openssl-legacy-provider && set CI=false && set DISABLE_ESLINT_PLUGIN=true && set GENERATE_SOURCEMAP=false && react-scripts build",
-    "vercel-build": "set CI=false && set DISABLE_ESLINT_PLUGIN=true && set GENERATE_SOURCEMAP=false && react-scripts build",
+    "vercel-build": "node build-vercel.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
