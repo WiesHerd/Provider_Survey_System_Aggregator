@@ -103,6 +103,13 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     surveySources: [] as string[]
   });
 
+  // All available options (before cascading)
+  const [allAvailableOptions, setAllAvailableOptions] = useState({
+    specialties: [] as string[],
+    regions: [] as string[],
+    surveySources: [] as string[]
+  });
+
   // Services
   const dataService = useMemo(() => getDataService(), []);
 
@@ -151,6 +158,13 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           // we'll need to get this from the surveys list
           const surveySources = [...new Set(surveys.map((survey: any) => (survey as any).type || survey.surveyProvider || '').filter(Boolean))] as string[];
           
+          // Store all available options
+          setAllAvailableOptions({
+            specialties,
+            regions,
+            surveySources
+          });
+
           setAvailableOptions({
             dimensions: ['specialty', 'region', 'providerType'],
             metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
@@ -185,6 +199,90 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   const saveReports = (reports: ReportConfig[]) => {
     localStorage.setItem('customReports', JSON.stringify(reports));
   };
+
+  // Calculate cascading options based on current filters
+  const calculateCascadingOptions = useMemo(() => {
+    if (!surveyData.length) {
+      return {
+        specialties: allAvailableOptions.specialties,
+        regions: allAvailableOptions.regions,
+        surveySources: allAvailableOptions.surveySources
+      };
+    }
+
+    let filteredData = surveyData;
+
+    // Apply specialty filter first
+    if (currentConfig.filters.specialties.length > 0) {
+      const specialtyMappingLookup = new Map<string, string[]>();
+      specialtyMappings.forEach(mapping => {
+        if (currentConfig.filters.specialties.includes(mapping.standardizedName)) {
+          const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
+          specialtyMappingLookup.set(mapping.standardizedName, sourceSpecialties);
+        }
+      });
+      
+      filteredData = filteredData.filter(row => {
+        const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
+        return Array.from(specialtyMappingLookup.values()).some(sourceSpecialties => 
+          sourceSpecialties.includes(rowSpecialty)
+        );
+      });
+    }
+
+    // Apply region filter
+    if (currentConfig.filters.regions.length > 0) {
+      filteredData = filteredData.filter(row => 
+        currentConfig.filters.regions.includes(String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || ''))
+      );
+    }
+
+    // Apply survey source filter
+    if (currentConfig.filters.surveySources.length > 0) {
+      filteredData = filteredData.filter(row => 
+        currentConfig.filters.surveySources.includes(String((row as any).surveySource || ''))
+      );
+    }
+
+    // Extract available options from filtered data
+    const availableSpecialties = new Set<string>();
+    const availableRegions = new Set<string>();
+    const availableSurveySources = new Set<string>();
+
+    filteredData.forEach(row => {
+      // Add regions
+      const region = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
+      if (region) availableRegions.add(region);
+
+      // Add survey sources
+      const surveySource = String((row as any).surveySource || '');
+      if (surveySource) availableSurveySources.add(surveySource);
+
+      // Add specialties (using mappings)
+      const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
+      for (const mapping of specialtyMappings) {
+        const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
+        if (sourceSpecialties.includes(rowSpecialty)) {
+          availableSpecialties.add(mapping.standardizedName);
+          break;
+        }
+      }
+    });
+
+    return {
+      specialties: Array.from(availableSpecialties).sort(),
+      regions: Array.from(availableRegions).sort(),
+      surveySources: Array.from(availableSurveySources).sort()
+    };
+  }, [surveyData, currentConfig.filters, specialtyMappings, allAvailableOptions.specialties, allAvailableOptions.regions, allAvailableOptions.surveySources]);
+
+  // Update available options when filters change
+  useEffect(() => {
+    setAvailableOptions(prev => ({
+      ...prev,
+      ...calculateCascadingOptions
+    }));
+  }, [calculateCascadingOptions]);
 
   // Generate chart data based on current configuration
   const chartData = useMemo((): ChartDataItem[] => {
@@ -307,10 +405,24 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Handle filter changes
   const handleFilterChange = (filterType: keyof typeof currentConfig.filters, value: string[]) => {
-    setCurrentConfig(prev => ({
-      ...prev,
-      filters: { ...prev.filters, [filterType]: value }
-    }));
+    setCurrentConfig(prev => {
+      const newFilters = { ...prev.filters, [filterType]: value };
+      
+      // Clear dependent filters when parent filter changes
+      if (filterType === 'specialties') {
+        // When specialties change, clear regions and survey sources
+        newFilters.regions = [];
+        newFilters.surveySources = [];
+      } else if (filterType === 'regions') {
+        // When regions change, clear survey sources
+        newFilters.surveySources = [];
+      }
+      
+      return {
+        ...prev,
+        filters: newFilters
+      };
+    });
   };
 
   // Save current report
