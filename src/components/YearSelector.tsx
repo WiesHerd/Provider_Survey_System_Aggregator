@@ -120,7 +120,7 @@ export const YearSelector: React.FC<YearSelectorProps> = ({
           <InputLabel>{label}</InputLabel>
           <Select
             value={selectedYear}
-            onChange={(e) => handleYearChange(e.target.value)}
+            onChange={(e: any) => handleYearChange(e.target.value)}
             label={label}
             startAdornment={
               <CalendarIcon className="h-4 w-4 text-gray-500 mr-2" />
@@ -211,7 +211,7 @@ export const YearSelector: React.FC<YearSelectorProps> = ({
                 <TextField
                   label="Year"
                   value={newYear}
-                  onChange={(e) => setNewYear(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewYear(e.target.value)}
                   placeholder="2026"
                   size="small"
                   fullWidth
@@ -222,7 +222,7 @@ export const YearSelector: React.FC<YearSelectorProps> = ({
                 <TextField
                   label="Description (Optional)"
                   value={newYearDescription}
-                  onChange={(e) => setNewYearDescription(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewYearDescription(e.target.value)}
                   placeholder="Survey data for 2026"
                   size="small"
                   fullWidth

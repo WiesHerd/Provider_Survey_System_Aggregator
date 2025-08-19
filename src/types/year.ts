@@ -1,9 +1,8 @@
-import { BaseEntity } from './base';
-
 /**
  * Year configuration and metadata
  */
-export interface IYearConfig extends BaseEntity {
+export interface IYearConfig {
+  id: string;
   year: string;
   isActive: boolean;
   isDefault: boolean;

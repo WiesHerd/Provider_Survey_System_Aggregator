@@ -201,7 +201,7 @@ export class YearManagementService {
       
       // Basic validation of survey data
       surveyData.forEach((survey, index) => {
-        if (!survey.surveyType || !survey.fileContent) {
+        if (!survey.type || !survey.name) {
           validation.dataIntegrity.invalidRecords++;
           validation.errors.push(`Survey ${index + 1} is missing required fields`);
         } else {
