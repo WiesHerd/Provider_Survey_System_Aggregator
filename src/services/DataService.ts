@@ -308,6 +308,27 @@ export class DataService {
     }
   }
 
+  async autoMapColumns(config: any): Promise<Array<{
+    standardizedName: string;
+    columns: any[];
+    confidence: number;
+  }>> {
+    switch (this.mode) {
+      case StorageMode.INDEXED_DB:
+        return await this.indexedDB.autoMapColumns(config);
+      case StorageMode.BACKEND:
+        return await this.backend.autoMapColumns(config);
+      case StorageMode.HYBRID:
+        try {
+          return await this.backend.autoMapColumns(config);
+        } catch {
+          return await this.indexedDB.autoMapColumns(config);
+        }
+      default:
+        return await this.indexedDB.autoMapColumns(config);
+    }
+  }
+
   // Utility Methods
   async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
     switch (this.mode) {

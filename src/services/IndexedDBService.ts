@@ -462,6 +462,143 @@ export class IndexedDBService {
     return unmapped;
   }
 
+  async autoMapColumns(config: any): Promise<Array<{
+    standardizedName: string;
+    columns: any[];
+    confidence: number;
+  }>> {
+    try {
+      const unmappedColumns = await this.getUnmappedColumns();
+      console.log('Auto-mapping columns:', unmappedColumns.map(c => c.name));
+      
+      const suggestions: Array<{
+        standardizedName: string;
+        columns: any[];
+        confidence: number;
+      }> = [];
+
+      // Group columns by similarity
+      const processedColumns = new Set<string>();
+      
+      for (const column of unmappedColumns) {
+        if (processedColumns.has(column.id)) continue;
+
+        const matches = unmappedColumns
+          .filter((c: any) => !processedColumns.has(c.id))
+          .map((c: any) => ({
+            column: c,
+            similarity: this.calculateSimilarity(column.name, c.name, c.dataType, column.dataType, config)
+          }))
+          .filter(match => {
+            console.log(`Similarity between "${column.name}" and "${match.column.name}": ${match.similarity}`);
+            return match.similarity >= config.confidenceThreshold;
+          })
+          .sort((a, b) => b.similarity - a.similarity);
+
+        if (matches.length > 0) {
+          const matchedColumns = matches.map(m => m.column);
+          matchedColumns.forEach(c => processedColumns.add(c.id));
+
+          console.log(`Creating mapping for "${column.name}" with ${matchedColumns.length} columns:`, 
+            matchedColumns.map(c => c.name));
+
+          suggestions.push({
+            standardizedName: this.generateStandardizedName(matchedColumns),
+            columns: matchedColumns,
+            confidence: matches[0].similarity
+          });
+        }
+      }
+
+      return suggestions;
+    } catch (error) {
+      console.error('Error in auto-mapping columns:', error);
+      return [];
+    }
+  }
+
+  private calculateSimilarity(name1: string, name2: string, type1: string, type2: string, config: any): number {
+    // Normalize names
+    const normalized1 = name1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalized2 = name2.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Exact match gets highest score
+    if (normalized1 === normalized2) {
+      return 1.0;
+    }
+
+    // Check for exact prefix match (e.g., "wrvu_p50" vs "wrvu_p90" should NOT match)
+    const prefix1 = normalized1.replace(/[0-9]/g, '');
+    const prefix2 = normalized2.replace(/[0-9]/g, '');
+    
+    // If prefixes don't match, return very low similarity
+    if (prefix1 !== prefix2) {
+      return 0.1;
+    }
+
+    // For same prefix, check if numbers are different (e.g., p50 vs p90)
+    const numbers1 = normalized1.match(/[0-9]+/g) || [];
+    const numbers2 = normalized2.match(/[0-9]+/g) || [];
+    
+    // If numbers are different, this is likely a different metric (p50 vs p90, p25 vs p75, etc.)
+    if (numbers1.length > 0 && numbers2.length > 0) {
+      const hasDifferentNumbers = numbers1.some(n1 => 
+        numbers2.some(n2 => n1 !== n2)
+      );
+      if (hasDifferentNumbers) {
+        console.log(`Different numbers detected: "${name1}" vs "${name2}" - returning 0.2 similarity`);
+        return 0.2; // Very low similarity for different percentiles/metrics
+      }
+    }
+
+    // Calculate Levenshtein distance for remaining cases
+    const distance = this.levenshteinDistance(normalized1, normalized2);
+    const maxLength = Math.max(normalized1.length, normalized2.length);
+    let similarity = 1 - distance / maxLength;
+
+    // Boost similarity for same data type
+    if (type1 === type2) {
+      similarity += 0.1;
+    }
+
+    return Math.min(similarity, 1.0);
+  }
+
+  private levenshteinDistance(str1: string, str2: string): number {
+    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+
+    for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+
+    for (let j = 1; j <= str2.length; j++) {
+      for (let i = 1; i <= str1.length; i++) {
+        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1, // deletion
+          matrix[j - 1][i] + 1, // insertion
+          matrix[j - 1][i - 1] + indicator // substitution
+        );
+      }
+    }
+    return matrix[str2.length][str1.length];
+  }
+
+  private generateStandardizedName(columns: any[]): string {
+    // Use the most common name pattern
+    const names = columns.map(c => c.name.toLowerCase());
+    
+    // Check for common patterns
+    if (names.some(n => n.includes('specialty'))) return 'specialty';
+    if (names.some(n => n.includes('provider'))) return 'providerType';
+    if (names.some(n => n.includes('region'))) return 'region';
+    if (names.some(n => n.includes('tcc'))) return 'tcc';
+    if (names.some(n => n.includes('cf'))) return 'cf';
+    if (names.some(n => n.includes('wrvu'))) return 'wrvu';
+    
+    // Default to the first column name
+    return columns[0].name;
+  }
+
   // Health check
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
     await this.ensureDB();

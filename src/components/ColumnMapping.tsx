@@ -329,9 +329,32 @@ const ColumnMapping: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // For now, auto-mapping is not implemented in DataService
-      // This would need to be implemented later
-      setError('Auto-mapping is not yet available with IndexedDB. Please map columns manually.');
+      // Call the auto-mapping service
+      const suggestions = await dataService.autoMapColumns({
+        confidenceThreshold: config.confidenceThreshold,
+        includeDataTypeMatching: config.enableFuzzyMatching
+      });
+
+      // Create mappings from suggestions
+      for (const suggestion of suggestions) {
+        await dataService.createColumnMapping({
+          id: crypto.randomUUID(),
+          standardizedName: suggestion.standardizedName,
+          sourceColumns: suggestion.columns.map(col => ({
+            id: crypto.randomUUID(),
+            column: col.name,
+            originalName: col.name,
+            surveySource: col.surveySource,
+            mappingId: ''
+          } as any)),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+
+      // Refresh data and close dialog
+      await loadData();
+      setActiveTab('mapped');
       setIsAutoMapOpen(false);
     } catch (error) {
       console.error('Auto-mapping error:', error);
