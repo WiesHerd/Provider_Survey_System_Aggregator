@@ -120,6 +120,11 @@ const Dashboard: React.FC = () => {
            transition={{ duration: 0.6 }}
            className="text-center mb-8"
          >
+           {/* Welcome Message */}
+           <h2 className="text-xl font-semibold text-gray-900 mb-4">
+             Welcome to
+           </h2>
+           
            {/* Logo and Brand */}
            <div className="flex items-center justify-center mb-6">
              <div className="flex items-center space-x-4">
@@ -142,11 +147,6 @@ const Dashboard: React.FC = () => {
                </div>
              </div>
            </div>
-           
-           {/* Welcome Message */}
-           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-             Welcome
-           </h2>
            <p className="text-sm text-gray-600">
              Get started by selecting an option below.
            </p>
