@@ -107,6 +107,32 @@ export class DataService {
     }
   }
 
+  async uploadSurvey(
+    file: File,
+    surveyName: string,
+    surveyYear: number,
+    surveyType: string,
+    onProgress?: (percent: number) => void
+  ): Promise<{ surveyId: string; rowCount: number }> {
+    switch (this.mode) {
+      case StorageMode.INDEXED_DB:
+        return await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+      case StorageMode.BACKEND:
+        return await this.backend.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+      case StorageMode.HYBRID:
+        try {
+          const result = await this.backend.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+          // Also save to IndexedDB as backup
+          await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+          return result;
+        } catch {
+          return await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+        }
+      default:
+        return await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+    }
+  }
+
   // Survey Data Methods
   async getSurveyData(surveyId: string, filters: any = {}, pagination: any = {}) {
     switch (this.mode) {

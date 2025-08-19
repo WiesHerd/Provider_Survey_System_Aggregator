@@ -163,6 +163,95 @@ export class IndexedDBService {
     });
   }
 
+  async uploadSurvey(
+    file: File,
+    surveyName: string,
+    surveyYear: number,
+    surveyType: string,
+    onProgress?: (percent: number) => void
+  ): Promise<{ surveyId: string; rowCount: number }> {
+    try {
+      // Parse CSV file
+      const text = await file.text();
+      const rows = this.parseCSV(text);
+      
+      // Create survey record
+      const surveyId = crypto.randomUUID();
+      const survey = {
+        id: surveyId,
+        name: surveyName,
+        year: surveyYear.toString(),
+        type: surveyType,
+        uploadDate: new Date(),
+        rowCount: rows.length,
+        specialtyCount: 0, // Will be calculated
+        dataPoints: rows.length,
+        colorAccent: '#6366F1',
+        metadata: {}
+      };
+
+      // Save survey
+      await this.createSurvey(survey);
+      
+      // Save survey data
+      await this.saveSurveyData(surveyId, rows);
+      
+      // Calculate specialty count
+      const uniqueSpecialties = new Set<string>();
+      rows.forEach(row => {
+        const specialty = row.specialty || row.Specialty || row['Provider Type'];
+        if (specialty) uniqueSpecialties.add(specialty);
+      });
+      
+      // Update survey with specialty count
+      const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
+      await this.updateSurvey(updatedSurvey);
+
+      return { surveyId, rowCount: rows.length };
+    } catch (error) {
+      console.error('Error uploading survey to IndexedDB:', error);
+      throw error;
+    }
+  }
+
+  private parseCSV(text: string): any[] {
+    const lines = text.split('\n');
+    if (lines.length === 0) return [];
+    
+    // Parse headers
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    
+    // Parse data rows
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+      const row: any = {};
+      
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      
+      rows.push(row);
+    }
+    
+    return rows;
+  }
+
+  private async updateSurvey(survey: any): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['surveys'], 'readwrite');
+      const store = transaction.objectStore('surveys');
+      const request = store.put(survey);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
   // Survey Data Methods
   async getSurveyData(surveyId: string, filters: any = {}, pagination: any = {}): Promise<{ rows: ISurveyRow[] }> {
     const db = await this.ensureDB();
