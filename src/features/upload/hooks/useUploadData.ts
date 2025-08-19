@@ -282,7 +282,7 @@ export const useUploadData = (
     } finally {
       setIsLoading(false);
     }
-  }, [backendService, selectedSurvey, onSurveySelect]);
+  }, [dataService, selectedSurvey, onSurveySelect]);
 
   // File upload
   const uploadFiles = useCallback(async () => {
@@ -360,7 +360,7 @@ export const useUploadData = (
         currentFileIndex: 0
       });
     }
-  }, [files, formState, backendService, onUploadComplete, clearFiles]);
+  }, [files, formState, dataService, onUploadComplete, clearFiles]);
 
   // Survey deletion
   const deleteSurvey = useCallback(async (surveyId: string) => {
@@ -399,7 +399,7 @@ export const useUploadData = (
         currentFileIndex: 0
       });
     }
-  }, [selectedSurvey, backendService, onSurveySelect, onSurveyDelete]);
+  }, [selectedSurvey, dataService, onSurveySelect, onSurveyDelete]);
 
   // Refresh data
   const refreshData = useCallback(async () => {

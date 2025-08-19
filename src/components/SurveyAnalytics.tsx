@@ -663,7 +663,7 @@ const SurveyAnalytics: React.FC = () => {
       }
     };
     fetchData();
-  }, [mappingService, storageService]);
+  }, [dataService]);
 
   const aggregatedData = useMemo(() => {
     if (!filters.specialty) return [];
