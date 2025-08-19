@@ -74,6 +74,14 @@ const Dashboard: React.FC = () => {
       color: 'bg-indigo-500',
       gradient: 'from-indigo-500 to-indigo-600',
     },
+    {
+      title: 'Custom Reports',
+      description: 'Create custom reports and visualizations from your survey data',
+      icon: ChartBarIcon,
+      path: '/custom-reports',
+      color: 'bg-teal-500',
+      gradient: 'from-teal-500 to-teal-600',
+    },
   ];
 
   const containerVariants = {
@@ -137,7 +145,7 @@ const Dashboard: React.FC = () => {
            
            {/* Welcome Message */}
            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-             Welcome to BenchPoint
+             Welcome
            </h2>
            <p className="text-sm text-gray-600">
              Get started by selecting an option below.
@@ -149,7 +157,7 @@ const Dashboard: React.FC = () => {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
         >
           {welcomeCards.map((card) => (
             <motion.div
