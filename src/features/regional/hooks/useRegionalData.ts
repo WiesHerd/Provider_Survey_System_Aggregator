@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { RegionalData, RegionalFilters, RegionalSummary, RegionalCalculationParams } from '../types/regional';
 import { calculateRegionalAnalytics, REGION_NAMES } from '../utils/regionalCalculations';
-import { LocalStorageService } from '../../../services/StorageService';
-import { SpecialtyMappingService } from '../../../services/SpecialtyMappingService';
-import BackendService from '../../../services/BackendService';
+import { getDataService } from '../../../services/DataService';
 import { ProviderType, GeographicRegion, SurveySource } from '../../../shared/types';
 
 interface UseRegionalDataReturn {
@@ -59,24 +57,22 @@ export const useRegionalData = (
       setLoading(true);
       setError(null);
 
-      const storageService = new LocalStorageService();
-      const mappingService = new SpecialtyMappingService(storageService);
-      const backendService = BackendService.getInstance();
+      const dataService = getDataService();
 
       // Get specialty mappings
-      const allMappings = await mappingService.getAllMappings();
+      const allMappings = await dataService.getAllSpecialtyMappings();
       console.log(`📋 Loaded ${allMappings.length} specialty mappings`);
       setMappings(allMappings);
 
-      // Get surveys from backend
-      const surveys = await backendService.getAllSurveys();
+      // Get surveys from DataService
+      const surveys = await dataService.getAllSurveys();
       console.log(`📊 Found ${surveys.length} surveys`);
       let allRows: any[] = [];
 
       // Load data from each survey
       for (const survey of surveys) {
         console.log(`🔍 Loading data for survey: ${survey.id}`);
-        const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 });
+        const data = await dataService.getSurveyData(survey.id, undefined, { limit: 10000 });
         
         if (data && data.rows) {
           console.log(`✅ Loaded ${data.rows.length} rows from survey ${survey.id}`);

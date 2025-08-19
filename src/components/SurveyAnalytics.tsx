@@ -22,10 +22,7 @@ import {
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
-import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
-import { ColumnMappingService } from '../services/ColumnMappingService';
-import { IStorageService, LocalStorageService } from '../services/StorageService';
-import BackendService from '../services/BackendService';
+import { getDataService } from '../services/DataService';
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
 import LoadingSpinner from './ui/loading-spinner';
@@ -361,10 +358,7 @@ const SurveyAnalytics: React.FC = () => {
 
 
 
-  const mappingService = useMemo(() => new SpecialtyMappingService(new LocalStorageService()), []);
-  const columnMappingService = useMemo(() => new ColumnMappingService(new LocalStorageService()), []);
-  const storageService = useMemo(() => new LocalStorageService(), []);
-  const backendService = useMemo(() => BackendService.getInstance(), []);
+  const dataService = useMemo(() => getDataService(), []);
 
   // Build chain map: standardizedName -> surveySource -> [source specialties]
   const chainByStandardized = useMemo(() => {
@@ -475,21 +469,19 @@ const SurveyAnalytics: React.FC = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Load specialty mappings from the actual service (not just initial mappings)
-        const allMappings = await mappingService.getAllMappings();
+        // Load specialty mappings from DataService
+        const allMappings = await dataService.getAllSpecialtyMappings();
         console.log('Loaded specialty mappings:', allMappings.length, 'mappings found');
         console.log('Available standardized names:', allMappings.map(m => m.standardizedName));
-        
-
         
         setMappings(allMappings);
 
         // Load column mappings
-        const columnMappings = await columnMappingService.getAllMappings();
+        const columnMappings = await dataService.getAllColumnMappings();
         console.log('Loaded column mappings:', columnMappings.length, 'mappings found');
 
-        // Then get survey data from backend
-        const uploadedSurveys = await backendService.getAllSurveys();
+        // Then get survey data from DataService
+        const uploadedSurveys = await dataService.getAllSurveys();
         console.log('📊 Found surveys:', uploadedSurveys.map(s => ({
           id: s.id,
           type: (s as any).type,
@@ -512,7 +504,7 @@ const SurveyAnalytics: React.FC = () => {
             console.log(`🔍 Loading data for survey ${survey.id} (${surveyType})`);
             // CRITICAL: Request sufficient rows to get all data, including specialties that appear later in the dataset
         // See docs/ALLERGY_IMMUNOLOGY_FIX.md for details on why this is necessary
-        const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 }); // Request up to 10,000 rows to get all data
+        const data = await dataService.getSurveyData(survey.id, undefined, { limit: 10000 }); // Request up to 10,000 rows to get all data
             if (data && data.rows) {
               // Log the column names from the first row
               if (data.rows.length > 0) {

@@ -2,9 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { ISurveyRow } from '../../../types/survey';
-import { LocalStorageService } from '../../../services/StorageService';
-import { SpecialtyMappingService } from '../../../services/SpecialtyMappingService';
-import BackendService from '../../../services/BackendService';
+import { getDataService } from '../../../services/DataService';
 import { RegionalComparison } from './RegionalComparison';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
@@ -18,24 +16,22 @@ export const RegionalAnalytics: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const storageService = new LocalStorageService();
-        const mappingService = new SpecialtyMappingService(storageService);
-        const backendService = BackendService.getInstance();
+        const dataService = getDataService();
         
         // Get specialty mappings
-        const allMappings = await mappingService.getAllMappings();
+        const allMappings = await dataService.getAllSpecialtyMappings();
         console.log(`📋 Loaded ${allMappings.length} specialty mappings`);
         setMappings(allMappings);
         
-        // Get surveys from backend
-        const surveys = await backendService.getAllSurveys();
+        // Get surveys from DataService
+        const surveys = await dataService.getAllSurveys();
         console.log(`📊 Found ${surveys.length} surveys`);
         let allRows: ISurveyRow[] = [];
         
         // Load data from each survey
         for (const survey of surveys) {
           console.log(`🔍 Loading data for survey: ${survey.id}`);
-          const data = await backendService.getSurveyData(survey.id, undefined, { limit: 10000 });
+          const data = await dataService.getSurveyData(survey.id, undefined, { limit: 10000 });
           if (data && data.rows) {
             console.log(`✅ Loaded ${data.rows.length} rows from survey ${survey.id}`);
             

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import BackendService from '../../../services/BackendService';
+import { getDataService } from '../../../services/DataService';
 import { 
   FileWithPreview,
   UploadedSurvey,
@@ -148,8 +148,8 @@ export const useUploadData = (
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Backend service
-  const backendService = useMemo(() => BackendService.getInstance(), []);
+  // Data service
+  const dataService = useMemo(() => getDataService(), []);
 
   // Memoized computed values
   const uniqueValues = useMemo(() => {
@@ -250,7 +250,7 @@ export const useUploadData = (
       setIsLoading(true);
       setError(null);
       
-      const surveys = await backendService.getAllSurveys();
+              const surveys = await dataService.getAllSurveys();
       
       const processedSurveys = surveys.map((survey: any) => ({
         id: survey.id,
@@ -318,7 +318,7 @@ export const useUploadData = (
         const surveyType = formState.isCustom ? formState.customSurveyType : formState.surveyType;
         const surveyYear = parseInt(formState.surveyYear);
         
-        const uploadedSurvey = await backendService.uploadSurvey(
+        const uploadedSurvey = await dataService.uploadSurvey(
           file,
           file.name,
           surveyYear,
@@ -374,7 +374,7 @@ export const useUploadData = (
       });
       setError(null);
 
-      await backendService.deleteSurvey(surveyId);
+              await dataService.deleteSurvey(surveyId);
       
       setUploadedSurveys(prev => prev.filter(survey => survey.id !== surveyId));
       
