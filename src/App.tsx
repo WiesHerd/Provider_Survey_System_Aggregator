@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import PageHeader from './components/PageHeader';
 import { StorageProvider } from './contexts/StorageContext';
 import { MappingProvider } from './contexts/MappingContext';
+import { YearProvider } from './contexts/YearContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { ArrowUpTrayIcon, LinkIcon, TableCellsIcon, PresentationChartLineIcon, CalculatorIcon, PrinterIcon } from '@heroicons/react/24/outline';
 
@@ -330,9 +331,11 @@ function App() {
   return (
     <StorageProvider>
       <MappingProvider>
-        <Router basename={basename}>
-          <PageContent />
-        </Router>
+        <YearProvider>
+          <Router basename={basename}>
+            <PageContent />
+          </Router>
+        </YearProvider>
       </MappingProvider>
     </StorageProvider>
   );
