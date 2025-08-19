@@ -119,14 +119,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         // Get all surveys first
         const surveys = await dataService.getAllSurveys();
         
-        // Collect all data from all surveys
+        // Collect all data from all surveys with survey source information
         const allData: ISurveyRow[] = [];
         
         for (const survey of surveys) {
           try {
             const surveyData = await dataService.getSurveyData(survey.id);
             if (surveyData.rows) {
-              allData.push(...surveyData.rows);
+              // Add survey source information to each row
+              const rowsWithSource = surveyData.rows.map(row => ({
+                ...row,
+                surveySource: (survey as any).type || 'Unknown'
+              }));
+              allData.push(...rowsWithSource);
             }
           } catch (error) {
             console.warn(`Failed to load data for survey ${survey.id}:`, error);
@@ -213,10 +218,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     }
     
     if (currentConfig.filters.surveySources.length > 0) {
-      // For survey sources, we need to filter by survey ID since the source is stored at survey level
-      // This is a limitation - we can't filter by survey source at the row level
-      // For now, we'll skip this filter until we can implement proper survey-level filtering
-      console.warn('Survey source filtering not implemented at row level');
+      filteredData = filteredData.filter(row => 
+        currentConfig.filters.surveySources.includes(String((row as any).surveySource || ''))
+      );
     }
 
     // Group by dimension and aggregate metric
