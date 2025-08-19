@@ -7,6 +7,8 @@ import { getDataService } from '../services/DataService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 import { TableFilters } from './TableFilters';
 import LoadingSpinner from './ui/loading-spinner';
+import { YearSelector } from './YearSelector';
+import { useYear } from '../contexts/YearContext';
 
 
 const SURVEY_OPTIONS = [
@@ -62,11 +64,12 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 
 const SurveyUpload: React.FC = () => {
   const dataService = getDataService();
+  const { currentYear } = useYear();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [surveyType, setSurveyType] = useState('');
   const [customSurveyType, setCustomSurveyType] = useState('');
-  const [surveyYear, setSurveyYear] = useState('');
+  const [surveyYear, setSurveyYear] = useState(currentYear);
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
@@ -97,6 +100,11 @@ const SurveyUpload: React.FC = () => {
   // Add state for collapsible sections
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
+
+  // Update surveyYear when currentYear changes
+  useEffect(() => {
+    setSurveyYear(currentYear);
+  }, [currentYear]);
 
 
 
@@ -146,15 +154,25 @@ const SurveyUpload: React.FC = () => {
     const loadSurveys = async () => {
       try {
         setIsLoading(true);
+        
+        // Load from both regular storage and year-specific storage
         const surveys = await dataService.getAllSurveys();
-        console.log('Loaded surveys:', surveys);
+        console.log('Loaded surveys from regular storage:', surveys);
+        
+        // Also load year-specific surveys
+        const yearService = new (await import('../services/YearManagementService')).YearManagementService();
+        const yearSurveys = await yearService.getYearData(currentYear, 'surveys');
+        console.log(`Loaded surveys from year ${currentYear}:`, yearSurveys);
+        
+        // Combine surveys from both sources
+        const allSurveys = [...surveys, ...yearSurveys];
         
         // Build lightweight survey list; fetch detailed rows only when a survey is selected
-        const processedSurveys = surveys.map((survey: any) => ({
+        const processedSurveys = allSurveys.map((survey: any) => ({
           id: survey.id,
           fileName: survey.name || '',
           surveyType: survey.type || '',
-          surveyYear: survey.year?.toString() || '',
+          surveyYear: survey.year?.toString() || currentYear,
           uploadDate: new Date(survey.uploadDate || new Date()),
           fileContent: '',
           rows: [],
@@ -180,7 +198,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [dataService]);
+  }, [dataService, currentYear]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -289,9 +307,14 @@ const SurveyUpload: React.FC = () => {
 
       setUploadProgress(80);
 
-      // Save survey and data to IndexedDB
+      // Save survey and data to IndexedDB with year-specific storage
       await dataService.createSurvey(survey);
       await dataService.saveSurveyData(surveyId, parsedRows);
+      
+      // Also save to year-specific storage
+      const yearService = new (await import('../services/YearManagementService')).YearManagementService();
+      await yearService.saveYearData(surveyYear, 'surveys', [survey]);
+      await yearService.saveYearData(surveyYear, 'surveyData', parsedRows);
 
       setUploadProgress(100);
 
@@ -486,47 +509,12 @@ const SurveyUpload: React.FC = () => {
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
-                  <Autocomplete
-                    freeSolo
-                    options={(() => {
-                      const currentYear = new Date().getFullYear();
-                      const years = [];
-                      for (let i = currentYear + 2; i >= currentYear - 10; i--) {
-                        years.push(i.toString());
-                      }
-                      return years;
-                    })()}
+                  <YearSelector
                     value={surveyYear}
-                    onChange={(event: any, newValue: string | null) => {
-                      if (newValue && /^\d{4}$/.test(newValue)) {
-                        setSurveyYear(newValue);
-                      }
-                    }}
-                    onInputChange={(event: any, newInputValue: string) => {
-                      if (/^\d{0,4}$/.test(newInputValue)) {
-                        setSurveyYear(newInputValue);
-                      }
-                    }}
-                    renderInput={(params: any) => (
-                      <TextField
-                        {...params}
-                        placeholder="Enter year (e.g., 2024)"
-                        sx={{
-                          backgroundColor: 'white',
-                          '& .MuiOutlinedInput-root': {
-                            fontSize: '0.875rem',
-                            height: '40px',
-                            borderRadius: '8px',
-                          }
-                        }}
-                      />
-                    )}
-                    sx={{
-                      '& .MuiAutocomplete-input': {
-                        paddingTop: '8px !important',
-                        paddingBottom: '8px !important',
-                      }
-                    }}
+                    onChange={setSurveyYear}
+                    showYearManagement={true}
+                    size="small"
+                    className="w-full"
                   />
                 </div>
 
