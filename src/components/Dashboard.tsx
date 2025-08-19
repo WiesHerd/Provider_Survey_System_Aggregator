@@ -105,7 +105,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                 {/* Contract Hub Branding */}
+                 {/* BenchPoint Branding */}
          <motion.div
            initial={{ opacity: 0, y: -20 }}
            animate={{ opacity: 1, y: 0 }}
@@ -118,8 +118,8 @@ const Dashboard: React.FC = () => {
                {/* Logo */}
                <div className="relative">
                  <img 
-                   src="/contract-hub-icon.svg" 
-                   alt="Contract Hub Logo" 
+                   src="/benchpoint-icon.svg" 
+                   alt="BenchPoint Logo" 
                    className="w-16 h-16 object-contain"
                    onError={(e) => {
                      console.log('Dashboard logo failed to load:', (e.target as HTMLImageElement).src);
@@ -129,15 +129,15 @@ const Dashboard: React.FC = () => {
                </div>
                {/* Brand Name */}
                <div className="text-3xl font-bold">
-                 <span className="text-gray-800">Contract</span>
-                 <span className="text-indigo-600">Hub</span>
+                 <span className="text-gray-800">Bench</span>
+                 <span className="text-indigo-600">Point</span>
                </div>
              </div>
            </div>
            
            {/* Welcome Message */}
            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-             Welcome to Contract Hub
+             Welcome to BenchPoint
            </h2>
            <p className="text-sm text-gray-600">
              Get started by selecting an option below.
@@ -208,7 +208,7 @@ const Dashboard: React.FC = () => {
           className="text-center mt-12"
         >
           <p className="text-sm text-gray-500">
-            © 2024 Contract Hub. All rights reserved.
+            © 2024 BenchPoint. All rights reserved.
           </p>
         </motion.div>
       </div>

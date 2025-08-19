@@ -83,7 +83,7 @@ const PageContent = () => {
       case '/instructions':
         return {
           title: 'Instructions',
-          description: 'How to use the Contract Hub Survey Aggregator and Market Analytics App'
+          description: 'How to use the BenchPoint Survey Aggregator and Market Analytics App'
         };
       case '/reports':
         return {

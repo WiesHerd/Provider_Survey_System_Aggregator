@@ -121,7 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
           <div className="w-12 h-12 flex items-center justify-center">
-            <img src="/contract-hub-icon.svg" alt="Contract Hub - Survey Aggregator" className="w-10 h-10 object-contain" onError={(e) => {
+            <img src="/benchpoint-icon.svg" alt="BenchPoint - Survey Aggregator" className="w-10 h-10 object-contain" onError={(e) => {
               const target = e.target as HTMLImageElement;
               console.log('Image failed to load:', target.src);
               target.style.display = 'none';
