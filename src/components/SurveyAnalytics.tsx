@@ -28,7 +28,9 @@ import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
 import LoadingSpinner from './ui/loading-spinner';
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
-const SHOW_DEBUG = true;
+import { useYear } from '../contexts/YearContext';
+import { performanceMonitor } from '../shared/utils/performance';
+const SHOW_DEBUG = false; // Set to false for production performance
 
 interface AggregatedData {
   standardizedName: string;
@@ -89,6 +91,77 @@ const calculateAverage = (values: number[]): number => {
   return values.reduce((acc, val) => acc + val, 0) / values.length;
 };
 
+// Enterprise-grade intelligent column mapping function
+const createIntelligentMappings = (row: any, surveySource: string): Array<{sourceColumn: string, targetColumn: string, confidence: number}> => {
+  const mappings: Array<{sourceColumn: string, targetColumn: string, confidence: number}> = [];
+  
+  // Define standardized column patterns with confidence scores
+  const columnPatterns = [
+    // TCC patterns (Total Cash Compensation)
+    { pattern: /tcc.*p25|p25.*tcc|total.*cash.*25|25.*total.*cash/i, target: 'tcc_p25', confidence: 0.9 },
+    { pattern: /tcc.*p50|p50.*tcc|total.*cash.*50|50.*total.*cash|median.*tcc|tcc.*median/i, target: 'tcc_p50', confidence: 0.9 },
+    { pattern: /tcc.*p75|p75.*tcc|total.*cash.*75|75.*total.*cash/i, target: 'tcc_p75', confidence: 0.9 },
+    { pattern: /tcc.*p90|p90.*tcc|total.*cash.*90|90.*total.*cash/i, target: 'tcc_p90', confidence: 0.9 },
+    
+    // wRVU patterns (Work RVUs)
+    { pattern: /wrvu.*p25|p25.*wrvu|work.*rvu.*25|25.*work.*rvu/i, target: 'wrvu_p25', confidence: 0.9 },
+    { pattern: /wrvu.*p50|p50.*wrvu|work.*rvu.*50|50.*work.*rvu|median.*wrvu|wrvu.*median/i, target: 'wrvu_p50', confidence: 0.9 },
+    { pattern: /wrvu.*p75|p75.*wrvu|work.*rvu.*75|75.*work.*rvu/i, target: 'wrvu_p75', confidence: 0.9 },
+    { pattern: /wrvu.*p90|p90.*wrvu|work.*rvu.*90|90.*work.*rvu/i, target: 'wrvu_p90', confidence: 0.9 },
+    
+    // CF patterns (Conversion Factor)
+    { pattern: /cf.*p25|p25.*cf|conversion.*factor.*25|25.*conversion.*factor/i, target: 'cf_p25', confidence: 0.9 },
+    { pattern: /cf.*p50|p50.*cf|conversion.*factor.*50|50.*conversion.*factor|median.*cf|cf.*median/i, target: 'cf_p50', confidence: 0.9 },
+    { pattern: /cf.*p75|p75.*cf|conversion.*factor.*75|75.*conversion.*factor/i, target: 'cf_p75', confidence: 0.9 },
+    { pattern: /cf.*p90|p90.*cf|conversion.*factor.*90|90.*conversion.*factor/i, target: 'cf_p90', confidence: 0.9 },
+    
+    // Organization and incumbent patterns
+    { pattern: /n_orgs|orgs|organizations|number.*org/i, target: 'n_orgs', confidence: 0.8 },
+    { pattern: /n_incumbents|incumbents|number.*incumbent/i, target: 'n_incumbents', confidence: 0.8 },
+    
+    // Direct matches (highest confidence)
+    { pattern: /^tcc_p25$/i, target: 'tcc_p25', confidence: 1.0 },
+    { pattern: /^tcc_p50$/i, target: 'tcc_p50', confidence: 1.0 },
+    { pattern: /^tcc_p75$/i, target: 'tcc_p75', confidence: 1.0 },
+    { pattern: /^tcc_p90$/i, target: 'tcc_p90', confidence: 1.0 },
+    { pattern: /^wrvu_p25$/i, target: 'wrvu_p25', confidence: 1.0 },
+    { pattern: /^wrvu_p50$/i, target: 'wrvu_p50', confidence: 1.0 },
+    { pattern: /^wrvu_p75$/i, target: 'wrvu_p75', confidence: 1.0 },
+    { pattern: /^wrvu_p90$/i, target: 'wrvu_p90', confidence: 1.0 },
+    { pattern: /^cf_p25$/i, target: 'cf_p25', confidence: 1.0 },
+    { pattern: /^cf_p50$/i, target: 'cf_p50', confidence: 1.0 },
+    { pattern: /^cf_p75$/i, target: 'cf_p75', confidence: 1.0 },
+    { pattern: /^cf_p90$/i, target: 'cf_p90', confidence: 1.0 },
+    { pattern: /^n_orgs$/i, target: 'n_orgs', confidence: 1.0 },
+    { pattern: /^n_incumbents$/i, target: 'n_incumbents', confidence: 1.0 }
+  ];
+  
+  // Test each column against patterns
+  Object.keys(row).forEach(columnName => {
+    let bestMatch = null;
+    let highestConfidence = 0;
+    
+    columnPatterns.forEach(pattern => {
+      if (pattern.pattern.test(columnName)) {
+        if (pattern.confidence > highestConfidence) {
+          highestConfidence = pattern.confidence;
+          bestMatch = pattern.target;
+        }
+      }
+    });
+    
+    if (bestMatch && highestConfidence > 0.7) {
+      mappings.push({
+        sourceColumn: columnName,
+        targetColumn: bestMatch,
+        confidence: highestConfidence
+      });
+    }
+  });
+  
+  return mappings;
+};
+
 // Fuzzy matching function for specialty names (word-based, not letter-based)
 const fuzzyMatchSpecialty = (specialty1: string, specialty2: string): boolean => {
   const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -101,42 +174,44 @@ const fuzzyMatchSpecialty = (specialty1: string, specialty2: string): boolean =>
   if (norm1 === norm2) return true;
   if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
 
-  const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
-  const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+  const words1 = norm1.split(/\s+/).filter((w: string) => w.length > 2);
+  const words2 = norm2.split(/\s+/).filter((w: string) => w.length > 2);
   if (words1.length === 0 || words2.length === 0) return false;
 
-  const common = words1.filter(w => words2.includes(w));
+  const common = words1.filter((w: string) => words2.includes(w));
   const jaccard = common.length / new Set([...words1, ...words2]).size;
 
   return jaccard >= 0.6 || common.length >= Math.min(words1.length, words2.length) * 0.8;
 };
 
-// Data transformation function that applies column mappings and specialty mappings
-const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string): any[] => {
-  console.log('🔄 Transforming survey data with mappings:', {
-    rawDataLength: rawData.length,
-    columnMappingsCount: columnMappings.length,
-    specialtyMappingsCount: specialtyMappings.length,
-    surveySource
-  });
+// Extract clean survey name from filename
+const extractCleanSurveyName = (filename: string): string => {
+  if (!filename) return 'Survey';
   
-  console.log('🔍 First few raw specialties:', rawData.slice(0, 3).map(row => row.specialty));
+  // Convert to lowercase for easier matching
+  const lowerFilename = filename.toLowerCase();
   
-  // Special debugging for SullivanCotter raw data
-  if (surveySource === 'SullivanCotter') {
-    const allergyRows = rawData.filter(row => 
-      row.specialty && (row.specialty.toLowerCase().includes('allergy') || row.specialty.toLowerCase().includes('immunology'))
-    );
-    console.log('🔍 Found', allergyRows.length, 'Allergy & Immunology rows in SullivanCotter raw data');
-    if (allergyRows.length > 0) {
-      console.log('📋 Sample Allergy & Immunology rows:', allergyRows.slice(0, 3).map(row => row.specialty));
-    }
-  }
+  // Check for known survey types
+  if (lowerFilename.includes('mgma')) return 'MGMA';
+  if (lowerFilename.includes('sullivancotter') || lowerFilename.includes('sullivan_cotter')) return 'SullivanCotter';
+  if (lowerFilename.includes('gallagher')) return 'Gallagher';
+  if (lowerFilename.includes('ecg')) return 'ECG';
+  if (lowerFilename.includes('amga')) return 'AMGA';
+  
+  // If no known type found, extract the first word before underscore or special characters
+  const cleanName = filename.split(/[_\-\s]/)[0];
+  return cleanName.charAt(0).toUpperCase() + cleanName.slice(1).toLowerCase();
+};
 
+// PERFORMANCE OPTIMIZATION: Optimized data transformation function
+const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string): any[] => {
   if (rawData.length === 0) return [];
 
-  // Create column mapping lookup for this survey source
+  // PERFORMANCE OPTIMIZATION: Pre-compute lookups once
   const columnMappingLookup = new Map();
+  const specialtyMappingLookup = new Map();
+  
+  // Build column mapping lookup for this survey source
   columnMappings.forEach(mapping => {
     mapping.sourceColumns.forEach((column: any) => {
       if (column.surveySource === surveySource) {
@@ -145,8 +220,7 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
     });
   });
 
-  // Create specialty mapping lookup for this survey source
-  const specialtyMappingLookup = new Map();
+  // Build specialty mapping lookup for this survey source
   specialtyMappings.forEach(mapping => {
     mapping.sourceSpecialties.forEach((specialty: any) => {
       if (specialty.surveySource === surveySource) {
@@ -155,36 +229,12 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
     });
   });
 
-  console.log('📋 Column mapping lookup for', surveySource, ':', Object.fromEntries(columnMappingLookup));
-  console.log('📋 Specialty mapping lookup for', surveySource, ':', Object.fromEntries(specialtyMappingLookup));
-  
-  // Special debugging for SullivanCotter Allergy & Immunology
-  if (surveySource === 'SullivanCotter') {
-    console.log('🔍 Checking SullivanCotter specialty mappings for Allergy & Immunology...');
-    const allergyMappings = Array.from(specialtyMappingLookup.entries()).filter(([key, value]) => 
-      key.includes('allergy') || key.includes('immunology') || value.includes('Allergy') || value.includes('Immunology')
-    );
-    console.log('📋 Allergy & Immunology mappings for SullivanCotter:', allergyMappings);
-  }
-  
-  // Debug: Show all available survey sources in mappings
-  const allSurveySources = new Set();
-  specialtyMappings.forEach(mapping => {
-    mapping.sourceSpecialties.forEach((specialty: any) => {
-      allSurveySources.add(specialty.surveySource);
-    });
-  });
-  console.log('📋 All available survey sources in mappings:', Array.from(allSurveySources));
-  console.log('🔍 Looking for survey source:', surveySource);
-  
-
-
+  // PERFORMANCE OPTIMIZATION: Use map instead of forEach for better performance
   return rawData.map(row => {
     const transformedRow: any = {
-      surveySource,
+      surveySource: (row as any)._surveyName || surveySource, // Use readable name instead of UUID
       specialty: row.specialty || row.normalizedSpecialty || '',
-      originalSpecialty: row.specialty || '', // Keep the original specialty name
-      // Carry through non-metric identity fields from common column names
+      originalSpecialty: row.specialty || '',
       providerType: (row as any).providerType || (row as any).provider_type || '',
       geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || '',
       n_orgs: 0,
@@ -203,82 +253,112 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
       cf_p90: 0,
     };
 
-    // Apply specialty mapping
+    // PERFORMANCE OPTIMIZATION: Apply specialty mapping with early return
     const originalSpecialty = String(row.specialty || '').toLowerCase();
     let standardizedSpecialty = specialtyMappingLookup.get(originalSpecialty);
     
-    // Special debugging for Allergy & Immunology
-    if (row.specialty && (row.specialty.toLowerCase().includes('allergy') || row.specialty.toLowerCase().includes('immunology'))) {
-      console.log(`🔍 Processing Allergy/Immunology specialty: "${row.specialty}" (normalized: "${originalSpecialty}")`);
-      console.log(`📋 Available mappings for ${surveySource}:`, Array.from(specialtyMappingLookup.entries()));
-      console.log(`🔍 Looking for mapping: "${originalSpecialty}"`);
-      console.log(`🔍 Found mapping: ${standardizedSpecialty || 'NOT FOUND'}`);
-    }
-    
-    // Debug: Log all specialties being processed
-    if (originalSpecialty && !standardizedSpecialty) {
-      console.log(`🔍 Processing specialty: "${row.specialty}" (normalized: "${originalSpecialty}")`);
-      console.log(`📋 Available mappings for ${surveySource}:`, Array.from(specialtyMappingLookup.entries()));
-    }
-    
-    // If no direct match, try fuzzy matching
-    if (!standardizedSpecialty) {
-      Array.from(specialtyMappingLookup.entries()).forEach(([key, value]) => {
-        if (fuzzyMatchSpecialty(originalSpecialty, key)) {
-          standardizedSpecialty = value;
-          console.log(`🔄 Fuzzy mapped specialty: "${row.specialty}" → "${standardizedSpecialty}" (matched "${key}")`);
-        }
+    // Debug: Log specialty mapping for heart-related specialties
+    if (originalSpecialty.includes('heart')) {
+      console.log('Specialty mapping debug:', {
+        originalSpecialty,
+        standardizedSpecialty,
+        availableMappings: Array.from(specialtyMappingLookup.keys()).filter(k => k.includes('heart')).slice(0, 5)
       });
+    }
+    
+    // Only do fuzzy matching if no direct match found
+    if (!standardizedSpecialty) {
+      // More precise fuzzy matching - prefer exact matches and word boundaries
+      let bestMatch: string | null = null;
+      let bestScore = 0;
+      
+      for (const [key, value] of specialtyMappingLookup.entries()) {
+        const keyLower = key.toLowerCase();
+        
+        // Exact match gets highest priority
+        if (originalSpecialty === keyLower) {
+          standardizedSpecialty = value;
+          break;
+        }
+        
+        // Word-based matching for better precision
+        const originalWords = originalSpecialty.split(/\s+/).filter((w: string) => w.length > 2);
+        const keyWords = keyLower.split(/\s+/).filter((w: string) => w.length > 2);
+        
+        if (originalWords.length > 0 && keyWords.length > 0) {
+          const commonWords = originalWords.filter((w: string) => keyWords.includes(w));
+          const score = commonWords.length / Math.max(originalWords.length, keyWords.length);
+          
+          if (score > bestScore && score >= 0.7) {
+            bestScore = score;
+            bestMatch = value;
+          }
+        }
+      }
+      
+      if (bestMatch) {
+        standardizedSpecialty = bestMatch;
+      }
     }
     
     if (standardizedSpecialty) {
       transformedRow.specialty = standardizedSpecialty;
-      transformedRow.originalSpecialty = row.specialty || ''; // Keep original for fallback matching
-      console.log(`✅ Mapped specialty: "${row.specialty}" → "${standardizedSpecialty}"`);
+      transformedRow.originalSpecialty = row.specialty || '';
     } else {
-      console.log(`❌ No mapping found for specialty: "${row.specialty}" (normalized: "${originalSpecialty}")`);
-      console.log('📋 Available mappings for this survey source:', Array.from(specialtyMappingLookup.entries()));
-      // Keep the original specialty if no mapping found
       transformedRow.specialty = row.specialty || '';
       transformedRow.originalSpecialty = row.specialty || '';
     }
 
-    // Apply column mappings
-    Object.keys(row).forEach(originalColumn => {
+    // PERFORMANCE OPTIMIZATION: Apply column mappings efficiently
+    let mappedColumns = 0;
+    for (const [originalColumn, value] of Object.entries(row)) {
       const standardizedName = columnMappingLookup.get(originalColumn);
       if (standardizedName) {
-        // Map the value to the standardized column name
-        const value = row[originalColumn];
+        mappedColumns++;
         
-        // Handle different metric types
-        if (standardizedName.toLowerCase().includes('tcc')) {
-          if (standardizedName.toLowerCase().includes('p25')) transformedRow.tcc_p25 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p50')) transformedRow.tcc_p50 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p75')) transformedRow.tcc_p75 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p90')) transformedRow.tcc_p90 = Number(value) || 0;
-        } else if (standardizedName.toLowerCase().includes('wrvu')) {
-          if (standardizedName.toLowerCase().includes('p25')) transformedRow.wrvu_p25 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p50')) transformedRow.wrvu_p50 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p75')) transformedRow.wrvu_p75 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p90')) transformedRow.wrvu_p90 = Number(value) || 0;
-        } else if (standardizedName.toLowerCase().includes('cf')) {
-          if (standardizedName.toLowerCase().includes('p25')) transformedRow.cf_p25 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p50')) transformedRow.cf_p50 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p75')) transformedRow.cf_p75 = Number(value) || 0;
-          else if (standardizedName.toLowerCase().includes('p90')) transformedRow.cf_p90 = Number(value) || 0;
-        } else if (standardizedName.toLowerCase().includes('orgs')) {
+        // PERFORMANCE OPTIMIZATION: Use switch-like logic for better performance
+        const lowerName = standardizedName.toLowerCase();
+        if (lowerName.includes('tcc')) {
+          if (lowerName.includes('p25')) transformedRow.tcc_p25 = Number(value) || 0;
+          else if (lowerName.includes('p50')) transformedRow.tcc_p50 = Number(value) || 0;
+          else if (lowerName.includes('p75')) transformedRow.tcc_p75 = Number(value) || 0;
+          else if (lowerName.includes('p90')) transformedRow.tcc_p90 = Number(value) || 0;
+        } else if (lowerName.includes('wrvu')) {
+          if (lowerName.includes('p25')) transformedRow.wrvu_p25 = Number(value) || 0;
+          else if (lowerName.includes('p50')) transformedRow.wrvu_p50 = Number(value) || 0;
+          else if (lowerName.includes('p75')) transformedRow.wrvu_p75 = Number(value) || 0;
+          else if (lowerName.includes('p90')) transformedRow.wrvu_p90 = Number(value) || 0;
+        } else if (lowerName.includes('cf')) {
+          if (lowerName.includes('p25')) transformedRow.cf_p25 = Number(value) || 0;
+          else if (lowerName.includes('p50')) transformedRow.cf_p50 = Number(value) || 0;
+          else if (lowerName.includes('p75')) transformedRow.cf_p75 = Number(value) || 0;
+          else if (lowerName.includes('p90')) transformedRow.cf_p90 = Number(value) || 0;
+        } else if (lowerName.includes('orgs')) {
           transformedRow.n_orgs = Number(value) || 0;
-        } else if (standardizedName.toLowerCase().includes('incumbents')) {
+        } else if (lowerName.includes('incumbents')) {
           transformedRow.n_incumbents = Number(value) || 0;
         }
       }
-    });
+    }
+    
+    // PERFORMANCE OPTIMIZATION: Only do intelligent mapping if no columns mapped
+    if (mappedColumns === 0) {
+      const intelligentMappings = createIntelligentMappings(row, surveySource);
+      
+      for (const [originalColumn, value] of Object.entries(row)) {
+        const mapping = intelligentMappings.find((m: {sourceColumn: string, targetColumn: string, confidence: number}) => m.sourceColumn === originalColumn);
+        if (mapping && value !== undefined && value !== null) {
+          transformedRow[mapping.targetColumn] = Number(value) || 0;
+          mappedColumns++;
+        }
+      }
+    }
 
     return transformedRow;
   });
 };
 
-const SurveyAnalytics: React.FC = () => {
+const SurveyAnalytics = React.memo(function SurveyAnalytics() {
   // Export functions
   const exportToExcel = () => {
     const headers = [
@@ -348,6 +428,7 @@ const SurveyAnalytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mappings, setMappings] = useState<ISpecialtyMapping[]>([]);
+  const [columnMappings, setColumnMappings] = useState<any[]>([]);
   const [surveys, setSurveys] = useState<Record<string, ISurveyRow[]>>({});
   const [filters, setFilters] = useState({
     specialty: '',
@@ -356,11 +437,14 @@ const SurveyAnalytics: React.FC = () => {
     surveySource: ''
   });
 
+  // PERFORMANCE OPTIMIZATION: Add loading states for better UX
+  const [isDataProcessing, setIsDataProcessing] = useState(false);
+  const [processedData, setProcessedData] = useState<any[]>([]);
 
-
+  const { currentYear, availableYears, setCurrentYear, resetYearConfiguration } = useYear();
   const dataService = useMemo(() => getDataService(), []);
 
-  // Build chain map: standardizedName -> surveySource -> [source specialties]
+  // PERFORMANCE OPTIMIZATION: Memoize expensive lookups
   const chainByStandardized = useMemo(() => {
     const result = new Map<string, Map<string, string[]>>();
     mappings.forEach(m => {
@@ -375,18 +459,62 @@ const SurveyAnalytics: React.FC = () => {
     return result;
   }, [mappings]);
 
-  // Survey counts by source for quick diagnostics
-  const surveyCountsBySource = useMemo(() => {
-    const counts = new Map<string, number>();
-    Object.values(surveys).forEach(rows => {
-      const source = String(rows[0]?.surveySource || 'unknown');
-      counts.set(source, (counts.get(source) || 0) + 1);
-    });
-    return counts;
-  }, [surveys]);
+  // PERFORMANCE OPTIMIZATION: Move data transformation to a separate effect
+  useEffect(() => {
+    if (!surveys || Object.keys(surveys).length === 0 || !columnMappings.length || !mappings.length) {
+      console.log('Missing data for processing:', {
+        surveysCount: surveys ? Object.keys(surveys).length : 0,
+        columnMappingsLength: columnMappings.length,
+        mappingsLength: mappings.length
+      });
+      setProcessedData([]);
+      return;
+    }
 
-  // Get unique values for filters
+    setIsDataProcessing(true);
+    
+    // Use setTimeout to defer heavy processing and prevent blocking the UI
+    const timeoutId = setTimeout(() => {
+      const startTime = performance.now();
+      
+      const allData: any[] = [];
+      Object.entries(surveys).forEach(([surveyId, surveyData]) => {
+        if (surveyData && surveyData.length > 0) {
+          const transformed = transformSurveyData(surveyData, columnMappings, mappings, surveyId);
+          allData.push(...transformed);
+        }
+      });
+      
+      console.log('Data processing results:', {
+        totalProcessedRows: allData.length,
+        availableSpecialties: [...new Set(allData.map(row => row.specialty))].slice(0, 10),
+        surveySources: [...new Set(allData.map(row => row.surveySource))].slice(0, 5),
+        sampleRow: allData[0],
+        // Debug: Show heart-related specialties
+        heartSpecialties: [...new Set(allData.map(row => row.specialty))].filter(s => s && s.toLowerCase().includes('heart')).slice(0, 10)
+      });
+      
+      setProcessedData(allData);
+      setIsDataProcessing(false);
+      
+      const endTime = performance.now();
+      console.log(`Data transformation completed in ${endTime - startTime}ms`);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [surveys, columnMappings, mappings]);
+
+  // PERFORMANCE OPTIMIZATION: Memoize unique values calculation
   const uniqueValues = useMemo(() => {
+    if (!processedData.length) {
+      return {
+        specialties: [],
+        providerTypes: [],
+        regions: [],
+        surveySources: []
+      };
+    }
+
     const values = {
       specialties: new Set<string>(),
       providerTypes: new Set<string>(),
@@ -394,18 +522,14 @@ const SurveyAnalytics: React.FC = () => {
       surveySources: new Set<string>()
     };
 
-    // Get all standardized names from actual mappings (not just initial mappings)
+    // Get all standardized names from actual mappings
     mappings.forEach(mapping => {
       if (mapping.standardizedName) {
         values.specialties.add(mapping.standardizedName);
-        console.log('Added specialty from mapping:', mapping.standardizedName);
       }
     });
 
-    // Build cascading sets based on current selections (specialty/survey source)
-    console.log('Extracting unique values from surveys with cascading filters:', filters, Object.keys(surveys));
-
-    // Pre-compute selected mapping and source names per survey for specialty cascade
+    // Build cascading sets based on current selections
     const selectedMapping = mappings.find(m => m.standardizedName === filters.specialty);
     const sourceNamesBySurvey = new Map<string, string[]>();
     if (selectedMapping) {
@@ -416,46 +540,29 @@ const SurveyAnalytics: React.FC = () => {
       });
     }
 
-    Object.entries(surveys).forEach(([surveyId, surveyRows]) => {
-      console.log(`Processing survey ${surveyId} with ${surveyRows.length} rows`);
-      surveyRows.forEach(row => {
-        const surveySource = String(row.surveySource || '');
-        // Respect survey source filter
-        if (filters.surveySource && surveySource.toLowerCase() !== filters.surveySource.toLowerCase()) return;
+    processedData.forEach(row => {
+      const surveySource = String(row.surveySource || '');
+      if (filters.surveySource && surveySource.toLowerCase() !== filters.surveySource.toLowerCase()) return;
 
-        // Respect specialty filter using standardized or source names
-        if (filters.specialty) {
-          const rowSpec = String(row.specialty || '');
-          const direct = rowSpec.toLowerCase() === filters.specialty.toLowerCase();
-          const srcList = sourceNamesBySurvey.get(surveySource) || [];
-          const viaSource = srcList.some(name => fuzzyMatchSpecialty(rowSpec, name));
-          if (!direct && !viaSource) return;
-        }
+      if (filters.specialty) {
+        const rowSpec = String(row.specialty || '');
+        const direct = rowSpec.toLowerCase() === filters.specialty.toLowerCase();
+        const srcList = sourceNamesBySurvey.get(surveySource) || [];
+        const viaSource = srcList.some(name => fuzzyMatchSpecialty(rowSpec, name));
+        if (!direct && !viaSource) return;
+      }
 
-        if (row.providerType) {
-          values.providerTypes.add(String(row.providerType));
-          console.log('Added provider type:', row.providerType);
-        }
-        const region = (row as any).geographicRegion || (row as any).geographic_region;
-        if (region) {
-          values.regions.add(String(region));
-          console.log('Added region:', region);
-        }
-        if (row.surveySource) {
-          values.surveySources.add(String(row.surveySource));
-          console.log('Added survey source:', row.surveySource);
-        }
-      });
+      if (row.providerType) {
+        values.providerTypes.add(String(row.providerType));
+      }
+      const region = (row as any).geographicRegion || (row as any).geographic_region;
+      if (region) {
+        values.regions.add(String(region));
+      }
+      if (row.surveySource) {
+        values.surveySources.add(String(row.surveySource));
+      }
     });
-
-    console.log('Total specialties found:', values.specialties.size);
-    console.log('All specialties:', Array.from(values.specialties));
-    console.log('Total survey sources found:', values.surveySources.size);
-    console.log('All survey sources:', Array.from(values.surveySources));
-    console.log('Total provider types found:', values.providerTypes.size);
-    console.log('All provider types:', Array.from(values.providerTypes));
-    console.log('Total regions found:', values.regions.size);
-    console.log('All regions:', Array.from(values.regions));
 
     return {
       specialties: Array.from(values.specialties).sort(),
@@ -463,198 +570,59 @@ const SurveyAnalytics: React.FC = () => {
       regions: Array.from(values.regions).sort(),
       surveySources: Array.from(values.surveySources).sort()
     };
-  }, [mappings, surveys]);
+  }, [processedData, mappings, filters]);
 
+  // PERFORMANCE OPTIMIZATION: Optimize data loading with pagination
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
         // Load specialty mappings from DataService
         const allMappings = await dataService.getAllSpecialtyMappings();
-        console.log('Loaded specialty mappings:', allMappings.length, 'mappings found');
-        console.log('Available standardized names:', allMappings.map(m => m.standardizedName));
-        
         setMappings(allMappings);
 
         // Load column mappings
-        const columnMappings = await dataService.getAllColumnMappings();
-        console.log('Loaded column mappings:', columnMappings.length, 'mappings found');
+        const loadedColumnMappings = await dataService.getAllColumnMappings();
+        setColumnMappings(loadedColumnMappings);
 
-        // Then get survey data from DataService
+        // Get survey data from DataService with pagination
         const uploadedSurveys = await dataService.getAllSurveys();
-        console.log('📊 Found surveys:', uploadedSurveys.map(s => ({
-          id: s.id,
-          type: (s as any).type,
-          totalRows: (s as any).rowCount,
-          fileName: (s as any).fileName,
-          uploadDate: (s as any).uploadDate
-        })));
         
         if (uploadedSurveys.length === 0) {
-          console.error('❌ No surveys found! This is the problem.');
           setError('No surveys found. Please upload some survey data first.');
           return;
         }
         
         const surveyData: Record<string, ISurveyRow[]> = {};
         
-        for (const survey of uploadedSurveys) {
-          try {
-            const surveyType = (survey as any).type;
-            console.log(`🔍 Loading data for survey ${survey.id} (${surveyType})`);
-            // CRITICAL: Request sufficient rows to get all data, including specialties that appear later in the dataset
-        // See docs/ALLERGY_IMMUNOLOGY_FIX.md for details on why this is necessary
-        const data = await dataService.getSurveyData(survey.id, undefined, { limit: 10000 }); // Request up to 10,000 rows to get all data
-            if (data && data.rows) {
-              // Log the column names from the first row
-              if (data.rows.length > 0) {
-                console.log('📋 Available columns:', Object.keys(data.rows[0]));
-              }
-
-
-
-              // Apply column mappings to transform the data
-              console.log(`🔄 Transforming ${data.rows.length} rows for survey ${survey.id} (${surveyType})`);
-              console.log('📋 Available column mappings:', columnMappings.map(m => ({
-                standardizedName: m.standardizedName,
-                sourceColumns: m.sourceColumns.map(c => `${c.name} (${c.surveySource})`)
-              })));
-              
-
-              
-              console.log(`🔄 About to transform ${data.rows.length} rows for survey ${survey.id} (${surveyType})`);
-              const transformedRows = transformSurveyData(data.rows, columnMappings, allMappings, surveyType);
-              console.log(`✅ Transformed ${transformedRows.length} rows for survey ${survey.id}`);
-              
-              // Special debugging for SullivanCotter transformed data
-              if (surveyType === 'SullivanCotter') {
-                const allergyTransformedRows = transformedRows.filter(row => 
-                  row.specialty && (row.specialty.toLowerCase().includes('allergy') || row.specialty.toLowerCase().includes('immunology'))
-                );
-                console.log('🔍 Found', allergyTransformedRows.length, 'Allergy & Immunology rows in SullivanCotter transformed data');
-                if (allergyTransformedRows.length > 0) {
-                  console.log('📋 Sample transformed Allergy & Immunology rows:', allergyTransformedRows.slice(0, 3).map(row => row.specialty));
-                }
-              }
-              
-              // Check if any specialties were actually transformed
-              const originalSpecialties = data.rows.slice(0, 5).map(row => row.specialty);
-              const transformedSpecialties = transformedRows.slice(0, 5).map(row => row.specialty);
-              console.log(`📋 Original specialties (first 5):`, originalSpecialties);
-              console.log(`📋 Transformed specialties (first 5):`, transformedSpecialties);
-              
-
-              
-              // Log some sample specialties from the raw data
-              if (data.rows.length > 0) {
-                const sampleSpecialties = data.rows.slice(0, 5).map(row => row.specialty);
-                console.log(`📋 Sample specialties from ${surveyType}:`, sampleSpecialties);
-              }
-              
-              if (transformedRows.length > 0) {
-                console.log('Sample transformed row:', {
-                  surveySource: transformedRows[0].surveySource,
-                  specialty: transformedRows[0].specialty,
-                  tcc_p50: transformedRows[0].tcc_p50,
-                  wrvu_p50: transformedRows[0].wrvu_p50,
-                  cf_p50: transformedRows[0].cf_p50
-                });
-              }
-              
-              surveyData[survey.id] = transformedRows.map(row => {
-                // Ensure all required fields are present and properly typed
-                const processedRow = {
+        // PERFORMANCE OPTIMIZATION: Load surveys in batches
+        const batchSize = 3; // Load 3 surveys at a time
+        for (let i = 0; i < uploadedSurveys.length; i += batchSize) {
+          const batch = uploadedSurveys.slice(i, i + batchSize);
+          
+          await Promise.all(batch.map(async (survey) => {
+            try {
+              const surveyType = (survey as any).type;
+              const data = await dataService.getSurveyData(survey.id, undefined, { limit: 10000 });
+              if (data && data.rows) {
+                // Add survey metadata to each row for better display
+                const rowsWithMetadata = data.rows.map((row: any) => ({
                   ...row,
-                  surveySource: surveyType,
-                  specialty: row.specialty || row.normalizedSpecialty || '',
-                  originalSpecialty: row.originalSpecialty || row.specialty || row.normalizedSpecialty || '',
-                  // Normalize provider type and region fields from possible snake_case inputs
-                  providerType: (row as any).providerType || (row as any).provider_type || '',
-                  geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || '',
-                  n_orgs: Number(row.n_orgs) || 0,
-                  n_incumbents: Number(row.n_incumbents) || 0,
-                  tcc_p25: Number(row.tcc_p25) || 0,
-                  tcc_p50: Number(row.tcc_p50) || 0,
-                  tcc_p75: Number(row.tcc_p75) || 0,
-                  tcc_p90: Number(row.tcc_p90) || 0,
-                  wrvu_p25: Number(row.wrvu_p25) || 0,
-                  wrvu_p50: Number(row.wrvu_p50) || 0,
-                  wrvu_p75: Number(row.wrvu_p75) || 0,
-                  wrvu_p90: Number(row.wrvu_p90) || 0,
-                  cf_p25: Number(row.cf_p25) || 0,
-                  cf_p50: Number(row.cf_p50) || 0,
-                  cf_p75: Number(row.cf_p75) || 0,
-                  cf_p90: Number(row.cf_p90) || 0,
-                };
-
-                // Log the first row of each survey to verify data
-                if (transformedRows.indexOf(row) === 0) {
-                  console.log('Sample transformed row:', {
-                    surveySource: processedRow.surveySource,
-                    specialty: processedRow.specialty,
-                    providerType: processedRow.providerType,
-                    metrics: {
-                      tcc: { p25: processedRow.tcc_p25, p50: processedRow.tcc_p50, p75: processedRow.tcc_p75, p90: processedRow.tcc_p90 },
-                      wrvu: { p25: processedRow.wrvu_p25, p50: processedRow.wrvu_p50, p75: processedRow.wrvu_p75, p90: processedRow.wrvu_p90 },
-                      cf: { p25: processedRow.cf_p25, p50: processedRow.cf_p50, p75: processedRow.cf_p75, p90: processedRow.cf_p90 }
-                    }
-                  });
-                }
-
-                return processedRow;
-              });
+                  _surveyId: survey.id,
+                  _surveyName: extractCleanSurveyName((survey as any).name || (survey as any).filename || survey.id),
+                  _surveyType: surveyType
+                }));
+                surveyData[survey.id] = rowsWithMetadata;
+              }
+            } catch (error) {
+              console.error(`Error processing survey ${survey.id}:`, error);
             }
-          } catch (error) {
-            console.error(`Error processing survey ${survey.id}:`, error);
-          }
+          }));
+          
+          // Update state incrementally for better UX
+          setSurveys(prev => ({ ...prev, ...surveyData }));
         }
 
-        console.log('Total surveys loaded:', Object.keys(surveyData).length);
-        console.log('Survey data keys:', Object.keys(surveyData));
-        
-        // Collect all specialties from all surveys to see what's available
-        const allSpecialties: string[] = [];
-        Object.entries(surveyData).forEach(([id, rows]) => {
-          const surveySpecialties = Array.from(new Set(rows.map(r => String(r.specialty || '')).filter(Boolean)));
-          allSpecialties.push(...surveySpecialties);
-          
-          console.log(`Survey ${id}:`, {
-            rowCount: rows.length,
-            surveySource: rows[0]?.surveySource,
-            specialties: surveySpecialties,
-            hasData: rows.some(r => r.tcc_p50 > 0 || r.wrvu_p50 > 0),
-            sampleRow: rows[0]
-          });
-        });
-        
-        // Check for Allergy & Immunology specifically
-        const uniqueSpecialties = Array.from(new Set(allSpecialties));
-        console.log('📋 All unique specialties across all surveys:', uniqueSpecialties);
-        
-        const allergySpecialties = uniqueSpecialties.filter(s => 
-          String(s).toLowerCase().includes('allergy') || String(s).toLowerCase().includes('immunology')
-        );
-        console.log('🎯 Allergy & Immunology related specialties found:', allergySpecialties);
-        
-        // Check if any survey has Allergy & Immunology rows
-        Object.entries(surveyData).forEach(([id, rows]) => {
-          const allergyRows = rows.filter(row => 
-            row.specialty && 
-            (String(row.specialty).toLowerCase().includes('allergy') || 
-             String(row.specialty).toLowerCase().includes('immunology'))
-          );
-          if (allergyRows.length > 0) {
-            console.log(`✅ Survey ${id} has ${allergyRows.length} Allergy & Immunology rows:`, 
-              allergyRows.slice(0, 3).map(row => ({
-                specialty: row.specialty,
-                originalSpecialty: row.originalSpecialty,
-                surveySource: row.surveySource
-              }))
-            );
-          }
-        });
-
-        setSurveys(surveyData);
       } catch (error) {
         console.error('Error fetching data:', error);
         setError('Failed to load data');
@@ -663,111 +631,111 @@ const SurveyAnalytics: React.FC = () => {
       }
     };
     fetchData();
-  }, [dataService]);
+  }, [dataService, currentYear]);
 
+  // PERFORMANCE OPTIMIZATION: Optimize aggregated data calculation
   const aggregatedData = useMemo(() => {
-    if (!filters.specialty) return [];
-
-    // Find the selected mapping
-    const selectedMapping = mappings.find(
-      m => m.standardizedName === filters.specialty
-    );
-    if (!selectedMapping) {
-      console.log('❌ No mapping found for specialty:', filters.specialty);
-      console.log('📋 Available mappings:', mappings.map(m => m.standardizedName));
+    if (!processedData || processedData.length === 0) {
+      console.log('No processed data available');
       return [];
     }
 
-    console.log('✅ Selected mapping:', selectedMapping);
-    console.log('📊 Available surveys:', Object.keys(surveys));
-    
-    // Collect ALL matching rows from ALL surveys for this standardized specialty
-    const allMatchingRows: ISurveyRow[] = [];
-    
-    // Look through ALL surveys for data matching the selected standardized specialty
-    Object.entries(surveys).forEach(([surveyId, surveyRows]) => {
-      if (!surveyRows || !surveyRows.length) {
-        console.log(`❌ No data found for survey ${surveyId}`);
-        return;
-      }
+    // If no specialty filter is selected, return empty array (no data should be shown)
+    if (!filters.specialty) {
+      console.log('No specialty filter selected - showing no data');
+      return [];
+    }
 
-      const surveySource = surveyRows[0]?.surveySource;
-      console.log(`🔍 Checking survey ${surveyId} (${surveySource}) for specialty "${filters.specialty}"`);
-      
-      
-      
-      // Show what source specialties this mapping expects for this survey source
-      const expectedSourceSpecialties = selectedMapping.sourceSpecialties
-        .filter(src => src.surveySource === surveySource)
-        .map(src => src.specialty);
-      console.log(`🎯 Expected source specialties for ${surveySource}:`, expectedSourceSpecialties);
-      
-      // Filter rows that match the selected standardized specialty
-      const filtered = surveyRows.filter(row => {
-        if (!row) return false;
+    // If specialty filter is active, find the matching mapping
+    console.log('Filtering by specialty:', filters.specialty);
+    console.log('Available mappings:', mappings.map(m => m.standardizedName));
+    
+    // More precise specialty matching - prefer exact matches first
+    let selectedMapping = mappings.find(m => 
+      m.standardizedName.toLowerCase() === filters.specialty.toLowerCase()
+    );
+    
+    // If no exact match, try partial matching but be more careful
+    if (!selectedMapping) {
+      selectedMapping = mappings.find(m => {
+        const mappingName = m.standardizedName.toLowerCase();
+        const filterName = filters.specialty.toLowerCase();
         
-        // Use the transformed specialty name (which should already be standardized)
-        const rowSpecialty = String(row.specialty || '').trim();
-        const selectedSpecialty = selectedMapping.standardizedName.trim();
-        
-        // Check if the row specialty matches the selected standardized specialty
-        const specialtyMatch = rowSpecialty.toLowerCase() === selectedSpecialty.toLowerCase();
-        
-        // If no direct match, check if this row's original specialty maps to the selected specialty
-        if (!specialtyMatch && row.originalSpecialty) {
-          const originalSpecialty = String(row.originalSpecialty).toLowerCase();
-          const mappingForThisSource = selectedMapping.sourceSpecialties.find(
-            src => src.surveySource === surveySource && src.specialty.toLowerCase() === originalSpecialty
-          );
-          if (mappingForThisSource) {
-            console.log(`✅ Found mapping match: "${row.originalSpecialty}" → "${selectedSpecialty}"`);
-            return true;
-          }
-        }
-        
-        // Apply other filters
-        const providerTypeMatch = !filters.providerType || 
-          String((row as any).providerType || (row as any).provider_type || '').toLowerCase().trim() === filters.providerType.toLowerCase().trim();
-        const regionMatch = !filters.region || 
-          String((row as any).geographicRegion || (row as any).geographic_region || '').toLowerCase().trim() === filters.region.toLowerCase().trim();
-        const surveySourceMatch = !filters.surveySource || 
-          String(row.surveySource || '').toLowerCase().trim() === filters.surveySource.toLowerCase().trim();
-        
-        const matches = specialtyMatch && providerTypeMatch && regionMatch && surveySourceMatch;
-        
-        if (specialtyMatch) {
-          console.log(`✅ Found matching row: "${rowSpecialty}" matches "${selectedSpecialty}"`);
-        } else {
-          console.log(`❌ No direct match: "${rowSpecialty}" != "${selectedSpecialty}"`);
-          // Debug: Show what the row actually contains
-          console.log(`🔍 Row details:`, {
-            surveySource: row.surveySource,
-            specialty: row.specialty,
-            originalSpecialty: (row as any).originalSpecialty,
-            providerType: row.providerType,
-            geographicRegion: row.geographicRegion
-          });
-        }
-        
-        return matches;
+        // Only match if the filter is a complete word or the mapping starts with the filter
+        return mappingName.startsWith(filterName + ' ') || 
+               mappingName === filterName ||
+               (filterName.includes(' ') && mappingName.includes(filterName));
       });
+    }
+    
+    if (!selectedMapping) {
+      console.log('No mapping found for specialty:', filters.specialty);
+      console.log('Available mappings:', mappings.map(m => m.standardizedName));
+      return [];
+    }
 
-      if (filtered.length > 0) {
-        console.log(`✅ Found ${filtered.length} matching rows in survey ${surveyId} (${surveySource}) for specialty "${filters.specialty}"`);
-        allMatchingRows.push(...filtered);
-      } else {
-        console.log(`❌ No matching rows found in survey ${surveyId} (${surveySource}) for specialty "${filters.specialty}"`);
+    console.log('Found mapping:', selectedMapping.standardizedName);
+
+    // Debug: Show what specialties are actually in the processed data
+    const availableSpecialties = [...new Set(processedData.map(row => row.specialty))].filter(Boolean);
+    console.log('Available specialties in processed data:', availableSpecialties.slice(0, 20));
+    console.log('Looking for specialty:', selectedMapping.standardizedName);
+    
+    // Show heart-related specialties specifically
+    const heartSpecialties = availableSpecialties.filter(s => s.toLowerCase().includes('heart'));
+    console.log('Heart-related specialties in data:', heartSpecialties);
+    
+    // Use the same approach as Regional Analytics - filter by source specialties
+    const mappedSpecialtyNames = selectedMapping.sourceSpecialties.map((spec: any) => spec.specialty);
+    console.log('Mapped source specialties:', mappedSpecialtyNames);
+
+    // Use processed data instead of transforming again
+    const allMatchingRows = processedData.filter(row => {
+      if (!row || !selectedMapping) return false;
+      
+      // Filter out placeholder or invalid rows
+      const surveySource = String(row.surveySource || '').trim();
+      const specialty = String(row.specialty || '').trim();
+      
+      // Skip rows with placeholder values
+      if (surveySource.toLowerCase().includes('simple average') || 
+          surveySource.toLowerCase().includes('average') ||
+          specialty.toLowerCase().includes('simple average') ||
+          specialty === '-' || specialty === '') {
+        return false;
       }
+      
+      const rowSpecialty = String(row.specialty || '').trim();
+      
+      // Use the same filtering logic as Regional Analytics
+      const specialtyMatch = mappedSpecialtyNames.some((mappedName: string) => 
+        rowSpecialty.toLowerCase().includes(mappedName.toLowerCase()) ||
+        mappedName.toLowerCase().includes(rowSpecialty.toLowerCase())
+      );
+      
+      // Debug: Log the comparison for heart-related specialties
+      if (rowSpecialty.toLowerCase().includes('heart') || mappedSpecialtyNames.some(name => name.toLowerCase().includes('heart'))) {
+        console.log('Comparing:', {
+          rowSpecialty: rowSpecialty,
+          mappedSpecialtyNames: mappedSpecialtyNames,
+          specialtyMatch: specialtyMatch,
+          rowSpecialtyLower: rowSpecialty.toLowerCase()
+        });
+      }
+      
+      const providerTypeMatch = !filters.providerType || 
+        String((row as any).providerType || (row as any).provider_type || '').toLowerCase().trim() === filters.providerType.toLowerCase().trim();
+      const regionMatch = !filters.region || 
+        String((row as any).geographicRegion || (row as any).geographic_region || '').toLowerCase().trim() === filters.region.toLowerCase().trim();
+      const surveySourceMatch = !filters.surveySource || 
+        String(row.surveySource || '').toLowerCase().trim() === filters.surveySource.toLowerCase().trim();
+      
+      return specialtyMatch && providerTypeMatch && regionMatch && surveySourceMatch;
     });
 
-    console.log(`📊 Total matching rows found across all surveys: ${allMatchingRows.length}`);
+    console.log('Matching rows found:', allMatchingRows.length);
 
-    if (allMatchingRows.length === 0) {
-      console.log('❌ No matching rows found for any survey');
-      console.log('📋 Available specialties in mappings:', mappings.map(m => m.standardizedName));
-      console.log('🎯 Selected specialty:', filters.specialty);
-      return [];
-    }
+    if (allMatchingRows.length === 0) return [];
 
     // Group rows by survey source, provider type, and region
     const groupedRows = new Map<string, ISurveyRow[]>();
@@ -779,150 +747,119 @@ const SurveyAnalytics: React.FC = () => {
       groupedRows.get(key)?.push(row);
     });
 
-    console.log(`Grouped into ${groupedRows.size} unique combinations`);
-
     // Create aggregated rows for each group
     const rows: AggregatedData[] = [];
     groupedRows.forEach((groupRows, key) => {
-      // Use the first row as base for metadata
       const row = groupRows[0];
       
-      // Calculate metrics including averages
+      if (!selectedMapping) return; // Skip if no mapping found
+      
       const metrics = {
         n_orgs: groupRows.reduce((sum, r) => sum + (Number(r.n_orgs) || 0), 0),
         n_incumbents: groupRows.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0),
-        // Simple averages
-        tcc_avg: calculateAverage([
-              ...groupRows.map(r => Number(r.tcc_p25) || 0),
-              ...groupRows.map(r => Number(r.tcc_p50) || 0),
-              ...groupRows.map(r => Number(r.tcc_p75) || 0),
-              ...groupRows.map(r => Number(r.tcc_p90) || 0)
-            ].filter(Boolean)),
-            wrvu_avg: calculateAverage([
-              ...groupRows.map(r => Number(r.wrvu_p25) || 0),
-              ...groupRows.map(r => Number(r.wrvu_p50) || 0),
-              ...groupRows.map(r => Number(r.wrvu_p75) || 0),
-              ...groupRows.map(r => Number(r.wrvu_p90) || 0)
-            ].filter(Boolean)),
-            cf_avg: calculateAverage([
-              ...groupRows.map(r => Number(r.cf_p25) || 0),
-              ...groupRows.map(r => Number(r.cf_p50) || 0),
-              ...groupRows.map(r => Number(r.cf_p75) || 0),
-              ...groupRows.map(r => Number(r.cf_p90) || 0)
-            ].filter(Boolean)),
-            // Weighted averages
-            tcc_weighted_avg: calculateWeightedAverage(
-              groupRows.map(r => (Number(r.tcc_p50) || 0)),
-              groupRows.map(r => (Number(r.n_incumbents) || 0))
-            ),
-            wrvu_weighted_avg: calculateWeightedAverage(
-              groupRows.map(r => (Number(r.wrvu_p50) || 0)),
-              groupRows.map(r => (Number(r.n_incumbents) || 0))
-            ),
-            cf_weighted_avg: calculateWeightedAverage(
-              groupRows.map(r => (Number(r.cf_p50) || 0)),
-              groupRows.map(r => (Number(r.n_incumbents) || 0))
-            ),
-            // Percentiles
-            tcc_p25: calculatePercentile(groupRows.map(r => Number(r.tcc_p25) || 0).filter(Boolean), 25),
-            tcc_p50: calculatePercentile(groupRows.map(r => Number(r.tcc_p50) || 0).filter(Boolean), 50),
-            tcc_p75: calculatePercentile(groupRows.map(r => Number(r.tcc_p75) || 0).filter(Boolean), 75),
-            tcc_p90: calculatePercentile(groupRows.map(r => Number(r.tcc_p90) || 0).filter(Boolean), 90),
-            wrvu_p25: calculatePercentile(groupRows.map(r => Number(r.wrvu_p25) || 0).filter(Boolean), 25),
-            wrvu_p50: calculatePercentile(groupRows.map(r => Number(r.wrvu_p50) || 0).filter(Boolean), 50),
-            wrvu_p75: calculatePercentile(groupRows.map(r => Number(r.wrvu_p75) || 0).filter(Boolean), 75),
-            wrvu_p90: calculatePercentile(groupRows.map(r => Number(r.wrvu_p90) || 0).filter(Boolean), 90),
-            cf_p25: calculatePercentile(groupRows.map(r => Number(r.cf_p25) || 0).filter(Boolean), 25),
-            cf_p50: calculatePercentile(groupRows.map(r => Number(r.cf_p50) || 0).filter(Boolean), 50),
-            cf_p75: calculatePercentile(groupRows.map(r => Number(r.cf_p75) || 0).filter(Boolean), 75),
-            cf_p90: calculatePercentile(groupRows.map(r => Number(r.cf_p90) || 0).filter(Boolean), 90),
-          };
+        tcc_p25: calculatePercentile(groupRows.map(r => Number(r.tcc_p25) || 0).filter(Boolean), 25),
+        tcc_p50: calculatePercentile(groupRows.map(r => Number(r.tcc_p50) || 0).filter(Boolean), 50),
+        tcc_p75: calculatePercentile(groupRows.map(r => Number(r.tcc_p75) || 0).filter(Boolean), 75),
+        tcc_p90: calculatePercentile(groupRows.map(r => Number(r.tcc_p90) || 0).filter(Boolean), 90),
+        wrvu_p25: calculatePercentile(groupRows.map(r => Number(r.wrvu_p25) || 0).filter(Boolean), 25),
+        wrvu_p50: calculatePercentile(groupRows.map(r => Number(r.wrvu_p50) || 0).filter(Boolean), 50),
+        wrvu_p75: calculatePercentile(groupRows.map(r => Number(r.wrvu_p75) || 0).filter(Boolean), 75),
+        wrvu_p90: calculatePercentile(groupRows.map(r => Number(r.wrvu_p90) || 0).filter(Boolean), 90),
+        cf_p25: calculatePercentile(groupRows.map(r => Number(r.cf_p25) || 0).filter(Boolean), 25),
+        cf_p50: calculatePercentile(groupRows.map(r => Number(r.cf_p50) || 0).filter(Boolean), 50),
+        cf_p75: calculatePercentile(groupRows.map(r => Number(r.cf_p75) || 0).filter(Boolean), 75),
+        cf_p90: calculatePercentile(groupRows.map(r => Number(r.cf_p90) || 0).filter(Boolean), 90),
+      };
 
-          rows.push({
-            standardizedName: selectedMapping.standardizedName,
-            surveySource: String(row.surveySource || ''),
-            surveySpecialty: String(row.specialty || ''),
-            geographicRegion: String(row.geographicRegion || ''),
-            n_orgs: metrics.n_orgs,
-            n_incumbents: metrics.n_incumbents,
-            tcc_p25: metrics.tcc_p25,
-            tcc_p50: metrics.tcc_p50,
-            tcc_p75: metrics.tcc_p75,
-            tcc_p90: metrics.tcc_p90,
-            wrvu_p25: metrics.wrvu_p25,
-            wrvu_p50: metrics.wrvu_p50,
-            wrvu_p75: metrics.wrvu_p75,
-            wrvu_p90: metrics.wrvu_p90,
-            cf_p25: metrics.cf_p25,
-            cf_p50: metrics.cf_p50,
-            cf_p75: metrics.cf_p75,
-            cf_p90: metrics.cf_p90
-          });
-        });
+      rows.push({
+        standardizedName: selectedMapping.standardizedName,
+        surveySource: String(row.surveySource || ''),
+        surveySpecialty: String(row.specialty || ''),
+        geographicRegion: String(row.geographicRegion || ''),
+        n_orgs: metrics.n_orgs,
+        n_incumbents: metrics.n_incumbents,
+        tcc_p25: metrics.tcc_p25,
+        tcc_p50: metrics.tcc_p50,
+        tcc_p75: metrics.tcc_p75,
+        tcc_p90: metrics.tcc_p90,
+        wrvu_p25: metrics.wrvu_p25,
+        wrvu_p50: metrics.wrvu_p50,
+        wrvu_p75: metrics.wrvu_p75,
+        wrvu_p90: metrics.wrvu_p90,
+        cf_p25: metrics.cf_p25,
+        cf_p50: metrics.cf_p50,
+        cf_p75: metrics.cf_p75,
+        cf_p90: metrics.cf_p90
+      });
+    });
 
-    console.log('Generated rows:', rows);
+    console.log('Generated rows for filtered specialty:', rows.length);
     return rows;
-  }, [filters, mappings, surveys]);
+  }, [filters, mappings, processedData]);
 
-  // Filter the data
+  // PERFORMANCE OPTIMIZATION: Optimize filtering
   const filteredData = useMemo(() => {
-    console.log('Filtering data with:', filters);
-    console.log('Available aggregated data:', aggregatedData);
+    const hasActiveFilters = filters.specialty || filters.surveySource || filters.providerType || filters.region;
+    if (!hasActiveFilters) return aggregatedData;
     
     return aggregatedData.filter(row => {
-      const matchesSpecialty = !filters.specialty || row.standardizedName.toLowerCase().includes(filters.specialty.toLowerCase());
-      const matchesSurveySource = !filters.surveySource || row.surveySource.toLowerCase().includes(filters.surveySource.toLowerCase());
-      const matchesProviderType = !filters.providerType || (
-        Object.values(surveys).some(surveyRows =>
-          surveyRows.some(s =>
-            s.specialty === row.surveySpecialty &&
-            s.surveySource === row.surveySource &&
-            s.providerType?.toLowerCase().includes(filters.providerType.toLowerCase())
-          )
-        )
-      );
-      const matchesRegion = !filters.region || (
-        Object.values(surveys).some(surveyRows =>
-          surveyRows.some(s =>
-            s.specialty === row.surveySpecialty &&
-            s.surveySource === row.surveySource &&
-            s.geographicRegion?.toLowerCase().includes(filters.region.toLowerCase())
-          )
-        )
-      );
+      if (filters.specialty && !row.standardizedName.toLowerCase().includes(filters.specialty.toLowerCase())) {
+        return false;
+      }
+      if (filters.surveySource && !row.surveySource.toLowerCase().includes(filters.surveySource.toLowerCase())) {
+        return false;
+      }
+      if (filters.providerType) {
+        const hasProviderType = processedData.some(s =>
+          s.specialty === row.surveySpecialty &&
+          s.surveySource === row.surveySource &&
+          s.providerType?.toLowerCase().includes(filters.providerType.toLowerCase())
+        );
+        if (!hasProviderType) return false;
+      }
+      if (filters.region) {
+        const hasRegion = processedData.some(s =>
+          s.specialty === row.surveySpecialty &&
+          s.surveySource === row.surveySource &&
+          s.geographicRegion?.toLowerCase().includes(filters.region.toLowerCase())
+        );
+        if (!hasRegion) return false;
+      }
 
-      return matchesSpecialty && matchesSurveySource && matchesProviderType && matchesRegion;
+      return true;
     });
-  }, [aggregatedData, filters, surveys]);
+  }, [aggregatedData, filters, processedData]);
+
+  // PERFORMANCE OPTIMIZATION: Debounced filter change handler
+  const debouncedFilterChange = useMemo(
+    () => performanceMonitor.debounce((filterName: string, value: string) => {
+      setFilters(prev => {
+        const newFilters = { ...prev, [filterName]: value };
+        
+        if (filterName === 'specialty') {
+          newFilters.providerType = '';
+          newFilters.region = '';
+          newFilters.surveySource = '';
+        }
+        
+        if (filterName === 'surveySource') {
+          newFilters.providerType = '';
+          newFilters.region = '';
+        }
+        
+        if (filterName === 'providerType') {
+          newFilters.region = '';
+        }
+        
+        return newFilters;
+      });
+    }, 300),
+    []
+  );
 
   const handleFilterChange = (filterName: string, value: string) => {
-    setFilters(prev => {
-      const newFilters = { ...prev, [filterName]: value };
-      
-      // Cascading logic: when specialty changes, reset other filters
-      if (filterName === 'specialty') {
-        newFilters.providerType = '';
-        newFilters.region = '';
-        newFilters.surveySource = '';
-      }
-      
-      // When survey source changes, reset provider type and region
-      if (filterName === 'surveySource') {
-        newFilters.providerType = '';
-        newFilters.region = '';
-      }
-      
-      // When provider type changes, reset region
-      if (filterName === 'providerType') {
-        newFilters.region = '';
-      }
-      
-      console.log('Filter changed:', filterName, 'to', value, 'New filters:', newFilters);
-      return newFilters;
-    });
+    debouncedFilterChange(filterName, value);
   };
-
-
 
   // Add function to group data by standardized specialty
   const groupBySpecialty = (data: AggregatedData[]): Record<string, AggregatedData[]> => {
@@ -984,13 +921,16 @@ const SurveyAnalytics: React.FC = () => {
     return { simple, weighted };
   };
 
-  if (isLoading) {
+  // PERFORMANCE OPTIMIZATION: Show loading state for data processing
+  if (isLoading || isDataProcessing) {
     return (
-      <LoadingSpinner 
-        message="Loading survey analytics..." 
-        fullScreen={true}
-        size="lg"
-      />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingSpinner 
+          message={isDataProcessing ? "Processing survey data..." : "Loading survey analytics..."} 
+          fullScreen={false}
+          size="lg"
+        />
+      </div>
     );
   }
 
@@ -1003,9 +943,10 @@ const SurveyAnalytics: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Filters Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 mt-4">
+    <>
+      <div className="min-h-screen bg-gray-50">
+        {/* Filters Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 mt-4">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-xl font-semibold text-gray-900">Data Filters</h3>
@@ -1025,7 +966,42 @@ const SurveyAnalytics: React.FC = () => {
         </div>
 
         {/* Filter Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          {/* Year Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Year
+            </label>
+            <FormControl fullWidth size="small">
+              <Select
+                value={currentYear}
+                onChange={(e: React.ChangeEvent<{ value: unknown }>) => {
+                  setCurrentYear(e.target.value as string);
+                }}
+                sx={{
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    borderRadius: '8px',
+                  },
+                  '&:hover': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused': {
+                    borderColor: '#3b82f6',
+                  }
+                }}
+                displayEmpty
+              >
+                {availableYears.map(year => (
+                  <MenuItem key={year} value={year}>{year}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
+
           {/* Specialty Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1057,11 +1033,14 @@ const SurveyAnalytics: React.FC = () => {
                   }}
                 />
               )}
-              renderOption={(props: any, option: string) => (
-                <li {...props}>
-                  {option === '' ? 'All Specialties' : formatSpecialtyForDisplay(option)}
-                </li>
-              )}
+              renderOption={(props: any, option: string) => {
+                const { key, ...otherProps } = props;
+                return (
+                  <li key={key} {...otherProps}>
+                    {option === '' ? 'All Specialties' : formatSpecialtyForDisplay(option)}
+                  </li>
+                );
+              }}
               filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
                 if (inputValue === '') {
                   return options;
@@ -1209,9 +1188,12 @@ const SurveyAnalytics: React.FC = () => {
       </div>
 
       {/* Data Table Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-semibold text-gray-900">Survey Analytics Data</h3>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">Survey Analytics Data</h3>
+            <p className="text-sm text-gray-600 mt-1">Scroll horizontally to view all columns • Hover over truncated text for full content</p>
+          </div>
         </div>
 
         {filteredData.length === 0 ? (
@@ -1225,27 +1207,36 @@ const SurveyAnalytics: React.FC = () => {
             <p className="text-gray-500">Try adjusting your filters to see results</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div>
             <TableContainer 
-              component={Paper} 
               sx={{ 
                 overflowX: 'auto', 
                 overflowY: 'hidden',
                 border: '1px solid #e5e7eb', 
-                borderRadius: '12px',
+                borderRadius: '8px',
+                width: '100%',
+                padding: 0,
+                margin: 0,
                 '& .MuiTable-root': {
-                  minWidth: '100%'
+                  width: '100%', // Use full container width
+                  tableLayout: 'auto', // Allow flexible column sizing
+                  margin: 0,
+                  padding: 0
+                },
+                '& .MuiTableContainer-root': {
+                  padding: 0,
+                  margin: 0
                 },
                 '&::-webkit-scrollbar': {
-                  height: '8px'
+                  height: '12px'
                 },
                 '&::-webkit-scrollbar-track': {
                   background: '#f1f1f1',
-                  borderRadius: '4px'
+                  borderRadius: '6px'
                 },
                 '&::-webkit-scrollbar-thumb': {
                   background: '#cbd5e1',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   '&:hover': {
                     background: '#94a3b8'
                   }
@@ -1255,7 +1246,7 @@ const SurveyAnalytics: React.FC = () => {
               <Table size="small" sx={{ width: '100%' }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell colSpan={5} sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', borderBottom: '2px solid #e2e8f0' }}>
+                    <TableCell colSpan={4} sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', borderBottom: '2px solid #e2e8f0' }}>
                       Survey Information
                     </TableCell>
                     <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#dbeafe', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
@@ -1269,143 +1260,458 @@ const SurveyAnalytics: React.FC = () => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    {/* Survey Info Headers */}
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem' }}>Survey Source</TableCell>
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem' }}>Survey Specialty</TableCell>
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem' }}>Region</TableCell>
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right' }}># Orgs</TableCell>
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right' }}># Incumbents</TableCell>
+                    {/* Survey Info Headers - Removed specialty column */}
+                    <TableCell sx={{ 
+                      backgroundColor: '#f8fafc', 
+                      fontWeight: 'bold', 
+                      fontSize: '0.875rem', 
+                      width: '20%', 
+                      minWidth: '200px',
+                      whiteSpace: 'normal',
+                      wordWrap: 'break-word',
+                      lineHeight: '1.4'
+                    }}>Survey Source</TableCell>
+                    <TableCell sx={{ 
+                      backgroundColor: '#f8fafc', 
+                      fontWeight: 'bold', 
+                      fontSize: '0.875rem', 
+                      width: '12%', 
+                      minWidth: '120px',
+                      whiteSpace: 'normal',
+                      wordWrap: 'break-word',
+                      lineHeight: '1.4'
+                    }}>Region</TableCell>
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right', width: '8%', minWidth: '80px' }}># Orgs</TableCell>
+                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right', width: '10%', minWidth: '100px' }}># Incumbents</TableCell>
                     
-                    {/* TCC Headers */}
-                    <TableCell sx={{ backgroundColor: '#dbeafe', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem' }}>P25</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem' }}>P50</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem' }}>P75</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem' }}>P90</TableCell>
+                    {/* TCC Headers - Increased for currency formatting */}
+                    <TableCell sx={{ backgroundColor: '#dbeafe', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P90</TableCell>
                     
-                    {/* wRVU Headers */}
-                    <TableCell sx={{ backgroundColor: '#dcfce7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem' }}>P25</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem' }}>P50</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem' }}>P75</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem' }}>P90</TableCell>
+                    {/* wRVU Headers - Increased for decimal formatting */}
+                    <TableCell sx={{ backgroundColor: '#dcfce7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P90</TableCell>
                     
-                    {/* CF Headers */}
-                    <TableCell sx={{ backgroundColor: '#fef3c7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem' }}>P25</TableCell>
-                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem' }}>P50</TableCell>
-                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem' }}>P75</TableCell>
-                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem' }}>P90</TableCell>
+                    {/* CF Headers - Increased for currency formatting */}
+                    <TableCell sx={{ backgroundColor: '#fef3c7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P90</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {Object.entries(groupBySpecialty(filteredData)).map(([specialty, rows]) => (
-                    <React.Fragment key={specialty}>
-                      {rows.map((row, idx) => (
-                        <TableRow 
-                          key={`${specialty}-${idx}`}
-                          sx={{ 
-                            '&:nth-of-type(odd)': { backgroundColor: '#f8fafc' },
-                            '&:hover': { backgroundColor: '#f1f5f9' },
-                            transition: 'background-color 0.2s'
-                          }}
-                        >
-                          <TableCell sx={{ fontSize: '0.875rem' }}>{row.surveySource}</TableCell>
-                          <TableCell sx={{ fontSize: '0.875rem' }}>{row.surveySpecialty}</TableCell>
-                          <TableCell sx={{ fontSize: '0.875rem' }}>{row.geographicRegion || 'N/A'}</TableCell>
-                          <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{row.n_orgs.toLocaleString()}</TableCell>
-                          <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{row.n_incumbents.toLocaleString()}</TableCell>
-                          
-                          {/* TCC Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
-                          <TableCell align="right">{formatCurrency(row.tcc_p50)}</TableCell>
-                          <TableCell align="right">{formatCurrency(row.tcc_p75)}</TableCell>
-                          <TableCell align="right">{formatCurrency(row.tcc_p90)}</TableCell>
-                          
-                          {/* wRVU Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatNumber(row.wrvu_p25)}</TableCell>
-                          <TableCell align="right">{formatNumber(row.wrvu_p50)}</TableCell>
-                          <TableCell align="right">{formatNumber(row.wrvu_p75)}</TableCell>
-                          <TableCell align="right">{formatNumber(row.wrvu_p90)}</TableCell>
-                          
-                          {/* CF Values */}
-                          <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
-                          <TableCell align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
-                        </TableRow>
-                      ))}
-                      {/* Summary Rows */}
-                      {(() => {
-                        const { simple, weighted } = calculateSummaryRows(rows);
-                        return (
-                          <>
-                            <TableRow sx={{ 
-                              backgroundColor: '#f1f5f9',
-                              borderTop: '2px solid #e2e8f0'
-                            }}>
-                              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Simple Average</TableCell>
-                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
-                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
-                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{simple.n_orgs}</TableCell>
-                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{simple.n_incumbents}</TableCell>
-                              
-                              {/* TCC Values */}
-                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(simple.tcc_p25)}</TableCell>
-                              <TableCell align="right">{formatCurrency(simple.tcc_p50)}</TableCell>
-                              <TableCell align="right">{formatCurrency(simple.tcc_p75)}</TableCell>
-                              <TableCell align="right">{formatCurrency(simple.tcc_p90)}</TableCell>
-                              
-                              {/* wRVU Values */}
-                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatNumber(simple.wrvu_p25)}</TableCell>
-                              <TableCell align="right">{formatNumber(simple.wrvu_p50)}</TableCell>
-                              <TableCell align="right">{formatNumber(simple.wrvu_p75)}</TableCell>
-                              <TableCell align="right">{formatNumber(simple.wrvu_p90)}</TableCell>
-                              
-                              {/* CF Values */}
-                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(simple.cf_p25, 2)}</TableCell>
-                              <TableCell align="right">{formatCurrency(simple.cf_p50, 2)}</TableCell>
-                              <TableCell align="right">{formatCurrency(simple.cf_p75, 2)}</TableCell>
-                              <TableCell align="right">{formatCurrency(simple.cf_p90, 2)}</TableCell>
-                            </TableRow>
-                            <TableRow sx={{ 
-                              backgroundColor: '#dbeafe',
-                              borderBottom: '2px solid #e2e8f0'
-                            }}>
-                              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Weighted Average</TableCell>
-                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
-                              <TableCell sx={{ fontSize: '0.875rem' }}>-</TableCell>
-                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{weighted.n_orgs}</TableCell>
-                              <TableCell align="right" sx={{ fontSize: '0.875rem' }}>{weighted.n_incumbents}</TableCell>
-                              
-                              {/* TCC Values */}
-                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(weighted.tcc_p25)}</TableCell>
-                              <TableCell align="right">{formatCurrency(weighted.tcc_p50)}</TableCell>
-                              <TableCell align="right">{formatCurrency(weighted.tcc_p75)}</TableCell>
-                              <TableCell align="right">{formatCurrency(weighted.tcc_p90)}</TableCell>
-                              
-                              {/* wRVU Values */}
-                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatNumber(weighted.wrvu_p25)}</TableCell>
-                              <TableCell align="right">{formatNumber(weighted.wrvu_p50)}</TableCell>
-                              <TableCell align="right">{formatNumber(weighted.wrvu_p75)}</TableCell>
-                              <TableCell align="right">{formatNumber(weighted.wrvu_p90)}</TableCell>
-                              
-                              {/* CF Values */}
-                              <TableCell sx={{ borderLeft: '2px solid #e2e8f0' }} align="right">{formatCurrency(weighted.cf_p25, 2)}</TableCell>
-                              <TableCell align="right">{formatCurrency(weighted.cf_p50, 2)}</TableCell>
-                              <TableCell align="right">{formatCurrency(weighted.cf_p75, 2)}</TableCell>
-                              <TableCell align="right">{formatCurrency(weighted.cf_p90, 2)}</TableCell>
-                            </TableRow>
-                          </>
-                        );
-                      })()}
-                    </React.Fragment>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </div>
-        )}
+                  {/* PERFORMANCE OPTIMIZATION: Limit displayed data for better performance */}
+          {Object.entries(groupBySpecialty(filteredData)).slice(0, 25).map(([specialty, rows]) => (
+                      <React.Fragment key={specialty}>
+                        {rows.map((row, idx) => (
+                          <TableRow 
+                            key={`${specialty}-${idx}`}
+                            sx={{ 
+                              '&:nth-of-type(odd)': { backgroundColor: '#f8fafc' },
+                              '&:hover': { backgroundColor: '#f1f5f9' },
+                              transition: 'background-color 0.2s',
+                              '& td': {
+                                borderBottom: '1px solid #e5e7eb',
+                                padding: '12px 16px',
+                                verticalAlign: 'top'
+                              }
+                            }}
+                          >
+                            <TableCell sx={{ 
+                              fontSize: '0.875rem', 
+                              width: '20%', 
+                              minWidth: '200px',
+                              whiteSpace: 'normal',
+                              wordWrap: 'break-word',
+                              lineHeight: '1.4',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }}>{row.surveySource}</TableCell>
+                            <TableCell sx={{ 
+                              fontSize: '0.875rem', 
+                              width: '12%', 
+                              minWidth: '120px',
+                              whiteSpace: 'normal',
+                              wordWrap: 'break-word',
+                              lineHeight: '1.4',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }}>{row.geographicRegion || 'N/A'}</TableCell>
+                            <TableCell align="right" sx={{ 
+                              fontSize: '0.875rem', 
+                              width: '8%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }}>{row.n_orgs.toLocaleString()}</TableCell>
+                            <TableCell align="right" sx={{ 
+                              fontSize: '0.875rem', 
+                              width: '10%', 
+                              minWidth: '100px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }}>{row.n_incumbents.toLocaleString()}</TableCell>
+                            
+                            {/* TCC Values */}
+                            <TableCell sx={{ 
+                              borderLeft: '2px solid #e2e8f0', 
+                              width: '8.75%', 
+                              minWidth: '100px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '8.75%', 
+                              minWidth: '100px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.tcc_p50)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '8.75%', 
+                              minWidth: '100px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.tcc_p75)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '8.75%', 
+                              minWidth: '100px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.tcc_p90)}</TableCell>
+                            
+                            {/* wRVU Values */}
+                            <TableCell sx={{ 
+                              borderLeft: '2px solid #e2e8f0', 
+                              width: '8%', 
+                              minWidth: '90px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatNumber(row.wrvu_p25)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '8%', 
+                              minWidth: '90px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatNumber(row.wrvu_p50)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '8%', 
+                              minWidth: '90px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatNumber(row.wrvu_p75)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '8%', 
+                              minWidth: '90px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatNumber(row.wrvu_p90)}</TableCell>
+                            
+                            {/* CF Values */}
+                            <TableCell sx={{ 
+                              borderLeft: '2px solid #e2e8f0', 
+                              width: '7.5%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7.5%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7.5%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7.5%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Summary Rows */}
+                        {(() => {
+                          const { simple, weighted } = calculateSummaryRows(rows);
+                          return (
+                            <>
+                              <TableRow sx={{ 
+                                backgroundColor: '#f1f5f9',
+                                borderTop: '2px solid #e2e8f0'
+                              }}>
+                                <TableCell sx={{ 
+                                  fontWeight: 'bold', 
+                                  fontSize: '0.875rem',
+                                  width: '20%', 
+                                  minWidth: '200px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>Simple Average</TableCell>
+                                <TableCell sx={{ 
+                                  fontSize: '0.875rem',
+                                  width: '12%', 
+                                  minWidth: '120px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>-</TableCell>
+                                <TableCell align="right" sx={{ 
+                                  fontSize: '0.875rem',
+                                  width: '8%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>{simple.n_orgs}</TableCell>
+                                <TableCell align="right" sx={{ 
+                                  fontSize: '0.875rem',
+                                  width: '10%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>{simple.n_incumbents}</TableCell>
+                                
+                                {/* TCC Values */}
+                                <TableCell sx={{ 
+                                  borderLeft: '2px solid #e2e8f0',
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.tcc_p25)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.tcc_p50)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.tcc_p75)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.tcc_p90)}</TableCell>
+                                
+                                {/* wRVU Values */}
+                                <TableCell sx={{ 
+                                  borderLeft: '2px solid #e2e8f0',
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(simple.wrvu_p25)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(simple.wrvu_p50)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(simple.wrvu_p75)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(simple.wrvu_p90)}</TableCell>
+                                
+                                {/* CF Values */}
+                                <TableCell sx={{ 
+                                  borderLeft: '2px solid #e2e8f0',
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.cf_p25, 2)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.cf_p50, 2)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.cf_p75, 2)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(simple.cf_p90, 2)}</TableCell>
+                              </TableRow>
+                              <TableRow sx={{ 
+                                backgroundColor: '#dbeafe',
+                                borderBottom: '2px solid #e2e8f0'
+                              }}>
+                                <TableCell sx={{ 
+                                  fontWeight: 'bold', 
+                                  fontSize: '0.875rem',
+                                  width: '20%', 
+                                  minWidth: '200px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>Weighted Average</TableCell>
+                                <TableCell sx={{ 
+                                  fontSize: '0.875rem',
+                                  width: '12%', 
+                                  minWidth: '120px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>-</TableCell>
+                                <TableCell align="right" sx={{ 
+                                  fontSize: '0.875rem',
+                                  width: '8%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>{weighted.n_orgs}</TableCell>
+                                <TableCell align="right" sx={{ 
+                                  fontSize: '0.875rem',
+                                  width: '10%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }}>{weighted.n_incumbents}</TableCell>
+                                
+                                {/* TCC Values */}
+                                <TableCell sx={{ 
+                                  borderLeft: '2px solid #e2e8f0',
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.tcc_p25)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.tcc_p50)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.tcc_p75)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8.75%', 
+                                  minWidth: '100px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.tcc_p90)}</TableCell>
+                                
+                                {/* wRVU Values */}
+                                <TableCell sx={{ 
+                                  borderLeft: '2px solid #e2e8f0',
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(weighted.wrvu_p25)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(weighted.wrvu_p50)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(weighted.wrvu_p75)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '8%', 
+                                  minWidth: '90px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatNumber(weighted.wrvu_p90)}</TableCell>
+                                
+                                {/* CF Values */}
+                                <TableCell sx={{ 
+                                  borderLeft: '2px solid #e2e8f0',
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.cf_p25, 2)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.cf_p50, 2)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.cf_p75, 2)}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7.5%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{formatCurrency(weighted.cf_p90, 2)}</TableCell>
+                              </TableRow>
+                            </>
+                          );
+                        })()}
+                      </React.Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {Object.entries(groupBySpecialty(filteredData)).length > 25 && (
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ Showing first 25 specialties for performance. Total: {Object.entries(groupBySpecialty(filteredData)).length} specialties.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
-};
+});
+
+SurveyAnalytics.displayName = 'SurveyAnalytics';
 
 export default SurveyAnalytics; 

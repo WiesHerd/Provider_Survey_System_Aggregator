@@ -7,7 +7,6 @@ import { getDataService } from '../services/DataService';
 import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 import { TableFilters } from './TableFilters';
 import LoadingSpinner from './ui/loading-spinner';
-import { YearSelector } from './YearSelector';
 import { useYear } from '../contexts/YearContext';
 
 
@@ -155,6 +154,8 @@ const SurveyUpload: React.FC = () => {
       try {
         setIsLoading(true);
         
+        console.log('Loading surveys for year:', currentYear);
+        
         // Load from both regular storage and year-specific storage
         const surveys = await dataService.getAllSurveys();
         console.log('Loaded surveys from regular storage:', surveys);
@@ -163,9 +164,19 @@ const SurveyUpload: React.FC = () => {
         const yearService = new (await import('../services/YearManagementService')).YearManagementService();
         const yearSurveys = await yearService.getYearData(currentYear, 'surveys');
         console.log(`Loaded surveys from year ${currentYear}:`, yearSurveys);
+        console.log('Year surveys type:', typeof yearSurveys);
+        console.log('Year surveys is array:', Array.isArray(yearSurveys));
+        if (yearSurveys && typeof yearSurveys === 'object') {
+          console.log('Year surveys keys:', Object.keys(yearSurveys));
+        }
+        
+        // Handle case where yearSurveys might not be an array
+        const yearSurveysArray = Array.isArray(yearSurveys) ? yearSurveys : [];
+        console.log('Year surveys array:', yearSurveysArray);
         
         // Combine surveys from both sources
-        const allSurveys = [...surveys, ...yearSurveys];
+        const allSurveys = [...surveys, ...yearSurveysArray];
+        console.log('Combined surveys:', allSurveys);
         
         // Build lightweight survey list; fetch detailed rows only when a survey is selected
         const processedSurveys = allSurveys.map((survey: any) => ({
@@ -184,6 +195,7 @@ const SurveyUpload: React.FC = () => {
           columnMappings: {}
         }));
 
+        console.log('Processed surveys:', processedSurveys);
         setUploadedSurveys(processedSurveys);
         // Auto-select first survey if none selected
         if (!selectedSurvey && processedSurveys.length > 0) {
@@ -308,10 +320,13 @@ const SurveyUpload: React.FC = () => {
       setUploadProgress(80);
 
       // Save survey and data to IndexedDB with year-specific storage
+      console.log('Saving survey to data service:', survey);
       await dataService.createSurvey(survey);
+      console.log('Saving survey data to data service:', surveyId);
       await dataService.saveSurveyData(surveyId, parsedRows);
       
       // Also save to year-specific storage
+      console.log('Saving to year-specific storage:', surveyYear);
       const yearService = new (await import('../services/YearManagementService')).YearManagementService();
       await yearService.saveYearData(surveyYear, 'surveys', [survey]);
       await yearService.saveYearData(surveyYear, 'surveyData', parsedRows);
@@ -509,12 +524,38 @@ const SurveyUpload: React.FC = () => {
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
-                  <YearSelector
+                  <Autocomplete
                     value={surveyYear}
-                    onChange={setSurveyYear}
-                    showYearManagement={true}
-                    size="small"
-                    className="w-full"
+                    onChange={(event: any, newValue: any) => {
+                      if (newValue) {
+                        setSurveyYear(newValue);
+                      }
+                    }}
+                    onInputChange={(event: any, newInputValue: any) => {
+                      // Allow typing any year
+                      if (newInputValue && /^\d{4}$/.test(newInputValue)) {
+                        setSurveyYear(newInputValue);
+                      }
+                    }}
+                    freeSolo
+                    options={['2024', '2025', '2026', '2027', '2028', '2029', '2030']}
+                    renderInput={(params: any) => (
+                      <TextField
+                        {...params}
+                        size="small"
+                        placeholder="Enter year (e.g., 2026)"
+                        inputProps={{
+                          ...params.inputProps,
+                          maxLength: 4,
+                          pattern: '[0-9]{4}'
+                        }}
+                      />
+                    )}
+                    sx={{
+                      '& .MuiAutocomplete-input': {
+                        fontSize: '14px'
+                      }
+                    }}
                   />
                 </div>
 

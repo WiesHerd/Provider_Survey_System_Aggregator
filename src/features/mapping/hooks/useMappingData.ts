@@ -48,10 +48,13 @@ interface UseMappingDataReturn {
   selectSpecialty: (specialty: IUnmappedSpecialty) => void;
   deselectSpecialty: (specialty: IUnmappedSpecialty) => void;
   clearSelectedSpecialties: () => void;
+  selectAllSpecialties: () => void;
+  deselectAllSpecialties: () => void;
   
   // Data operations
   loadData: () => Promise<void>;
   createMapping: () => Promise<void>;
+  createGroupedMapping: () => Promise<void>;
   deleteMapping: (mappingId: string) => Promise<void>;
   clearAllMappings: () => Promise<void>;
   removeLearnedMapping: (original: string) => Promise<void>;
@@ -210,7 +213,51 @@ export const useMappingData = (): UseMappingDataReturn => {
     try {
       setError(null);
       
-      // Use the first specialty name as the standardized name
+      // Create individual mappings for each selected specialty
+      const newMappings: ISpecialtyMapping[] = [];
+      
+      for (const specialty of selectedSpecialties) {
+        // Each specialty gets its own mapping with its own name as standardized name
+        const sourceSpecialty = {
+          id: crypto.randomUUID(),
+          specialty: specialty.name,
+          originalName: specialty.name,
+          surveySource: specialty.surveySource,
+          mappingId: ''
+        };
+
+        const mapping = await dataService.createSpecialtyMapping({
+          id: crypto.randomUUID(),
+          standardizedName: specialty.name, // Each specialty maps to itself
+          sourceSpecialties: [sourceSpecialty], // Only one source specialty per mapping
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        
+        newMappings.push(mapping);
+      }
+      
+      // Update state
+      setMappings(prev => [...prev, ...newMappings]);
+      setUnmappedSpecialties(prev => 
+        prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
+      );
+      setSelectedSpecialties([]);
+      setActiveTab('mapped'); // Switch to mapped view after creating
+    } catch (err) {
+      setError('Failed to create mappings');
+      console.error('Error creating mappings:', err);
+    }
+  }, [selectedSpecialties, dataService]);
+
+  // Create grouped mapping - all selected specialties in one mapping
+  const createGroupedMapping = useCallback(async () => {
+    if (selectedSpecialties.length === 0) return;
+
+    try {
+      setError(null);
+      
+      // Use the first specialty name as the standardized name for the group
       const standardizedName = selectedSpecialties[0].name;
       
       const sourceSpecialties = selectedSpecialties.map(specialty => ({
@@ -224,7 +271,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       const mapping = await dataService.createSpecialtyMapping({
         id: crypto.randomUUID(),
         standardizedName,
-        sourceSpecialties,
+        sourceSpecialties, // All specialties in one mapping
         createdAt: new Date(),
         updatedAt: new Date()
       });
@@ -237,8 +284,8 @@ export const useMappingData = (): UseMappingDataReturn => {
       setSelectedSpecialties([]);
       setActiveTab('mapped'); // Switch to mapped view after creating
     } catch (err) {
-      setError('Failed to create mapping');
-      console.error('Error creating mapping:', err);
+      setError('Failed to create grouped mapping');
+      console.error('Error creating grouped mapping:', err);
     }
   }, [selectedSpecialties, dataService]);
 
@@ -311,7 +358,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       const convertedMappings = mappings.map(convertMapping);
 
       // Generate suggestions
-      const suggestions = generateMappingSuggestions(
+      const suggestions = await generateMappingSuggestions(
         convertedUnmapped,
         convertedMappings,
         learnedMappings,
@@ -324,7 +371,7 @@ export const useMappingData = (): UseMappingDataReturn => {
           await dataService.createSpecialtyMapping({
             id: crypto.randomUUID(),
             standardizedName: suggestion.standardizedName,
-            sourceSpecialties: suggestion.specialties.map(s => ({
+            sourceSpecialties: suggestion.specialties.map((s: any) => ({
               id: crypto.randomUUID(),
               specialty: s.name,
               originalName: s.name,
@@ -343,7 +390,14 @@ export const useMappingData = (): UseMappingDataReturn => {
       // Refresh data
       await loadData();
       
-      return { suggestions, results };
+      return { 
+        suggestions, 
+        results: {
+          total: results.total,
+          mapped: results.mapped,
+          skipped: results.skipped
+        }
+      };
     } catch (err) {
       setError('Failed to process auto-mapping');
       console.error('Auto-mapping error:', err);
@@ -360,6 +414,17 @@ export const useMappingData = (): UseMappingDataReturn => {
     return validateMappingConfig(config);
   }, []);
 
+  // Select all specialties (filtered by current search)
+  const selectAllSpecialties = useCallback(() => {
+    setSelectedSpecialties(filteredUnmapped);
+  }, [filteredUnmapped]);
+
+  // Deselect all specialties
+  const deselectAllSpecialties = useCallback(() => {
+    setSelectedSpecialties([]);
+  }, []);
+
+  
   return {
     // State
     mappings: mappings.map(convertMapping),
@@ -386,13 +451,16 @@ export const useMappingData = (): UseMappingDataReturn => {
     selectSpecialty,
     deselectSpecialty,
     clearSelectedSpecialties,
+    selectAllSpecialties,
+    deselectAllSpecialties,
     
-    // Data operations
-    loadData,
-    createMapping,
-    deleteMapping,
-    clearAllMappings,
-    removeLearnedMapping,
+         // Data operations
+     loadData,
+     createMapping,
+     createGroupedMapping,
+     deleteMapping,
+     clearAllMappings,
+     removeLearnedMapping,
     
     // Auto-mapping
     autoMap,

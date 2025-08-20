@@ -24,6 +24,9 @@ interface YearContextType {
   
   // Refresh data
   refreshYears: () => Promise<void>;
+  
+  // Reset configuration
+  resetYearConfiguration: () => Promise<void>;
 }
 
 const YearContext = createContext<YearContextType | undefined>(undefined);
@@ -150,6 +153,17 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
     await initializeYears();
   };
 
+  const resetYearConfiguration = async () => {
+    try {
+      setError(null);
+      await yearService.resetYearConfiguration();
+      await initializeYears();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset year configuration');
+      console.error('Error resetting year configuration:', err);
+    }
+  };
+
   const value: YearContextType = {
     currentYear,
     availableYears,
@@ -162,7 +176,8 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
     setYearFilter,
     loading,
     error,
-    refreshYears
+    refreshYears,
+    resetYearConfiguration
   };
 
   return (

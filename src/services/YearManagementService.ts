@@ -32,15 +32,18 @@ export class YearManagementService {
         return JSON.parse(stored);
       }
       
-      // Default configuration for 2025
+      // Check what year data actually exists in IndexedDB
+      const actualYear = await this.detectActualYear();
+      
+      // Default configuration based on actual data
       const defaultConfig: IYearConfig = {
-        id: '2025',
-        year: '2025',
+        id: actualYear,
+        year: actualYear,
         isActive: true,
         isDefault: true,
         description: 'Current survey year',
-        startDate: new Date('2025-01-01'),
-        endDate: new Date('2025-12-31'),
+        startDate: new Date(`${actualYear}-01-01`),
+        endDate: new Date(`${actualYear}-12-31`),
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -54,12 +57,53 @@ export class YearManagementService {
   }
 
   /**
+   * Detect the actual year from uploaded survey data
+   */
+  private async detectActualYear(): Promise<string> {
+    try {
+      // Check IndexedDB for survey data
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
+      
+      // Get all surveys to see what years exist
+      const surveys = await dataService.getAllSurveys();
+      
+      if (surveys && surveys.length > 0) {
+        // Look for year information in survey metadata
+        for (const survey of surveys) {
+          if ('surveyYear' in survey && survey.surveyYear) {
+            return survey.surveyYear;
+          }
+          if ('year' in survey && survey.year) {
+            return survey.year;
+          }
+        }
+        
+        // If no explicit year, check survey names for year patterns
+        for (const survey of surveys) {
+          const surveyName = ('surveyProvider' in survey ? survey.surveyProvider : survey.name) || '';
+          const yearMatch = surveyName.match(/\b(20\d{2})\b/);
+          if (yearMatch) {
+            return yearMatch[1];
+          }
+        }
+      }
+      
+      // Default to 2024 if no data found (since user has 2024 data)
+      return '2024';
+    } catch (error) {
+      console.error('Error detecting actual year:', error);
+      return '2024'; // Default to 2024 since that's what user has
+    }
+  }
+
+  /**
    * Get active year
    */
   async getActiveYear(): Promise<string> {
     const configs = await this.getYearConfigs();
     const activeConfig = configs.find(config => config.isActive);
-    return activeConfig?.year || '2025';
+    return activeConfig?.year || await this.detectActualYear();
   }
 
   /**
@@ -68,7 +112,7 @@ export class YearManagementService {
   async getDefaultYear(): Promise<string> {
     const configs = await this.getYearConfigs();
     const defaultConfig = configs.find(config => config.isDefault);
-    return defaultConfig?.year || '2025';
+    return defaultConfig?.year || await this.detectActualYear();
   }
 
   /**
@@ -270,5 +314,13 @@ export class YearManagementService {
    */
   private async saveYearConfigs(configs: IYearConfig[]): Promise<void> {
     localStorage.setItem(this.YEAR_CONFIG_KEY, JSON.stringify(configs));
+  }
+
+  /**
+   * Reset year configuration to detect actual data
+   */
+  async resetYearConfiguration(): Promise<void> {
+    localStorage.removeItem(this.YEAR_CONFIG_KEY);
+    // The next call to getYearConfigs will recreate with correct year
   }
 }

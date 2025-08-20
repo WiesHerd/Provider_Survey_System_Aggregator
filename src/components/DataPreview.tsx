@@ -4,7 +4,9 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  Box
+  Box,
+  Autocomplete,
+  TextField
 } from '@mui/material';
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
@@ -94,6 +96,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const handleFilterChange = (
     event: React.ChangeEvent<{ name?: string; value: unknown }> | any
   ) => {
+    console.log('Filter change:', {
+      name: event.target.name,
+      value: event.target.value,
+      currentFilters: globalFilters
+    });
     onFilterChange(event.target.name, event.target.value);
   };
 
@@ -165,6 +172,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let isCancelled = false;
     let timeoutId: NodeJS.Timeout;
     
+    console.log('Filter effect triggered:', {
+      specialty: globalFilters.specialty,
+      providerType: globalFilters.providerType,
+      region: globalFilters.region
+    });
+    
     const loadFilteredData = async () => {
       try {
         setIsRefreshing(true);
@@ -175,11 +188,19 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           region: globalFilters.region || undefined
         };
         
+        console.log('Loading filtered data with filters:', filters);
+        
         const { rows: surveyData } = await dataService.getSurveyData(
           file.id,
           filters,
           { limit: 10000 } // Fetch all data (up to 10,000 rows)
         );
+        
+        console.log('Filtered data returned:', {
+          rowCount: surveyData.length,
+          sampleRows: surveyData.slice(0, 3),
+          sampleSpecialties: [...new Set(surveyData.map(row => row.specialty))].slice(0, 5)
+        });
         
         if (!isCancelled && surveyData.length > 0) {
           setOriginalData(surveyData);
@@ -236,18 +257,61 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let cancelled = false;
     const loadFilters = async () => {
       try {
+        console.log('Loading filter options for file:', file.id);
         // For IndexedDB, we'll extract filter options from the data
         const { rows } = await dataService.getSurveyData(file.id);
         if (cancelled) return;
         
-        const specialties = [...new Set(rows.map(row => String(row.specialty || row.Specialty || row['Provider Type'])).filter(Boolean))].sort();
-        const providerTypes = [...new Set(rows.map(row => String(row.providerType || row['Provider Type'])).filter(Boolean))].sort();
-        const regions = [...new Set(rows.map(row => String(row.region || row.Region || row.geographicRegion)).filter(Boolean))].sort();
+        console.log('Raw data for filter extraction:', rows.slice(0, 3));
+        console.log('Available field names:', Object.keys(rows[0] || {}));
+        
+        // More robust field name detection
+        const firstRow = rows[0] || {};
+        const fieldNames = Object.keys(firstRow);
+        
+        // Find specialty field
+        const specialtyField = fieldNames.find(field => 
+          field.toLowerCase().includes('specialty') || 
+          field.toLowerCase().includes('speciality')
+        ) || 'specialty';
+        
+        // Find provider type field
+        const providerTypeField = fieldNames.find(field => 
+          field.toLowerCase().includes('provider') || 
+          field.toLowerCase().includes('type')
+        ) || 'providerType';
+        
+        // Find region field
+        const regionField = fieldNames.find(field => 
+          field.toLowerCase().includes('region') || 
+          field.toLowerCase().includes('geographic')
+        ) || 'geographicRegion';
+        
+        console.log('Detected field names:', {
+          specialtyField,
+          providerTypeField,
+          regionField
+        });
+        
+        const specialties = [...new Set(rows.map(row => String(row[specialtyField] || '')).filter(Boolean))].sort();
+        const providerTypes = [...new Set(rows.map(row => String(row[providerTypeField] || '')).filter(Boolean))].sort();
+        const regions = [...new Set(rows.map(row => String(row[regionField] || '')).filter(Boolean))].sort();
+        
+        console.log('Extracted filter options:', {
+          specialties: specialties.slice(0, 10),
+          providerTypes: providerTypes.slice(0, 10),
+          regions: regions.slice(0, 10),
+          totalSpecialties: specialties.length,
+          totalProviderTypes: providerTypes.length,
+          totalRegions: regions.length
+        });
         
         setServerSpecialties(specialties);
         setServerProviderTypes(providerTypes);
         setServerRegions(regions);
-      } catch {}
+      } catch (error) {
+        console.error('Error loading filter options:', error);
+      }
     };
     if (file.id) loadFilters();
     return () => { cancelled = true; };
@@ -277,16 +341,53 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const filteredData = useMemo(() => {
     if (!originalData.length || !stats) return [];
 
-    // Server is now handling the filtering, so just convert to display format
-    if (originalData.length > 0 && previewData[0]) {
+    console.log('Filtering data with current filters:', globalFilters);
+    console.log('Original data count:', originalData.length);
+
+    // Apply client-side filtering since server-side filtering isn't working
+    let filteredRows = originalData;
+    
+    // Filter by specialty
+    if (globalFilters.specialty) {
+      filteredRows = filteredRows.filter(row => {
+        const rowSpecialty = String(row.specialty || '').toLowerCase();
+        const filterSpecialty = globalFilters.specialty.toLowerCase();
+        return rowSpecialty.includes(filterSpecialty) || filterSpecialty.includes(rowSpecialty);
+      });
+      console.log('After specialty filter:', filteredRows.length, 'rows');
+    }
+    
+    // Filter by provider type
+    if (globalFilters.providerType) {
+      filteredRows = filteredRows.filter(row => {
+        const rowProviderType = String(row.providerType || row.provider_type || '').toLowerCase();
+        const filterProviderType = globalFilters.providerType.toLowerCase();
+        return rowProviderType.includes(filterProviderType) || filterProviderType.includes(rowProviderType);
+      });
+      console.log('After provider type filter:', filteredRows.length, 'rows');
+    }
+    
+    // Filter by region
+    if (globalFilters.region) {
+      filteredRows = filteredRows.filter(row => {
+        const rowRegion = String(row.geographicRegion || row.region || '').toLowerCase();
+        const filterRegion = globalFilters.region.toLowerCase();
+        return rowRegion.includes(filterRegion) || filterRegion.includes(rowRegion);
+      });
+      console.log('After region filter:', filteredRows.length, 'rows');
+    }
+
+    // Convert filtered data to display format
+    if (filteredRows.length > 0 && previewData[0]) {
       const headers = previewData[0];
-      const data = originalData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
-      console.log('Filtered data:', data.length, 'rows');
+      const data = filteredRows.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+      console.log('Final filtered data:', data.length, 'rows');
       return data;
     }
 
+    console.log('No data after filtering');
     return [];
-  }, [originalData, stats, previewData]);
+  }, [originalData, stats, previewData, globalFilters.specialty, globalFilters.providerType, globalFilters.region]);
 
 
 
@@ -455,26 +556,71 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Filter Dropdowns - Perfectly Aligned */}
         <div className="grid grid-cols-3 gap-4">
           <FormControl fullWidth size="small">
-            <InputLabel className="text-sm font-medium text-gray-700 mb-2">Specialty</InputLabel>
-            <Select
-              name="specialty"
+            <Autocomplete
+              options={cascadingFilterOptions.specialties}
               value={globalFilters.specialty}
-              onChange={handleFilterChange}
-              label="Specialty"
-              className="h-10"
+              onChange={(event: any, newValue: string | null) => {
+                console.log('Autocomplete specialty change:', {
+                  newValue,
+                  currentFilters: globalFilters
+                });
+                // Use the same pattern as other dropdowns
+                const syntheticEvent = {
+                  target: {
+                    name: 'specialty',
+                    value: newValue || ''
+                  }
+                };
+                handleFilterChange(syntheticEvent);
+              }}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                return options.filter((option: string) =>
+                  option.toLowerCase().includes(inputValue.toLowerCase())
+                );
+              }}
+              getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+              isOptionEqualToValue={(option: string, value: string) => option === value}
+              clearOnBlur={false}
+              selectOnFocus
+              freeSolo
+              renderInput={(params: any) => (
+                <TextField
+                  {...params}
+                  label="Specialty"
+                  placeholder="Search specialties..."
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                      </svg>
+                    ),
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '8px',
+                    },
+                    '& .MuiAutocomplete-input': {
+                      padding: '8px 12px',
+                    },
+                    '& .MuiAutocomplete-inputRoot': {
+                      padding: '0 8px',
+                    },
+                  }}
+                />
+              )}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
-                }
+                },
+                '& .MuiAutocomplete-input': {
+                  padding: '8px 12px',
+                },
+                '& .MuiAutocomplete-inputRoot': {
+                  padding: '0 8px',
+                },
               }}
-            >
-              <MenuItem value="">All</MenuItem>
-              {cascadingFilterOptions.specialties.map(specialty => (
-                <MenuItem key={specialty} value={specialty}>
-                  {formatSpecialtyForDisplay(specialty)}
-                </MenuItem>
-              ))}
-            </Select>
+            />
           </FormControl>
 
           <FormControl fullWidth size="small">

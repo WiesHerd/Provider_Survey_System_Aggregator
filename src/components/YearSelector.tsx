@@ -91,21 +91,18 @@ export const YearSelector: React.FC<YearSelectorProps> = ({
   };
 
   const getYearLabel = (year: string) => {
-    const config = yearConfigs.find(c => c.year === year);
-    if (config?.isActive) {
-      return `${year} (Active)`;
-    }
-    if (config?.isDefault) {
-      return `${year} (Default)`;
-    }
-    return year;
+    return year; // Just show the year, no verbose labels
   };
 
   const getYearChipColor = (year: string) => {
     const config = yearConfigs.find(c => c.year === year);
     if (config?.isActive) return 'primary';
-    if (config?.isDefault) return 'secondary';
     return 'default';
+  };
+
+  const isActiveYear = (year: string) => {
+    const config = yearConfigs.find(c => c.year === year);
+    return config?.isActive || false;
   };
 
   return (
@@ -118,41 +115,51 @@ export const YearSelector: React.FC<YearSelectorProps> = ({
           className="min-w-[120px]"
         >
           <InputLabel>{label}</InputLabel>
-          <Select
-            value={selectedYear}
-            onChange={(e: any) => handleYearChange(e.target.value)}
-            label={label}
-            startAdornment={
-              <CalendarIcon className="h-4 w-4 text-gray-500 mr-2" />
-            }
-          >
-            {showAllYears && (
-              <MenuItem value="all">
-                <Box className="flex items-center gap-2">
-                  <Typography>All Years</Typography>
-                  <Chip 
-                    label={availableYears.length} 
-                    size="small" 
-                    variant="outlined"
-                  />
-                </Box>
-              </MenuItem>
-            )}
-            
-            {availableYears.map((year) => (
-              <MenuItem key={year} value={year}>
-                <Box className="flex items-center gap-2">
-                  <Typography>{year}</Typography>
-                  <Chip 
-                    label={getYearLabel(year)}
-                    size="small"
-                    color={getYearChipColor(year)}
-                    variant={year === selectedYear ? 'filled' : 'outlined'}
-                  />
-                </Box>
-              </MenuItem>
-            ))}
-          </Select>
+                     <Select
+             value={selectedYear}
+             onChange={(e: any) => handleYearChange(e.target.value)}
+             label={label}
+             
+                                                       renderValue={(value: any) => (
+                <Typography>{value}</Typography>
+              )}
+             sx={{
+               '& .MuiSelect-select': {
+                 display: 'flex',
+                 alignItems: 'center',
+                 gap: 1
+               }
+             }}
+           >
+             {showAllYears && (
+               <MenuItem value="all">
+                 <Box className="flex items-center gap-2">
+                   <Typography>All Years</Typography>
+                   <Chip 
+                     label={availableYears.length} 
+                     size="small" 
+                     variant="outlined"
+                   />
+                 </Box>
+               </MenuItem>
+             )}
+             
+             {availableYears.map((year) => (
+               <MenuItem key={year} value={year}>
+                 <Box className="flex items-center gap-2 w-full">
+                   <Typography className="flex-1">{year}</Typography>
+                   {isActiveYear(year) && (
+                     <div className="flex items-center gap-1">
+                       <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+                       <Typography variant="caption" className="text-indigo-600 font-medium">
+                         Active
+                       </Typography>
+                     </div>
+                   )}
+                 </Box>
+               </MenuItem>
+             ))}
+           </Select>
         </FormControl>
 
         {showYearManagement && (
@@ -189,17 +196,20 @@ export const YearSelector: React.FC<YearSelectorProps> = ({
               <Typography variant="subtitle2" className="mb-2">
                 Available Years
               </Typography>
-              <Box className="flex flex-wrap gap-2">
-                {yearConfigs.map((config) => (
-                  <Chip
-                    key={config.year}
-                    label={getYearLabel(config.year)}
-                    color={getYearChipColor(config.year)}
-                    variant={config.isActive ? 'filled' : 'outlined'}
-                    size="small"
-                  />
-                ))}
-              </Box>
+                             <Box className="flex flex-wrap gap-2">
+                 {yearConfigs.map((config) => (
+                   <Chip
+                     key={config.year}
+                     label={config.year}
+                     color={config.isActive ? 'primary' : 'default'}
+                     variant={config.isActive ? 'filled' : 'outlined'}
+                     size="small"
+                     icon={config.isActive ? (
+                       <div className="w-2 h-2 bg-white rounded-full"></div>
+                     ) : undefined}
+                   />
+                 ))}
+               </Box>
             </div>
 
             <div className="border-t pt-4">

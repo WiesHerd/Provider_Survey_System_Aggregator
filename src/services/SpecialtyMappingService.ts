@@ -108,12 +108,13 @@ export class SpecialtyMappingService {
 
       // Collect all mapped specialty names (both standardized and original names)
       mappings.forEach(mapping => {
-        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mappedNames.add(mapping.standardizedName.toLowerCase().trim());
         mapping.sourceSpecialties.forEach((source: ISourceSpecialty) => {
-          mappedNames.add(source.specialty.toLowerCase());
+          mappedNames.add(source.specialty.toLowerCase().trim());
         });
       });
       console.log('✅ Mapped names collected:', Array.from(mappedNames));
+      console.log('🔍 All existing mappings:', mappings);
 
       // Process surveys in batches for better performance
       const batchSize = 10;
@@ -166,6 +167,7 @@ export class SpecialtyMappingService {
             });
 
             console.log(`🏥 Found specialties in survey ${survey.id}:`, Array.from(counts.entries()));
+            console.log(`🔍 Raw specialty names from survey ${survey.id}:`, Array.from(counts.keys()));
 
             const surveySource = (survey as any).type || (survey as any).surveyProvider || 'Unknown';
             return { surveySource, counts };
@@ -179,21 +181,26 @@ export class SpecialtyMappingService {
         
         // Convert per-survey counts into unmapped entries (one per survey source)
         batchResults.forEach(({ surveySource, counts }) => {
-                      counts.forEach((count, specialty) => {
-              const key = specialty.toLowerCase();
-              if (!mappedNames.has(key)) {
-                unmappedSpecialties.push({
-                  id: `${surveySource}-${specialty}`,
-                  name: specialty,
-                  surveySource,
-                  frequency: count
-                });
-              }
-            });
+          counts.forEach((count, specialty) => {
+            const key = specialty.toLowerCase().trim();
+            console.log(`🔍 Processing specialty: "${specialty}" (key: "${key}") from ${surveySource}`);
+            if (!mappedNames.has(key)) {
+              console.log(`➕ Adding to unmapped: "${specialty}" from ${surveySource}`);
+              unmappedSpecialties.push({
+                id: `${surveySource}-${specialty}`,
+                name: specialty,
+                surveySource,
+                frequency: count
+              });
+            } else {
+              console.log(`✅ Skipping mapped specialty: "${specialty}" (key: "${key}")`);
+            }
+          });
         });
       }
 
       console.log(`✅ Found ${unmappedSpecialties.length} unmapped specialties:`, unmappedSpecialties);
+      console.log(`🔍 Final unmapped specialty names:`, unmappedSpecialties.map(s => ({ name: s.name, source: s.surveySource })));
       return unmappedSpecialties;
     } catch (error) {
       console.error('❌ Error getting unmapped specialties:', error);
@@ -633,109 +640,152 @@ export class SpecialtyMappingService {
   }
 
   async generateMappingSuggestions(config: IAutoMappingConfig): Promise<IMappingSuggestion[]> {
+    console.log('🚀 Starting local AI-based mapping suggestions...');
+    
     const unmappedSpecialties = await this.getUnmappedSpecialties();
     const existingMappings = config.useExistingMappings ? await this.getAllMappings() : [];
-    const suggestions: IMappingSuggestion[] = [];
+    const learnedMappings = await this.getLearnedMappings();
 
-    // Group specialties by similar names
-    const groups = new Map<string, Array<{ name: string; surveySource: string }>>();
+    console.log(`📊 Processing ${unmappedSpecialties.length} unmapped specialties`);
+    console.log(`📊 Using ${existingMappings.length} existing mappings`);
+    console.log(`📊 Using ${Object.keys(learnedMappings).length} learned mappings`);
 
-    // Helper function to normalize strings for comparison
-    const normalizeString = (str: string): string => {
-      let normalized = str.toLowerCase();
-      if (!config.useFuzzyMatching) {
-        // Only basic normalization if fuzzy matching is disabled
-        return normalized.trim();
-      }
-      // More aggressive normalization for fuzzy matching
-      normalized = normalized
-        .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-        .replace(/\s+/g, ' ') // Normalize whitespace
-        .trim();
-      return normalized;
-    };
-
-    // Function to calculate similarity between two strings
-    const calculateSimilarity = (str1: string, str2: string): number => {
-      const normalized1 = normalizeString(str1);
-      const normalized2 = normalizeString(str2);
+    try {
+      // Import the LLM-based function
+      const { generateMappingSuggestions } = await import('../features/mapping/utils/mappingCalculations');
       
-      if (!config.useFuzzyMatching) {
-        // Exact match when fuzzy matching is disabled
-        return normalized1 === normalized2 ? 1 : 0;
-      }
+      // Convert existingMappings to the correct type
+      const convertedExistingMappings = existingMappings.map(mapping => ({
+        ...mapping,
+        sourceSpecialties: mapping.sourceSpecialties.map(specialty => ({
+          id: specialty.id || crypto.randomUUID(),
+          specialty: specialty.specialty,
+          originalName: specialty.originalName || specialty.specialty,
+          surveySource: specialty.surveySource as any,
+          frequency: specialty.frequency || 1,
+          mappingId: specialty.mappingId || ''
+        }))
+      }));
       
-      return stringSimilarity(normalized1, normalized2);
-    };
+      const suggestions = await generateMappingSuggestions(
+        unmappedSpecialties,
+        convertedExistingMappings,
+        learnedMappings,
+        config
+      );
 
-    // First pass: group by exact matches
-    unmappedSpecialties.forEach(specialty => {
-      let foundMatch = false;
+      console.log(`✅ Generated ${suggestions.length} LLM-based suggestions`);
+      return suggestions;
+
+    } catch (error) {
+      console.error('❌ LLM-based suggestions failed, falling back to original method:', error);
       
-      // Check against existing mappings first
-      if (config.useExistingMappings) {
-        for (const mapping of existingMappings) {
-          const similarity = calculateSimilarity(specialty.name, mapping.standardizedName);
-          if (similarity >= config.confidenceThreshold) {
-            const key = mapping.standardizedName;
-            const group = groups.get(key) || [];
-            group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
-            groups.set(key, group);
-            foundMatch = true;
-            break;
-          }
+      // Fallback to original method
+      const suggestions: IMappingSuggestion[] = [];
+
+      // Group specialties by similar names
+      const groups = new Map<string, Array<{ name: string; surveySource: string }>>();
+
+      // Helper function to normalize strings for comparison
+      const normalizeString = (str: string): string => {
+        let normalized = str.toLowerCase();
+        if (!config.useFuzzyMatching) {
+          // Only basic normalization if fuzzy matching is disabled
+          return normalized.trim();
         }
-      }
+        // More aggressive normalization for fuzzy matching
+        normalized = normalized
+          .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim();
+        return normalized;
+      };
 
-      if (!foundMatch) {
-        // Try to match with other unmapped specialties
-        let matched = false;
-        // Convert Map.entries() to Array to avoid iterator issues
-        Array.from(groups.entries()).forEach(([key, group]) => {
-          if (!matched) {
-            const similarity = calculateSimilarity(specialty.name, key);
+      // Function to calculate similarity between two strings
+      const calculateSimilarity = (str1: string, str2: string): number => {
+        const normalized1 = normalizeString(str1);
+        const normalized2 = normalizeString(str2);
+        
+        if (!config.useFuzzyMatching) {
+          // Exact match when fuzzy matching is disabled
+          return normalized1 === normalized2 ? 1 : 0;
+        }
+        
+        return stringSimilarity(normalized1, normalized2);
+      };
+
+      // First pass: group by exact matches
+      unmappedSpecialties.forEach(specialty => {
+        let foundMatch = false;
+        
+        // Check against existing mappings first
+        if (config.useExistingMappings) {
+          for (const mapping of existingMappings) {
+            const similarity = calculateSimilarity(specialty.name, mapping.standardizedName);
             if (similarity >= config.confidenceThreshold) {
+              const key = mapping.standardizedName;
+              const group = groups.get(key) || [];
               group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
-              matched = true;
+              groups.set(key, group);
+              foundMatch = true;
+              break;
             }
           }
-        });
-
-        if (!matched) {
-          // Create new group
-          groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource as any }]);
         }
-      }
-    });
 
-    // Convert groups to suggestions
-    // Convert Map.entries() to Array to avoid iterator issues
-    Array.from(groups.entries()).forEach(([standardizedName, specialties]) => {
-      if (specialties.length > 0) {
-        // Calculate average confidence for the group
-        let totalConfidence = 0;
-        let comparisons = 0;
+        if (!foundMatch) {
+          // Try to match with other unmapped specialties
+          let matched = false;
+          // Convert Map.entries() to Array to avoid iterator issues
+          Array.from(groups.entries()).forEach(([key, group]) => {
+            if (!matched) {
+              const similarity = calculateSimilarity(specialty.name, key);
+              if (similarity >= config.confidenceThreshold) {
+                group.push({ name: specialty.name, surveySource: specialty.surveySource as any });
+                matched = true;
+              }
+            }
+          });
 
-        for (let i = 0; i < specialties.length; i++) {
-          for (let j = i + 1; j < specialties.length; j++) {
-            totalConfidence += calculateSimilarity(specialties[i].name, specialties[j].name);
-            comparisons++;
+          if (!matched) {
+            // Create new group
+            groups.set(specialty.name, [{ name: specialty.name, surveySource: specialty.surveySource as any }]);
           }
         }
+      });
 
-        const confidence = comparisons > 0 
-          ? totalConfidence / comparisons 
-          : (specialties.length === 1 ? 1 : 0);
+      // Convert groups to suggestions
+      // Convert Map.entries() to Array to avoid iterator issues
+      Array.from(groups.entries()).forEach(([standardizedName, specialties]) => {
+        if (specialties.length > 0) {
+          // Calculate average confidence for the group
+          let totalConfidence = 0;
+          let comparisons = 0;
 
-        suggestions.push({
-          standardizedName,
-          confidence,
-          specialties
-        });
-      }
-    });
+          for (let i = 0; i < specialties.length; i++) {
+            for (let j = i + 1; j < specialties.length; j++) {
+              totalConfidence += calculateSimilarity(specialties[i].name, specialties[j].name);
+              comparisons++;
+            }
+          }
 
-    return suggestions.sort((a, b) => b.confidence - a.confidence);
+          const confidence = comparisons > 0 
+            ? totalConfidence / comparisons 
+            : (specialties.length === 1 ? 1 : 0);
+
+          if (confidence >= config.confidenceThreshold) {
+            suggestions.push({
+              standardizedName,
+              confidence,
+              specialties
+            });
+          }
+        }
+      });
+
+      console.log(`✅ Generated ${suggestions.length} fallback suggestions`);
+      return suggestions;
+    }
   }
 
   private async saveLearningData(originalName: string, correctedName: string): Promise<void> {

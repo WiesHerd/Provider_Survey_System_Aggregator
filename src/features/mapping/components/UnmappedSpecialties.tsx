@@ -44,29 +44,38 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
 
   return (
     <>
-      {/* Search Bar */}
-      <div className="mb-4">
-        <TextField
-          fullWidth
-          placeholder="Search across all surveys..."
-          value={searchTerm}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-          size="small"
-          sx={{ 
-            '& .MuiOutlinedInput-root': {
-              fontSize: '0.875rem',
-              height: '40px'
-            }
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon className="h-4 w-4 text-gray-400" />
-              </InputAdornment>
-            ),
-          }}
-        />
-      </div>
+             {/* Search Bar */}
+       <div className="mb-4">
+         <TextField
+           fullWidth
+           placeholder="Search across all surveys..."
+           value={searchTerm}
+           onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
+           size="small"
+           sx={{ 
+             '& .MuiOutlinedInput-root': {
+               fontSize: '0.875rem',
+               height: '40px'
+             }
+           }}
+           InputProps={{
+             startAdornment: (
+               <InputAdornment position="start">
+                 <SearchIcon className="h-4 w-4 text-gray-400" />
+               </InputAdornment>
+             ),
+           }}
+         />
+       </div>
+
+               {/* Selection Counter */}
+        {selectedSpecialties.length > 0 && (
+          <div className="mb-4 flex items-center justify-end">
+            <div className="text-sm text-gray-600">
+              {selectedSpecialties.length} selected
+            </div>
+          </div>
+        )}
 
       {/* Selected Specialties Display */}
       {selectedSpecialties.length > 0 && (
