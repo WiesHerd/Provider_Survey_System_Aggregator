@@ -152,6 +152,8 @@ export interface AutoMappingProps {
   onClose: () => void;
   onAutoMap: (config: IAutoMappingConfig) => Promise<void>;
   loading?: boolean;
+  title?: string;
+  description?: string;
 }
 
 export interface SpecialtyCardProps {

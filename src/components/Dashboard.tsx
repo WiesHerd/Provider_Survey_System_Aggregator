@@ -11,6 +11,7 @@ import {
   CalculatorIcon,
   ChartBarIcon,
   DocumentTextIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 
 interface WelcomeCard {
@@ -81,6 +82,14 @@ const Dashboard: React.FC = () => {
       path: '/custom-reports',
       color: 'bg-teal-500',
       gradient: 'from-teal-500 to-teal-600',
+    },
+    {
+      title: 'System Settings',
+      description: 'Manage data storage, export settings, and system preferences',
+      icon: Cog6ToothIcon,
+      path: '/system-settings',
+      color: 'bg-slate-500',
+      gradient: 'from-slate-500 to-slate-600',
     },
   ];
 
@@ -157,7 +166,7 @@ const Dashboard: React.FC = () => {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto"
         >
           {welcomeCards.map((card) => (
             <motion.div

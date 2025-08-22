@@ -18,6 +18,7 @@ const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const SurveyRegionalAnalytics = lazy(() => import('./components/SurveyRegionalAnalytics').then(module => ({ default: module.SurveyRegionalAnalytics })));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReportsWrapper = lazy(() => import('./components/CustomReportsWrapper'));
+const SystemSettings = lazy(() => import('./components/SystemSettings'));
 
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
@@ -85,6 +86,11 @@ const PageContent = () => {
         return {
           title: 'Instructions',
           description: 'How to use the BenchPoint Survey Aggregator and Market Analytics App'
+        };
+      case '/system-settings':
+        return {
+          title: 'System Settings',
+          description: 'Manage your data storage and system preferences'
         };
       case '/reports':
         return {
@@ -160,6 +166,7 @@ const PageContent = () => {
               <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />
               <Route path="/custom-reports" element={<CustomReportsWrapper />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
+              <Route path="/system-settings" element={<SystemSettings />} />
               <Route path="/instructions" element={
                 <div className="min-h-screen bg-gray-50">
                   <div className="max-w-5xl mx-auto py-4">

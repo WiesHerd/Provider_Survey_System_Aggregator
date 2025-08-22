@@ -77,6 +77,13 @@ const SurveyUpload: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState(0);
+  const [justUploaded, setJustUploaded] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Confirmation dialog states
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [showClearAllConfirmation, setShowClearAllConfirmation] = useState(false);
+  const [surveyToDelete, setSurveyToDelete] = useState<UploadedSurvey | null>(null);
   
   // Add global filter state
   const [globalFilters, setGlobalFilters] = useState({
@@ -150,6 +157,19 @@ const SurveyUpload: React.FC = () => {
 
   // Load saved surveys on component mount
   useEffect(() => {
+    // Skip loading if we just uploaded a survey to prevent overriding the state
+    if (justUploaded) {
+      console.log('🔄 Skipping survey load - just uploaded a survey');
+      setJustUploaded(false);
+      return;
+    }
+
+    // Skip if we're currently uploading
+    if (isUploading) {
+      console.log('🔄 Skipping survey load - currently uploading');
+      return;
+    }
+
     const loadSurveys = async () => {
       try {
         setIsLoading(true);
@@ -210,7 +230,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [dataService, currentYear]);
+  }, [dataService, currentYear, justUploaded, isUploading]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -250,15 +270,42 @@ const SurveyUpload: React.FC = () => {
 
   const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    
+    // Find the survey to delete
+    const survey = uploadedSurveys.find(s => s.id === surveyId);
+    if (!survey) return;
+    
+    // Show confirmation dialog
+    setSurveyToDelete(survey);
+    setShowDeleteConfirmation(true);
+  };
+
+  const confirmDeleteSurvey = async () => {
+    if (!surveyToDelete) return;
+    
     try {
-      await dataService.deleteSurvey(surveyId);
-      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
-      if (selectedSurvey === surveyId) {
+      setIsDeleting(true);
+      setDeleteProgress(10);
+      
+      await dataService.deleteSurvey(surveyToDelete.id);
+      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyToDelete.id));
+      
+      if (selectedSurvey === surveyToDelete.id) {
         setSelectedSurvey(null);
       }
+      
+      setDeleteProgress(90);
     } catch (error) {
       console.error('Error removing survey:', error);
       handleError('Error removing survey');
+    } finally {
+      setDeleteProgress(100);
+      setTimeout(() => {
+        setIsDeleting(false);
+        setDeleteProgress(0);
+        setShowDeleteConfirmation(false);
+        setSurveyToDelete(null);
+      }, 600);
     }
   };
 
@@ -317,6 +364,28 @@ const SurveyUpload: React.FC = () => {
         }
       };
 
+      // Add survey to state immediately for visual feedback
+      const immediateSurvey = {
+        id: surveyId,
+        fileName: surveyName,
+        surveyType: surveyTypeName,
+        surveyYear,
+        uploadDate: new Date(),
+        fileContent: '',
+        rows: [],
+        stats: {
+          totalRows: parsedRows.length,
+          uniqueSpecialties: survey.specialtyCount,
+          totalDataPoints: parsedRows.length
+        },
+        columnMappings: {}
+      };
+
+      console.log('🔄 Adding survey to state immediately:', immediateSurvey.fileName);
+      setUploadedSurveys(prev => [...prev, immediateSurvey]);
+      setSelectedSurvey(surveyId);
+      setRefreshTrigger(prev => prev + 1);
+
       setUploadProgress(80);
 
       // Save survey and data to IndexedDB with year-specific storage
@@ -339,29 +408,30 @@ const SurveyUpload: React.FC = () => {
       });
 
       // Update local state and select the new survey
-      setUploadedSurveys(prev => {
-        const updated = [
-          ...prev,
-          {
-            id: surveyId,
-            fileName: surveyName,
-            surveyType: surveyTypeName,
-            surveyYear,
-            uploadDate: new Date(),
-            fileContent: '',
-            rows: [],
-            stats: {
-              totalRows: parsedRows.length,
-              uniqueSpecialties: survey.specialtyCount,
-              totalDataPoints: parsedRows.length
-            },
-            columnMappings: {}
-          }
-        ];
-        return updated;
-      });
+      const newSurvey = {
+        id: surveyId,
+        fileName: surveyName,
+        surveyType: surveyTypeName,
+        surveyYear,
+        uploadDate: new Date(),
+        fileContent: '',
+        rows: [],
+        stats: {
+          totalRows: parsedRows.length,
+          uniqueSpecialties: survey.specialtyCount,
+          totalDataPoints: parsedRows.length
+        },
+        columnMappings: {}
+      };
+
+      // State already updated above, just set the flag to prevent useEffect override
+      setJustUploaded(true);
       
-      setSelectedSurvey(surveyId);
+      // Additional force refresh after a short delay
+      setTimeout(() => {
+        console.log('🔄 Force refresh triggered');
+        setRefreshTrigger(prev => prev + 1);
+      }, 50);
 
       // Clear form
       setFiles([]);
@@ -384,15 +454,18 @@ const SurveyUpload: React.FC = () => {
     }
   };
 
-  const handleClearAll = async () => {
+  const handleClearAll = () => {
+    setShowClearAllConfirmation(true);
+  };
+
+  const confirmClearAll = async () => {
     try {
-      // Confirm destructive action
-      const confirmDelete = window.confirm('This will delete ALL surveys from Azure. Type OK to proceed.');
-      if (!confirmDelete) return;
       setIsDeleting(true);
       setDeleteProgress(10);
+      
       await dataService.deleteAllSurveys();
       setDeleteProgress(90);
+      
       setUploadedSurveys([]);
       setSelectedSurvey(null);
     } catch (error) {
@@ -403,6 +476,7 @@ const SurveyUpload: React.FC = () => {
       setTimeout(() => {
         setIsDeleting(false);
         setDeleteProgress(0);
+        setShowClearAllConfirmation(false);
       }, 600);
     }
   };
@@ -648,10 +722,12 @@ const SurveyUpload: React.FC = () => {
                   <LoadingSpinner message="Loading surveys..." size="lg" variant="primary" />
                 ) : uploadedSurveys.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">No surveys uploaded yet</p>
+                    <p className="text-gray-500">No surveys uploaded yet (Count: {uploadedSurveys.length})</p>
                   </div>
                 ) : (
-                  <div className="relative z-10 flex items-center gap-2 overflow-x-auto overflow-y-visible whitespace-nowrap pb-1">
+                  <>
+        
+                  <div key={`surveys-${refreshTrigger}`} className="relative z-10 flex items-center gap-2 overflow-x-auto overflow-y-visible whitespace-nowrap pb-1">
                     {uploadedSurveys.map((survey) => {
                       const isActive = selectedSurvey === survey.id;
                       const stats = calculateSurveyStats(survey.rows);
@@ -706,6 +782,7 @@ const SurveyUpload: React.FC = () => {
                       );
                     })}
                   </div>
+                  </>
                 )}
               </>
             )}
@@ -771,6 +848,65 @@ const SurveyUpload: React.FC = () => {
               <div className="mt-3 text-xs text-gray-500">
                 {deleteProgress < 100 ? 'Removing survey data…' : 'All surveys cleared.'}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Individual Survey Delete Confirmation Modal */}
+      {showDeleteConfirmation && surveyToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-lg shadow-lg border border-green-400 w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to delete this item?
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirmation(false);
+                  setSurveyToDelete(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSurvey}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Surveys Confirmation Modal */}
+      {showClearAllConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-lg shadow-lg border border-green-400 w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to delete this item?
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowClearAllConfirmation(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmClearAll}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>

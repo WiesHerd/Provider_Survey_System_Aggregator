@@ -75,6 +75,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   data: propData, 
   title = 'Custom Reports' 
 }) => {
+  console.log('🔄 CustomReports component rendering...');
+  
   // State management
   const [loading, setLoading] = useState(true);
   const [surveyData, setSurveyData] = useState<ISurveyRow[]>([]);
@@ -121,6 +123,11 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         
         // Load specialty mappings first
         const mappings = await dataService.getAllSpecialtyMappings();
+        console.log('🗺️ Loaded specialty mappings:', mappings.length, 'mappings');
+        console.log('📋 Sample mappings:', mappings.slice(0, 3).map(mapping => ({
+          standardizedName: mapping.standardizedName,
+          sourceSpecialties: mapping.sourceSpecialties.map(src => src.specialty)
+        })));
         setSpecialtyMappings(mappings);
         
         // Get all surveys first
@@ -146,10 +153,55 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         }
         
         if (allData.length > 0) {
+          console.log('📊 Loaded survey data:', allData.length, 'total rows');
+          console.log('📋 Sample data rows:', allData.slice(0, 3).map(row => ({
+            specialty: row.specialty,
+            normalizedSpecialty: row.normalizedSpecialty,
+            surveySource: (row as any).surveySource,
+            region: (row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion,
+            tcc_p50: row.tcc_p50
+          })));
+          
           setSurveyData(allData);
           
-          // Extract available options using specialty mappings (like analytics screen)
-          const specialties = mappings.map((mapping: ISpecialtyMapping) => mapping.standardizedName).filter(Boolean);
+          // Extract available options from survey data (not just mapped specialties)
+          const allSpecialtiesFromData = [...new Set(allData.map((row: ISurveyRow) => String(row.specialty || row.normalizedSpecialty || '')).filter(Boolean))] as string[];
+          const mappedSpecialties = mappings.map((mapping: ISpecialtyMapping) => mapping.standardizedName).filter(Boolean);
+          
+          console.log('🔍 Raw specialties from data:', allSpecialtiesFromData);
+          console.log('🗺️ Mapped specialties:', mappedSpecialties);
+          
+          // Use ONLY standardized specialty names from mappings (like Regional Analytics)
+          // This ensures we show the parent specialties, not the raw data specialties
+          const specialties = mappedSpecialties.filter(mappedSpecialty => {
+            // Check if this mapped specialty has any data by looking at source specialties
+            const mapping = mappings.find(m => m.standardizedName === mappedSpecialty);
+            if (mapping) {
+              const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
+              const hasData = allSpecialtiesFromData.some(dataSpecialty => 
+                sourceSpecialties.some(sourceSpec => 
+                  dataSpecialty.toLowerCase().includes(sourceSpec) || 
+                  sourceSpec.includes(dataSpecialty.toLowerCase())
+                )
+              );
+              
+              if (hasData) {
+                console.log(`✅ Mapped specialty "${mappedSpecialty}" has data`);
+                return true;
+              } else {
+                console.log(`❌ Mapped specialty "${mappedSpecialty}" has NO data`);
+                return false;
+              }
+            }
+            return false;
+          }).sort();
+          
+          console.log(`📊 Specialty filtering summary:`);
+          console.log(`   - Raw specialties from data: ${allSpecialtiesFromData.length}`);
+          console.log(`   - Total mapped specialties: ${mappedSpecialties.length}`);
+          console.log(`   - Final standardized specialties with data: ${specialties.length}`);
+          console.log(`   - Filtered out: ${mappedSpecialties.length - specialties.length} mapped specialties without data`);
+          console.log(`   - Using parent/standardized names only (like Regional Analytics)`);
           
           const regions = [...new Set(allData.map((row: ISurveyRow) => String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '')).filter(Boolean))] as string[];
           
@@ -158,6 +210,10 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           // we'll need to get this from the surveys list
           const surveySources = [...new Set(surveys.map((survey: any) => (survey as any).type || survey.surveyProvider || '').filter(Boolean))] as string[];
           
+          console.log(`📊 Data summary:`);
+          console.log(`   - Regions with data: ${regions.length}`);
+          console.log(`   - Survey sources with data: ${surveySources.length}`);
+          
           // Store all available options
           setAllAvailableOptions({
             specialties,
@@ -165,6 +221,10 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             surveySources
           });
 
+          console.log('🔍 DEBUG - Available specialties for filter:', specialties);
+          console.log('🔍 DEBUG - Available regions for filter:', regions);
+          console.log('🔍 DEBUG - Available survey sources for filter:', surveySources);
+          
           setAvailableOptions({
             dimensions: ['specialty', 'region', 'providerType'],
             metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
@@ -212,25 +272,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
     let filteredData = surveyData;
 
-    // Apply specialty filter first
-    if (currentConfig.filters.specialties.length > 0) {
-      const specialtyMappingLookup = new Map<string, string[]>();
-      specialtyMappings.forEach(mapping => {
-        if (currentConfig.filters.specialties.includes(mapping.standardizedName)) {
-          const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
-          specialtyMappingLookup.set(mapping.standardizedName, sourceSpecialties);
-        }
-      });
-      
-      filteredData = filteredData.filter(row => {
-        const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
-        return Array.from(specialtyMappingLookup.values()).some(sourceSpecialties => 
-          sourceSpecialties.includes(rowSpecialty)
-        );
-      });
-    }
-
-    // Apply region filter
+    // Apply region filter (but NOT specialty filter to avoid circular dependency)
     if (currentConfig.filters.regions.length > 0) {
       filteredData = filteredData.filter(row => 
         currentConfig.filters.regions.includes(String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || ''))
@@ -245,7 +287,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     }
 
     // Extract available options from filtered data
-    const availableSpecialties = new Set<string>();
     const availableRegions = new Set<string>();
     const availableSurveySources = new Set<string>();
 
@@ -257,24 +298,14 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       // Add survey sources
       const surveySource = String((row as any).surveySource || '');
       if (surveySource) availableSurveySources.add(surveySource);
-
-      // Add specialties (using mappings)
-      const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
-      for (const mapping of specialtyMappings) {
-        const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
-        if (sourceSpecialties.includes(rowSpecialty)) {
-          availableSpecialties.add(mapping.standardizedName);
-          break;
-        }
-      }
     });
 
     return {
-      specialties: Array.from(availableSpecialties).sort(),
+      specialties: allAvailableOptions.specialties, // Always use all available specialties
       regions: Array.from(availableRegions).sort(),
       surveySources: Array.from(availableSurveySources).sort()
     };
-  }, [surveyData, currentConfig.filters, specialtyMappings, allAvailableOptions.specialties, allAvailableOptions.regions, allAvailableOptions.surveySources]);
+  }, [surveyData, currentConfig.filters.regions, currentConfig.filters.surveySources, specialtyMappings, allAvailableOptions.specialties, allAvailableOptions.regions, allAvailableOptions.surveySources]);
 
   // Update available options when filters change
   useEffect(() => {
@@ -286,40 +317,144 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Generate chart data based on current configuration
   const chartData = useMemo((): ChartDataItem[] => {
-    if (!surveyData.length) return [];
+    console.log('🔄 Generating chart data...');
+    console.log('📊 Total survey data rows:', surveyData.length);
+    console.log('🎯 Current config:', currentConfig);
+    console.log('🗺️ Specialty mappings count:', specialtyMappings.length);
+    
+    if (!surveyData.length) {
+      console.log('❌ No survey data available');
+      return [];
+    }
 
     // Apply filters
     let filteredData = surveyData;
+    console.log('🔍 Starting with', filteredData.length, 'rows');
     
     if (currentConfig.filters.specialties.length > 0) {
+        console.log('🎯 Filtering by specialties:', currentConfig.filters.specialties);
+        
       // Create a mapping from standardized names to source specialties
       const specialtyMappingLookup = new Map<string, string[]>();
+        console.log('🎯 Selected specialties:', currentConfig.filters.specialties);
+        console.log('🗺️ Available mappings:', specialtyMappings.map(m => m.standardizedName));
+        
       specialtyMappings.forEach(mapping => {
         if (currentConfig.filters.specialties.includes(mapping.standardizedName)) {
           const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
           specialtyMappingLookup.set(mapping.standardizedName, sourceSpecialties);
+            console.log(`📋 Mapping "${mapping.standardizedName}" to:`, sourceSpecialties);
+          }
+        });
+        
+        // If no mappings found, try to find partial matches
+        if (specialtyMappingLookup.size === 0) {
+          console.log('⚠️ No exact mappings found, trying partial matches...');
+          specialtyMappings.forEach(mapping => {
+            const standardizedName = mapping.standardizedName.toLowerCase();
+            if (currentConfig.filters.specialties.some(selected => 
+              selected.toLowerCase().includes(standardizedName) || 
+              standardizedName.includes(selected.toLowerCase())
+            )) {
+              const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
+              specialtyMappingLookup.set(mapping.standardizedName, sourceSpecialties);
+              console.log(`📋 Partial match: "${mapping.standardizedName}" to:`, sourceSpecialties);
+            }
+          });
         }
-      });
-      
+        
+        console.log('🔍 Specialty mapping lookup:', Object.fromEntries(specialtyMappingLookup));
+        
+        const beforeSpecialtyFilter = filteredData.length;
       filteredData = filteredData.filter(row => {
         const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
-        return Array.from(specialtyMappingLookup.values()).some(sourceSpecialties => 
-          sourceSpecialties.includes(rowSpecialty)
-        );
-      });
+          
+          // Check if it matches any of the mapped specialties
+          let matches = false;
+          
+          // First, try exact match with mapped specialties
+          for (const [standardizedName, sourceSpecialties] of specialtyMappingLookup.entries()) {
+            if (sourceSpecialties.includes(rowSpecialty)) {
+              matches = true;
+              break;
+            }
+          }
+          
+          // If no exact match, try partial matching for specialty names
+          if (!matches) {
+            for (const [standardizedName, sourceSpecialties] of specialtyMappingLookup.entries()) {
+              if (sourceSpecialties.some(sourceSpec => 
+                rowSpecialty.includes(sourceSpec.toLowerCase()) || 
+                sourceSpec.toLowerCase().includes(rowSpecialty)
+              )) {
+                matches = true;
+                break;
+              }
+            }
+          }
+          
+          // If still no match, try matching against the standardized name itself
+          if (!matches) {
+            for (const [standardizedName, sourceSpecialties] of specialtyMappingLookup.entries()) {
+              if (rowSpecialty.includes(standardizedName.toLowerCase()) || 
+                  standardizedName.toLowerCase().includes(rowSpecialty)) {
+                matches = true;
+                break;
+              }
+            }
+          }
+          
+          // Debug: Log what we're looking for vs what we found
+          if (filteredData.indexOf(row) < 3) {
+            console.log(`🔍 Row specialty: "${rowSpecialty}" - looking for:`, Array.from(specialtyMappingLookup.keys()));
+            console.log(`🔍 Available source specialties:`, Array.from(specialtyMappingLookup.values()).flat());
+          }
+          
+          // Debug first few rows
+          if (filteredData.indexOf(row) < 5) {
+            console.log(`🔍 Row specialty: "${rowSpecialty}" - matches: ${matches}`);
+          }
+          
+          return matches;
+        });
+        console.log(`🎯 Specialty filter: ${beforeSpecialtyFilter} → ${filteredData.length} rows`);
     }
     
     if (currentConfig.filters.regions.length > 0) {
-      filteredData = filteredData.filter(row => 
-        currentConfig.filters.regions.includes(String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || ''))
-      );
+      console.log('🌍 Filtering by regions:', currentConfig.filters.regions);
+      const beforeRegionFilter = filteredData.length;
+      filteredData = filteredData.filter(row => {
+        const region = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
+        const matches = currentConfig.filters.regions.includes(region);
+        
+        // Debug first few rows
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`🌍 Row region: "${region}" - matches: ${matches}`);
+        }
+        
+        return matches;
+      });
+      console.log(`🌍 Region filter: ${beforeRegionFilter} → ${filteredData.length} rows`);
     }
     
     if (currentConfig.filters.surveySources.length > 0) {
-      filteredData = filteredData.filter(row => 
-        currentConfig.filters.surveySources.includes(String((row as any).surveySource || ''))
-      );
+      console.log('📋 Filtering by survey sources:', currentConfig.filters.surveySources);
+      const beforeSourceFilter = filteredData.length;
+      filteredData = filteredData.filter(row => {
+        const surveySource = String((row as any).surveySource || '');
+        const matches = currentConfig.filters.surveySources.includes(surveySource);
+        
+        // Debug first few rows
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`📋 Row survey source: "${surveySource}" - matches: ${matches}`);
+        }
+        
+        return matches;
+      });
+      console.log(`📋 Survey source filter: ${beforeSourceFilter} → ${filteredData.length} rows`);
     }
+
+    console.log('✅ After all filters:', filteredData.length, 'rows remaining');
 
     // Group by dimension and aggregate metric
     const grouped = filteredData.reduce((acc, row) => {
@@ -364,6 +499,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       return acc;
     }, {} as Record<string, { name: string; value: number; count: number; total: number }>);
 
+    console.log('📊 Grouped data keys:', Object.keys(grouped));
+
     // Calculate averages and format
     const allData = Object.values(grouped)
       .map((item: { name: string; value: number; count: number; total: number }) => ({
@@ -375,25 +512,20 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       .filter(item => item.value > 0)
       .sort((a, b) => b.value - a.value);
     
-    console.log('Data processing summary:');
-    console.log('- Total survey data rows:', surveyData.length);
-    console.log('- Filtered data rows:', filteredData.length);
-    console.log('- Grouped items:', Object.keys(grouped).length);
-    console.log('- Final allData items:', allData.length);
-    console.log('- Current dimension:', currentConfig.dimension);
-    console.log('- Current filters:', currentConfig.filters);
+    console.log('📈 Final chart data:', allData.length, 'items');
+    console.log('📊 Sample chart data:', allData.slice(0, 3));
     
     // For specialty dimension, require at least one specialty to be selected
     if (currentConfig.dimension === 'specialty') {
       if (currentConfig.filters.specialties.length === 0) {
-        console.log('Specialty dimension with no filters - returning empty data');
+        console.log('❌ Specialty dimension with no filters - returning empty data');
         return []; // Return empty data when no specialty filter is applied
       } else {
-        console.log('Specialty dimension with filters - returning filtered data:', allData.length, 'items');
+        console.log('✅ Specialty dimension with filters - returning filtered data:', allData.length, 'items');
         return allData; // Show filtered specialties
       }
     } else {
-      console.log('Non-specialty dimension - limiting to top 20');
+      console.log('📊 Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
   }, [surveyData, currentConfig, specialtyMappings]);
@@ -479,6 +611,37 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     a.click();
   };
 
+  // Smart scaling function to make differences more prominent
+  const calculateOptimalYAxis = (data: any[], isCurrency: boolean, isWRVU: boolean) => {
+    if (data.length === 0) return { min: 0, max: 100 };
+    
+    const values = data.map(item => item.value).filter(val => val !== null && val !== undefined);
+    if (values.length === 0) return { min: 0, max: 100 };
+    
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    
+    // If values are very close together (less than 5% difference), use smart scaling
+    const percentageDifference = range / max;
+    
+    if (percentageDifference < 0.05 && range > 0) {
+      // Use a tighter range to make differences more visible
+      const padding = range * 0.2; // 20% padding
+      const smartMin = Math.max(0, min - padding);
+      const smartMax = max + padding;
+      
+      return { min: smartMin, max: smartMax };
+    }
+    
+    // Default scaling with 10% padding
+    const padding = range * 0.1;
+    return { 
+      min: Math.max(0, min - padding), 
+      max: max + padding 
+    };
+  };
+
   // Render chart based on type
   const renderChart = () => {
     if (chartData.length === 0) {
@@ -495,6 +658,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
     const isCurrency = currentConfig.metric.includes('tcc') || currentConfig.metric.includes('cf');
     const isWRVU = currentConfig.metric.includes('wrvu');
+    
+    // Calculate optimal Y-axis scaling
+    const yAxisConfig = calculateOptimalYAxis(chartData, isCurrency, isWRVU);
 
     if (currentConfig.chartType === 'pie') {
       return (
@@ -550,6 +716,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 interval={isManyItems ? 2 : 0} // Show every 3rd label for many items
               />
                 <YAxis 
+                  domain={[yAxisConfig.min, yAxisConfig.max]}
                   tickFormatter={(value) => 
                     isCurrency ? `$${(value / 1000).toFixed(0)}K` : 
                     isWRVU ? value.toLocaleString() : 
@@ -613,6 +780,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 interval={isManyItems ? 2 : 0} // Show every 3rd label for many items
               />
               <YAxis 
+                domain={[yAxisConfig.min, yAxisConfig.max]}
                 tickFormatter={(value) => 
                   isCurrency ? `$${(value / 1000).toFixed(0)}K` : 
                   isWRVU ? value.toLocaleString() : 
@@ -664,6 +832,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   return (
     <div className="w-full flex flex-col gap-4">
       {/* Action Buttons - Top of page */}
+      <div className="flex justify-between items-center">
       <div className="flex gap-2">
         <Button
           variant="contained"
@@ -691,7 +860,167 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         </Button>
       </div>
 
-      {/* Filters - Spanning across both containers */}
+        {/* Saved Reports Dropdown */}
+        {savedReports.length > 0 && (
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <Select
+              value=""
+              onChange={(e: SelectChangeEvent<string>) => {
+                const report = savedReports.find(r => r.id === e.target.value);
+                if (report) loadReport(report);
+              }}
+              displayEmpty
+              sx={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                border: '1px solid #d1d5db',
+                '&:hover': {
+                  borderColor: '#6366f1',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                },
+                '&.Mui-focused': {
+                  backgroundColor: 'white',
+                  boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
+                  borderColor: '#6366f1',
+                }
+              }}
+            >
+              <MenuItem value="" disabled>
+                <em>📁 Saved Reports</em>
+              </MenuItem>
+              {savedReports.map((report) => (
+                <MenuItem key={report.id} value={report.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div className="font-medium text-gray-900">{report.name}</div>
+                    <div className="text-xs text-gray-500">{report.dimension} × {report.metric.replace('_', ' ')}</div>
+                  </div>
+                  <IconButton 
+                    size="small" 
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      deleteReport(report.id);
+                    }}
+                    sx={{ 
+                      color: '#ef4444',
+                      '&:hover': { backgroundColor: '#fee2e2' }
+                    }}
+                  >
+                    <BookmarkSlashIcon className="h-3 w-3" />
+                  </IconButton>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+      </div>
+
+      {/* Report Builder - First, define what you want to build */}
+      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <CardContent className="p-6">
+          <Typography variant="h6" className="mb-4 text-gray-900 font-semibold">
+            Report Builder
+          </Typography>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Report Name */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Report Name
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Enter report name to save..."
+                value={currentConfig.name}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleConfigChange('name', e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                  }
+                }}
+              />
+            </FormControl>
+
+            {/* Dimension Selector */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Group By (X-Axis)
+              </Typography>
+              <Select
+                value={currentConfig.dimension}
+                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('dimension', e.target.value)}
+                sx={{
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                  }
+                }}
+              >
+                <MenuItem value="specialty">Specialty</MenuItem>
+                <MenuItem value="region">Region</MenuItem>
+                <MenuItem value="providerType">Provider Type</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Metric Selector */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Measure (Y-Axis)
+              </Typography>
+              <Select
+                value={currentConfig.metric}
+                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('metric', e.target.value)}
+                sx={{
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                  }
+                }}
+              >
+                <MenuItem value="tcc_p25">TCC 25th Percentile</MenuItem>
+                <MenuItem value="tcc_p50">TCC 50th Percentile</MenuItem>
+                <MenuItem value="tcc_p75">TCC 75th Percentile</MenuItem>
+                <MenuItem value="tcc_p90">TCC 90th Percentile</MenuItem>
+                <MenuItem value="wrvu_p25">wRVU 25th Percentile</MenuItem>
+                <MenuItem value="wrvu_p50">wRVU 50th Percentile</MenuItem>
+                <MenuItem value="wrvu_p75">wRVU 75th Percentile</MenuItem>
+                <MenuItem value="wrvu_p90">wRVU 90th Percentile</MenuItem>
+                <MenuItem value="cf_p25">CF 25th Percentile</MenuItem>
+                <MenuItem value="cf_p50">CF 50th Percentile</MenuItem>
+                <MenuItem value="cf_p75">CF 75th Percentile</MenuItem>
+                <MenuItem value="cf_p90">CF 90th Percentile</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Chart Type Selector */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Chart Type
+              </Typography>
+              <Select
+                value={currentConfig.chartType}
+                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('chartType', e.target.value)}
+                sx={{
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                  }
+                }}
+              >
+                <MenuItem value="bar">Bar Chart</MenuItem>
+                <MenuItem value="line">Line Chart</MenuItem>
+                <MenuItem value="pie">Pie Chart</MenuItem>
+              </Select>
+            </FormControl>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters - Then filter the data */}
       <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
         <CardContent className="p-6">
           <Typography variant="h6" className="mb-4 text-gray-900 font-semibold">
@@ -702,57 +1031,122 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             {/* Specialty Filter */}
             <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Specialties
+                Specialties ({availableOptions.specialties.length} available)
               </Typography>
               <Autocomplete
                 multiple
                 value={currentConfig.filters.specialties}
                 onChange={(event: any, newValue: string[]) => {
-                  // Handle "Select All" logic
-                  if (newValue.includes('__select_all__')) {
-                    if (currentConfig.filters.specialties.length === availableOptions.specialties.length) {
-                      // If all are selected, deselect all
-                      handleFilterChange('specialties', []);
-                    } else {
-                      // Select all specialties
-                      handleFilterChange('specialties', availableOptions.specialties);
-                    }
-                  } else {
-                    // Normal selection
-                    handleFilterChange('specialties', newValue);
-                  }
+                  console.log('AUTOCOMPLETE onChange - newValue:', newValue);
+                  handleFilterChange('specialties', newValue);
                 }}
-                options={['__select_all__', ...availableOptions.specialties]}
-                getOptionLabel={(option: string) => {
-                  if (option === '__select_all__') {
-                    return `☐ Select All Specialties (${availableOptions.specialties.length})`;
-                  }
-                  return formatSpecialtyForDisplay(option);
+                options={availableOptions.specialties}
+                getOptionKey={(option: string) => option}
+                onOpen={() => {
+                  console.log('🚨 AUTOCOMPLETE OPENED - Available options:', availableOptions.specialties);
+                  console.log('🚨 AUTOCOMPLETE OPENED - Options length:', availableOptions.specialties.length);
                 }}
+                getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
                 renderInput={(params: any) => (
                   <TextField
                     {...params}
-                    placeholder="Search for specialties..."
+                    placeholder="Search and select specialties..."
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         backgroundColor: 'white',
-                        borderRadius: '8px',
-                        fontSize: '0.875rem',
+                        borderRadius: '12px',
+                        border: '2px solid #e5e7eb',
                         '&:hover': {
-                          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                          borderColor: '#9ca3af',
+                          borderColor: '#6366f1',
+                        },
+                        '&.Mui-focused': {
+                          borderColor: '#6366f1',
+                          boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
+                        }
+                      }
+                    }}
+                  />
+                )}
+                renderTags={(value: string[], getTagProps: any) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {value.map((option: string, index: number) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={`${option}-${index}`}
+                        label={formatSpecialtyForDisplay(option)}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: '#6366f1', 
+                          color: 'white',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            '&:hover': { color: 'white' }
+                          }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                sx={{
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                    maxHeight: '300px'
+                  },
+                  '& .MuiAutocomplete-option': {
+                    '&:hover': { backgroundColor: '#f3f4f6' },
+                    '&.Mui-selected': { 
+                      backgroundColor: '#ede9fe',
+                      color: '#5b21b6',
+                      '&:hover': { backgroundColor: '#ddd6fe' }
+                    }
+                  }
+                }}
+                noOptionsText="No specialties found"
+                clearOnBlur={false}
+                disableCloseOnSelect={true}
+              />
+            </FormControl>
+
+            {/* Region Filter */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Regions
+              </Typography>
+              <Autocomplete
+                multiple
+                value={currentConfig.filters.regions}
+                onChange={(event: any, newValue: string[]) => handleFilterChange('regions', newValue)}
+                options={availableOptions.regions}
+                getOptionLabel={(option: string) => option}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Select regions..."
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        fontSize: '0.875rem',
+                        border: '2px solid #e5e7eb',
+                        '&:hover': {
+                          borderColor: '#6366f1',
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
                         },
                         '&.Mui-focused': {
                           backgroundColor: 'white',
-                          boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
-                          borderColor: '#3b82f6',
+                          boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
+                          borderColor: '#6366f1',
                         }
                       },
                       '& .MuiInputBase-input': {
-                        paddingTop: '8px',
-                        paddingBottom: '8px',
-                        paddingLeft: '12px',
-                        paddingRight: '12px',
+                        paddingTop: '12px',
+                        paddingBottom: '12px',
+                        paddingLeft: '14px',
+                        paddingRight: '14px',
+                        fontSize: '0.875rem',
                       }
                     }}
                   />
@@ -763,71 +1157,46 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                       <Chip
                         {...getTagProps({ index })}
                         key={option}
-                        label={formatSpecialtyForDisplay(option)}
+                        label={option}
                         size="small"
-                        sx={{ backgroundColor: '#6A5ACD', color: 'white' }}
+                        sx={{ 
+                          backgroundColor: '#059669', 
+                          color: 'white',
+                          fontWeight: '500',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            '&:hover': { color: 'white' }
+                          }
+                        }}
                       />
                     ))}
                   </Box>
                 )}
                 sx={{
                   '& .MuiAutocomplete-paper': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
                     borderRadius: '12px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                    maxHeight: '300px'
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    maxHeight: '300px',
+                    marginTop: '4px'
                   },
                   '& .MuiAutocomplete-option': {
-                    '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                    padding: '12px 16px',
+                    fontSize: '0.875rem',
+                    '&:hover': { backgroundColor: '#f3f4f6' },
                     '&.Mui-selected': { 
-                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                      '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
+                      backgroundColor: '#d1fae5',
+                      color: '#047857',
+                      fontWeight: '500',
+                      '&:hover': { backgroundColor: '#a7f3d0' }
                     }
                   }
                 }}
-                noOptionsText="No specialties found"
+                noOptionsText="No regions found"
                 clearOnBlur={false}
-                blurOnSelect={true}
+                disableCloseOnSelect={true}
               />
-            </FormControl>
-
-            {/* Region Filter */}
-            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
-              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Regions
-              </Typography>
-              <Select
-                multiple
-                value={currentConfig.filters.regions}
-                onChange={(e: SelectChangeEvent<string[]>) => handleFilterChange('regions', e.target.value as string[])}
-                renderValue={(selected: string[]) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value: string) => (
-                      <Chip 
-                        key={value} 
-                        label={value} 
-                        size="small"
-                        sx={{ backgroundColor: '#6A5ACD', color: 'white' }}
-                      />
-                    ))}
-                  </Box>
-                )}
-                sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                  }
-                }}
-              >
-                {availableOptions.regions.map((region) => (
-                  <MenuItem key={region} value={region}>
-                    {region}
-                  </MenuItem>
-                ))}
-              </Select>
             </FormControl>
 
             {/* Survey Source Filter */}
@@ -835,36 +1204,88 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Survey Sources
               </Typography>
-              <Select
+              <Autocomplete
                 multiple
                 value={currentConfig.filters.surveySources}
-                onChange={(e: SelectChangeEvent<string[]>) => handleFilterChange('surveySources', e.target.value as string[])}
-                renderValue={(selected: string[]) => (
+                onChange={(event: any, newValue: string[]) => handleFilterChange('surveySources', newValue)}
+                options={availableOptions.surveySources}
+                getOptionLabel={(option: string) => option}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Select survey sources..."
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        fontSize: '0.875rem',
+                        border: '2px solid #e5e7eb',
+                        '&:hover': {
+                          borderColor: '#6366f1',
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        },
+                        '&.Mui-focused': {
+                          backgroundColor: 'white',
+                          boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
+                          borderColor: '#6366f1',
+                        }
+                      },
+                      '& .MuiInputBase-input': {
+                        paddingTop: '12px',
+                        paddingBottom: '12px',
+                        paddingLeft: '14px',
+                        paddingRight: '14px',
+                        fontSize: '0.875rem',
+                      }
+                    }}
+                  />
+                )}
+                renderTags={(value: string[], getTagProps: any) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value: string) => (
-                      <Chip 
-                        key={value} 
-                        label={value} 
+                    {value.map((option: string, index: number) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={option}
+                        label={option}
                         size="small"
-                        sx={{ backgroundColor: '#6A5ACD', color: 'white' }}
+                        sx={{ 
+                          backgroundColor: '#dc2626', 
+                          color: 'white',
+                          fontWeight: '500',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            '&:hover': { color: 'white' }
+                          }
+                        }}
                       />
                     ))}
                   </Box>
                 )}
                 sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    maxHeight: '300px',
+                    marginTop: '4px'
+                  },
+                  '& .MuiAutocomplete-option': {
+                    padding: '12px 16px',
+                    fontSize: '0.875rem',
+                    '&:hover': { backgroundColor: '#f3f4f6' },
+                    '&.Mui-selected': { 
+                      backgroundColor: '#fee2e2',
+                      color: '#dc2626',
+                      fontWeight: '500',
+                      '&:hover': { backgroundColor: '#fecaca' }
+                    }
                   }
                 }}
-              >
-                {availableOptions.surveySources.map((source) => (
-                  <MenuItem key={source} value={source}>
-                    {source}
-                  </MenuItem>
-                ))}
-              </Select>
+                noOptionsText="No survey sources found"
+                clearOnBlur={false}
+                disableCloseOnSelect={true}
+              />
             </FormControl>
           </div>
         </CardContent>
@@ -975,54 +1396,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         </CardContent>
       </Card>
 
-      {/* Saved Reports */}
-      {savedReports.length > 0 && (
-        <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <CardContent className="p-6">
-            <Typography variant="h6" className="mb-4 text-gray-900 font-semibold">
-              Saved Reports
-            </Typography>
-            
-            <div className="space-y-2">
-              {savedReports.map((report) => (
-                <div 
-                  key={report.id} 
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <Typography variant="body2" className="font-medium text-gray-900 truncate">
-                      {report.name}
-                    </Typography>
-                    <Typography variant="caption" className="text-gray-500">
-                      {report.dimension} × {report.metric.replace('_', ' ')}
-                    </Typography>
-                  </div>
-                  <div className="flex gap-1">
-                    <Tooltip title="Load Report">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => loadReport(report)}
-                        sx={{ color: '#6A5ACD' }}
-                      >
-                        <BookmarkIcon className="h-4 w-4" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete Report">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => deleteReport(report.id)}
-                        sx={{ color: '#ef4444' }}
-                      >
-                        <BookmarkSlashIcon className="h-4 w-4" />
-                      </IconButton>
-                    </Tooltip>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Chart Preview */}
       <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
@@ -1034,6 +1408,22 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </Typography>
                             <Typography variant="body2" className="text-gray-600">
                 {currentConfig.dimension.replace('_', ' ')} × {currentConfig.metric.replace('_', ' ')} ({chartData.length} items)
+                {(() => {
+                  const values = chartData.map(item => item.value);
+                  const min = Math.min(...values);
+                  const max = Math.max(...values);
+                  const range = max - min;
+                  const percentageDifference = range / max;
+                  
+                  if (percentageDifference < 0.05 && range > 0) {
+                    return (
+                      <span className="ml-2 text-blue-600 text-sm">
+                        • Enhanced scaling applied for better visibility
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {currentConfig.dimension === 'specialty' && currentConfig.filters.specialties.length === 0 && (
                   <span className="ml-2 text-orange-600 text-sm">

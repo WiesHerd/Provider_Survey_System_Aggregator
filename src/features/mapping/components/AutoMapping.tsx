@@ -20,7 +20,9 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
   isOpen, 
   onClose, 
   onAutoMap, 
-  loading = false 
+  loading = false,
+  title = "Auto-Map Specialties",
+  description = "Configure automatic specialty mapping"
 }) => {
   // Configuration state
   const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.7);
@@ -68,8 +70,8 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
                 <BoltIcon className="h-6 w-6 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Auto-Map Specialties</h2>
-                <p className="text-sm text-gray-500">Configure automatic specialty mapping</p>
+                <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+                <p className="text-sm text-gray-500">{description}</p>
               </div>
             </div>
             <button
@@ -86,8 +88,8 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
             {/* Description */}
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
               <p className="text-sm text-indigo-800">
-                Automatically map specialties based on similarity and existing mappings. 
-                This will analyze unmapped specialties and suggest mappings with the specified confidence level.
+                Automatically map items based on similarity and existing mappings. 
+                This will analyze unmapped items and suggest mappings with the specified confidence level.
               </p>
             </div>
 

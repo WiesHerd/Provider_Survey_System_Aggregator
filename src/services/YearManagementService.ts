@@ -8,6 +8,31 @@ import { ISpecialtyMapping } from '../types/specialty';
 export class YearManagementService {
   private readonly YEAR_CONFIG_KEY = 'year_configs';
   private readonly YEAR_DATA_PREFIX = 'year_data_';
+  private readonly INDEXEDDB_NAME = 'SurveyAggregatorDB';
+  private readonly INDEXEDDB_VERSION = 1;
+
+  /**
+   * Get IndexedDB database
+   */
+  private async getDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.INDEXEDDB_NAME, this.INDEXEDDB_VERSION);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+      
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        
+        // Create object stores if they don't exist
+        if (!db.objectStoreNames.contains('yearData')) {
+          const yearDataStore = db.createObjectStore('yearData', { keyPath: 'key' });
+          yearDataStore.createIndex('year', 'year', { unique: false });
+          yearDataStore.createIndex('dataType', 'dataType', { unique: false });
+        }
+      };
+    });
+  }
 
   /**
    * Get all available years
@@ -175,10 +200,16 @@ export class YearManagementService {
   }
 
   /**
-   * Get year-specific data
+   * Get year-specific data using IndexedDB for large data
    */
   async getYearData<T>(year: string, dataType: string): Promise<T[]> {
     try {
+      // For large data types like surveyData, use IndexedDB
+      if (dataType === 'surveyData' || dataType === 'surveys') {
+        return await this.getYearDataFromIndexedDB<T>(year, dataType);
+      }
+      
+      // For small metadata, use localStorage
       const key = `${this.YEAR_DATA_PREFIX}${year}_${dataType}`;
       const stored = localStorage.getItem(key);
       return stored ? JSON.parse(stored) : [];
@@ -189,10 +220,42 @@ export class YearManagementService {
   }
 
   /**
-   * Save year-specific data
+   * Get year data from IndexedDB
+   */
+  private async getYearDataFromIndexedDB<T>(year: string, dataType: string): Promise<T[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['yearData'], 'readonly');
+        const store = transaction.objectStore('yearData');
+        const index = store.index('year');
+        const request = index.getAll(year);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const results = request.result;
+          const yearData = results.find(item => item.dataType === dataType);
+          resolve(yearData ? yearData.data : []);
+        };
+      });
+    } catch (error) {
+      console.error(`Error getting ${dataType} data from IndexedDB for year ${year}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Save year-specific data using IndexedDB for large data
    */
   async saveYearData<T>(year: string, dataType: string, data: T[]): Promise<void> {
     try {
+      // For large data types like surveyData, use IndexedDB
+      if (dataType === 'surveyData' || dataType === 'surveys') {
+        await this.saveYearDataToIndexedDB<T>(year, dataType, data);
+        return;
+      }
+      
+      // For small metadata, use localStorage
       const key = `${this.YEAR_DATA_PREFIX}${year}_${dataType}`;
       const yearData: IYearData<T> = {
         year,
@@ -208,6 +271,192 @@ export class YearManagementService {
     } catch (error) {
       console.error(`Error saving ${dataType} data for year ${year}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Save year data to IndexedDB
+   */
+  private async saveYearDataToIndexedDB<T>(year: string, dataType: string, data: T[]): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['yearData'], 'readwrite');
+        const store = transaction.objectStore('yearData');
+        
+        // Create a unique key for this year and data type
+        const key = `${year}_${dataType}`;
+        
+        const yearData: IYearData<T> = {
+          year,
+          data,
+          metadata: {
+            totalRecords: data.length,
+            lastUpdated: new Date(),
+            source: 'user_upload'
+          }
+        };
+        
+        const request = store.put({
+          key,
+          year,
+          dataType,
+          data: yearData.data,
+          metadata: yearData.metadata
+        });
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error(`Error saving ${dataType} data to IndexedDB for year ${year}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all year data from IndexedDB
+   */
+  async clearYearData(year?: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['yearData'], 'readwrite');
+        const store = transaction.objectStore('yearData');
+        
+        if (year) {
+          // Clear specific year data
+          const index = store.index('year');
+          const request = index.getAllKeys(year);
+          
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const keys = request.result;
+            let completed = 0;
+            
+            if (keys.length === 0) {
+              resolve();
+              return;
+            }
+            
+            keys.forEach(key => {
+              const deleteRequest = store.delete(key);
+              deleteRequest.onerror = () => reject(deleteRequest.error);
+              deleteRequest.onsuccess = () => {
+                completed++;
+                if (completed === keys.length) {
+                  resolve();
+                }
+              };
+            });
+          };
+        } else {
+          // Clear all year data
+          const request = store.clear();
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve();
+        }
+      });
+    } catch (error) {
+      console.error('Error clearing year data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get storage usage information
+   */
+  async getStorageInfo(): Promise<{
+    localStorageUsage: number;
+    indexedDBUsage: number;
+    totalUsage: number;
+    quota: number;
+  }> {
+    try {
+      // Get localStorage usage
+      let localStorageUsage = 0;
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key) {
+            localStorageUsage += localStorage.getItem(key)?.length || 0;
+          }
+        }
+      } catch (error) {
+        console.warn('Could not calculate localStorage usage:', error);
+      }
+
+      // Get IndexedDB usage (approximate)
+      let indexedDBUsage = 0;
+      try {
+        const db = await this.getDB();
+        const transaction = db.transaction(['yearData'], 'readonly');
+        const store = transaction.objectStore('yearData');
+        const request = store.getAll();
+        
+        await new Promise<void>((resolve, reject) => {
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const data = request.result;
+            indexedDBUsage = JSON.stringify(data).length;
+            resolve();
+          };
+        });
+      } catch (error) {
+        console.warn('Could not calculate IndexedDB usage:', error);
+      }
+
+      const totalUsage = localStorageUsage + indexedDBUsage;
+      
+      // Estimate quota (browsers typically allow 5-10MB for localStorage, much more for IndexedDB)
+      const quota = 50 * 1024 * 1024; // 50MB estimate for total storage
+
+      return {
+        localStorageUsage,
+        indexedDBUsage,
+        totalUsage,
+        quota
+      };
+    } catch (error) {
+      console.error('Error getting storage info:', error);
+      return {
+        localStorageUsage: 0,
+        indexedDBUsage: 0,
+        totalUsage: 0,
+        quota: 0
+      };
+    }
+  }
+
+  /**
+   * Check if storage is available and has space
+   */
+  async checkStorageAvailability(): Promise<{
+    available: boolean;
+    message: string;
+    usage: number;
+    quota: number;
+  }> {
+    try {
+      const storageInfo = await this.getStorageInfo();
+      const available = storageInfo.totalUsage < storageInfo.quota * 0.9; // Leave 10% buffer
+      
+      return {
+        available,
+        message: available 
+          ? 'Storage space is available' 
+          : 'Storage space is running low. Consider clearing some data.',
+        usage: storageInfo.totalUsage,
+        quota: storageInfo.quota
+      };
+    } catch (error) {
+      console.error('Error checking storage availability:', error);
+      return {
+        available: false,
+        message: 'Unable to check storage availability',
+        usage: 0,
+        quota: 0
+      };
     }
   }
 
@@ -313,7 +562,12 @@ export class YearManagementService {
    * Save year configurations
    */
   private async saveYearConfigs(configs: IYearConfig[]): Promise<void> {
-    localStorage.setItem(this.YEAR_CONFIG_KEY, JSON.stringify(configs));
+    try {
+      localStorage.setItem(this.YEAR_CONFIG_KEY, JSON.stringify(configs));
+    } catch (error) {
+      console.error('Error saving year configs:', error);
+      throw error;
+    }
   }
 
   /**
