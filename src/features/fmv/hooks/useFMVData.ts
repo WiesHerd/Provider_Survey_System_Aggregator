@@ -96,9 +96,10 @@ export const useFMVData = () => {
           }
           
           const transformedRows = data.rows.map((row: any) => ({
+            ...row,
             id: row.id || '',
-            providerType: row.providerType || row.provider_type || '',
-            geographicRegion: row.geographicRegion || row.geographic_region || '',
+            providerType: (row as any).providerType || (row as any).provider_type || '',
+            geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || '',
             specialty: row.specialty || row.normalizedSpecialty || '',
             normalizedSpecialty: row.normalizedSpecialty || '',
             surveySource: surveyType || '',
@@ -132,38 +133,34 @@ export const useFMVData = () => {
         surveySources: new Set<string>()
       };
 
-      // Use standardized names only (like Regional Analytics) - ensure uniqueness
-      const uniqueStandardizedNames = new Set<string>();
+      // Get all standardized names from actual mappings (like Survey Analytics)
       allMappings.forEach(mapping => {
-        if (mapping.standardizedName && mapping.standardizedName.trim()) {
-          uniqueStandardizedNames.add(mapping.standardizedName.trim());
+        if (mapping.standardizedName) {
+          values.specialties.add(mapping.standardizedName);
         }
       });
 
-      // Add unique standardized names to specialties
-      uniqueStandardizedNames.forEach(name => {
-        values.specialties.add(name);
-      });
+      console.log('FMV Debug - Standardized specialties from mappings:', Array.from(values.specialties));
 
-      console.log('FMV Debug - Unique standardized specialties:', Array.from(values.specialties));
+      // Build cascading sets based on current selections (like Survey Analytics)
+      allRows.forEach(row => {
+        const surveySource = String(row.surveySource || '');
+        const providerType = String(row.providerType || '');
+        const region = String(row.geographicRegion || '');
+        const year = String(row.year || '');
 
-      // Add values from actual data (excluding specialties - we only want standardized ones)
-      allRows.forEach((row: any) => {
-        if (row.providerType) {
-          values.providerTypes.add(row.providerType);
-          console.log('FMV Debug - Found provider type:', row.providerType);
+        // Add values to sets
+        if (providerType) {
+          values.providerTypes.add(providerType);
         }
-        if (row.geographicRegion) {
-          values.regions.add(row.geographicRegion);
-          console.log('FMV Debug - Found region:', row.geographicRegion);
+        if (region) {
+          values.regions.add(region);
         }
-        if (row.surveySource) {
-          values.surveySources.add(row.surveySource);
-          console.log('FMV Debug - Found survey source:', row.surveySource);
+        if (surveySource) {
+          values.surveySources.add(surveySource);
         }
-        if (row.year) {
-          yearsSet.add(String(row.year));
-          console.log('FMV Debug - Found year:', row.year);
+        if (year) {
+          yearsSet.add(year);
         }
       });
       
