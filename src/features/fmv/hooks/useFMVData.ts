@@ -85,8 +85,10 @@ export const useFMVData = () => {
       // Collect all survey data first
       for (const survey of uploadedSurveys) {
         const surveyType = (survey as any).type || (survey as any).name || 'Unknown';
+        console.log('FMV Debug - Processing survey:', surveyType, survey.id);
         const data = await dataService.getSurveyData(survey.id);
         if (data && data.rows && Array.isArray(data.rows)) {
+          console.log('FMV Debug - Survey data rows:', data.rows.length);
           // Debug: Check what fields are available in the first row
           if (data.rows.length > 0) {
             console.log('FMV Debug - First row keys:', Object.keys(data.rows[0]));
@@ -130,19 +132,35 @@ export const useFMVData = () => {
         surveySources: new Set<string>()
       };
 
-      // Add mapped specialties
+      // Use standardized names only (like Regional Analytics) - ensure uniqueness
+      const uniqueStandardizedNames = new Set<string>();
       allMappings.forEach(mapping => {
-        if (mapping.standardizedName) {
-          values.specialties.add(mapping.standardizedName);
+        if (mapping.standardizedName && mapping.standardizedName.trim()) {
+          uniqueStandardizedNames.add(mapping.standardizedName.trim());
         }
       });
 
-      // Add values from actual data
+      // Add unique standardized names to specialties
+      uniqueStandardizedNames.forEach(name => {
+        values.specialties.add(name);
+      });
+
+      console.log('FMV Debug - Unique standardized specialties:', Array.from(values.specialties));
+
+      // Add values from actual data (excluding specialties - we only want standardized ones)
       allRows.forEach((row: any) => {
-        if (row.providerType) values.providerTypes.add(row.providerType);
-        if (row.geographicRegion) values.regions.add(row.geographicRegion);
-        if (row.specialty) values.specialties.add(row.specialty);
-        if (row.surveySource) values.surveySources.add(row.surveySource);
+        if (row.providerType) {
+          values.providerTypes.add(row.providerType);
+          console.log('FMV Debug - Found provider type:', row.providerType);
+        }
+        if (row.geographicRegion) {
+          values.regions.add(row.geographicRegion);
+          console.log('FMV Debug - Found region:', row.geographicRegion);
+        }
+        if (row.surveySource) {
+          values.surveySources.add(row.surveySource);
+          console.log('FMV Debug - Found survey source:', row.surveySource);
+        }
         if (row.year) {
           yearsSet.add(String(row.year));
           console.log('FMV Debug - Found year:', row.year);
@@ -189,13 +207,18 @@ export const useFMVData = () => {
         yearsSet.add('2022');
       }
 
+      // Final deduplication and sorting
+      const finalSpecialties = [...new Set(Array.from(values.specialties))].sort();
+      
       setUniqueValues({
-        specialties: Array.from(values.specialties).sort(),
+        specialties: finalSpecialties,
         providerTypes: Array.from(values.providerTypes).sort(),
         regions: Array.from(values.regions).sort(),
         surveySources: Array.from(values.surveySources).sort(),
         years: Array.from(yearsSet).sort((a, b) => Number(b) - Number(a))
       });
+
+      console.log('FMV Debug - Final unique specialties set:', finalSpecialties);
     } catch (err) {
       console.error('Error fetching unique values:', err);
       setError('Failed to load filter options');
