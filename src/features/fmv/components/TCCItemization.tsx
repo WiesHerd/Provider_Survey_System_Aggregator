@@ -85,34 +85,30 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
             
             {/* Type Field */}
             <div className="lg:col-span-3">
-              <Autocomplete
-                freeSolo
-                options={["Base Salary", "Bonus", "Incentive", "Other"]}
+              <TextField
+                label="Type"
                 value={component.type}
-                onInputChange={(_, newValue) => updateComponent(idx, 'type', newValue)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Type" 
-                    fullWidth 
-                    size="small"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: '8px',
-                        '&:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#3b82f6',
-                        },
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#3b82f6',
-                          borderWidth: '2px',
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: '#3b82f6',
-                      },
-                    }}
-                  />
-                )}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  updateComponent(idx, 'type', e.target.value)
+                }
+                fullWidth
+                size="small"
+                placeholder="Enter compensation type..."
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#3b82f6',
+                  },
+                }}
               />
             </div>
             
@@ -120,16 +116,16 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
             <div className="lg:col-span-3">
               <TextField
                 label="Amount"
-                type="number"
-                value={component.amount}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                  updateComponent(idx, 'amount', e.target.value)
-                }
+                type="text"
+                value={component.amount ? `$${Number(component.amount).toLocaleString()}` : ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  // Remove all non-numeric characters except decimal point
+                  const numericValue = e.target.value.replace(/[^0-9.]/g, '');
+                  updateComponent(idx, 'amount', numericValue);
+                }}
                 fullWidth
                 size="small"
-                InputProps={{ 
-                  startAdornment: <InputAdornment position="start">$</InputAdornment> 
-                }}
+                placeholder="0"
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: '8px',
@@ -191,9 +187,18 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
       </div>
       
       {/* Total TCC Display */}
-      <div className="pt-4 border-t border-gray-200">
-        <div className="text-sm text-gray-600">
-          <p><strong>Total TCC:</strong> <span className="text-blue-600 font-semibold">${total.toLocaleString()}</span></p>
+      <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Total Cash Compensation</h3>
+            <p className="text-sm text-gray-600">Sum of all compensation components</p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold text-blue-600">${total.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">
+              {components.length} component{components.length !== 1 ? 's' : ''}
+            </div>
+          </div>
         </div>
       </div>
       
