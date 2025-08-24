@@ -7,7 +7,6 @@ import {
   MappingFilters
 } from '../types/mapping';
 import { normalizeSpecialty, calculateSimilarity } from '../../../shared/utils/specialtyMatching';
-import { LLMSpecialtyMatchingService } from '../../../shared/utils/llmSpecialtyMatching';
 import { SurveySource } from '../../../shared/types';
 
 /**
@@ -115,7 +114,7 @@ export const filterLearnedMappings = (
 };
 
 /**
- * Generate mapping suggestions using local AI-powered matching
+ * Generate mapping suggestions using original logic
  */
 export const generateMappingSuggestions = async (
   unmappedSpecialties: any[], // Accept any type to handle conversion
@@ -123,9 +122,6 @@ export const generateMappingSuggestions = async (
   learnedMappings: Record<string, string>,
   config: IAutoMappingConfig
 ): Promise<IMappingSuggestion[]> => {
-  const suggestions: IMappingSuggestion[] = [];
-  const processedSpecialties = new Set<string>();
-
   // Convert unmapped specialties to the correct type
   const convertedUnmappedSpecialties: IUnmappedSpecialty[] = unmappedSpecialties.map(specialty => ({
     id: specialty.id,
@@ -134,175 +130,13 @@ export const generateMappingSuggestions = async (
     frequency: specialty.frequency
   }));
 
-  // Initialize local AI matching service
-  const llmService = new LLMSpecialtyMatchingService({
-    similarityThreshold: config.confidenceThreshold,
-    maxRetries: 3
-  });
-
-  try {
-    // Extract specialty names for LLM processing
-    const specialtyNames = convertedUnmappedSpecialties.map(s => s.name);
-    const existingMappingNames = existingMappings.map(m => m.standardizedName);
-
-    // Use local AI to group similar specialties
-    const { groups } = await llmService.matchAndGroupSpecialties(
-      specialtyNames,
-      existingMappingNames
-    );
-
-    console.log('🔍 Local AI identified groups:', groups);
-
-    // Process each group
-    groups.forEach(group => {
-      if (group.specialties.length === 0) return;
-
-      // Find the corresponding unmapped specialties for this group
-      const groupSpecialties = convertedUnmappedSpecialties.filter(s => 
-        group.specialties.includes(s.name)
-      );
-
-      // Check if any specialties in this group are already processed
-      const unprocessedSpecialties = groupSpecialties.filter(s => 
-        !processedSpecialties.has(s.id)
-      );
-
-      if (unprocessedSpecialties.length === 0) return;
-
-      // Determine the best standardized name for this group
-      let standardizedName = group.groupName;
-      let confidence = group.confidence;
-
-      // Check if we should use existing mappings
-      if (config.useExistingMappings) {
-        const existingMatch = existingMappings.find(mapping => {
-          const mappingNormalized = normalizeSpecialty(mapping.standardizedName);
-          const groupNormalized = normalizeSpecialty(group.groupName);
-          return calculateSimilarity(mappingNormalized, groupNormalized) > 0.8;
-        });
-
-        if (existingMatch) {
-          standardizedName = existingMatch.standardizedName;
-          confidence = Math.max(confidence, 0.9);
-        }
-      }
-
-      // Check learned mappings
-      const groupNormalized = normalizeSpecialty(group.groupName);
-      if (learnedMappings[groupNormalized]) {
-        standardizedName = learnedMappings[groupNormalized];
-        confidence = Math.max(confidence, 0.85);
-      }
-
-      // Apply fuzzy matching if enabled and no good match found
-      if (config.useFuzzyMatching && confidence < config.confidenceThreshold) {
-        const similarMappings = existingMappings.filter(mapping => {
-          const similarity = calculateSimilarity(
-            normalizeSpecialty(mapping.standardizedName),
-            groupNormalized
-          );
-          return similarity > 0.7;
-        });
-
-        if (similarMappings.length > 0) {
-          const bestMatch = similarMappings.reduce((best, current) => {
-            const bestSimilarity = calculateSimilarity(
-              normalizeSpecialty(best.standardizedName),
-              groupNormalized
-            );
-            const currentSimilarity = calculateSimilarity(
-              normalizeSpecialty(current.standardizedName),
-              groupNormalized
-            );
-            return currentSimilarity > bestSimilarity ? current : best;
-          });
-
-          standardizedName = bestMatch.standardizedName;
-          confidence = Math.max(confidence, 0.75);
-        }
-      }
-
-      // Only add suggestion if confidence meets threshold
-      if (confidence >= config.confidenceThreshold) {
-        suggestions.push({
-          standardizedName,
-          confidence,
-          specialties: unprocessedSpecialties.map(s => ({
-            name: s.name,
-            surveySource: s.surveySource
-          }))
-        });
-
-        // Mark specialties as processed
-        unprocessedSpecialties.forEach(s => processedSpecialties.add(s.id));
-      }
-    });
-
-    // Handle remaining unprocessed specialties individually
-    const remainingSpecialties = convertedUnmappedSpecialties.filter(s => 
-      !processedSpecialties.has(s.id)
-    );
-
-    if (remainingSpecialties.length > 0) {
-      console.log('🔍 Processing remaining specialties individually:', remainingSpecialties.length);
-      
-      const remainingNames = remainingSpecialties.map(s => s.name);
-      const { matches } = await llmService.matchAndGroupSpecialties(
-        remainingNames,
-        existingMappingNames
-      );
-
-      matches.forEach((match, index) => {
-        const specialty = remainingSpecialties[index];
-        let standardizedName = match.standardizedName;
-        let confidence = match.confidence;
-
-        // Apply the same logic as above for individual specialties
-        if (config.useExistingMappings) {
-          const existingMatch = existingMappings.find(mapping => {
-            const mappingNormalized = normalizeSpecialty(mapping.standardizedName);
-            const specialtyNormalized = normalizeSpecialty(specialty.name);
-            return calculateSimilarity(mappingNormalized, specialtyNormalized) > 0.8;
-          });
-
-          if (existingMatch) {
-            standardizedName = existingMatch.standardizedName;
-            confidence = Math.max(confidence, 0.9);
-          }
-        }
-
-        // Check learned mappings
-        const specialtyNormalized = normalizeSpecialty(specialty.name);
-        if (learnedMappings[specialtyNormalized]) {
-          standardizedName = learnedMappings[specialtyNormalized];
-          confidence = Math.max(confidence, 0.85);
-        }
-
-        if (confidence >= config.confidenceThreshold) {
-          suggestions.push({
-            standardizedName,
-            confidence,
-            specialties: [{
-              name: specialty.name,
-              surveySource: specialty.surveySource
-            }]
-          });
-        }
-      });
-    }
-
-    console.log('✅ LLM-based suggestions generated:', suggestions.length);
-    return suggestions;
-
-  } catch (error) {
-    console.error('❌ Local AI matching failed, falling back to original method:', error);
-    return generateMappingSuggestionsFallback(
-      convertedUnmappedSpecialties,
-      existingMappings,
-      learnedMappings,
-      config
-    );
-  }
+  // Use the fallback method directly
+  return generateMappingSuggestionsFallback(
+    convertedUnmappedSpecialties,
+    existingMappings,
+    learnedMappings,
+    config
+  );
 };
 
 /**

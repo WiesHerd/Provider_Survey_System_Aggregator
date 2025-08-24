@@ -131,33 +131,26 @@ const PageContent = () => {
     }
   }, [location.pathname]);
 
-  // If it's the dashboard, render without sidebar
-  if (isDashboard) {
-    return (
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    );
-  }
-
-  // For all other pages, render with sidebar
+  // Render all pages with sidebar for consistent branding
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'pl-64' : 'pl-20'}`}>
-        <PageHeader 
-          title={headerContent.title} 
-          description={headerContent.description} 
-          showDownloadButton={headerContent.showDownloadButton}
-          titleClassName={location.pathname === '/upload' ? 'text-lg' : undefined}
-          className={location.pathname === '/analytics' ? 'mb-0' : undefined}
-        />
-        <main className="bg-gray-50 px-8">
+        {!isDashboard && (
+          <PageHeader 
+            title={headerContent.title} 
+            description={headerContent.description} 
+            showDownloadButton={headerContent.showDownloadButton}
+            titleClassName={location.pathname === '/upload' ? 'text-lg' : undefined}
+            className={location.pathname === '/analytics' ? 'mb-0' : undefined}
+          />
+        )}
+        <main className={`bg-gray-50 ${isDashboard ? '' : 'px-8'}`}>
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/upload" element={<SurveyUpload />} />
               <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
               <Route path="/column-mapping" element={<ColumnMapping />} />

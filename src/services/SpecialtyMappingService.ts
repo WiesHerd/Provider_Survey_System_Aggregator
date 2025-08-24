@@ -651,7 +651,7 @@ export class SpecialtyMappingService {
     console.log(`📊 Using ${Object.keys(learnedMappings).length} learned mappings`);
 
     try {
-      // Import the LLM-based function
+      // Import the mapping suggestions function
       const { generateMappingSuggestions } = await import('../features/mapping/utils/mappingCalculations');
       
       // Convert existingMappings to the correct type
@@ -674,11 +674,11 @@ export class SpecialtyMappingService {
         config
       );
 
-      console.log(`✅ Generated ${suggestions.length} LLM-based suggestions`);
+      console.log(`✅ Generated ${suggestions.length} mapping suggestions`);
       return suggestions;
 
     } catch (error) {
-      console.error('❌ LLM-based suggestions failed, falling back to original method:', error);
+      console.error('❌ Mapping suggestions failed, falling back to original method:', error);
       
       // Fallback to original method
       const suggestions: IMappingSuggestion[] = [];
