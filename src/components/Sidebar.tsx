@@ -120,11 +120,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       {/* Branding */}
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
-          <div className="w-12 h-12 flex items-center justify-center bg-indigo-600 rounded-lg">
+          <div className="w-12 h-12 flex items-center justify-center">
             <img 
               src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} 
               alt="BenchPoint - Survey Aggregator" 
-              className="w-8 h-8 object-contain" 
+              className="w-12 h-12 object-contain" 
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 console.log('Image failed to load:', target.src);
@@ -133,8 +133,28 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                 const parent = target.parentElement;
                 if (parent) {
                   parent.innerHTML = `
-                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
+                      <defs>
+                        <linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+                          <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
+                      <circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+                      <circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+                      <circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+                      <circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+                      <circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+                      <circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+                      <line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
+                      <line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
+                      <line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
+                      <line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                      <line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                      <line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                      <circle cx="32" cy="32" r="4" fill="white"/>
+                      <circle cx="32" cy="32" r="2" fill="#4F46E5"/>
                     </svg>
                   `;
                 }
