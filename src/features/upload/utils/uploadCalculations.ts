@@ -138,6 +138,7 @@ export const filterSurveys = (surveys: UploadedSurvey[], filters: UploadGlobalFi
 /**
  * Required columns for survey data files
  * These are the standard columns that must be present for proper processing
+ * Note: We support multiple formats (Title Case, snake_case, camelCase)
  */
 export const REQUIRED_COLUMNS = [
   'Provider Name',
@@ -164,6 +165,7 @@ export const COLUMN_ALIASES: Record<string, string> = {
   'Medical Specialty': 'Specialty',
   'Department': 'Specialty',
   'Service Line': 'Specialty',
+  'specialty': 'Specialty',
   
   // Geographic Region variations
   'Region': 'Geographic Region',
@@ -171,12 +173,16 @@ export const COLUMN_ALIASES: Record<string, string> = {
   'State': 'Geographic Region',
   'Area': 'Geographic Region',
   'Market': 'Geographic Region',
+  'geographic_region': 'Geographic Region',
+  'geographicRegion': 'Geographic Region',
   
   // Provider Type variations
   'Type': 'Provider Type',
   'Provider Category': 'Provider Type',
   'Physician Type': 'Provider Type',
   'Role': 'Provider Type',
+  'provider_type': 'Provider Type',
+  'providerType': 'Provider Type',
   
   // Compensation variations
   'Salary': 'Compensation',
@@ -236,6 +242,31 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       mappedColumns[requiredColumn] = aliasMatch;
       suggestions.push(`✓ Mapped "${aliasMatch}" to "${requiredColumn}"`);
       return;
+    }
+
+    // Special handling for Provider Name - optional for current functionality
+    if (requiredColumn === 'Provider Name') {
+      // Provider Name is optional for current survey processing
+      suggestions.push(`Note: "Provider Name" is optional for survey data processing`);
+      return;
+    }
+
+    // Special handling for Compensation - check if any compensation-related columns exist
+    if (requiredColumn === 'Compensation') {
+      const compensationColumns = detectedColumns.filter(col => 
+        col.toLowerCase().includes('comp') || 
+        col.toLowerCase().includes('salary') || 
+        col.toLowerCase().includes('pay') ||
+        col.toLowerCase().includes('tcc') ||
+        col.toLowerCase().includes('wrvu') ||
+        col.toLowerCase().includes('cf')
+      );
+      
+      if (compensationColumns.length > 0) {
+        mappedColumns[requiredColumn] = compensationColumns[0]; // Use first compensation column
+        suggestions.push(`✓ Found compensation data: ${compensationColumns.join(', ')}`);
+        return;
+      }
     }
 
     // Column is missing - add to missing list
