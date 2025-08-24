@@ -1,5 +1,6 @@
 import React from 'react';
 import { Paper, Typography } from '@mui/material';
+import { CheckIcon } from '@heroicons/react/24/solid';
 import { SpecialtyCardProps } from '../types/mapping';
 import { getSurveySourceColor } from '../utils/mappingCalculations';
 
@@ -32,6 +33,13 @@ export const SpecialtyCard: React.FC<SpecialtyCardProps> = ({
         borderLeftWidth: '3px' 
       }}
     >
+      {/* Green checkmark for selected items */}
+      {isSelected && (
+        <div className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm">
+          <CheckIcon className="w-3 h-3 text-white" />
+        </div>
+      )}
+      
       <div className="flex justify-between items-center">
         <div className="flex-1">
           <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">

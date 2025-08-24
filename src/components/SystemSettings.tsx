@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { 
   ArrowDownTrayIcon, 
   TrashIcon, 
@@ -21,7 +20,7 @@ interface StorageStats {
   lastUpdated: string;
 }
 
-interface SystemSettings {
+interface SystemSettingsConfig {
   exportFormat: 'csv' | 'json';
   autoRefresh: boolean;
   showAdvancedOptions: boolean;
@@ -30,7 +29,7 @@ interface SystemSettings {
 
 const SystemSettings: React.FC = () => {
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({
+  const [settings, setSettings] = useState<SystemSettingsConfig>({
     exportFormat: 'json',
     autoRefresh: true,
     showAdvancedOptions: false,
@@ -50,8 +49,7 @@ const SystemSettings: React.FC = () => {
     try {
       const status = await indexedDBInspector.getStatus();
       if (status) {
-        // More accurate storage calculation
-        const estimatedBytesPerSurvey = 5000; // More realistic estimate
+        const estimatedBytesPerSurvey = 5000;
         setStorageStats({
           usedSpace: status.totalSurveys * estimatedBytesPerSurvey,
           surveys: status.totalSurveys,
@@ -128,7 +126,7 @@ const SystemSettings: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Modern Header */}
+        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -150,22 +148,18 @@ const SystemSettings: React.FC = () => {
 
         {/* Message Display */}
         {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`mb-6 flex items-center p-4 rounded-xl border ${
-              message.type === 'success' 
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-                : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-          >
+          <div className={`mb-6 flex items-center p-4 rounded-xl border ${
+            message.type === 'success' 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
             {message.type === 'success' ? (
               <CheckCircleIcon className="w-5 h-5 mr-3 flex-shrink-0" />
             ) : (
               <XCircleIcon className="w-5 h-5 mr-3 flex-shrink-0" />
             )}
             <span className="font-medium">{message.text}</span>
-          </motion.div>
+          </div>
         )}
 
         {/* Main Content Grid */}
@@ -173,11 +167,7 @@ const SystemSettings: React.FC = () => {
           {/* Left Column - Storage & Data Management */}
           <div className="xl:col-span-2 space-y-8">
             {/* Storage Overview */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100"
-            >
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-semibold text-gray-900 mb-2">Storage Overview</h2>
@@ -235,15 +225,10 @@ const SystemSettings: React.FC = () => {
                   Refresh Stats
                 </button>
               </div>
-            </motion.div>
+            </div>
 
             {/* Data Management */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white rounded-2xl border border-gray-200 overflow-hidden"
-            >
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <div className="px-8 py-6 border-b border-gray-100">
                 <div className="flex items-center">
                   <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center mr-4">
@@ -302,18 +287,13 @@ const SystemSettings: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
 
           {/* Right Column - Settings & Info */}
           <div className="space-y-8">
             {/* Export Settings */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-2xl border border-gray-200 overflow-hidden"
-            >
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center">
                   <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
@@ -330,7 +310,7 @@ const SystemSettings: React.FC = () => {
                   </label>
                   <select
                     value={settings.exportFormat}
-                    onChange={(e) => setSettings(prev => ({ ...prev, exportFormat: e.target.value as 'csv' | 'json' }))}
+                    onChange={(e) => setSettings((prev: SystemSettingsConfig) => ({ ...prev, exportFormat: e.target.value as 'csv' | 'json' }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                   >
                     <option value="json">JSON (Recommended)</option>
@@ -343,7 +323,7 @@ const SystemSettings: React.FC = () => {
                     type="checkbox"
                     id="autoRefresh"
                     checked={settings.autoRefresh}
-                    onChange={(e) => setSettings(prev => ({ ...prev, autoRefresh: e.target.checked }))}
+                    onChange={(e) => setSettings((prev: SystemSettingsConfig) => ({ ...prev, autoRefresh: e.target.checked }))}
                     className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                   />
                   <label htmlFor="autoRefresh" className="ml-3 text-sm text-gray-700">
@@ -358,15 +338,10 @@ const SystemSettings: React.FC = () => {
                   Save Settings
                 </button>
               </div>
-            </motion.div>
+            </div>
 
             {/* System Information */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border border-gray-200"
-            >
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border border-gray-200">
               <div className="flex items-center mb-6">
                 <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
                   <InformationCircleIcon className="w-4 h-4 text-green-600" />
@@ -404,7 +379,7 @@ const SystemSettings: React.FC = () => {
                   For backup, use the export feature regularly to save your work.
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>

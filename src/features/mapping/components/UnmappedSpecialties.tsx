@@ -2,7 +2,6 @@ import React from 'react';
 import {
   TextField,
   Typography,
-  Chip,
   Paper,
   Button,
   InputAdornment,
@@ -71,32 +70,11 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
                {/* Selection Counter */}
         {selectedSpecialties.length > 0 && (
           <div className="mb-4 flex items-center justify-end">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 font-medium">
               {selectedSpecialties.length} selected
             </div>
           </div>
         )}
-
-      {/* Selected Specialties Display */}
-      {selectedSpecialties.length > 0 && (
-        <div className="mb-4">
-          <Typography variant="subtitle2" className="mb-2 text-sm">
-            Selected Specialties:
-          </Typography>
-          <div className="flex flex-wrap gap-2">
-            {selectedSpecialties.map((specialty) => (
-              <Chip
-                key={specialty.id}
-                label={`${specialty.name} (${specialty.surveySource})`}
-                onDelete={() => onSpecialtySelect(specialty)}
-                color="primary"
-                size="small"
-                sx={{ fontSize: '0.75rem' }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Specialties Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

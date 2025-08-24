@@ -129,8 +129,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           </div>
           {isOpen && (
             <span className="ml-3 font-bold text-xl flex items-center" style={{ letterSpacing: 0.5 }}>
-              <span className="text-gray-900">Contract</span>
-              <span className="text-indigo-600">Hub</span>
+              <span className="text-gray-900">Bench</span>
+              <span className="text-indigo-600">Point</span>
             </span>
           )}
         </div>
