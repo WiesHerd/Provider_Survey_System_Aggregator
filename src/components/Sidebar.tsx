@@ -120,12 +120,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       {/* Branding */}
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
-          <div className="w-12 h-12 flex items-center justify-center">
-            <img src="/benchpoint-icon.svg" alt="BenchPoint - Survey Aggregator" className="w-10 h-10 object-contain" onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              console.log('Image failed to load:', target.src);
-              target.style.display = 'none';
-            }} />
+          <div className="w-12 h-12 flex items-center justify-center bg-indigo-600 rounded-lg">
+            <img 
+              src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} 
+              alt="BenchPoint - Survey Aggregator" 
+              className="w-8 h-8 object-contain" 
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                console.log('Image failed to load:', target.src);
+                // Show fallback icon if image fails
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.innerHTML = `
+                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                  `;
+                }
+              }} 
+            />
           </div>
           {isOpen && (
             <span className="ml-3 font-bold text-xl flex items-center" style={{ letterSpacing: 0.5 }}>
