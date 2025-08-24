@@ -25,6 +25,7 @@ interface ColumnValidationDisplayProps {
 
 /**
  * ColumnValidationDisplay component for showing file validation results
+ * Only displays when there are validation issues
  * 
  * @param validation - Column validation result
  * @param fileName - Name of the file being validated
@@ -33,21 +34,9 @@ export const ColumnValidationDisplay: React.FC<ColumnValidationDisplayProps> = (
   validation,
   fileName
 }) => {
+  // Only show validation display if there are actual issues
   if (validation.isValid) {
-    return (
-      <Alert severity="success" sx={{ mt: 2 }}>
-        <Typography variant="body2" fontWeight="medium">
-          ✓ File "{fileName}" has all required columns
-        </Typography>
-        {validation.suggestions.length > 0 && (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              {validation.suggestions.join(', ')}
-            </Typography>
-          </Box>
-        )}
-      </Alert>
-    );
+    return null; // Don't show anything for valid files
   }
 
   return (

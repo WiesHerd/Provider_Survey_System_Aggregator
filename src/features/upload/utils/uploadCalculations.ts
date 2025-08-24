@@ -240,14 +240,12 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
     );
     if (aliasMatch) {
       mappedColumns[requiredColumn] = aliasMatch;
-      suggestions.push(`✓ Mapped "${aliasMatch}" to "${requiredColumn}"`);
       return;
     }
 
     // Special handling for Provider Name - optional for current functionality
     if (requiredColumn === 'Provider Name') {
       // Provider Name is optional for current survey processing
-      suggestions.push(`Note: "Provider Name" is optional for survey data processing`);
       return;
     }
 
@@ -264,7 +262,6 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       
       if (compensationColumns.length > 0) {
         mappedColumns[requiredColumn] = compensationColumns[0]; // Use first compensation column
-        suggestions.push(`✓ Found compensation data: ${compensationColumns.join(', ')}`);
         return;
       }
     }
