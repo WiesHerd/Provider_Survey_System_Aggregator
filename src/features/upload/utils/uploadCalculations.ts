@@ -10,7 +10,7 @@ import {
   UploadGlobalFilters,
   FileWithPreview 
 } from '../types/upload';
-import { formatFileSize, formatDate } from '@/shared/utils';
+import { formatFileSize, formatDate } from '../../../shared/utils';
 
 /**
  * Calculate survey statistics from file content
@@ -136,11 +136,140 @@ export const filterSurveys = (surveys: UploadedSurvey[], filters: UploadGlobalFi
 };
 
 /**
- * Validate file upload
+ * Required columns for survey data files
+ * These are the standard columns that must be present for proper processing
+ */
+export const REQUIRED_COLUMNS = [
+  'Provider Name',
+  'Specialty', 
+  'Geographic Region',
+  'Provider Type',
+  'Compensation'
+] as const;
+
+/**
+ * Common column aliases for fuzzy matching
+ * Maps alternative column names to their standard required column names
+ */
+export const COLUMN_ALIASES: Record<string, string> = {
+  // Provider Name variations
+  'Physician Name': 'Provider Name',
+  'Doctor Name': 'Provider Name',
+  'Name': 'Provider Name',
+  'Provider': 'Provider Name',
+  'Physician': 'Provider Name',
+  
+  // Specialty variations
+  'Specialty Type': 'Specialty',
+  'Medical Specialty': 'Specialty',
+  'Department': 'Specialty',
+  'Service Line': 'Specialty',
+  
+  // Geographic Region variations
+  'Region': 'Geographic Region',
+  'Location': 'Geographic Region',
+  'State': 'Geographic Region',
+  'Area': 'Geographic Region',
+  'Market': 'Geographic Region',
+  
+  // Provider Type variations
+  'Type': 'Provider Type',
+  'Provider Category': 'Provider Type',
+  'Physician Type': 'Provider Type',
+  'Role': 'Provider Type',
+  
+  // Compensation variations
+  'Salary': 'Compensation',
+  'Total Compensation': 'Compensation',
+  'Annual Compensation': 'Compensation',
+  'Pay': 'Compensation',
+  'Income': 'Compensation'
+};
+
+/**
+ * Column validation result interface
+ */
+export interface ColumnValidationResult {
+  isValid: boolean;
+  detectedColumns: string[];
+  missingColumns: string[];
+  mappedColumns: Record<string, string>;
+  suggestions: string[];
+  errors: string[];
+}
+
+/**
+ * Validate CSV columns against required columns
+ * 
+ * @param headers - Array of column headers from CSV
+ * @returns Column validation result with detailed feedback
+ */
+export const validateColumns = (headers: string[]): ColumnValidationResult => {
+  const detectedColumns = headers.map(h => h.trim());
+  const missingColumns: string[] = [];
+  const mappedColumns: Record<string, string> = {};
+  const suggestions: string[] = [];
+  const errors: string[] = [];
+
+  // Check each required column
+  REQUIRED_COLUMNS.forEach(requiredColumn => {
+    // Try exact match first
+    if (detectedColumns.includes(requiredColumn)) {
+      mappedColumns[requiredColumn] = requiredColumn;
+      return;
+    }
+
+    // Try case-insensitive match
+    const caseInsensitiveMatch = detectedColumns.find(
+      col => col.toLowerCase() === requiredColumn.toLowerCase()
+    );
+    if (caseInsensitiveMatch) {
+      mappedColumns[requiredColumn] = caseInsensitiveMatch;
+      return;
+    }
+
+    // Try alias matching
+    const aliasMatch = detectedColumns.find(col => 
+      COLUMN_ALIASES[col] === requiredColumn
+    );
+    if (aliasMatch) {
+      mappedColumns[requiredColumn] = aliasMatch;
+      suggestions.push(`✓ Mapped "${aliasMatch}" to "${requiredColumn}"`);
+      return;
+    }
+
+    // Column is missing - add to missing list
+    missingColumns.push(requiredColumn);
+    
+    // Find potential matches for suggestions
+    const potentialMatches = detectedColumns.filter(col => 
+      col.toLowerCase().includes(requiredColumn.toLowerCase().split(' ')[0]) ||
+      requiredColumn.toLowerCase().includes(col.toLowerCase().split(' ')[0])
+    );
+    
+    if (potentialMatches.length > 0) {
+      suggestions.push(`Missing "${requiredColumn}". Did you mean: ${potentialMatches.join(', ')}?`);
+    } else {
+      errors.push(`Required column "${requiredColumn}" not found`);
+    }
+  });
+
+  return {
+    isValid: missingColumns.length === 0,
+    detectedColumns,
+    missingColumns,
+    mappedColumns,
+    suggestions,
+    errors
+  };
+};
+
+/**
+ * Enhanced file validation with column checking
  * 
  * @param file - File to validate
  * @param existingFiles - Array of existing files
- * @returns Validation result
+ * @returns Enhanced validation result
  */
 export const validateFileUpload = (
   file: File, 

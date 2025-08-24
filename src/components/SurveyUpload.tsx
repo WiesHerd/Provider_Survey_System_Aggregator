@@ -8,6 +8,8 @@ import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
 import { TableFilters } from './TableFilters';
 import LoadingSpinner from './ui/loading-spinner';
 import { useYear } from '../contexts/YearContext';
+import { validateColumns } from '../features/upload/utils/uploadCalculations';
+import { ColumnValidationDisplay } from '../features/upload/components/ColumnValidationDisplay';
 
 
 const SURVEY_OPTIONS = [
@@ -102,6 +104,9 @@ const SurveyUpload: React.FC = () => {
     providerTypes: new Set(),
     regions: new Set()
   });
+
+  // Add state for column validation
+  const [columnValidation, setColumnValidation] = useState<any>(null);
 
   // Add state for collapsible sections
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
@@ -238,6 +243,8 @@ const SurveyUpload: React.FC = () => {
       id: Math.random().toString(36).substring(7)
     }));
     setFiles(prev => [...prev, ...newFiles]);
+    setError('');
+    setColumnValidation(null); // Clear previous validation
   }, []);
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -325,6 +332,17 @@ const SurveyUpload: React.FC = () => {
       const rows = text.split('\n').filter(row => row.trim());
       const headers = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
       const dataRows = rows.slice(1).filter(row => row.trim());
+
+      // Validate columns before processing
+      const validation = validateColumns(headers);
+      setColumnValidation(validation);
+      
+      if (!validation.isValid) {
+        setError('File has missing required columns. Please check the validation details below.');
+        setIsUploading(false);
+        setUploadProgress(0);
+        return;
+      }
 
       setUploadProgress(30);
 
@@ -684,6 +702,14 @@ const SurveyUpload: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              )}
+
+              {/* Column Validation Display */}
+              {columnValidation && (
+                <ColumnValidationDisplay 
+                  validation={columnValidation} 
+                  fileName={files[0]?.name || ''} 
+                />
               )}
             </>
             )}
