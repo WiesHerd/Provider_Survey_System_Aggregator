@@ -624,45 +624,129 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           </FormControl>
 
           <FormControl fullWidth size="small">
-            <InputLabel className="text-sm font-medium text-gray-700 mb-2">Provider Type</InputLabel>
-            <Select
-              name="providerType"
+            <Autocomplete
+              options={cascadingFilterOptions.providerTypes}
               value={globalFilters.providerType}
-              onChange={handleFilterChange}
-              label="Provider Type"
-              className="h-10"
+              onChange={(event: any, newValue: string | null) => {
+                const syntheticEvent = {
+                  target: {
+                    name: 'providerType',
+                    value: newValue || ''
+                  }
+                };
+                handleFilterChange(syntheticEvent);
+              }}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                return options.filter((option: string) =>
+                  option.toLowerCase().includes(inputValue.toLowerCase())
+                );
+              }}
+              getOptionLabel={(option: string) => option}
+              isOptionEqualToValue={(option: string, value: string) => option === value}
+              clearOnBlur={false}
+              selectOnFocus
+              freeSolo
+              renderInput={(params: any) => (
+                <TextField
+                  {...params}
+                  label="Provider Type"
+                  placeholder="Search provider types..."
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                      </svg>
+                    ),
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '8px',
+                    },
+                    '& .MuiAutocomplete-input': {
+                      padding: '8px 12px',
+                    },
+                    '& .MuiAutocomplete-inputRoot': {
+                      padding: '0 8px',
+                    },
+                  }}
+                />
+              )}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
-                }
+                },
+                '& .MuiAutocomplete-input': {
+                  padding: '8px 12px',
+                },
+                '& .MuiAutocomplete-inputRoot': {
+                  padding: '0 8px',
+                },
               }}
-            >
-              <MenuItem value="">All</MenuItem>
-              {cascadingFilterOptions.providerTypes.map(type => (
-                <MenuItem key={type} value={type}>{type}</MenuItem>
-              ))}
-            </Select>
+            />
           </FormControl>
 
           <FormControl fullWidth size="small">
-            <InputLabel className="text-sm font-medium text-gray-700 mb-2">Geographic Region</InputLabel>
-            <Select
-              name="region"
+            <Autocomplete
+              options={cascadingFilterOptions.regions}
               value={globalFilters.region}
-              onChange={handleFilterChange}
-              label="Geographic Region"
-              className="h-10"
+              onChange={(event: any, newValue: string | null) => {
+                const syntheticEvent = {
+                  target: {
+                    name: 'region',
+                    value: newValue || ''
+                  }
+                };
+                handleFilterChange(syntheticEvent);
+              }}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                return options.filter((option: string) =>
+                  option.toLowerCase().includes(inputValue.toLowerCase())
+                );
+              }}
+              getOptionLabel={(option: string) => option}
+              isOptionEqualToValue={(option: string, value: string) => option === value}
+              clearOnBlur={false}
+              selectOnFocus
+              freeSolo
+              renderInput={(params: any) => (
+                <TextField
+                  {...params}
+                  label="Geographic Region"
+                  placeholder="Search regions..."
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                      </svg>
+                    ),
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '8px',
+                    },
+                    '& .MuiAutocomplete-input': {
+                      padding: '8px 12px',
+                    },
+                    '& .MuiAutocomplete-inputRoot': {
+                      padding: '0 8px',
+                    },
+                  }}
+                />
+              )}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
-                }
+                },
+                '& .MuiAutocomplete-input': {
+                  padding: '8px 12px',
+                },
+                '& .MuiAutocomplete-inputRoot': {
+                  padding: '0 8px',
+                },
               }}
-            >
-              <MenuItem value="">All</MenuItem>
-              {cascadingFilterOptions.regions.map(region => (
-                <MenuItem key={region} value={region}>{region}</MenuItem>
-              ))}
-            </Select>
+            />
           </FormControl>
         </div>
       </Box>
