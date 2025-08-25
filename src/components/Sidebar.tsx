@@ -122,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         <div className="flex items-center">
           <div className="w-12 h-12 flex items-center justify-center">
                          <img 
-               src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=2'} 
+               src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=3'} 
                alt="BenchPoint - Survey Aggregator" 
                className="w-12 h-12 object-contain" 
               onError={(e) => {
