@@ -140,7 +140,7 @@ const Dashboard: React.FC = () => {
                {/* Logo */}
                <div className="relative">
                  <img 
-                                       src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=5'} 
+                                       src={process.env.PUBLIC_URL + '/favicon-32x32.svg?v=5'} 
                    alt="BenchPoint Logo" 
                    className="w-16 h-16 object-contain"
                    onError={(e) => {
