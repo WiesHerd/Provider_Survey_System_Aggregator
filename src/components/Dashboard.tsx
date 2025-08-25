@@ -137,15 +137,45 @@ const Dashboard: React.FC = () => {
            {/* Logo and Brand */}
            <div className="flex items-center justify-center mb-6">
              <div className="flex items-center space-x-4">
-               {/* Logo */}
+                              {/* Logo */}
                <div className="relative">
                  <img 
-                                       src={process.env.PUBLIC_URL + '/favicon-32x32.svg?v=5'} 
+                   src={process.env.PUBLIC_URL + '/favicon-32x32.svg?v=5'} 
                    alt="BenchPoint Logo" 
                    className="w-16 h-16 object-contain"
                    onError={(e) => {
                      console.log('Dashboard logo failed to load:', (e.target as HTMLImageElement).src);
-                     (e.target as HTMLImageElement).style.display = 'none';
+                     // Replace with inline SVG fallback
+                     const target = e.target as HTMLImageElement;
+                     target.style.display = 'none';
+                     const parent = target.parentElement;
+                     if (parent) {
+                       parent.innerHTML = `
+                         <svg class="w-16 h-16" fill="currentColor" viewBox="0 0 64 64">
+                           <defs>
+                             <linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                               <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+                               <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+                             </linearGradient>
+                           </defs>
+                           <circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
+                           <circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+                           <circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+                           <circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+                           <circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+                           <circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+                           <circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+                           <line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
+                           <line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
+                           <line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
+                           <line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                           <line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                           <line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                           <circle cx="32" cy="32" r="4" fill="white"/>
+                           <circle cx="32" cy="32" r="2" fill="#4F46E5"/>
+                         </svg>
+                       `;
+                     }
                    }}
                  />
                </div>
