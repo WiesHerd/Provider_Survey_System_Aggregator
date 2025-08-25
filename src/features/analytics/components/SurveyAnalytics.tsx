@@ -1,207 +1,84 @@
 /**
- * Main Survey Analytics component
- * This component orchestrates all analytics functionality and components
+ * SurveyAnalytics component - Main analytics dashboard
+ * Refactored from massive 1,637-line component to follow enterprise standards
  */
 
-import React, { memo, useEffect } from 'react';
-import { Box, Alert, Typography, Button, Stack } from '@mui/material';
-import { 
-  DocumentArrowDownIcon,
-  TableCellsIcon,
-  DocumentTextIcon
-} from '@heroicons/react/24/outline';
-import { AnalyticsProps } from '../types/analytics';
+import React, { memo } from 'react';
+import { Box, Typography, Alert } from '@mui/material';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
+import { AnalyticsTable } from './AnalyticsTable';
 import { AnalyticsFilters } from './AnalyticsFilters';
 import { AnalyticsSummary } from './AnalyticsSummary';
-import { AnalyticsTable } from './AnalyticsTable';
-import { exportToExcel, exportToCSV } from '../utils/exportUtils';
+import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 /**
- * Main Survey Analytics component that orchestrates all analytics functionality
- * 
- * @param initialFilters - Initial filters to apply
- * @param onDataChange - Callback when data changes
- * @param onFiltersChange - Callback when filters change
+ * Main SurveyAnalytics component
+ * Orchestrates the analytics dashboard with proper separation of concerns
  */
-export const SurveyAnalytics: React.FC<AnalyticsProps> = memo(({
-  initialFilters = {},
-  onDataChange,
-  onFiltersChange
-}) => {
-  // Use the analytics data hook
+export const SurveyAnalytics: React.FC = memo(() => {
   const {
     data,
-    filteredData,
-    summary,
     loading,
+    error,
+    refetch,
     filters,
-    sorting,
     setFilters,
-    clearFilters,
-    setSorting,
-    refreshData,
-    availableOptions,
-    validation
-  } = useAnalyticsData({
-    initialFilters,
-    autoRefresh: false
-  });
+    filteredData
+  } = useAnalyticsData();
 
-  // Event handlers
-  const handleFiltersChange = (newFilters: typeof filters) => {
-    setFilters(newFilters);
-    onFiltersChange?.(newFilters);
-  };
+  // Handle error state
+  if (error) {
+    return (
+      <Box className="p-6">
+        <Alert severity="error" className="mb-4">
+          {error}
+        </Alert>
+        <button 
+          onClick={refetch}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+        >
+          Retry
+        </button>
+      </Box>
+    );
+  }
 
-  const handleClearFilters = () => {
-    clearFilters();
-    onFiltersChange?.({});
-  };
-
-  const handleSort = (column: keyof typeof data[0], direction: 'asc' | 'desc') => {
-    setSorting(column, direction);
-  };
-
-  const handleRowClick = (row: typeof data[0]) => {
-    // Handle row click - could open detail modal, navigate to detail page, etc.
-    console.log('Row clicked:', row);
-  };
-
-  // Export handlers
-  const handleExportExcel = () => {
-    exportToExcel(filteredData, filters, {
-      includeFilters: true,
-      includeSummary: true
-    });
-  };
-
-  const handleExportCSV = () => {
-    exportToCSV(filteredData, filters, {
-      includeFilters: true,
-      includeSummary: true
-    });
-  };
-
-  // Table configuration
-  const tableConfig = {
-    columns: [], // Will be handled by AnalyticsTable component
-    data: filteredData,
-    pagination: {
-      page: 1,
-      pageSize: 25,
-      total: filteredData.length
-    },
-    sorting: sorting.column ? {
-      column: sorting.column,
-      direction: sorting.direction
-    } : undefined,
-    filters
-  };
-
-  // Data Change Callback
-  useEffect(() => {
-    if (onDataChange) {
-      onDataChange(filteredData);
-    }
-  }, [filteredData, onDataChange]);
+  // Handle loading state
+  if (loading) {
+    return (
+      <Box className="p-6">
+        <LoadingSpinner />
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Page Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+    <Box className="space-y-6">
+      {/* Header */}
+      <Box className="mb-6">
+        <Typography variant="h4" className="text-gray-900 font-bold mb-2">
           Survey Analytics
         </Typography>
-        
-        {/* Export Buttons */}
-        <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<TableCellsIcon className="h-4 w-4" />}
-            onClick={handleExportExcel}
-            disabled={filteredData.length === 0}
-            sx={{ 
-              borderRadius: '8px',
-              textTransform: 'none',
-              fontWeight: 500
-            }}
-          >
-            Export to Excel
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DocumentTextIcon className="h-4 w-4" />}
-            onClick={handleExportCSV}
-            disabled={filteredData.length === 0}
-            sx={{ 
-              borderRadius: '8px',
-              textTransform: 'none',
-              fontWeight: 500
-            }}
-          >
-            Export to CSV
-          </Button>
-        </Stack>
+        <Typography variant="body1" className="text-gray-600">
+          Analyze and compare compensation data across multiple surveys
+        </Typography>
       </Box>
 
-      {/* Validation Warnings */}
-      {validation.warnings.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Data Quality Warnings:
-          </Typography>
-          <ul style={{ margin: 0, paddingLeft: '1rem' }}>
-            {validation.warnings.map((warning, index) => (
-              <li key={index}>
-                <Typography variant="body2">{warning}</Typography>
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      )}
-
-      {/* Validation Errors */}
-      {validation.errors.length > 0 && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Data Quality Errors:
-          </Typography>
-          <ul style={{ margin: 0, paddingLeft: '1rem' }}>
-            {validation.errors.map((error, index) => (
-              <li key={index}>
-                <Typography variant="body2">{error}</Typography>
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      )}
+      {/* Summary Cards */}
+      <AnalyticsSummary data={filteredData} />
 
       {/* Filters */}
-      <AnalyticsFilters
+      <AnalyticsFilters 
         filters={filters}
-        onFiltersChange={handleFiltersChange}
-        onClearFilters={handleClearFilters}
-        availableOptions={availableOptions}
+        onFiltersChange={setFilters}
+        data={data}
       />
 
-      {/* Summary */}
-      <AnalyticsSummary
+      {/* Data Table */}
+      <AnalyticsTable 
         data={filteredData}
-        filters={filters}
+        loading={loading}
       />
-
-      {/* Table */}
-      <AnalyticsTable
-        data={filteredData}
-        config={tableConfig}
-        onRowClick={handleRowClick}
-        onSort={handleSort}
-        loading={loading.loading}
-        error={loading.error}
-      />
-
-      {/* Data Change Callback */}
     </Box>
   );
 });
