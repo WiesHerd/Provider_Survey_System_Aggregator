@@ -92,7 +92,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
                 <TextField
                   {...params}
                   label="Survey Type"
-                                     placeholder="Search survey type..."
+                                     placeholder="Search type"
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: (
@@ -154,7 +154,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
               value={formState.customSurveyType}
               onChange={handleCustomSurveyTypeChange}
               disabled={disabled}
-                             placeholder="Enter custom type"
+                             placeholder="Custom type"
               InputProps={{
                 startAdornment: (
                   <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -180,7 +180,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
             value={formState.surveyYear}
             onChange={handleSurveyYearChange}
             disabled={disabled}
-            placeholder="2024"
+            placeholder="Year"
             type="text"
             inputProps={{
               pattern: "[0-9]*",
