@@ -587,7 +587,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 <TextField
                   {...params}
                   label="Specialty"
-                  placeholder="Search specialties..."
+                                     placeholder="Search specialties"
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: (
@@ -650,7 +650,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 <TextField
                   {...params}
                   label="Provider Type"
-                  placeholder="Search provider types..."
+                                     placeholder="Search provider types"
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: (
@@ -713,7 +713,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 <TextField
                   {...params}
                   label="Geographic Region"
-                  placeholder="Search regions..."
+                                     placeholder="Search regions"
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: (

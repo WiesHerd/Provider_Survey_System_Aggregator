@@ -15,7 +15,8 @@ import {
   Typography,
   FormControlLabel,
   Switch,
-  Alert
+  Alert,
+  Autocomplete
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { UploadFormProps } from '../types/upload';
@@ -36,7 +37,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
   disabled = false
 }) => {
   // Event handlers
-  const handleSurveyTypeChange = (e: SelectChangeEvent<string>) => {
+  const handleSurveyTypeChange = (e: SelectChangeEvent<string> | { target: { value: string } }) => {
     onFormChange('surveyType', e.target.value);
   };
 
@@ -91,7 +92,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
                 <TextField
                   {...params}
                   label="Survey Type"
-                  placeholder="Select or search survey type..."
+                                     placeholder="Search survey type..."
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: (
@@ -153,7 +154,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
               value={formState.customSurveyType}
               onChange={handleCustomSurveyTypeChange}
               disabled={disabled}
-              placeholder="Enter custom survey type"
+                             placeholder="Enter custom type"
               InputProps={{
                 startAdornment: (
                   <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
