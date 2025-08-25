@@ -36,7 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const listRef = useRef<HTMLUListElement>(null);
   
   const menuItems: MenuItem[] = [
-    { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
+    { name: 'Home', icon: HomeIcon, path: '/dashboard' },
     { name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
     { name: 'Specialty Mapping', icon: LinkIcon, path: '/specialty-mapping' },
     { name: 'Column Mapping', icon: TableCellsIcon, path: '/column-mapping' },
@@ -121,10 +121,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       <div className="flex items-center h-16 px-4">
         <div className="flex items-center">
           <div className="w-12 h-12 flex items-center justify-center">
-            <img 
-              src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} 
-              alt="BenchPoint - Survey Aggregator" 
-              className="w-12 h-12 object-contain" 
+                         <img 
+               src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=2'} 
+               alt="BenchPoint - Survey Aggregator" 
+               className="w-12 h-12 object-contain" 
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 console.log('Image failed to load:', target.src);
