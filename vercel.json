@@ -28,24 +28,16 @@
       "dest": "/static/$1"
     },
     {
-      "src": "/contract-hub-icon.svg",
-      "dest": "/contract-hub-icon.svg"
+      "src": "/favicon-16x16.svg",
+      "dest": "/favicon-16x16.svg"
     },
     {
-      "src": "/contract-hub-favicon-16x16.svg",
-      "dest": "/contract-hub-favicon-16x16.svg"
+      "src": "/favicon-32x32.svg",
+      "dest": "/favicon-32x32.svg"
     },
     {
-      "src": "/contract-hub-favicon-32x32.svg",
-      "dest": "/contract-hub-favicon-32x32.svg"
-    },
-    {
-      "src": "/contract-hub-app-icon.svg",
-      "dest": "/contract-hub-app-icon.svg"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/favicon.ico"
+      "src": "/benchpoint-icon.svg",
+      "dest": "/benchpoint-icon.svg"
     },
     {
       "src": "/manifest.json",
