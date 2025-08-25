@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getDataService } from '../../../services/DataService';
 import { ISurveyRow } from '../../../types/survey';
 import { ISpecialtyMapping } from '../../../types/specialty';
-import { AggregatedData } from '../utils/analyticsCalculations';
+import { AggregatedData, AnalyticsFilters } from '../types/analytics';
 import { performanceMonitor } from '../../../shared/utils/performance';
 
 interface UseAnalyticsDataReturn {
@@ -20,14 +20,7 @@ interface UseAnalyticsDataReturn {
   filteredData: AggregatedData[];
 }
 
-export interface AnalyticsFilters {
-  specialty?: string;
-  providerType?: string;
-  region?: string;
-  surveySource?: string;
-  year?: string;
-  search?: string;
-}
+
 
 const SHOW_DEBUG = false; // Set to false for production performance
 
@@ -45,7 +38,7 @@ export const useAnalyticsData = (): UseAnalyticsDataReturn => {
 
       const dataService = getDataService();
       const surveys = await dataService.getAllSurveys();
-      const mappings = await dataService.getSpecialtyMappings();
+      const mappings = await dataService.getAllSpecialtyMappings();
 
       if (SHOW_DEBUG) {
         console.log('Fetched surveys:', surveys.length);
@@ -65,7 +58,7 @@ export const useAnalyticsData = (): UseAnalyticsDataReturn => {
   };
 
   // Process survey data into aggregated format
-  const processSurveyData = async (surveys: ISurveyRow[], mappings: ISpecialtyMapping[]): Promise<AggregatedData[]> => {
+  const processSurveyData = async (surveys: any[], mappings: ISpecialtyMapping[]): Promise<AggregatedData[]> => {
     return new Promise((resolve) => {
       // Use setTimeout to make this asynchronous and avoid blocking UI
       setTimeout(() => {
@@ -78,10 +71,13 @@ export const useAnalyticsData = (): UseAnalyticsDataReturn => {
             
             if (!aggregatedData[key]) {
               aggregatedData[key] = {
+                id: key, // Use the key as the ID
                 standardizedName: survey.standardizedName || '',
                 surveySource: survey.surveySource,
                 surveySpecialty: survey.surveySpecialty,
                 geographicRegion: survey.geographicRegion,
+                providerType: survey.providerType || 'Unknown',
+                surveyYear: survey.surveyYear || 'Unknown',
                 n_orgs: 0,
                 n_incumbents: 0,
                 tcc_p25: 0,
@@ -96,6 +92,7 @@ export const useAnalyticsData = (): UseAnalyticsDataReturn => {
                 cf_p50: 0,
                 cf_p75: 0,
                 cf_p90: 0,
+                rawData: survey.rawData || {}
               };
             }
 

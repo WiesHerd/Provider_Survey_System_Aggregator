@@ -9,7 +9,7 @@ import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { AnalyticsTable } from './AnalyticsTable';
 import { AnalyticsFilters } from './AnalyticsFilters';
 import { AnalyticsSummary } from './AnalyticsSummary';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import LoadingSpinner from '../../../components/ui/loading-spinner';
 
 /**
  * Main SurveyAnalytics component
@@ -65,19 +65,37 @@ export const SurveyAnalytics: React.FC = memo(() => {
       </Box>
 
       {/* Summary Cards */}
-      <AnalyticsSummary data={filteredData} />
+      <AnalyticsSummary data={filteredData} filters={filters} />
 
       {/* Filters */}
       <AnalyticsFilters 
         filters={filters}
         onFiltersChange={setFilters}
-        data={data}
+        onClearFilters={() => setFilters({})}
+        availableOptions={{
+          specialties: [...new Set(data.map(row => row.surveySpecialty))].sort(),
+          providerTypes: [...new Set(data.map(row => row.providerType))].sort(),
+          regions: [...new Set(data.map(row => row.geographicRegion))].sort(),
+          surveySources: [...new Set(data.map(row => row.surveySource))].sort(),
+          years: [...new Set(data.map(row => row.surveyYear))].sort()
+        }}
       />
 
       {/* Data Table */}
       <AnalyticsTable 
         data={filteredData}
+        config={{
+          columns: [],
+          data: filteredData,
+          pagination: {
+            page: 1,
+            pageSize: 25,
+            total: filteredData.length
+          }
+        }}
         loading={loading}
+        onRowClick={(row) => console.log('Row clicked:', row)}
+        onSort={(column, direction) => console.log('Sort:', column, direction)}
       />
     </Box>
   );
