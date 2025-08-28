@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { FormControl, InputLabel, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
+import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
-import { ISurveyData, ISurveyRow, ISurveyMetadata } from '../types/survey';
-import { TableFilters } from './TableFilters';
+import { ISurveyRow, ISurveyMetadata } from '../types/survey';
 import LoadingSpinner from './ui/loading-spinner';
 import { useYear } from '../contexts/YearContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
@@ -29,13 +28,7 @@ interface FileWithPreview extends File {
   uploadDate?: Date;
 }
 
-interface StorageSurvey {
-  id: string;
-  metadata: ISurveyMetadata & {
-    surveyType: string;
-    fileContent: string;
-  };
-}
+
 
 interface UploadedSurveyMetadata {
   id: string;
@@ -95,17 +88,6 @@ const SurveyUpload: React.FC = () => {
     region: ''
   });
 
-  // Add state for unique values across all surveys
-  const [uniqueValues, setUniqueValues] = useState<{
-    specialties: Set<string>;
-    providerTypes: Set<string>;
-    regions: Set<string>;
-  }>({
-    specialties: new Set(),
-    providerTypes: new Set(),
-    regions: new Set()
-  });
-
   // Add state for column validation
   const [columnValidation, setColumnValidation] = useState<any>(null);
 
@@ -124,34 +106,7 @@ const SurveyUpload: React.FC = () => {
 
 
 
-  // Update unique values when surveys change
-  useEffect(() => {
-    const newValues = {
-      specialties: new Set<string>(),
-      providerTypes: new Set<string>(),
-      regions: new Set<string>()
-    };
 
-    uploadedSurveys.forEach(survey => {
-      if (!survey.fileContent) return;  // Skip if no file content
-      
-      const lines = survey.fileContent.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      
-      const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
-      const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
-      const regionIdx = headers.findIndex(h => h.includes('region') || h.includes('geography'));
-
-      lines.slice(1).forEach(line => {
-        const values = line.split(',').map(v => v.trim());
-        if (specialtyIdx >= 0) newValues.specialties.add(values[specialtyIdx]);
-        if (providerTypeIdx >= 0) newValues.providerTypes.add(values[providerTypeIdx]);
-        if (regionIdx >= 0) newValues.regions.add(values[regionIdx]);
-      });
-    });
-
-    setUniqueValues(newValues);
-  }, [uploadedSurveys]);
 
   // Handle global filter changes
   const handleFilterChange = (filterName: string, value: string) => {
@@ -427,22 +382,7 @@ const SurveyUpload: React.FC = () => {
         rowCount: parsedRows.length
       });
 
-      // Update local state and select the new survey
-      const newSurvey = {
-        id: surveyId,
-        fileName: surveyName,
-        surveyType: surveyTypeName,
-        surveyYear,
-        uploadDate: new Date(),
-        fileContent: '',
-        rows: [],
-        stats: {
-          totalRows: parsedRows.length,
-          uniqueSpecialties: survey.specialtyCount,
-          totalDataPoints: parsedRows.length
-        },
-        columnMappings: {}
-      };
+      
 
       // State already updated above, just set the flag to prevent useEffect override
       setJustUploaded(true);
