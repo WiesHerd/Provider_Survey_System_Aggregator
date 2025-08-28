@@ -11,6 +11,8 @@ import { useYear } from '../contexts/YearContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload/components/ColumnValidationDisplay';
 import { downloadSampleFile } from '../utils/downloadUtils';
+import { cleanUnicodeText, cleanUnicodeArray, getEncodingSummary } from '../utils/encodingUtils';
+import { EncodingIssuesDisplay } from './EncodingIssuesDisplay';
 
 
 const SURVEY_OPTIONS = [
@@ -108,6 +110,11 @@ const SurveyUpload: React.FC = () => {
 
   // Add state for column validation
   const [columnValidation, setColumnValidation] = useState<any>(null);
+  const [encodingIssues, setEncodingIssues] = useState<{
+    hasIssues: boolean;
+    issues: string[];
+    recommendations: string[];
+  } | null>(null);
 
   // Add state for collapsible sections
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
@@ -246,6 +253,7 @@ const SurveyUpload: React.FC = () => {
     setFiles(prev => [...prev, ...newFiles]);
     setError('');
     setColumnValidation(null); // Clear previous validation
+    setEncodingIssues(null); // Clear previous encoding issues
   }, []);
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -330,8 +338,17 @@ const SurveyUpload: React.FC = () => {
     try {
       // Read the CSV file
       const text = await file.text();
+      
+      // Check for encoding issues
+      const encodingSummary = getEncodingSummary(text);
+      setEncodingIssues(encodingSummary);
+      if (encodingSummary.hasIssues) {
+        console.warn('Encoding issues detected:', encodingSummary.issues);
+        console.log('Recommendations:', encodingSummary.recommendations);
+      }
+      
       const rows = text.split('\n').filter(row => row.trim());
-      const headers = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const headers = cleanUnicodeArray(rows[0].split(',').map(h => h.trim().replace(/"/g, '')));
       const dataRows = rows.slice(1).filter(row => row.trim());
 
       // Validate columns before processing
@@ -349,7 +366,7 @@ const SurveyUpload: React.FC = () => {
 
       // Parse CSV data
       const parsedRows = dataRows.map(row => {
-        const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
+        const values = cleanUnicodeArray(row.split(',').map(v => v.trim().replace(/"/g, '')));
         const rowData: any = {};
         headers.forEach((header, index) => {
           rowData[header] = values[index] || '';
@@ -710,13 +727,16 @@ const SurveyUpload: React.FC = () => {
                 </div>
               )}
 
-              {/* Column Validation Display */}
-              {columnValidation && (
-                <ColumnValidationDisplay 
-                  validation={columnValidation} 
-                  fileName={files[0]?.name || ''} 
-                />
-              )}
+                             {/* Encoding Issues Display */}
+               <EncodingIssuesDisplay encodingIssues={encodingIssues} />
+               
+               {/* Column Validation Display */}
+               {columnValidation && (
+                 <ColumnValidationDisplay 
+                   validation={columnValidation} 
+                   fileName={files[0]?.name || ''} 
+                 />
+               )}
             </>
             )}
           </div>
