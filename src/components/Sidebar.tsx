@@ -15,6 +15,7 @@ import {
   CalculatorIcon,
   InformationCircleIcon,
   DocumentChartBarIcon,
+  CpuChipIcon,
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -45,6 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     { name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
     { name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
     { name: 'Instructions', icon: InformationCircleIcon, path: '/instructions' },
+    { name: 'Download Test', icon: CpuChipIcon, path: '/download-test' },
   ];
 
   const handleNavigation = (path: string) => navigate(path);

@@ -19,6 +19,7 @@ const SurveyRegionalAnalytics = lazy(() => import('./components/SurveyRegionalAn
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReportsWrapper = lazy(() => import('./components/CustomReportsWrapper'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
+const DownloadTest = lazy(() => import('./components/DownloadTest').then(module => ({ default: module.DownloadTest })));
 
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
@@ -91,6 +92,11 @@ const PageContent = () => {
         return {
           title: 'System Settings',
           description: 'Manage your data storage and system preferences'
+        };
+      case '/download-test':
+        return {
+          title: 'Download Test',
+          description: 'Test file download functionality'
         };
       case '/reports':
         return {
@@ -288,6 +294,7 @@ const PageContent = () => {
                   </div>
                 </div>
               } />
+              <Route path="/download-test" element={<DownloadTest />} />
               <Route path="/reports" element={<div className="p-4">Reports page coming soon</div>} />
             </Routes>
           </Suspense>

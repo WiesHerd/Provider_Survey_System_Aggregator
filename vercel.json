@@ -44,6 +44,26 @@
       "dest": "/manifest.json"
     },
     {
+      "src": "/sample-survey.csv",
+      "dest": "/sample-survey.csv"
+    },
+    {
+      "src": "/synthetic_mgma.csv",
+      "dest": "/synthetic_mgma.csv"
+    },
+    {
+      "src": "/synthetic_gallagher.csv",
+      "dest": "/synthetic_gallagher.csv"
+    },
+    {
+      "src": "/synthetic_sullivan_cotter.csv",
+      "dest": "/synthetic_sullivan_cotter.csv"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|pdf|csv))",
+      "dest": "/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }

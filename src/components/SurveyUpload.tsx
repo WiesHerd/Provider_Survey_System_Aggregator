@@ -10,6 +10,7 @@ import LoadingSpinner from './ui/loading-spinner';
 import { useYear } from '../contexts/YearContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload/components/ColumnValidationDisplay';
+import { downloadSampleFile } from '../utils/downloadUtils';
 
 
 const SURVEY_OPTIONS = [
@@ -552,13 +553,18 @@ const SurveyUpload: React.FC = () => {
                 </button>
                 <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
               </div>
-              <a
-                href={process.env.PUBLIC_URL + '/sample-survey.csv'}
-                download="sample-survey.csv"
+              <button
+                onClick={async () => {
+                  try {
+                    await downloadSampleFile();
+                  } catch (error) {
+                    console.error('Download failed:', error);
+                  }
+                }}
                 className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
               >
                 Download Sample
-              </a>
+              </button>
             </div>
             
             {!isUploadSectionCollapsed && (
