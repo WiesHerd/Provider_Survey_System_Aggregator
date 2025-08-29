@@ -96,7 +96,7 @@ db.serialize(() => {
     // Ignore error if column already exists
   });
 
-  // Survey data table
+  // Survey data table (current structure - keeping for backward compatibility)
   db.run(`CREATE TABLE IF NOT EXISTS survey_data (
     id TEXT PRIMARY KEY,
     surveyId TEXT,
@@ -115,6 +115,31 @@ db.serialize(() => {
   db.run('ALTER TABLE survey_data ADD COLUMN data TEXT', (err) => {
     // Ignore error if column already exists
   });
+
+  // NEW: Normalized survey data table (refactored structure)
+  db.run(`CREATE TABLE IF NOT EXISTS survey_data_normalized (
+    id TEXT PRIMARY KEY,
+    surveyId TEXT,
+    specialty TEXT,
+    providerType TEXT,
+    geographicRegion TEXT,
+    variable TEXT,  -- 'Total Cash Compensation', 'Work RVUs', 'Conversion Factor'
+    n_orgs INTEGER,
+    n_incumbents INTEGER,
+    p25 REAL,
+    p50 REAL,
+    p75 REAL,
+    p90 REAL,
+    originalData TEXT, -- JSON blob of the original row for reference
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (surveyId) REFERENCES surveys (id)
+  )`);
+
+  // Create indexes for better performance
+  db.run('CREATE INDEX IF NOT EXISTS idx_survey_data_normalized_surveyId ON survey_data_normalized(surveyId)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_survey_data_normalized_specialty ON survey_data_normalized(specialty)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_survey_data_normalized_variable ON survey_data_normalized(variable)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_survey_data_normalized_region ON survey_data_normalized(geographicRegion)');
 
   // Specialty mappings table
   db.run(`CREATE TABLE IF NOT EXISTS specialty_mappings (
