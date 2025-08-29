@@ -244,8 +244,15 @@ export const formatSpecialtyForDisplay = (specialty: string): string => {
     'fm': 'FM'
   };
 
-  // First, handle special cases in parentheses
-  let formatted = specialty;
+  // First, normalize special characters that cause encoding issues
+  let formatted = specialty
+    .replace(/–/g, '-')  // Replace en dash (–) with regular hyphen (-)
+    .replace(/—/g, '-')  // Replace em dash (—) with regular hyphen (-)
+    .replace(/…/g, '...') // Replace ellipsis (…) with three dots
+    .replace(/"/g, '"')   // Replace smart quotes with regular quotes
+    .replace(/"/g, '"')
+    .replace(/'/g, "'")   // Replace smart apostrophes with regular apostrophes
+    .replace(/'/g, "'");
   
   // Handle parentheses content
   formatted = formatted.replace(/\(([^)]+)\)/g, (match, content) => {

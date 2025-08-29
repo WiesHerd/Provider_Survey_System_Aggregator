@@ -22,6 +22,7 @@ export interface ISurveyRow {
   [key: string]: string | number;
 }
 
+
 export interface ISurveyMetadata {
   totalRows: number;
   uniqueSpecialties: string[];
