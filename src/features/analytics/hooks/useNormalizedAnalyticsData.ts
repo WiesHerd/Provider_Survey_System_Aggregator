@@ -44,7 +44,7 @@ export const useNormalizedAnalyticsData = (): UseNormalizedAnalyticsDataReturn =
 
       // Filter surveys by current year if specified
       const yearFilteredSurveys = filters.year 
-        ? surveys.filter((survey: any) => survey.year === filters.year)
+        ? (surveys as any[]).filter((survey: any) => survey.year === filters.year)
         : surveys;
 
       console.log('📅 Year-filtered surveys:', yearFilteredSurveys.length);
@@ -176,9 +176,9 @@ export const useNormalizedAnalyticsData = (): UseNormalizedAnalyticsDataReturn =
   // Calculate available options for filters
   const availableOptions = useMemo(() => {
     const specialties = [...new Set(data.map(row => row.surveySpecialty))].filter(Boolean).sort();
-    const providerTypes = [...new Set(data.map(row => row.providerType))].filter(Boolean).sort() as any[];
-    const regions = [...new Set(data.map(row => row.geographicRegion))].filter(Boolean).sort() as any[];
-    const surveySources = [...new Set(data.map(row => row.surveySource))].filter(Boolean).sort() as any[];
+    const providerTypes = [...new Set(data.map(row => row.providerType))].filter(Boolean).sort();
+    const regions = [...new Set(data.map(row => row.geographicRegion))].filter(Boolean).sort();
+    const surveySources = [...new Set(data.map(row => row.surveySource))].filter(Boolean).sort();
     const years = [...new Set(data.map(row => row.surveyYear))].filter(Boolean).sort();
     const variables = [...new Set(data.map(row => row.variable))].filter(Boolean).sort();
 

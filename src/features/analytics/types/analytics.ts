@@ -142,9 +142,9 @@ export interface AnalyticsFiltersProps {
   onClearFilters: () => void;
   availableOptions: {
     specialties: string[];
-    providerTypes: ProviderType[];
-    regions: GeographicRegion[];
-    surveySources: SurveySource[];
+    providerTypes: string[];
+    regions: string[];
+    surveySources: string[];
     years: string[];
     variables: string[];
   };
