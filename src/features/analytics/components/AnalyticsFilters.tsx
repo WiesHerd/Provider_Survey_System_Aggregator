@@ -199,6 +199,33 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
           </FormControl>
         </Grid>
 
+        {/* Variable Filter */}
+        <Grid item xs={12} sm={6} md={3}>
+          <FormControl fullWidth size="small">
+            <InputLabel id="variable-filter-label">Variable</InputLabel>
+            <Select
+              labelId="variable-filter-label"
+              value={filters.variable || ''}
+              label="Variable"
+              onChange={(e: SelectChangeEvent<string>) => handleFilterChange('variable', e.target.value)}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
+            >
+              <MenuItem value="">
+                <em>All Variables</em>
+              </MenuItem>
+              {availableOptions.variables?.map((variable) => (
+                <MenuItem key={variable} value={variable}>
+                  {variable}
+                </MenuItem>
+              )) || []}
+            </Select>
+          </FormControl>
+        </Grid>
+
         {/* Search Filter */}
         <Grid item xs={12} sm={6} md={3}>
           <TextField
