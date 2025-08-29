@@ -41,12 +41,14 @@ class BackendService {
     // Use XHR to report real upload progress
     const xhr = new XMLHttpRequest();
     const promise = new Promise<{ surveyId: string; rowCount: number }>((resolve, reject) => {
-      xhr.open('POST', `${API_BASE_URL}/upload`);
+      xhr.open('POST', `${API_BASE_URL}/upload-normalized`);
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const result = JSON.parse(xhr.responseText);
-            resolve({ surveyId: result.surveyId, rowCount: result.rowCount });
+            // Handle both old and new response formats
+            const rowCount = result.stats?.normalizedRows || result.stats?.rows || result.rowCount || 0;
+            resolve({ surveyId: result.surveyId, rowCount });
           } catch (err) {
             reject(new Error('Invalid server response'));
           }
@@ -125,10 +127,17 @@ class BackendService {
     if (options?.page) params.append('page', String(options.page));
     if (options?.limit) params.append('limit', String(options.limit));
 
-    const response = await fetch(`${API_BASE_URL}/survey/${surveyId}/data?${params.toString()}`);
+    // Try normalized data endpoint first, fallback to legacy endpoint
+    let response = await fetch(`${API_BASE_URL}/survey/${surveyId}/normalized-data?${params.toString()}`);
     
     if (!response.ok) {
-      throw new Error('Failed to fetch survey data');
+      // Fallback to legacy endpoint if normalized endpoint fails
+      console.log('Normalized data endpoint failed, trying legacy endpoint...');
+      response = await fetch(`${API_BASE_URL}/survey/${surveyId}/data?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch survey data');
+      }
     }
 
     const data = await response.json();
