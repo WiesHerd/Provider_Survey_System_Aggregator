@@ -73,10 +73,10 @@ export const formatNormalizedValue = (
   variable: string
 ): string => {
   if (!value || isNaN(value)) return '0';
-  
+
   switch (variable) {
     case 'Total Cash Compensation':
-      return formatCurrency(value, 0); // No decimals for TCC
+      return formatNumber(value, 0); // No decimals for TCC
     case 'Work RVUs':
       return formatNumber(value, 0); // No decimals for wRVUs
     case 'Conversion Factor':
