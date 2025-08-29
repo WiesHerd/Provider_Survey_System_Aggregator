@@ -54,6 +54,39 @@ export const formatNumber = (
 };
 
 /**
+ * Formats a number for normalized data display
+ * Automatically determines appropriate decimal places based on variable type
+ * 
+ * @param value - Number to format
+ * @param variable - Variable type ('Total Cash Compensation', 'Work RVUs', 'Conversion Factor')
+ * @returns Formatted number string
+ * 
+ * @example
+ * ```typescript
+ * formatNormalizedValue(1234567, 'Total Cash Compensation'); // Returns "1,234,567"
+ * formatNormalizedValue(1234.56, 'Conversion Factor'); // Returns "1,234.56"
+ * formatNormalizedValue(5000, 'Work RVUs'); // Returns "5,000"
+ * ```
+ */
+export const formatNormalizedValue = (
+  value: number,
+  variable: string
+): string => {
+  if (!value || isNaN(value)) return '0';
+  
+  switch (variable) {
+    case 'Total Cash Compensation':
+      return formatCurrency(value, 0); // No decimals for TCC
+    case 'Work RVUs':
+      return formatNumber(value, 0); // No decimals for wRVUs
+    case 'Conversion Factor':
+      return formatNumber(value, 2); // 2 decimals for CF
+    default:
+      return formatNumber(value, 2); // Default to 2 decimals
+  }
+};
+
+/**
  * Formats a number as a percentage
  * 
  * @param value - Number to format (0-1 for decimal, 0-100 for percentage)

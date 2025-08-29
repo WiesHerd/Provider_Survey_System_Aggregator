@@ -9,7 +9,7 @@ import {
   TextField
 } from '@mui/material';
 import { getDataService } from '../services/DataService';
-import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
 import LoadingSpinner from './ui/loading-spinner';
 
 // Lazy load AG Grid to reduce initial bundle size
@@ -407,6 +407,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     // If we have the server-derived headers, use them; otherwise fall back to previewData detection
     const headers = previewData[0] || [];
     console.log('Creating column defs for headers:', headers);
+    
+    // Check if this is normalized format data
+    const isNormalizedFormat = headers.some(header => 
+      ['p25', 'p50', 'p75', 'p90', 'variable'].includes(header.toLowerCase())
+    );
+    
     return headers
       .filter((header: string) => {
         const lower = String(header).toLowerCase();
@@ -415,11 +421,18 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       .map((header: string) => {
       const key = header;
       const lower = header.toLowerCase();
+      
+      // Handle both wide and normalized formats
       const isTcc = lower.startsWith('tcc_') || lower.includes('total_cash') || lower.includes('tcc');
       const isCf = lower.startsWith('cf_') || lower.includes('conversion');
       const isWrvu = lower.includes('wrvu');
       const isCount = lower === 'n_orgs' || lower === 'n_incumbents';
-      const isNumeric = isTcc || isCf || isWrvu || isCount;
+      
+      // For normalized format, check if this is a percentile column
+      const isPercentile = isNormalizedFormat && ['p25', 'p50', 'p75', 'p90'].includes(lower);
+      const isVariable = isNormalizedFormat && lower === 'variable';
+      
+      const isNumeric = isTcc || isCf || isWrvu || isCount || isPercentile;
       const isSpecialty = lower.includes('specialty');
 
       return {
@@ -454,9 +467,20 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         valueFormatter: (params: any) => {
           const raw = params.value ?? params.data?.[key];
           if (raw === undefined || raw === null) return '';
+          
+          // Handle normalized format percentiles
+          if (isNormalizedFormat && isPercentile) {
+            const variable = params.data?.variable;
+            if (variable) {
+              return formatNormalizedValue(parseFloat(raw), variable);
+            }
+          }
+          
+          // Handle wide format
           if (isTcc) return formatCurrency(raw, 0);
           if (isCf) return formatCurrency(raw, 2);
           if (isWrvu || isCount) return formatNumber(raw, 0);
+          
           return raw;
         },
       } as any;

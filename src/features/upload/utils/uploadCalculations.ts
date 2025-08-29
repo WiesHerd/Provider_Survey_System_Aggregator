@@ -149,6 +149,23 @@ export const REQUIRED_COLUMNS = [
 ] as const;
 
 /**
+ * Required columns for normalized data format
+ * This is the new structure where each variable (TCC, wRVU, CF) gets its own row
+ */
+export const NORMALIZED_REQUIRED_COLUMNS = [
+  'specialty',
+  'provider_type',
+  'geographic_region',
+  'variable',
+  'n_orgs',
+  'n_incumbents',
+  'p25',
+  'p50',
+  'p75',
+  'p90'
+] as const;
+
+/**
  * Common column aliases for fuzzy matching
  * Maps alternative column names to their standard required column names
  */
@@ -202,6 +219,7 @@ export interface ColumnValidationResult {
   mappedColumns: Record<string, string>;
   suggestions: string[];
   errors: string[];
+  format?: 'normalized' | 'wide';
 }
 
 /**
@@ -217,7 +235,34 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
   const suggestions: string[] = [];
   const errors: string[] = [];
 
-  // Check each required column
+  // First, detect if this is a normalized format file
+  const isNormalizedFormat = NORMALIZED_REQUIRED_COLUMNS.every(col => 
+    detectedColumns.includes(col)
+  );
+
+  if (isNormalizedFormat) {
+    // This is a normalized format file - validate against normalized columns
+    NORMALIZED_REQUIRED_COLUMNS.forEach(requiredColumn => {
+      if (detectedColumns.includes(requiredColumn)) {
+        mappedColumns[requiredColumn] = requiredColumn;
+      } else {
+        missingColumns.push(requiredColumn);
+        errors.push(`Required normalized column "${requiredColumn}" not found`);
+      }
+    });
+
+    return {
+      isValid: missingColumns.length === 0,
+      detectedColumns,
+      missingColumns,
+      mappedColumns,
+      suggestions,
+      errors,
+      format: 'normalized'
+    };
+  }
+
+  // Legacy wide format validation
   REQUIRED_COLUMNS.forEach(requiredColumn => {
     // Try exact match first
     if (detectedColumns.includes(requiredColumn)) {
@@ -288,7 +333,8 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
     missingColumns,
     mappedColumns,
     suggestions,
-    errors
+    errors,
+    format: 'wide'
   };
 };
 

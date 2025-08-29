@@ -24,21 +24,26 @@ function normalizeRow(row, surveyId) {
   const n_orgs = parseInt(row.n_orgs) || 0;
   const n_incumbents = parseInt(row.n_incumbents) || 0;
   
-  // Handle different column naming conventions
-  const tcc_p25 = parseFloat(row.tcc_p25) || parseFloat(row.TCC_p25) || 0;
-  const tcc_p50 = parseFloat(row.tcc_p50) || parseFloat(row.TCC_p50) || 0;
-  const tcc_p75 = parseFloat(row.tcc_p75) || parseFloat(row.TCC_p75) || 0;
-  const tcc_p90 = parseFloat(row.tcc_p90) || parseFloat(row.TCC_p90) || 0;
+  // Handle different column naming conventions and format numbers
+  const formatNumber = (value, decimals = 0) => {
+    const num = parseFloat(value) || 0;
+    return Number(num.toFixed(decimals));
+  };
+
+  const tcc_p25 = formatNumber(row.tcc_p25 || row.TCC_p25, 0);
+  const tcc_p50 = formatNumber(row.tcc_p50 || row.TCC_p50, 0);
+  const tcc_p75 = formatNumber(row.tcc_p75 || row.TCC_p75, 0);
+  const tcc_p90 = formatNumber(row.tcc_p90 || row.TCC_p90, 0);
   
-  const wrvu_p25 = parseFloat(row.wrvu_p25) || parseFloat(row.wRVU_p25) || 0;
-  const wrvu_p50 = parseFloat(row.wrvu_p50) || parseFloat(row.wRVU_p50) || 0;
-  const wrvu_p75 = parseFloat(row.wrvu_p75) || parseFloat(row.wRVU_p75) || 0;
-  const wrvu_p90 = parseFloat(row.wrvu_p90) || parseFloat(row.wRVU_p90) || 0;
+  const wrvu_p25 = formatNumber(row.wrvu_p25 || row.wRVU_p25, 0);
+  const wrvu_p50 = formatNumber(row.wrvu_p50 || row.wRVU_p50, 0);
+  const wrvu_p75 = formatNumber(row.wrvu_p75 || row.wRVU_p75, 0);
+  const wrvu_p90 = formatNumber(row.wrvu_p90 || row.wRVU_p90, 0);
   
-  const cf_p25 = parseFloat(row.cf_p25) || parseFloat(row.CF_p25) || 0;
-  const cf_p50 = parseFloat(row.cf_p50) || parseFloat(row.CF_p50) || 0;
-  const cf_p75 = parseFloat(row.cf_p75) || parseFloat(row.CF_p75) || 0;
-  const cf_p90 = parseFloat(row.cf_p90) || parseFloat(row.CF_p90) || 0;
+  const cf_p25 = formatNumber(row.cf_p25 || row.CF_p25, 2);
+  const cf_p50 = formatNumber(row.cf_p50 || row.CF_p50, 2);
+  const cf_p75 = formatNumber(row.cf_p75 || row.CF_p75, 2);
+  const cf_p90 = formatNumber(row.cf_p90 || row.CF_p90, 2);
   
   // Create TCC row
   if (tcc_p50 > 0) {
