@@ -19,7 +19,7 @@ export class DataService {
   private backend: BackendService;
   private mode: StorageMode;
 
-  constructor(mode: StorageMode = StorageMode.INDEXED_DB) {
+  constructor(mode: StorageMode = StorageMode.BACKEND) {
     this.indexedDB = new IndexedDBService();
     this.backend = BackendService.getInstance();
     this.mode = mode;
@@ -493,7 +493,7 @@ export class DataService {
 // Singleton instance
 let dataServiceInstance: DataService | null = null;
 
-export const getDataService = (mode: StorageMode = StorageMode.INDEXED_DB): DataService => {
+export const getDataService = (mode: StorageMode = StorageMode.BACKEND): DataService => {
   if (!dataServiceInstance) {
     dataServiceInstance = new DataService(mode);
   }
