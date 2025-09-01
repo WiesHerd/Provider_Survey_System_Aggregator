@@ -8,11 +8,15 @@ import { MappingProvider } from './contexts/MappingContext';
 import { YearProvider } from './contexts/YearContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { ArrowUpTrayIcon, LinkIcon, TableCellsIcon, PresentationChartLineIcon, CalculatorIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { PageSpinner, SuspenseSpinner } from './shared/components';
 
 // Lazy load all route components for code splitting
 const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
 const SpecialtyMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.SpecialtyMapping })));
 const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
+const VariableMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.VariableMapping })));
+const RegionMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.RegionMapping })));
+const ProviderTypeMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.ProviderTypeMapping })));
 const SurveyAnalytics = lazy(() => import('./components/AnalyticsWrapper'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const SurveyRegionalAnalytics = lazy(() => import('./components/SurveyRegionalAnalytics').then(module => ({ default: module.SurveyRegionalAnalytics })));
@@ -22,9 +26,9 @@ const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const DownloadTest = lazy(() => import('./components/DownloadTest').then(module => ({ default: module.DownloadTest })));
 
 // Loading component for Suspense fallback
-const LoadingSpinner = () => (
+const AppLoadingSpinner = () => (
   <div className="flex items-center justify-center h-64">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    <PageSpinner message="Initializing application..." />
   </div>
 );
 
@@ -55,8 +59,23 @@ const PageContent = () => {
         };
       case '/column-mapping':
         return {
-          title: 'Column Mapping',
-          description: 'Define column mappings and data transformations'
+          title: 'Other Column Mappings',
+          description: 'Map percentile columns and technical fields across surveys'
+        };
+      case '/variable-mapping':
+        return {
+          title: 'Survey Field Mapping',
+          description: 'Map and standardize compensation variables across surveys'
+        };
+      case '/region-mapping':
+        return {
+          title: 'Region Mapping',
+          description: 'Map and standardize region names across surveys'
+        };
+      case '/provider-type-mapping':
+        return {
+          title: 'Provider Type Mapping',
+          description: 'Map provider types (MD, NP, PA) across different survey sources'
         };
       case '/analytics':
         return {
@@ -153,13 +172,16 @@ const PageContent = () => {
           />
         )}
         <main className={`bg-gray-50 ${isDashboard ? '' : 'px-8'}`}>
-          <Suspense fallback={<LoadingSpinner />}>
+          <Suspense fallback={<SuspenseSpinner message="Loading page..." />}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/upload" element={<SurveyUpload />} />
               <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
               <Route path="/column-mapping" element={<ColumnMapping />} />
+              <Route path="/variable-mapping" element={<VariableMapping />} />
+        <Route path="/region-mapping" element={<RegionMapping />} />
+              <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />

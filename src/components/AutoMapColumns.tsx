@@ -14,7 +14,6 @@ import {
 import { BoltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import { ButtonSpinner } from './ui/loading-spinner';
 import { ColumnMappingService } from '../services/ColumnMappingService';
-import { LocalStorageService } from '../services/StorageService';
 import { IAutoMappingConfig } from '../types/column';
 
 interface AutoMapColumnsProps {
@@ -49,7 +48,7 @@ const AutoMapColumns: React.FC<AutoMapColumnsProps> = ({ onClose, onMappingsCrea
       setLoading(true);
       setError(null);
 
-      const mappingService = new ColumnMappingService(new LocalStorageService());
+      const mappingService = new ColumnMappingService();
       const suggestions = await mappingService.autoMapColumns(config);
 
       // Create mappings from suggestions

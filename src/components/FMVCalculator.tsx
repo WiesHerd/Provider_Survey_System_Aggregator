@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Card, Typography, Divider, Grid, TextField, MenuItem, InputAdornment, Box, Paper, RadioGroup, FormControlLabel, Radio, Button, FormControl, FormHelperText } from '@mui/material';
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
+import { getDataService } from '../services/DataService';
 import Autocomplete from '@mui/material/Autocomplete';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { keyframes } from '@mui/system';
@@ -478,33 +479,77 @@ const DebugSurveyData: React.FC = () => {
   return null;
 };
 
-// Utility to normalize a survey row
+// Utility to normalize a survey row with variable-based transformation
 const normalizeSurveyRow = (row: any, surveyMeta: any, cm: any = {}) => {
-  // Debug: print surveyMeta for a few rows
-  if (Math.random() < 0.01) {
-    console.log('Normalizing row, surveyMeta:', surveyMeta);
-  }
-  return {
+  // Initialize transformed row with base data
+  const transformedRow: any = {
     ...row,
-    providerType: row[cm.providerType || 'providerType'] || row.providerType || row.provider_type || '',
-    geographicRegion: row[cm.geographicRegion || 'geographicRegion'] || row.geographicRegion || row.geographic_region || '',
+    providerType: row[cm.providerType || 'providerType'] || row.providerType || row.provider_type || 
+                  row.ProviderType || row.Provider_Type || row['Provider Type'] || row.Type || '',
+    geographicRegion: row[cm.geographicRegion || 'geographicRegion'] || row.geographicRegion || 
+                      row.geographic_region || row.Geographic_Region || row.Region || row['Geographic Region'] || '',
     specialty: row[cm.specialty || 'specialty'] || row.specialty || row.normalizedSpecialty || '',
     normalizedSpecialty: row.normalizedSpecialty || '',
-    surveySource: surveyMeta?.surveyType || '',
+    surveySource: surveyMeta?.surveyType || surveyMeta?.type || '',
     year: String(row[cm.year || 'year'] || row.year || surveyMeta?.surveyYear || surveyMeta?.metadata?.surveyYear || ''),
-    tcc_p25: Number(row[cm.tcc_p25 || 'tcc_p25']) || 0,
-    tcc_p50: Number(row[cm.tcc_p50 || 'tcc_p50']) || 0,
-    tcc_p75: Number(row[cm.tcc_p75 || 'tcc_p75']) || 0,
-    tcc_p90: Number(row[cm.tcc_p90 || 'tcc_p90']) || 0,
-    wrvu_p25: Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0,
-    wrvu_p50: Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0,
-    wrvu_p75: Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0,
-    wrvu_p90: Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0,
-    cf_p25: Number(row[cm.cf_p25 || 'cf_p25']) || 0,
-    cf_p50: Number(row[cm.cf_p50 || 'cf_p50']) || 0,
-    cf_p75: Number(row[cm.cf_p75 || 'cf_p75']) || 0,
-    cf_p90: Number(row[cm.cf_p90 || 'cf_p90']) || 0,
+    // Initialize compensation fields
+    tcc_p25: 0,
+    tcc_p50: 0,
+    tcc_p75: 0,
+    tcc_p90: 0,
+    wrvu_p25: 0,
+    wrvu_p50: 0,
+    wrvu_p75: 0,
+    wrvu_p90: 0,
+    cf_p25: 0,
+    cf_p50: 0,
+    cf_p75: 0,
+    cf_p90: 0,
+    n_orgs: 0,
+    n_incumbents: 0
   };
+
+  // Handle variable-based data structure (same as RegionalAnalytics)
+  if (row.variable) {
+    const variable = String(row.variable).toLowerCase();
+    const p25 = Number(row.p25) || 0;
+    const p50 = Number(row.p50) || 0;
+    const p75 = Number(row.p75) || 0;
+    const p90 = Number(row.p90) || 0;
+    
+    if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
+      transformedRow.tcc_p25 = p25;
+      transformedRow.tcc_p50 = p50;
+      transformedRow.tcc_p75 = p75;
+      transformedRow.tcc_p90 = p90;
+    } else if (variable.includes('cf') || variable.includes('conversion')) {
+      transformedRow.cf_p25 = p25;
+      transformedRow.cf_p50 = p50;
+      transformedRow.cf_p75 = p75;
+      transformedRow.cf_p90 = p90;
+    } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+      transformedRow.wrvu_p25 = p25;
+      transformedRow.wrvu_p50 = p50;
+      transformedRow.wrvu_p75 = p75;
+      transformedRow.wrvu_p90 = p90;
+    }
+  } else {
+    // Fallback to column mappings for legacy data
+    transformedRow.tcc_p25 = Number(row[cm.tcc_p25 || 'tcc_p25']) || 0;
+    transformedRow.tcc_p50 = Number(row[cm.tcc_p50 || 'tcc_p50']) || 0;
+    transformedRow.tcc_p75 = Number(row[cm.tcc_p75 || 'tcc_p75']) || 0;
+    transformedRow.tcc_p90 = Number(row[cm.tcc_p90 || 'tcc_p90']) || 0;
+    transformedRow.wrvu_p25 = Number(row[cm.wrvu_p25 || 'wrvu_p25']) || 0;
+    transformedRow.wrvu_p50 = Number(row[cm.wrvu_p50 || 'wrvu_p50']) || 0;
+    transformedRow.wrvu_p75 = Number(row[cm.wrvu_p75 || 'wrvu_p75']) || 0;
+    transformedRow.wrvu_p90 = Number(row[cm.wrvu_p90 || 'wrvu_p90']) || 0;
+    transformedRow.cf_p25 = Number(row[cm.cf_p25 || 'cf_p25']) || 0;
+    transformedRow.cf_p50 = Number(row[cm.cf_p50 || 'cf_p50']) || 0;
+    transformedRow.cf_p75 = Number(row[cm.cf_p75 || 'cf_p75']) || 0;
+    transformedRow.cf_p90 = Number(row[cm.cf_p90 || 'cf_p90']) || 0;
+  }
+
+  return transformedRow;
 };
 
 // Utility to robustly normalize strings for comparison
@@ -571,10 +616,11 @@ const FMVCalculator: React.FC = () => {
 
   useEffect(() => {
     const fetchUniqueValues = async () => {
+      const dataService = getDataService();
       const storageService = new LocalStorageService();
       const mappingService = new SpecialtyMappingService(storageService);
       const allMappings = await mappingService.getAllMappings();
-      const uploadedSurveys = await storageService.listSurveys();
+      const uploadedSurveys = await dataService.getAllSurveys();
       const yearsSet = new Set<string>();
       const values = {
         specialties: new Set<string>(),
@@ -600,11 +646,12 @@ const FMVCalculator: React.FC = () => {
         if (survey.metadata.uniqueRegions) {
           survey.metadata.uniqueRegions.forEach((r: string) => values.regions.add(r));
         }
-        if (survey.metadata.surveyType) values.surveySources.add(survey.metadata.surveyType);
-        const data = await storageService.getSurveyData(survey.id);
+        if (survey.metadata && survey.metadata.surveyType) values.surveySources.add(survey.metadata.surveyType);
+        if ((survey as any).type) values.surveySources.add((survey as any).type);
+        const data = await dataService.getSurveyData(survey.id);
         if (data && data.rows) {
           const cm = survey.metadata?.columnMappings || {};
-          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey.metadata, cm));
+          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey, cm));
           normalizedRows.forEach((row: any) => {
             if (row.providerType) values.providerTypes.add(row.providerType);
             if (row.geographicRegion) values.regions.add(row.geographicRegion);
@@ -632,17 +679,35 @@ const FMVCalculator: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const dataService = getDataService();
       const storageService = new LocalStorageService();
       const mappingService = new SpecialtyMappingService(storageService);
       const allMappings = await mappingService.getAllMappings();
-      const uploadedSurveys = await storageService.listSurveys();
+      const uploadedSurveys = await dataService.getAllSurveys();
       let allRows: any[] = [];
+      console.log('🔍 FMV DEBUG - Loading data from', uploadedSurveys.length, 'surveys');
       for (const survey of uploadedSurveys) {
-        const data = await storageService.getSurveyData(survey.id);
+        const data = await dataService.getSurveyData(survey.id);
         if (data && data.rows) {
+          console.log(`🔍 FMV DEBUG - Survey ${survey.id} has ${data.rows.length} rows`);
           const cm = survey.metadata?.columnMappings || {};
-          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey.metadata, cm));
+          const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey, cm));
+          console.log(`🔍 FMV DEBUG - First normalized row:`, {
+            originalRow: Object.keys(data.rows[0]).slice(0, 10),
+            normalizedRow: {
+              specialty: normalizedRows[0].specialty,
+              variable: normalizedRows[0].variable,
+              tcc_values: {
+                tcc_p25: normalizedRows[0].tcc_p25,
+                tcc_p50: normalizedRows[0].tcc_p50,
+                tcc_p75: normalizedRows[0].tcc_p75,
+                tcc_p90: normalizedRows[0].tcc_p90
+              }
+            }
+          });
           allRows = allRows.concat(normalizedRows);
+        } else {
+          console.log(`🔍 FMV DEBUG - Survey ${survey.id} has no data`);
         }
       }
       // Use mapping service for robust specialty matching
@@ -671,8 +736,27 @@ const FMVCalculator: React.FC = () => {
         filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
         console.log('Row years after filter:', filteredRows.map(r => r.year));
       }
-      console.log('Filtered rows:', filteredRows);
-      console.log('wRVU values:', filteredRows.map(r => [r.wrvu_p25, r.wrvu_p50, r.wrvu_p75, r.wrvu_p90]));
+      console.log('🔍 FMV DEBUG - Filtered rows:', filteredRows.length);
+      if (filteredRows.length > 0) {
+        console.log('🔍 FMV DEBUG - Sample filtered row:', {
+          specialty: filteredRows[0].specialty,
+          geographicRegion: filteredRows[0].geographicRegion,
+          providerType: filteredRows[0].providerType,
+          surveySource: filteredRows[0].surveySource,
+          variable: filteredRows[0].variable,
+          compensationValues: {
+            tcc_p25: filteredRows[0].tcc_p25,
+            tcc_p50: filteredRows[0].tcc_p50,
+            tcc_p75: filteredRows[0].tcc_p75,
+            tcc_p90: filteredRows[0].tcc_p90,
+            wrvu_p25: filteredRows[0].wrvu_p25,
+            wrvu_p50: filteredRows[0].wrvu_p50,
+            cf_p25: filteredRows[0].cf_p25,
+            cf_p50: filteredRows[0].cf_p50
+          },
+          rawFields: Object.keys(filteredRows[0]).slice(0, 20)
+        });
+      }
       // Aggregate percentiles for TCC, wRVUs, CF
       const tccs = filteredRows.flatMap(r => [r.tcc_p25, r.tcc_p50, r.tcc_p75, r.tcc_p90].filter(Boolean));
       const wrvus = filteredRows.flatMap(r => [r.wrvu_p25, r.wrvu_p50, r.wrvu_p75, r.wrvu_p90].filter(Boolean));

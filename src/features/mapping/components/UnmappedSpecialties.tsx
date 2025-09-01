@@ -105,30 +105,27 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
         })}
       </div>
 
-      {/* Empty State */}
+      {/* Empty State - Consistent enterprise pattern */}
       {Array.from(specialtiesBySurvey.entries()).length === 0 && (
-        <div className="text-center py-8 bg-gray-50 rounded-lg">
-          <WarningIcon className="h-8 w-8 text-gray-400 mx-auto mb-3" />
-          <Typography variant="h6" color="textSecondary" className="mb-2 text-sm">
-            No Unmapped Specialties Found
-          </Typography>
-          <Typography variant="body2" color="textSecondary" className="mb-3 text-sm">
-            {searchTerm 
-              ? "No specialties match your search criteria"
-              : "All specialties have been mapped or no survey data is available"
-            }
-          </Typography>
-          {!searchTerm && (
-            <Button
-              variant="outlined"
-              onClick={onRefresh}
-              startIcon={<BoltIcon className="h-4 w-4" />}
-              size="small"
-              sx={{ fontSize: '0.875rem', textTransform: 'none' }}
-            >
-              Refresh Data
-            </Button>
-          )}
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+              <BoltIcon className="h-6 w-6 text-gray-500" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Unmapped Specialties Found</h3>
+            <p className="text-gray-600 mb-4">
+              {searchTerm ? 'No specialties match your search criteria.' : 'All specialties are mapped, or no survey data is available.'}
+            </p>
+            {!searchTerm && (
+              <button
+                onClick={onRefresh}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <BoltIcon className="h-4 w-4 mr-2" />
+                Refresh Data
+              </button>
+            )}
+          </div>
         </div>
       )}
     </>

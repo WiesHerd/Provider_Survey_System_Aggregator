@@ -17,14 +17,6 @@ export interface AggregatedData extends BaseEntity, CompensationMetrics {
   n_orgs: number;
   n_incumbents: number;
   surveyYear: string;
-  
-  // Normalized data fields
-  variable: string;
-  p25: number;
-  p50: number;
-  p75: number;
-  p90: number;
-  
   rawData?: Record<string, any>;
 }
 
@@ -37,7 +29,6 @@ export interface AnalyticsFilters {
   region?: GeographicRegion;
   surveySource?: SurveySource;
   year?: string;
-  variable?: string;
   search?: string;
 }
 
@@ -142,11 +133,10 @@ export interface AnalyticsFiltersProps {
   onClearFilters: () => void;
   availableOptions: {
     specialties: string[];
-    providerTypes: string[];
-    regions: string[];
-    surveySources: string[];
+    providerTypes: ProviderType[];
+    regions: GeographicRegion[];
+    surveySources: SurveySource[];
     years: string[];
-    variables: string[];
   };
 }
 

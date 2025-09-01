@@ -3,29 +3,36 @@ import {
   BoltIcon, 
   AdjustmentsHorizontalIcon,
   XMarkIcon,
-  CheckIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { AutoMappingProps, IAutoMappingConfig } from '../types/mapping';
 
 /**
- * AutoMapping component for the auto-mapping dialog
+ * Modular AutoMapping component for all mapping screens
  * 
  * @param isOpen - Whether the dialog is open
  * @param onClose - Callback to close the dialog
  * @param onAutoMap - Callback to execute auto-mapping
  * @param loading - Whether auto-mapping is in progress
+ * @param title - Modal title (default: "Auto-Map")
+ * @param description - Modal description
+ * @param iconColor - Icon background color (default: "indigo")
+ * @param iconColorClass - Icon color class (default: "text-indigo-600")
+ * @param bgColorClass - Icon background color class (default: "bg-indigo-100")
  */
 export const AutoMapping: React.FC<AutoMappingProps> = ({ 
   isOpen, 
   onClose, 
   onAutoMap, 
   loading = false,
-  title = "Auto-Map Specialties",
-  description = "Configure automatic specialty mapping"
+  title = "Auto-Map",
+  description = "Configure automatic mapping",
+  iconColor = "indigo",
+  iconColorClass = "text-indigo-600",
+  bgColorClass = "bg-indigo-100"
 }) => {
   // Configuration state
-  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.7);
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.8);
   const [useExistingMappings, setUseExistingMappings] = useState<boolean>(true);
   const [useFuzzyMatching, setUseFuzzyMatching] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,14 +67,14 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={handleClose} />
       
-             {/* Modal */}
-       <div className="flex min-h-full items-center justify-center p-4">
-         <div className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col">
+      {/* Modal */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-indigo-100 rounded-lg">
-                <BoltIcon className="h-6 w-6 text-indigo-600" />
+              <div className={`flex items-center justify-center w-10 h-10 ${bgColorClass} rounded-lg`}>
+                <BoltIcon className={`h-6 w-6 ${iconColorClass}`} />
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
@@ -83,169 +90,99 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
             </button>
           </div>
 
-                     {/* Content */}
-           <div className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* Description */}
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-              <p className="text-sm text-indigo-800">
-                Automatically map items based on similarity and existing mappings. 
-                This will analyze unmapped items and suggest mappings with the specified confidence level.
-              </p>
-            </div>
-
-                         {/* Configuration Section */}
-             <div className="space-y-4">
+          {/* Content */}
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Configuration Section */}
+            <div className="space-y-4">
               {/* Confidence Threshold */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <AdjustmentsHorizontalIcon className="h-5 w-5 text-gray-600" />
-                  <h3 className="text-lg font-medium text-gray-900">Confidence Threshold</h3>
+                  <AdjustmentsHorizontalIcon className="h-5 w-5 text-gray-500" />
+                  <h3 className="text-lg font-medium text-gray-900">Similarity Threshold</h3>
                 </div>
                 <p className="text-sm text-gray-600 mb-4">
-                  Only create mappings with confidence above this threshold
+                  Higher values create fewer, more precise mappings. Lower values create more mappings with potentially less accuracy.
                 </p>
                 
-                                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Low (More mappings, less accurate)</span>
-                    <span className="text-gray-500">High (Fewer mappings, more accurate)</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">50%</span>
+                    <span className="text-sm text-gray-500">70%</span>
+                    <span className="text-sm text-gray-500">90%</span>
                   </div>
-                  
-                  <div className="relative">
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1"
-                      step="0.1"
-                      value={confidenceThreshold}
-                      onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                      disabled={loading}
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>0.1</span>
-                      <span>0.5</span>
-                      <span>1.0</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
-                      {(confidenceThreshold * 100).toFixed(0)}% Confidence
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.0"
+                    step="0.05"
+                    value={confidenceThreshold}
+                    onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    style={{
+                      background: `linear-gradient(to right, ${iconColor === 'indigo' ? '#6366f1' : iconColor === 'blue' ? '#3b82f6' : '#8b5cf6'} 0%, ${iconColor === 'indigo' ? '#6366f1' : iconColor === 'blue' ? '#3b82f6' : '#8b5cf6'} ${(confidenceThreshold - 0.5) * 200}%, #e5e7eb ${(confidenceThreshold - 0.5) * 200}%, #e5e7eb 100%)`
+                    }}
+                  />
+                  <div className="flex justify-center">
+                    <span className="text-lg font-semibold text-gray-900">
+                      {Math.round(confidenceThreshold * 100)}%
                     </span>
                   </div>
                 </div>
               </div>
 
-                             {/* Mapping Options */}
-               <div>
-                 <h3 className="text-lg font-medium text-gray-900 mb-3">Mapping Options</h3>
-                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useExistingMappings}
-                      onChange={(e) => setUseExistingMappings(e.target.checked)}
-                      disabled={loading}
-                      className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                    />
-                    <span className="text-sm text-gray-700">Use existing mappings as reference</span>
-                  </label>
-                  
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useFuzzyMatching}
-                      onChange={(e) => setUseFuzzyMatching(e.target.checked)}
-                      disabled={loading}
-                      className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-                    />
-                    <span className="text-sm text-gray-700">Enable fuzzy matching for similar names</span>
-                  </label>
-                </div>
-              </div>
+              
 
-                             {/* Current Settings Summary */}
-               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                 <h4 className="text-sm font-medium text-gray-900 mb-2">Current Settings</h4>
-                <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                    {(confidenceThreshold * 100).toFixed(0)}% Confidence
-                  </span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
-                    {useExistingMappings ? "Use existing mappings" : "Ignore existing mappings"}
-                  </span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
-                    {useFuzzyMatching ? "Fuzzy matching enabled" : "Fuzzy matching disabled"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Error Display */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="flex">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mt-0.5" />
-                  <div className="ml-3">
+              {/* Error Display */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                     <p className="text-sm text-red-800">{error}</p>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-                     {/* Footer */}
-           <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 flex-shrink-0">
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
             <button
               onClick={handleClose}
               disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               onClick={handleAutoMap}
               disabled={loading}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`inline-flex items-center px-4 py-2 text-sm font-medium text-white ${iconColor === 'indigo' ? 'bg-indigo-600 hover:bg-indigo-700' : iconColor === 'blue' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'} border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${iconColor === 'indigo' ? 'focus:ring-indigo-500' : iconColor === 'blue' ? 'focus:ring-blue-500' : 'focus:ring-purple-500'} transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <BoltIcon className="h-4 w-4 mr-2" />
-                  Auto-Map Specialties
-                </>
-              )}
+              <BoltIcon className="h-4 w-4 mr-2" />
+              {loading ? 'Processing...' : 'Start Auto-Mapping'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Custom slider styles */}
       <style>{`
         .slider::-webkit-slider-thumb {
           appearance: none;
           height: 20px;
           width: 20px;
           border-radius: 50%;
-          background: #4f46e5;
+          background: ${iconColor === 'indigo' ? '#6366f1' : iconColor === 'blue' ? '#3b82f6' : '#8b5cf6'};
           cursor: pointer;
-          border: 2px solid #ffffff;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
         .slider::-moz-range-thumb {
           height: 20px;
           width: 20px;
           border-radius: 50%;
-          background: #4f46e5;
+          background: ${iconColor === 'indigo' ? '#6366f1' : iconColor === 'blue' ? '#3b82f6' : '#8b5cf6'};
           cursor: pointer;
-          border: 2px solid #ffffff;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          border: none;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
       `}</style>
     </div>

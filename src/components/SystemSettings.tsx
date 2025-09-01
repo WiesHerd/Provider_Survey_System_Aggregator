@@ -11,6 +11,7 @@ import {
   CheckCircleIcon,
   XCircleIcon
 } from '@heroicons/react/24/outline';
+import { InlineSpinner, ButtonSpinner } from '../shared/components';
 import { getDataService } from '../services/DataService';
 import { IndexedDBInspector } from '../utils/indexedDBInspector';
 
@@ -210,7 +211,7 @@ const SystemSettings: React.FC = () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-xl p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <InlineSpinner message="Clearing data..." size="md" />
                   <p className="text-gray-500">Loading storage information...</p>
                 </div>
               )}
@@ -388,7 +389,7 @@ const SystemSettings: React.FC = () => {
       {loading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 flex items-center space-x-4 shadow-2xl">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <ButtonSpinner size="md" />
             <span className="text-gray-700 font-medium">Processing...</span>
           </div>
         </div>

@@ -92,12 +92,6 @@ export const useAnalyticsData = (): UseAnalyticsDataReturn => {
                 cf_p50: 0,
                 cf_p75: 0,
                 cf_p90: 0,
-                // Add normalized data fields
-                variable: '',
-                p25: 0,
-                p50: 0,
-                p75: 0,
-                p90: 0,
                 rawData: survey.rawData || {}
               };
             }

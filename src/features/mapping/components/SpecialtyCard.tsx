@@ -23,20 +23,20 @@ export const SpecialtyCard: React.FC<SpecialtyCardProps> = ({
   return (
     <Paper 
       onClick={handleClick}
-      className={`p-3 relative transition-colors duration-200 border cursor-pointer ${
+      className={`p-3 relative transition-all duration-200 border cursor-pointer ${
         isSelected 
-          ? 'bg-indigo-50 border-2 border-indigo-400 shadow-md' 
-          : 'bg-gray-50 hover:bg-gray-100 border-gray-200 hover:border-gray-300 hover:shadow-md'
+          ? 'bg-indigo-50 border-2 border-indigo-500 ring-2 ring-indigo-200 shadow-md' 
+          : 'bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-md'
       }`}
       style={{ 
         borderLeftColor: getSurveySourceColor(specialty.surveySource), 
-        borderLeftWidth: '3px' 
+        borderLeftWidth: isSelected ? '5px' : '3px' 
       }}
     >
       {/* Green checkmark for selected items */}
       {isSelected && (
-        <div className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm">
-          <CheckIcon className="w-3 h-3 text-white" />
+        <div className="absolute top-2 right-2 w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center shadow">
+          <CheckIcon className="w-4 h-4 text-white" />
         </div>
       )}
       

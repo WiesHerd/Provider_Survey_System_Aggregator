@@ -7,9 +7,10 @@ interface MappedColumnsProps {
   mapping: IColumnMapping;
   onEdit?: () => void;
   onDelete?: () => void;
+  selected?: boolean;
 }
 
-const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete }) => {
+const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete, selected = false }) => {
   // Color mapping for different survey sources
   const getSourceColor = (source: string) => {
     switch (source) {
@@ -34,7 +35,11 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
   };
 
   return (
-    <Paper className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
+    <Paper className={`p-3 relative transition-all duration-200 border ${
+      selected
+        ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-200 shadow-md'
+        : 'bg-gray-50 hover:bg-gray-100 border-gray-200 hover:border-gray-300 hover:shadow-md'
+    }`}>
       {/* Header with standardized name and actions */}
       <div className="flex justify-between items-center mb-2">
         <div>
@@ -46,6 +51,13 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
           </Typography>
         </div>
         <div className="flex space-x-1">
+          {selected && (
+            <div className="mr-2">
+              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+            </div>
+          )}
           {onEdit && (
             <Tooltip title="Edit mapping">
               <IconButton onClick={onEdit} size="small">
@@ -89,7 +101,7 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
                     </Typography>
                   </div>
                   <Typography variant="caption" style={{ color: getSourceColor(column.surveySource) }} className="text-sm font-semibold whitespace-nowrap">
-                    Type: {column.surveySource}
+                    {column.surveySource}
                   </Typography>
                 </div>
               </div>

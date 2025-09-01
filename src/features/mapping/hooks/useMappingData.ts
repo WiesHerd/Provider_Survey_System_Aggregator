@@ -167,7 +167,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getAllSpecialtyMappings(),
         dataService.getUnmappedSpecialties(),
-        dataService.getLearnedMappings()
+        dataService.getLearnedMappings('specialty')
       ]);
       
       console.log('Loaded data:', { 
@@ -330,17 +330,15 @@ export const useMappingData = (): UseMappingDataReturn => {
   const removeLearnedMapping = useCallback(async (original: string) => {
     try {
       setError(null);
-      // For now, just remove from local state since learned mappings are in localStorage
-      setLearnedMappings(prev => {
-        const newLearnedMappings = { ...prev };
-        delete newLearnedMappings[original];
-        return newLearnedMappings;
-      });
+      await dataService.removeLearnedMapping('specialty', original);
+      // Refresh learned mappings
+      const learnedData = await dataService.getLearnedMappings('specialty');
+      setLearnedMappings(learnedData);
     } catch (err) {
       setError('Failed to remove learned mapping');
       console.error('Error removing learned mapping:', err);
     }
-  }, []);
+  }, [dataService]);
 
   // Auto-mapping
   const autoMap = useCallback(async (config: IAutoMappingConfig) => {

@@ -95,28 +95,90 @@ export const useFMVData = () => {
             console.log('FMV Debug - First row sample:', data.rows[0]);
           }
           
-          const transformedRows = data.rows.map((row: any) => ({
-            ...row,
-            id: row.id || '',
-            providerType: (row as any).providerType || (row as any).provider_type || '',
-            geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || '',
-            specialty: row.specialty || row.normalizedSpecialty || '',
-            normalizedSpecialty: row.normalizedSpecialty || '',
-            surveySource: surveyType || '',
-            year: String(row.year || row.surveyYear || (survey as any).year || ''),
-            tcc_p25: Number(row.tcc_p25) || 0,
-            tcc_p50: Number(row.tcc_p50) || 0,
-            tcc_p75: Number(row.tcc_p75) || 0,
-            tcc_p90: Number(row.tcc_p90) || 0,
-            wrvu_p25: Number(row.wrvu_p25) || 0,
-            wrvu_p50: Number(row.wrvu_p50) || 0,
-            wrvu_p75: Number(row.wrvu_p75) || 0,
-            wrvu_p90: Number(row.wrvu_p90) || 0,
-            cf_p25: Number(row.cf_p25) || 0,
-            cf_p50: Number(row.cf_p50) || 0,
-            cf_p75: Number(row.cf_p75) || 0,
-            cf_p90: Number(row.cf_p90) || 0,
-          }));
+          const transformedRows = data.rows.map((row: any) => {
+            // Initialize transformed row with base fields
+            const transformedRow: any = {
+              ...row,
+              id: row.id || '',
+              providerType: (row as any).providerType || (row as any).provider_type || 
+                           (row as any).ProviderType || (row as any).Provider_Type || 
+                           (row as any)['Provider Type'] || (row as any).Type || '',
+              geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || 
+                               (row as any).Geographic_Region || (row as any).Region || 
+                               (row as any)['Geographic Region'] || '',
+              specialty: row.specialty || row.normalizedSpecialty || '',
+              normalizedSpecialty: row.normalizedSpecialty || '',
+              surveySource: surveyType || '',
+              year: String(row.year || row.surveyYear || (survey as any).year || ''),
+              // Initialize compensation fields
+              tcc_p25: 0,
+              tcc_p50: 0,
+              tcc_p75: 0,
+              tcc_p90: 0,
+              wrvu_p25: 0,
+              wrvu_p50: 0,
+              wrvu_p75: 0,
+              wrvu_p90: 0,
+              cf_p25: 0,
+              cf_p50: 0,
+              cf_p75: 0,
+              cf_p90: 0,
+            };
+
+            // Handle variable-based data structure (same as RegionalAnalytics)
+            if (row.variable) {
+              const variable = String(row.variable).toLowerCase();
+              const p25 = Number(row.p25) || 0;
+              const p50 = Number(row.p50) || 0;
+              const p75 = Number(row.p75) || 0;
+              const p90 = Number(row.p90) || 0;
+              
+              if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
+                transformedRow.tcc_p25 = p25;
+                transformedRow.tcc_p50 = p50;
+                transformedRow.tcc_p75 = p75;
+                transformedRow.tcc_p90 = p90;
+              } else if (variable.includes('cf') || variable.includes('conversion')) {
+                transformedRow.cf_p25 = p25;
+                transformedRow.cf_p50 = p50;
+                transformedRow.cf_p75 = p75;
+                transformedRow.cf_p90 = p90;
+              } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+                transformedRow.wrvu_p25 = p25;
+                transformedRow.wrvu_p50 = p50;
+                transformedRow.wrvu_p75 = p75;
+                transformedRow.wrvu_p90 = p90;
+              }
+            } else {
+              // Fallback to direct field access for legacy data
+              transformedRow.tcc_p25 = Number(row.tcc_p25) || 0;
+              transformedRow.tcc_p50 = Number(row.tcc_p50) || 0;
+              transformedRow.tcc_p75 = Number(row.tcc_p75) || 0;
+              transformedRow.tcc_p90 = Number(row.tcc_p90) || 0;
+              transformedRow.wrvu_p25 = Number(row.wrvu_p25) || 0;
+              transformedRow.wrvu_p50 = Number(row.wrvu_p50) || 0;
+              transformedRow.wrvu_p75 = Number(row.wrvu_p75) || 0;
+              transformedRow.wrvu_p90 = Number(row.wrvu_p90) || 0;
+              transformedRow.cf_p25 = Number(row.cf_p25) || 0;
+              transformedRow.cf_p50 = Number(row.cf_p50) || 0;
+              transformedRow.cf_p75 = Number(row.cf_p75) || 0;
+              transformedRow.cf_p90 = Number(row.cf_p90) || 0;
+            }
+
+            return transformedRow;
+          });
+          
+          // Debug the transformation results
+          if (transformedRows.length > 0) {
+            console.log('🔍 FMV DEBUG - Transformed row sample:', {
+              original_variable: data.rows[0].variable,
+              original_p50: data.rows[0].p50,
+              transformed_tcc_p50: transformedRows[0].tcc_p50,
+              transformed_wrvu_p50: transformedRows[0].wrvu_p50,
+              transformed_cf_p50: transformedRows[0].cf_p50
+            });
+          }
+          
           allRows = allRows.concat(transformedRows);
         }
       }

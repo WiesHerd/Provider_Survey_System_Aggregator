@@ -121,8 +121,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       try {
         setLoading(true);
         
-        // Load specialty mappings first
+        // Load specialty mappings and column mappings first
         const mappings = await dataService.getAllSpecialtyMappings();
+        const columnMappings = await dataService.getAllColumnMappings();
         console.log('🗺️ Loaded specialty mappings:', mappings.length, 'mappings');
         console.log('📋 Sample mappings:', mappings.slice(0, 3).map(mapping => ({
           standardizedName: mapping.standardizedName,
@@ -140,12 +141,65 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           try {
             const surveyData = await dataService.getSurveyData(survey.id);
             if (surveyData.rows) {
-              // Add survey source information to each row
-              const rowsWithSource = surveyData.rows.map(row => ({
-                ...row,
-                surveySource: (survey as any).type || 'Unknown'
-              }));
-              allData.push(...rowsWithSource);
+              const surveySource = (survey as any).type || 'Unknown';
+              
+              // Apply the same variable-based transformation as RegionalAnalytics
+              const transformedRows = surveyData.rows.map(row => {
+                const transformedRow: any = {
+                  ...row,
+                  surveySource: surveySource,
+                  specialty: row.specialty || row.normalizedSpecialty || '',
+                  geographicRegion: row.geographic_region || row.region || row.geographicRegion || 
+                                  row.Geographic_Region || row.Region || row['Geographic Region'] || '',
+                  providerType: row.providerType || row.provider_type || row.ProviderType || 
+                              row.Provider_Type || row['Provider Type'] || row.Type || '',
+                  // Initialize compensation fields
+                  tcc_p25: 0,
+                  tcc_p50: 0,
+                  tcc_p75: 0,
+                  tcc_p90: 0,
+                  cf_p25: 0,
+                  cf_p50: 0,
+                  cf_p75: 0,
+                  cf_p90: 0,
+                  wrvu_p25: 0,
+                  wrvu_p50: 0,
+                  wrvu_p75: 0,
+                  wrvu_p90: 0,
+                  n_orgs: 0,
+                  n_incumbents: 0
+                };
+
+                // Handle variable-based data structure (same as RegionalAnalytics)
+                if (row.variable) {
+                  const variable = String(row.variable).toLowerCase();
+                  const p25 = Number(row.p25) || 0;
+                  const p50 = Number(row.p50) || 0;
+                  const p75 = Number(row.p75) || 0;
+                  const p90 = Number(row.p90) || 0;
+                  
+                  if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
+                    transformedRow.tcc_p25 = p25;
+                    transformedRow.tcc_p50 = p50;
+                    transformedRow.tcc_p75 = p75;
+                    transformedRow.tcc_p90 = p90;
+                  } else if (variable.includes('cf') || variable.includes('conversion')) {
+                    transformedRow.cf_p25 = p25;
+                    transformedRow.cf_p50 = p50;
+                    transformedRow.cf_p75 = p75;
+                    transformedRow.cf_p90 = p90;
+                  } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+                    transformedRow.wrvu_p25 = p25;
+                    transformedRow.wrvu_p50 = p50;
+                    transformedRow.wrvu_p75 = p75;
+                    transformedRow.wrvu_p90 = p90;
+                  }
+                }
+
+                return transformedRow;
+              });
+              
+              allData.push(...transformedRows);
             }
           } catch (error) {
             console.warn(`Failed to load data for survey ${survey.id}:`, error);
@@ -1290,112 +1344,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           </div>
         </CardContent>
       </Card>
-
-      {/* Report Builder - Spanning across full width */}
-      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <CardContent className="p-6">
-          <Typography variant="h6" className="mb-4 text-gray-900 font-semibold">
-            Report Builder
-          </Typography>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Report Name */}
-            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
-              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Report Name
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Enter report name to save..."
-                value={currentConfig.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleConfigChange('name', e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                  }
-                }}
-              />
-            </FormControl>
-
-            {/* Dimension Selector */}
-            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
-              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Group By (X-Axis)
-              </Typography>
-              <Select
-                value={currentConfig.dimension}
-                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('dimension', e.target.value)}
-                sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                  }
-                }}
-              >
-                <MenuItem value="specialty">Specialty</MenuItem>
-                <MenuItem value="region">Region</MenuItem>
-                <MenuItem value="providerType">Provider Type</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Metric Selector */}
-            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
-              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Measure (Y-Axis)
-              </Typography>
-              <Select
-                value={currentConfig.metric}
-                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('metric', e.target.value)}
-                sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                  }
-                }}
-              >
-                <MenuItem value="tcc_p25">TCC 25th Percentile</MenuItem>
-                <MenuItem value="tcc_p50">TCC 50th Percentile</MenuItem>
-                <MenuItem value="tcc_p75">TCC 75th Percentile</MenuItem>
-                <MenuItem value="tcc_p90">TCC 90th Percentile</MenuItem>
-                <MenuItem value="wrvu_p25">wRVU 25th Percentile</MenuItem>
-                <MenuItem value="wrvu_p50">wRVU 50th Percentile</MenuItem>
-                <MenuItem value="wrvu_p75">wRVU 75th Percentile</MenuItem>
-                <MenuItem value="wrvu_p90">wRVU 90th Percentile</MenuItem>
-                <MenuItem value="cf_p25">CF 25th Percentile</MenuItem>
-                <MenuItem value="cf_p50">CF 50th Percentile</MenuItem>
-                <MenuItem value="cf_p75">CF 75th Percentile</MenuItem>
-                <MenuItem value="cf_p90">CF 90th Percentile</MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Chart Type Selector */}
-            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
-              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Chart Type
-              </Typography>
-              <Select
-                value={currentConfig.chartType}
-                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('chartType', e.target.value)}
-                sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                  }
-                }}
-              >
-                <MenuItem value="bar">Bar Chart</MenuItem>
-                <MenuItem value="line">Line Chart</MenuItem>
-                <MenuItem value="pie">Pie Chart</MenuItem>
-              </Select>
-            </FormControl>
-          </div>
-        </CardContent>
-      </Card>
-
 
 
       {/* Chart Preview */}

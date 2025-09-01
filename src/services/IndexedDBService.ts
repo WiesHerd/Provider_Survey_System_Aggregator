@@ -1,6 +1,7 @@
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
 import { IColumnMapping } from '../types/column';
+import { IUnmappedVariable } from '../features/mapping/types/mapping';
 
 interface Survey {
   id: string;
@@ -35,7 +36,7 @@ interface SurveyData {
 export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
-  private readonly DB_VERSION = 1;
+  private readonly DB_VERSION = 4;
 
   async initialize(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -83,6 +84,51 @@ export class IndexedDBService {
           const columnStore = db.createObjectStore('columnMappings', { keyPath: 'id' });
           columnStore.createIndex('surveyId', 'surveyId', { unique: false });
           columnStore.createIndex('originalName', 'originalName', { unique: false });
+        }
+
+        // Create variable mappings store
+        if (!db.objectStoreNames.contains('variableMappings')) {
+          const variableStore = db.createObjectStore('variableMappings', { keyPath: 'id' });
+          variableStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+          variableStore.createIndex('variableType', 'variableType', { unique: false });
+        }
+
+        // Create region mappings store
+        if (!db.objectStoreNames.contains('regionMappings')) {
+          const regionStore = db.createObjectStore('regionMappings', { keyPath: 'id' });
+          regionStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+        }
+
+        // Create provider type mappings store
+        if (!db.objectStoreNames.contains('providerTypeMappings')) {
+          const providerTypeStore = db.createObjectStore('providerTypeMappings', { keyPath: 'id' });
+          providerTypeStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+        }
+
+        // Create learned mappings stores
+        if (!db.objectStoreNames.contains('learnedSpecialtyMappings')) {
+          const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'original' });
+          learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('learnedColumnMappings')) {
+          const learnedColumnStore = db.createObjectStore('learnedColumnMappings', { keyPath: 'original' });
+          learnedColumnStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('learnedVariableMappings')) {
+          const learnedVariableStore = db.createObjectStore('learnedVariableMappings', { keyPath: 'original' });
+          learnedVariableStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('learnedRegionMappings')) {
+          const learnedRegionStore = db.createObjectStore('learnedRegionMappings', { keyPath: 'original' });
+          learnedRegionStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('learnedProviderTypeMappings')) {
+          const learnedProviderTypeStore = db.createObjectStore('learnedProviderTypeMappings', { keyPath: 'original' });
+          learnedProviderTypeStore.createIndex('corrected', 'corrected', { unique: false });
         }
       };
     });
@@ -473,32 +519,143 @@ export class IndexedDBService {
         const firstRow = rows[0];
         const surveySource = survey.type || survey.name || 'Unknown';
         
+        // Debug: Log all columns in the first row
+        console.log(`🔍 Survey ${surveySource} columns:`, Object.keys(firstRow));
+        
+        // Check top-level columns
         Object.keys(firstRow).forEach(columnName => {
-          if (!mappedNames.has(columnName.toLowerCase())) {
+          // Debug: Check each column against compensation patterns
+          const isCompensation = this.isCompensationOrTechnicalColumn(columnName);
+          console.log(`🔍 Column "${columnName}" - isCompensation: ${isCompensation}`);
+          
+          // Include compensation and technical columns, including percentile columns
+          if (isCompensation) {
             const key = columnName.toLowerCase();
             const current = columnCounts.get(key) || { count: 0, sources: new Set(), dataType: typeof firstRow[columnName] };
             current.count++;
             current.sources.add(surveySource);
             columnCounts.set(key, current);
+            
+            // Debug: Log compensation columns found
+            console.log(`✅ Found compensation column: ${columnName} in ${surveySource}`);
           }
         });
+        
+        // ALSO check nested data object for columns
+        if (firstRow.data && typeof firstRow.data === 'object') {
+          console.log(`🔍 Checking nested data object for survey: ${surveySource}`);
+          Object.keys(firstRow.data).forEach(columnName => {
+            // Debug: Check each nested column against compensation patterns
+            const isCompensation = this.isCompensationOrTechnicalColumn(columnName);
+            console.log(`🔍 Nested column "${columnName}" - isCompensation: ${isCompensation}`);
+            
+            // Include compensation and technical columns, including percentile columns
+            if (isCompensation) {
+              const key = columnName.toLowerCase();
+              const current = columnCounts.get(key) || { count: 0, sources: new Set(), dataType: 'string' };
+              current.count++;
+              current.sources.add(surveySource);
+              columnCounts.set(key, current);
+              
+              // Debug: Log compensation columns found
+              console.log(`✅ Found nested compensation column: ${columnName} in ${surveySource}`);
+            }
+          });
+        }
       }
     }
 
-    // Create separate entries for each survey source
+
+
+    // Create separate entries for each survey source, but ONLY if not already mapped
     columnCounts.forEach((value, key) => {
       Array.from(value.sources).forEach(surveySource => {
-        unmapped.push({
-          id: crypto.randomUUID(),
-          name: key,
-          dataType: value.dataType,
-          surveySource: surveySource,
-          frequency: value.count
-        });
+        // Check if this column is already mapped
+        if (!mappedNames.has(key)) {
+          unmapped.push({
+            id: crypto.randomUUID(),
+            name: key,
+            dataType: value.dataType,
+            surveySource: surveySource,
+            frequency: value.count,
+            category: this.categorizeColumn(key)
+          });
+        } else {
+          console.log(`🚫 Skipping mapped column: ${key} from ${surveySource}`);
+        }
       });
     });
 
+    console.log(`📊 Total unmapped columns found: ${unmapped.length}`);
+    console.log(`📋 Unmapped columns:`, unmapped.map(c => `${c.name} (${c.surveySource})`));
+
     return unmapped;
+  }
+
+  /**
+   * Determines if a column is compensation or technical data that should be handled by Column Mapping
+   * Excludes specialty, provider type, region, and variable name columns (handled by dedicated mappers)
+   */
+  private isCompensationOrTechnicalColumn(columnName: string): boolean {
+    const name = columnName.toLowerCase();
+    
+    // Exclude columns handled by dedicated mappers
+    const excludePatterns = [
+      /^specialty$/i,
+      /^provider.*type$/i, /^providertype$/i,
+      /^geographic.*region$/i, /^region$/i, /^geographicregion$/i,
+      /^variable$/i, /^variable.*name$/i
+    ];
+    
+    for (const pattern of excludePatterns) {
+      if (pattern.test(name)) {
+        return false;
+      }
+    }
+    
+    // Include compensation percentile patterns
+    const includePatterns = [
+      // TCC patterns
+      /tcc.*p\d+/i, /p\d+.*tcc/i, /total.*cash.*\d+/i, /\d+.*total.*cash/i,
+      /total.*comp.*\d+/i, /\d+.*total.*comp/i,
+      
+      // wRVU patterns  
+      /wrvu.*p\d+/i, /p\d+.*wrvu/i, /work.*rvu.*\d+/i, /\d+.*work.*rvu/i,
+      /rvu.*\d+/i, /\d+.*rvu/i,
+      
+      // CF patterns
+      /cf.*p\d+/i, /p\d+.*cf/i, /conversion.*factor.*\d+/i, /\d+.*conversion.*factor/i,
+      
+      // Technical fields
+      /n_orgs?$/i, /n_incumbents?$/i, /number.*org/i, /number.*incumbent/i,
+      /organization.*count/i, /incumbent.*count/i,
+      
+      // Direct percentile matches
+      /^tcc_p\d+$/i, /^wrvu_p\d+$/i, /^cf_p\d+$/i,
+      
+      // Basic percentile patterns (p25, p50, p75, p90)
+      /^p\d+$/i, /^p25$/i, /^p50$/i, /^p75$/i, /^p90$/i,
+      
+      // Common survey percentile variations
+      /median/i, /25th/i, /75th/i, /90th/i, /percentile/i
+    ];
+    
+    return includePatterns.some(pattern => pattern.test(name));
+  }
+
+  /**
+   * Categorizes compensation columns for better organization
+   */
+  private categorizeColumn(columnName: string): string {
+    const name = columnName.toLowerCase();
+    
+    if (/tcc|total.*cash|total.*comp/i.test(name)) return 'Total Cash Compensation';
+    if (/wrvu|work.*rvu|rvu/i.test(name)) return 'Work RVUs'; 
+    if (/cf|conversion.*factor/i.test(name)) return 'Conversion Factor';
+    if (/n_orgs?|organization|number.*org/i.test(name)) return 'Organization Count';
+    if (/n_incumbents?|incumbent|number.*incumbent/i.test(name)) return 'Incumbent Count';
+    
+    return 'Other Compensation';
   }
 
   // Utility Methods
@@ -549,6 +706,65 @@ export class IndexedDBService {
     });
 
     return unmapped;
+  }
+
+  async getUnmappedVariables(): Promise<IUnmappedVariable[]> {
+    try {
+      const surveys = await this.getAllSurveys();
+      const mappings = await this.getVariableMappings();
+    
+    const mappedNames = new Set<string>();
+    mappings.forEach(mapping => {
+      mappedNames.add(mapping.standardizedName.toLowerCase());
+      mapping.sourceVariables.forEach((source: any) => {
+        mappedNames.add(source.originalVariableName.toLowerCase());
+      });
+    });
+
+    const unmapped: IUnmappedVariable[] = [];
+    const variableCounts = new Map<string, { count: number; sources: Set<string> }>();
+
+    for (const survey of surveys) {
+      const { rows } = await this.getSurveyData(survey.id);
+      
+      // Get survey source with proper fallbacks
+      const surveySource = survey.type || survey.name || 'Unknown';
+      
+      rows.forEach(row => {
+        const variable = row.variable || row.Variable || row['Variable Name'];
+        if (variable && typeof variable === 'string' && !mappedNames.has(variable.toLowerCase())) {
+          const key = variable.toLowerCase();
+          const current = variableCounts.get(key) || { count: 0, sources: new Set() };
+          current.count++;
+          current.sources.add(surveySource);
+          variableCounts.set(key, current);
+        }
+      });
+    }
+
+    // Create separate entries for each survey source instead of combining them
+    variableCounts.forEach((value, key) => {
+      // Create a separate entry for each survey source
+      Array.from(value.sources).forEach(surveySource => {
+        const variableType = this.detectVariableType(key);
+        unmapped.push({
+          id: crypto.randomUUID(),
+          name: key,
+          frequency: value.count,
+          surveySource: surveySource as any,
+          variableType: variableType.type,
+          variableSubType: variableType.subType,
+          confidence: variableType.confidence,
+          suggestions: variableType.suggestions
+        });
+      });
+    });
+
+      return unmapped;
+    } catch (error) {
+      console.error('Error getting unmapped variables:', error);
+      return [];
+    }
   }
 
   async autoMapColumns(config: any): Promise<Array<{
@@ -695,5 +911,451 @@ export class IndexedDBService {
       status: 'healthy',
       timestamp: new Date().toISOString()
     };
+  }
+
+  // Variable Mapping Methods
+  async getVariableMappings(): Promise<any[]> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['variableMappings'], 'readonly');
+      const store = transaction.objectStore('variableMappings');
+      const request = store.getAll();
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || []);
+    });
+  }
+
+  async createVariableMapping(mapping: any): Promise<any> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['variableMappings'], 'readwrite');
+      const store = transaction.objectStore('variableMappings');
+      const request = store.add(mapping);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(mapping);
+    });
+  }
+
+  async updateVariableMapping(id: string, mapping: any): Promise<any> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['variableMappings'], 'readwrite');
+      const store = transaction.objectStore('variableMappings');
+      const request = store.put({ ...mapping, id });
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(mapping);
+    });
+  }
+
+  async deleteVariableMapping(id: string): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['variableMappings'], 'readwrite');
+      const store = transaction.objectStore('variableMappings');
+      const request = store.delete(id);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async clearAllVariableMappings(): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['variableMappings'], 'readwrite');
+      const store = transaction.objectStore('variableMappings');
+      const request = store.clear();
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async getUnmappedProviderTypes(): Promise<any[]> {
+    try {
+      const surveys = await this.getAllSurveys();
+      const mappings = await this.getProviderTypeMappings();
+    
+      const mappedNames = new Set<string>();
+      mappings.forEach(mapping => {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mapping.sourceProviderTypes.forEach((source: any) => {
+          mappedNames.add(source.providerType.toLowerCase());
+        });
+      });
+
+      const unmapped: any[] = [];
+      const providerTypeCounts = new Map<string, { count: number; sources: Set<string> }>();
+
+      for (const survey of surveys) {
+        const { rows } = await this.getSurveyData(survey.id);
+        
+        // Get survey source with proper fallbacks
+        const surveySource = survey.type || survey.name || 'Unknown';
+        
+        rows.forEach(row => {
+          // Look for provider type in different possible column names
+          const providerType = row.providerType || row['Provider Type'] || row.provider_type || row['provider_type'];
+          if (providerType && typeof providerType === 'string' && !mappedNames.has(providerType.toLowerCase())) {
+            const key = providerType.toLowerCase();
+            const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
+            current.count++;
+            current.sources.add(surveySource);
+            providerTypeCounts.set(key, current);
+          }
+        });
+      }
+
+      // Create separate entries for each survey source
+      providerTypeCounts.forEach((value, key) => {
+        Array.from(value.sources).forEach(surveySource => {
+          unmapped.push({
+            id: crypto.randomUUID(),
+            name: key,
+            frequency: value.count,
+            surveySource: surveySource as any
+          });
+        });
+      });
+
+      return unmapped;
+    } catch (error) {
+      console.error('Error getting unmapped provider types:', error);
+      return [];
+    }
+  }
+
+  async getUnmappedRegions(): Promise<any[]> {
+    try {
+      const surveys = await this.getAllSurveys();
+      const mappings = await this.getRegionMappings();
+    
+      const mappedNames = new Set<string>();
+      mappings.forEach(mapping => {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mapping.sourceRegions.forEach((source: any) => {
+          mappedNames.add(source.region.toLowerCase());
+        });
+      });
+
+      const unmapped: any[] = [];
+      const regionCounts = new Map<string, { count: number; sources: Set<string> }>();
+
+      for (const survey of surveys) {
+        const { rows } = await this.getSurveyData(survey.id);
+        
+        // Get survey source with proper fallbacks
+        const surveySource = survey.type || survey.name || 'Unknown';
+        
+        rows.forEach(row => {
+          // Look for region in different possible column names
+          const region = row.geographicRegion || row['Geographic Region'] || row.geographic_region || row.region || row.Region;
+          if (region && typeof region === 'string' && !mappedNames.has(region.toLowerCase())) {
+            const key = region.toLowerCase();
+            const current = regionCounts.get(key) || { count: 0, sources: new Set() };
+            current.count++;
+            current.sources.add(surveySource);
+            regionCounts.set(key, current);
+          }
+        });
+      }
+
+      // Create separate entries for each survey source
+      regionCounts.forEach((value, key) => {
+        Array.from(value.sources).forEach(surveySource => {
+          unmapped.push({
+            id: crypto.randomUUID(),
+            name: key,
+            frequency: value.count,
+            surveySource: surveySource as any
+          });
+        });
+      });
+
+      return unmapped;
+    } catch (error) {
+      console.error('Error getting unmapped regions:', error);
+      return [];
+    }
+  }
+
+  // Provider Type Mapping Methods
+  async getProviderTypeMappings(): Promise<any[]> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['providerTypeMappings'], 'readonly');
+      const store = transaction.objectStore('providerTypeMappings');
+      const request = store.getAll();
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || []);
+    });
+  }
+
+  async createProviderTypeMapping(mapping: any): Promise<any> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['providerTypeMappings'], 'readwrite');
+      const store = transaction.objectStore('providerTypeMappings');
+      const request = store.add(mapping);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(mapping);
+    });
+  }
+
+  async updateProviderTypeMapping(id: string, mapping: any): Promise<any> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['providerTypeMappings'], 'readwrite');
+      const store = transaction.objectStore('providerTypeMappings');
+      const request = store.put({ ...mapping, id });
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(mapping);
+    });
+  }
+
+  async deleteProviderTypeMapping(id: string): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['providerTypeMappings'], 'readwrite');
+      const store = transaction.objectStore('providerTypeMappings');
+      const request = store.delete(id);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async clearAllProviderTypeMappings(): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['providerTypeMappings'], 'readwrite');
+      const store = transaction.objectStore('providerTypeMappings');
+      const request = store.clear();
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  // Region Mapping Methods
+  async getRegionMappings(): Promise<any[]> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['regionMappings'], 'readonly');
+      const store = transaction.objectStore('regionMappings');
+      const request = store.getAll();
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || []);
+    });
+  }
+
+  async createRegionMapping(mapping: any): Promise<any> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['regionMappings'], 'readwrite');
+      const store = transaction.objectStore('regionMappings');
+      const request = store.add(mapping);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(mapping);
+    });
+  }
+
+  async updateRegionMapping(id: string, mapping: any): Promise<any> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['regionMappings'], 'readwrite');
+      const store = transaction.objectStore('regionMappings');
+      const request = store.put({ ...mapping, id });
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(mapping);
+    });
+  }
+
+  async deleteRegionMapping(id: string): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['regionMappings'], 'readwrite');
+      const store = transaction.objectStore('regionMappings');
+      const request = store.delete(id);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async clearAllRegionMappings(): Promise<void> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['regionMappings'], 'readwrite');
+      const store = transaction.objectStore('regionMappings');
+      const request = store.clear();
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  private detectVariableType(variableName: string): {
+    type: 'compensation' | 'categorical';
+    subType: string;
+    confidence: number;
+    suggestions: string[];
+  } {
+    const name = variableName.toLowerCase();
+    
+    // Compensation variables
+    if (name.includes('tcc') || name.includes('total cash') || name.includes('compensation')) {
+      return {
+        type: 'compensation',
+        subType: 'tcc',
+        confidence: 0.9,
+        suggestions: ['tcc', 'total_cash_compensation']
+      };
+    }
+    
+    if (name.includes('wrvu') || name.includes('work rvu') || name.includes('rvu')) {
+      return {
+        type: 'compensation',
+        subType: 'wrvu',
+        confidence: 0.9,
+        suggestions: ['wrvu', 'work_rvu']
+      };
+    }
+    
+    if (name.includes('cf') || name.includes('conversion') || name.includes('factor')) {
+      return {
+        type: 'compensation',
+        subType: 'cf',
+        confidence: 0.9,
+        suggestions: ['cf', 'conversion_factor']
+      };
+    }
+    
+    if (name.includes('base') || name.includes('salary')) {
+      return {
+        type: 'compensation',
+        subType: 'base_pay',
+        confidence: 0.8,
+        suggestions: ['base_pay', 'salary']
+      };
+    }
+    
+    // Categorical variables
+    if (name.includes('region') || name.includes('geographic')) {
+      return {
+        type: 'categorical',
+        subType: 'region',
+        confidence: 0.8,
+        suggestions: ['region', 'geographic_region']
+      };
+    }
+    
+    if (name.includes('provider') || name.includes('type')) {
+      return {
+        type: 'categorical',
+        subType: 'provider_type',
+        confidence: 0.7,
+        suggestions: ['provider_type', 'type']
+      };
+    }
+    
+    // Default to compensation if we can't determine
+    return {
+      type: 'compensation',
+      subType: 'unknown',
+      confidence: 0.5,
+      suggestions: [variableName.toLowerCase().replace(/\s+/g, '_')]
+    };
+  }
+
+  // ==================== LEARNED MAPPINGS METHODS ====================
+
+  /**
+   * Get learned mappings for a specific type
+   */
+  async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<Record<string, string>> {
+    const db = await this.ensureDB();
+    const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const mappings: Record<string, string> = {};
+        request.result.forEach((item: any) => {
+          mappings[item.original] = item.corrected;
+        });
+        resolve(mappings);
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Save a learned mapping
+   */
+  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string): Promise<void> {
+    const db = await this.ensureDB();
+    const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.put({
+        original: original.toLowerCase(),
+        corrected,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Remove a learned mapping
+   */
+  async removeLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string): Promise<void> {
+    const db = await this.ensureDB();
+    const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.delete(original.toLowerCase());
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Clear all learned mappings of a specific type
+   */
+  async clearLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<void> {
+    const db = await this.ensureDB();
+    const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.clear();
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 }

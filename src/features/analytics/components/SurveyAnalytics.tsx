@@ -5,7 +5,7 @@
 
 import React, { memo } from 'react';
 import { Box, Typography, Alert } from '@mui/material';
-import { useNormalizedAnalyticsData } from '../hooks/useNormalizedAnalyticsData';
+import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { AnalyticsTable } from './AnalyticsTable';
 import { AnalyticsFilters } from './AnalyticsFilters';
 import { AnalyticsSummary } from './AnalyticsSummary';
@@ -23,9 +23,8 @@ export const SurveyAnalytics: React.FC = memo(() => {
     refetch,
     filters,
     setFilters,
-    filteredData,
-    availableOptions
-  } = useNormalizedAnalyticsData();
+    filteredData
+  } = useAnalyticsData();
 
   // Handle error state
   if (error) {
@@ -73,7 +72,13 @@ export const SurveyAnalytics: React.FC = memo(() => {
         filters={filters}
         onFiltersChange={setFilters}
         onClearFilters={() => setFilters({})}
-        availableOptions={availableOptions}
+        availableOptions={{
+          specialties: [...new Set(data.map(row => row.surveySpecialty))].sort(),
+          providerTypes: [...new Set(data.map(row => row.providerType))].sort(),
+          regions: [...new Set(data.map(row => row.geographicRegion))].sort(),
+          surveySources: [...new Set(data.map(row => row.surveySource))].sort(),
+          years: [...new Set(data.map(row => row.surveyYear))].sort()
+        }}
       />
 
       {/* Data Table */}

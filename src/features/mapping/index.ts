@@ -1,21 +1,27 @@
-// Main component
+// Export all mapping components
 export { SpecialtyMapping } from './components/SpecialtyMapping';
+export { VariableMapping } from './components/VariableMapping';
+export { RegionMapping } from './components/RegionMapping';
+export { ProviderTypeMapping } from './components/ProviderTypeMapping';
 
-// Sub-components
-export { SpecialtyCard } from './components/SpecialtyCard';
-export { MappingHelp } from './components/MappingHelp';
+// Reusable container component
+export { MappingScreen } from './components/MappingScreen';
 export { UnmappedSpecialties } from './components/UnmappedSpecialties';
 export { MappedSpecialties } from './components/MappedSpecialties';
-export { MappedSpecialtyItem } from './components/MappedSpecialtyItem';
 export { LearnedMappings } from './components/LearnedMappings';
 export { AutoMapping } from './components/AutoMapping';
+export { UnmappedVariables } from './components/UnmappedVariables';
+export { MappedVariables } from './components/MappedVariables';
+export { VariableCard } from './components/VariableCard';
+export { VariableMappingCard } from './components/VariableMappingCard';
+export { VariableMappingDialog } from './components/VariableMappingDialog';
 
-// Hooks
+// Export all mapping hooks
 export { useMappingData } from './hooks/useMappingData';
+export { useVariableMappingData } from './hooks/useVariableMappingData';
 
-// Types
+// Export all mapping types
 export type {
-  ISourceSpecialty,
   ISpecialtyMapping,
   IUnmappedSpecialty,
   ISpecialtyGroup,
@@ -36,7 +42,14 @@ export type {
   MappingApiResponse,
   AutoMappingApiResponse,
   MappingValidationResult,
-  MappingExportConfig
+  MappingExportConfig,
+  IVariableMapping,
+  IVariableSource,
+  IUnmappedVariable,
+  VariableMappingProps,
+  VariableMappingState,
+  VariableCardProps,
+  VariableMappingCardProps
 } from './types/mapping';
 
 // Utilities

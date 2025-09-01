@@ -32,6 +32,21 @@ import { useYear } from '../contexts/YearContext';
 import { performanceMonitor } from '../shared/utils/performance';
 const SHOW_DEBUG = false; // Set to false for production performance
 
+// Variable mapping interface
+interface VariableMapping {
+  id: string;
+  standardizedName: string;
+  variableType: 'compensation' | 'categorical';
+  variableSubType: string;
+  sourceVariables: Array<{
+    surveySource: string;
+    originalVariableName: string;
+    frequency?: number;
+  }>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface AggregatedData {
   standardizedName: string;
   surveySource: string;
@@ -89,6 +104,78 @@ const calculateWeightedAverage = (values: number[], weights: number[]): number =
 const calculateAverage = (values: number[]): number => {
   if (values.length === 0) return 0;
   return values.reduce((acc, val) => acc + val, 0) / values.length;
+};
+
+// Dynamic variable detection and categorization
+const detectVariableType = (variableName: string): { type: string; standardizedName: string } => {
+  const name = variableName.toLowerCase();
+  
+  // Define patterns for different variable types
+  const patterns = {
+    tcc: ['compensation', 'salary', 'total cash', 'tcc', 'total compensation'],
+    wrvu: ['rvu', 'relative value', 'work rvu', 'wrvu', 'work relative value'],
+    cf: ['conversion', 'cf', 'factor', 'conversion factor'],
+    bonus: ['bonus', 'incentive', 'performance', 'productivity'],
+    quality: ['quality', 'metrics', 'score', 'outcome'],
+    stipend: ['stipend', 'allowance', 'supplement'],
+    retention: ['retention', 'loyalty', 'longevity'],
+    call: ['call', 'coverage', 'duty'],
+    admin: ['admin', 'administrative', 'leadership'],
+    research: ['research', 'academic', 'teaching']
+  };
+  
+  // Find matching pattern
+  for (const [type, keywords] of Object.entries(patterns)) {
+    if (keywords.some(keyword => name.includes(keyword))) {
+      return { 
+        type, 
+        standardizedName: `${type}_variable` 
+      };
+    }
+  }
+  
+  // If no pattern matches, create a generic mapping
+  return { 
+    type: 'custom', 
+    standardizedName: `custom_${name.replace(/[^a-z0-9]/g, '_')}` 
+  };
+};
+
+// Generate standardized field names for any variable type
+const generateStandardizedFields = (variableType: string, percentile: string): string => {
+  return `${variableType}_${percentile}`;
+};
+
+// Get variable mappings from the database
+const getVariableMappings = async (): Promise<VariableMapping[]> => {
+  try {
+    const dataService = getDataService();
+    const mappings = await dataService.getVariableMappings();
+    return mappings || [];
+  } catch (error) {
+    console.error('Error loading variable mappings:', error);
+    return [];
+  }
+};
+
+// Find variable mapping for a given variable name and survey source
+const findVariableMapping = (
+  variableName: string, 
+  surveySource: string, 
+  variableMappings: VariableMapping[],
+  variableType?: 'compensation' | 'categorical',
+  variableSubType?: string
+): VariableMapping | null => {
+  return variableMappings.find(mapping => {
+    // If variableType and variableSubType are specified, filter by them
+    if (variableType && mapping.variableType !== variableType) return false;
+    if (variableSubType && mapping.variableSubType !== variableSubType) return false;
+    
+    return mapping.sourceVariables.some(source => 
+      source.surveySource === surveySource && 
+      source.originalVariableName.toLowerCase() === variableName.toLowerCase()
+    );
+  }) || null;
 };
 
 // Enterprise-grade intelligent column mapping function
@@ -204,7 +291,7 @@ const extractCleanSurveyName = (filename: string): string => {
 };
 
 // PERFORMANCE OPTIMIZATION: Optimized data transformation function
-const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string): any[] => {
+const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string, variableMappings: VariableMapping[] = []): any[] => {
   if (rawData.length === 0) return [];
 
   // PERFORMANCE OPTIMIZATION: Pre-compute lookups once
@@ -311,6 +398,70 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
 
     // PERFORMANCE OPTIMIZATION: Apply column mappings efficiently
     let mappedColumns = 0;
+    
+    // Apply categorical variable mappings
+    if (row.geographicRegion) {
+      const regionMapping = findVariableMapping(row.geographicRegion, surveySource, variableMappings, 'categorical', 'region');
+      if (regionMapping) {
+        transformedRow.geographicRegion = regionMapping.standardizedName;
+        transformedRow.originalRegion = row.geographicRegion;
+      }
+    }
+    
+    if (row.providerType) {
+      const providerMapping = findVariableMapping(row.providerType, surveySource, variableMappings, 'categorical', 'providerType');
+      if (providerMapping) {
+        transformedRow.providerType = providerMapping.standardizedName;
+        transformedRow.originalProviderType = row.providerType;
+      }
+    }
+    
+    // Handle variable-based data structure (pivot format)
+    if (row.variable && (row.p25 !== undefined || row.p50 !== undefined || row.p75 !== undefined || row.p90 !== undefined)) {
+      // First try to find a variable mapping
+      const variableMapping = findVariableMapping(row.variable, surveySource, variableMappings);
+      
+      if (variableMapping) {
+        // Use the stored variable mapping
+        const percentiles = ['p25', 'p50', 'p75', 'p90'];
+        
+        percentiles.forEach(percentile => {
+          if (row[percentile] !== undefined) {
+            const fieldName = generateStandardizedFields(variableMapping.variableType, percentile);
+            transformedRow[fieldName] = Number(row[percentile]) || 0;
+            mappedColumns++;
+          }
+        });
+        
+        console.log('🔍 Variable mapping found:', {
+          variable: row.variable,
+          mappingType: variableMapping.variableType,
+          standardizedName: variableMapping.standardizedName,
+          mappedFields: percentiles.map(p => generateStandardizedFields(variableMapping.variableType, p))
+        });
+      } else {
+        // Fallback to auto-detection
+        const variableType = detectVariableType(row.variable);
+        const percentiles = ['p25', 'p50', 'p75', 'p90'];
+        
+        percentiles.forEach(percentile => {
+          if (row[percentile] !== undefined) {
+            const fieldName = generateStandardizedFields(variableType.type, percentile);
+            transformedRow[fieldName] = Number(row[percentile]) || 0;
+            mappedColumns++;
+          }
+        });
+        
+        console.log('🔍 Variable-based mapping (auto-detected):', {
+          variable: row.variable,
+          detectedType: variableType.type,
+          standardizedName: variableType.standardizedName,
+          mappedFields: percentiles.map(p => generateStandardizedFields(variableType.type, p))
+        });
+      }
+    }
+    
+    // Handle traditional column-based mappings
     for (const [originalColumn, value] of Object.entries(row)) {
       const standardizedName = columnMappingLookup.get(originalColumn);
       if (standardizedName) {
@@ -341,6 +492,100 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
       }
     }
     
+    // ENHANCED FALLBACK: If no columns mapped, try intelligent mapping with compensation detection
+    if (mappedColumns === 0) {
+      const intelligentMappings = createIntelligentMappings(row, surveySource);
+      
+      for (const [originalColumn, value] of Object.entries(row)) {
+        const mapping = intelligentMappings.find((m: {sourceColumn: string, targetColumn: string, confidence: number}) => m.sourceColumn === originalColumn);
+        if (mapping && value !== undefined && value !== null) {
+          transformedRow[mapping.targetColumn] = Number(value) || 0;
+          mappedColumns++;
+        }
+      }
+    }
+    
+    // ULTIMATE FALLBACK: Direct column name matching for compensation data
+    if (mappedColumns === 0) {
+      for (const [originalColumn, value] of Object.entries(row)) {
+        const columnName = String(originalColumn || '').toLowerCase();
+        const numValue = Number(value) || 0;
+        
+        // TCC (Total Cash Compensation) patterns
+        if (columnName.includes('total') && columnName.includes('comp') && columnName.includes('25')) transformedRow.tcc_p25 = numValue;
+        else if (columnName.includes('total') && columnName.includes('comp') && columnName.includes('median')) transformedRow.tcc_p50 = numValue;
+        else if (columnName.includes('total') && columnName.includes('comp') && columnName.includes('75')) transformedRow.tcc_p75 = numValue;
+        else if (columnName.includes('total') && columnName.includes('comp') && columnName.includes('90')) transformedRow.tcc_p90 = numValue;
+        else if (columnName.includes('tcc') && columnName.includes('25')) transformedRow.tcc_p25 = numValue;
+        else if (columnName.includes('tcc') && columnName.includes('median')) transformedRow.tcc_p50 = numValue;
+        else if (columnName.includes('tcc') && columnName.includes('75')) transformedRow.tcc_p75 = numValue;
+        else if (columnName.includes('tcc') && columnName.includes('90')) transformedRow.tcc_p90 = numValue;
+        
+        // WRVU (Work RVU) patterns
+        else if (columnName.includes('wrvu') && columnName.includes('25')) transformedRow.wrvu_p25 = numValue;
+        else if (columnName.includes('wrvu') && columnName.includes('median')) transformedRow.wrvu_p50 = numValue;
+        else if (columnName.includes('wrvu') && columnName.includes('75')) transformedRow.wrvu_p75 = numValue;
+        else if (columnName.includes('wrvu') && columnName.includes('90')) transformedRow.wrvu_p90 = numValue;
+        else if (columnName.includes('rvu') && columnName.includes('25')) transformedRow.wrvu_p25 = numValue;
+        else if (columnName.includes('rvu') && columnName.includes('median')) transformedRow.wrvu_p50 = numValue;
+        else if (columnName.includes('rvu') && columnName.includes('75')) transformedRow.wrvu_p75 = numValue;
+        else if (columnName.includes('rvu') && columnName.includes('90')) transformedRow.wrvu_p90 = numValue;
+        
+        // CF (Conversion Factor) patterns
+        else if (columnName.includes('cf') && columnName.includes('25')) transformedRow.cf_p25 = numValue;
+        else if (columnName.includes('cf') && columnName.includes('median')) transformedRow.cf_p50 = numValue;
+        else if (columnName.includes('cf') && columnName.includes('75')) transformedRow.cf_p75 = numValue;
+        else if (columnName.includes('cf') && columnName.includes('90')) transformedRow.cf_p90 = numValue;
+        else if (columnName.includes('conversion') && columnName.includes('25')) transformedRow.cf_p25 = numValue;
+        else if (columnName.includes('conversion') && columnName.includes('median')) transformedRow.cf_p50 = numValue;
+        else if (columnName.includes('conversion') && columnName.includes('75')) transformedRow.cf_p75 = numValue;
+        else if (columnName.includes('conversion') && columnName.includes('90')) transformedRow.cf_p90 = numValue;
+        
+        // Organization and incumbent patterns
+        else if (columnName.includes('org') && !columnName.includes('incumbent')) transformedRow.n_orgs = numValue;
+        else if (columnName.includes('incumbent')) transformedRow.n_incumbents = numValue;
+      }
+    }
+    
+    // Debug: Log column mapping results for first few rows
+    if (Math.random() < 0.05) { // Log 5% of rows for debugging - more frequent
+      console.log('🔍 Column mapping debug:', {
+        surveySource,
+        originalSpecialty: row.specialty,
+        mappedColumns,
+        availableColumns: Object.keys(row),
+        columnMappingLookupSize: columnMappingLookup.size,
+        sampleMappings: Array.from(columnMappingLookup.entries()).slice(0, 5),
+        // Add compensation-specific debugging
+        tccValues: {
+          p25: transformedRow.tcc_p25,
+          p50: transformedRow.tcc_p50,
+          p75: transformedRow.tcc_p75,
+          p90: transformedRow.tcc_p90
+        },
+        wrvuValues: {
+          p25: transformedRow.wrvu_p25,
+          p50: transformedRow.wrvu_p50,
+          p75: transformedRow.wrvu_p75,
+          p90: transformedRow.wrvu_p90
+        },
+        cfValues: {
+          p25: transformedRow.cf_p25,
+          p50: transformedRow.cf_p50,
+          p75: transformedRow.cf_p75,
+          p90: transformedRow.cf_p90
+        }
+      });
+      
+      // Also log the actual row data to see what columns exist
+      console.log('📊 Raw row data sample:', {
+        surveySource,
+        specialty: row.specialty,
+        allColumns: Object.keys(row),
+        sampleValues: Object.entries(row).slice(0, 10).map(([k, v]) => `${k}: ${v}`)
+      });
+    }
+    
     // PERFORMANCE OPTIMIZATION: Only do intelligent mapping if no columns mapped
     if (mappedColumns === 0) {
       const intelligentMappings = createIntelligentMappings(row, surveySource);
@@ -352,6 +597,84 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
           mappedColumns++;
         }
       }
+    }
+    
+    // Debug: Log if no TCC/WRVU/CF values were mapped
+    if (mappedColumns === 0) {
+      console.log('⚠️ No columns mapped for row:', {
+        surveySource,
+        originalSpecialty: row.specialty,
+        availableColumns: Object.keys(row),
+        sampleValues: Object.entries(row).slice(0, 5).map(([k, v]) => `${k}: ${v}`),
+        // Show all column names that might contain compensation data
+        compensationColumns: Object.keys(row).filter(col => 
+          col.toLowerCase().includes('tcc') || 
+          col.toLowerCase().includes('wrvu') || 
+          col.toLowerCase().includes('rvu') || 
+          col.toLowerCase().includes('cf') || 
+          col.toLowerCase().includes('conversion') || 
+          col.toLowerCase().includes('comp') ||
+          col.toLowerCase().includes('total')
+        )
+      });
+    }
+    
+    // Debug: Log if compensation values are all zero
+    if (transformedRow.tcc_p50 === 0 && transformedRow.wrvu_p50 === 0 && transformedRow.cf_p50 === 0) {
+      console.log('💰 No compensation data found for row:', {
+        surveySource,
+        originalSpecialty: row.specialty,
+        mappedColumns,
+        availableColumns: Object.keys(row),
+        compensationColumns: Object.keys(row).filter(col => 
+          col.toLowerCase().includes('tcc') || 
+          col.toLowerCase().includes('wrvu') || 
+          col.toLowerCase().includes('rvu') || 
+          col.toLowerCase().includes('cf') || 
+          col.toLowerCase().includes('conversion') || 
+          col.toLowerCase().includes('comp') ||
+          col.toLowerCase().includes('total')
+        ),
+        finalValues: {
+          tcc_p50: transformedRow.tcc_p50,
+          wrvu_p50: transformedRow.wrvu_p50,
+          cf_p50: transformedRow.cf_p50
+        }
+      });
+    }
+    
+    // ALWAYS log the first few rows to see what's happening
+    if (Math.random() < 0.02) { // Log 2% of rows - very frequent
+      console.log('🔍 ALWAYS DEBUG - Row transformation:', {
+        surveySource,
+        originalSpecialty: row.specialty,
+        mappedColumns,
+        availableColumns: Object.keys(row),
+        compensationColumns: Object.keys(row).filter(col => 
+          col.toLowerCase().includes('tcc') || 
+          col.toLowerCase().includes('wrvu') || 
+          col.toLowerCase().includes('rvu') || 
+          col.toLowerCase().includes('cf') || 
+          col.toLowerCase().includes('conversion') || 
+          col.toLowerCase().includes('comp') ||
+          col.toLowerCase().includes('total')
+        ),
+        sampleValues: Object.entries(row).slice(0, 10).map(([k, v]) => `${k}: ${v}`),
+        finalCompensationValues: {
+          tcc_p25: transformedRow.tcc_p25,
+          tcc_p50: transformedRow.tcc_p50,
+          tcc_p75: transformedRow.tcc_p75,
+          tcc_p90: transformedRow.tcc_p90,
+          wrvu_p25: transformedRow.wrvu_p25,
+          wrvu_p50: transformedRow.wrvu_p50,
+          wrvu_p75: transformedRow.wrvu_p75,
+          wrvu_p90: transformedRow.wrvu_p90,
+          cf_p25: transformedRow.cf_p25,
+          cf_p50: transformedRow.cf_p50,
+          cf_p75: transformedRow.cf_p75,
+          cf_p90: transformedRow.cf_p90
+        }
+      });
     }
 
     return transformedRow;
@@ -430,19 +753,39 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
   const [mappings, setMappings] = useState<ISpecialtyMapping[]>([]);
   const [columnMappings, setColumnMappings] = useState<any[]>([]);
   const [surveys, setSurveys] = useState<Record<string, ISurveyRow[]>>({});
-  const [filters, setFilters] = useState({
-    specialty: '',
-    providerType: '',
-    region: '',
-    surveySource: ''
+  // Persist filters in localStorage to survive component re-renders (e.g., sidebar toggle)
+  const [filters, setFilters] = useState(() => {
+    try {
+      const savedFilters = localStorage.getItem('analyticsFilters');
+      if (savedFilters) {
+        return JSON.parse(savedFilters);
+      }
+    } catch (error) {
+      console.warn('Failed to load saved filters:', error);
+    }
+    return {
+      specialty: '',
+      providerType: '',
+      region: '',
+      surveySource: ''
+    };
   });
 
   // PERFORMANCE OPTIMIZATION: Add loading states for better UX
   const [isDataProcessing, setIsDataProcessing] = useState(false);
   const [processedData, setProcessedData] = useState<any[]>([]);
 
-  const { currentYear, availableYears, setCurrentYear, resetYearConfiguration } = useYear();
+  const { currentYear, availableYears, setCurrentYear } = useYear();
   const dataService = useMemo(() => getDataService(), []);
+
+  // Save filters to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('analyticsFilters', JSON.stringify(filters));
+    } catch (error) {
+      console.warn('Failed to save filters:', error);
+    }
+  }, [filters]);
 
   // PERFORMANCE OPTIMIZATION: Memoize expensive lookups
   const chainByStandardized = useMemo(() => {
@@ -474,13 +817,24 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
     setIsDataProcessing(true);
     
     // Use setTimeout to defer heavy processing and prevent blocking the UI
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
       const startTime = performance.now();
+      
+      // Load variable mappings
+      const variableMappings = await getVariableMappings();
+      console.log('📊 Variable mappings loaded:', {
+        count: variableMappings.length,
+        mappings: variableMappings.map(m => ({
+          type: m.variableType,
+          standardizedName: m.standardizedName,
+          sources: m.sourceVariables.map(s => `${s.surveySource}: ${s.originalVariableName}`)
+        }))
+      });
       
       const allData: any[] = [];
       Object.entries(surveys).forEach(([surveyId, surveyData]) => {
         if (surveyData && surveyData.length > 0) {
-          const transformed = transformSurveyData(surveyData, columnMappings, mappings, surveyId);
+          const transformed = transformSurveyData(surveyData, columnMappings, mappings, surveyId, variableMappings);
           allData.push(...transformed);
         }
       });
@@ -491,7 +845,12 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
         surveySources: [...new Set(allData.map(row => row.surveySource))].slice(0, 5),
         sampleRow: allData[0],
         // Debug: Show heart-related specialties
-        heartSpecialties: [...new Set(allData.map(row => row.specialty))].filter(s => s && s.toLowerCase().includes('heart')).slice(0, 10)
+        heartSpecialties: [...new Set(allData.map(row => row.specialty))].filter(s => s && s.toLowerCase().includes('heart')).slice(0, 10),
+        // Debug: Check for TCC/WRVU/CF values
+        rowsWithTCC: allData.filter(row => row.tcc_p50 > 0).length,
+        rowsWithWRVU: allData.filter(row => row.wrvu_p50 > 0).length,
+        rowsWithCF: allData.filter(row => row.cf_p50 > 0).length,
+        totalRows: allData.length
       });
       
       setProcessedData(allData);
@@ -503,6 +862,37 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
 
     return () => clearTimeout(timeoutId);
   }, [surveys, columnMappings, mappings]);
+
+  // Debug: Log column mappings on load
+  useEffect(() => {
+    console.log('🔧 Column mappings loaded:', {
+      totalMappings: columnMappings.length,
+      mappingsBySurvey: columnMappings.reduce((acc: any, mapping: any) => {
+        mapping.sourceColumns.forEach((col: any) => {
+          if (!acc[col.surveySource]) acc[col.surveySource] = [];
+          acc[col.surveySource].push({
+            originalName: col.name,
+            standardizedName: mapping.standardizedName
+          });
+        });
+        return acc;
+      }, {}),
+      sampleMappings: columnMappings.slice(0, 3).map(m => ({
+        standardizedName: m.standardizedName,
+        sourceColumns: m.sourceColumns.map((c: any) => c.name)
+      })),
+      // Check for compensation-related mappings
+      compensationMappings: columnMappings.filter(m => 
+        m.standardizedName.toLowerCase().includes('tcc') || 
+        m.standardizedName.toLowerCase().includes('wrvu') || 
+        m.standardizedName.toLowerCase().includes('cf') ||
+        m.standardizedName.toLowerCase().includes('comp')
+      ).map(m => ({
+        standardizedName: m.standardizedName,
+        sourceColumns: m.sourceColumns.map((c: any) => c.name)
+      }))
+    });
+  }, [columnMappings]);
 
   // PERFORMANCE OPTIMIZATION: Memoize unique values calculation
   const uniqueValues = useMemo(() => {
@@ -542,6 +932,13 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
 
     processedData.forEach(row => {
       const surveySource = String(row.surveySource || '');
+      
+      // Always add survey sources to maintain all options in dropdown
+      if (row.surveySource) {
+        values.surveySources.add(String(row.surveySource));
+      }
+
+      // For other filters, apply cascading logic
       if (filters.surveySource && surveySource.toLowerCase() !== filters.surveySource.toLowerCase()) return;
 
       if (filters.specialty) {
@@ -558,9 +955,6 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       const region = (row as any).geographicRegion || (row as any).geographic_region;
       if (region) {
         values.regions.add(String(region));
-      }
-      if (row.surveySource) {
-        values.surveySources.add(String(row.surveySource));
       }
     });
 
@@ -583,13 +977,49 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
 
         // Load column mappings
         const loadedColumnMappings = await dataService.getAllColumnMappings();
+        console.log('📋 Loaded column mappings:', {
+          count: loadedColumnMappings.length,
+          mappings: loadedColumnMappings.map(m => ({
+            standardizedName: m.standardizedName,
+            sourceColumns: m.sourceColumns?.length || 0
+          }))
+        });
         setColumnMappings(loadedColumnMappings);
 
         // Get survey data from DataService with pagination
         const uploadedSurveys = await dataService.getAllSurveys();
         
+        // Debug: Log the actual survey data structure
+        console.log('🔍 SurveyAnalytics: Raw survey data from DataService:', uploadedSurveys.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          year: s.year,
+          surveyYear: s.surveyYear,
+          type: s.type,
+          surveyType: s.surveyType,
+          uploadDate: s.uploadDate
+        })));
+        
         if (uploadedSurveys.length === 0) {
           setError('No surveys found. Please upload some survey data first.');
+          return;
+        }
+        
+        // Filter surveys by current year
+        const yearFilteredSurveys = (uploadedSurveys as any[]).filter((survey: any) => {
+          // IndexedDB uses 'year' field, BackendService uses 'surveyYear' field
+          const surveyYear = survey.year || survey.surveyYear || '';
+          return surveyYear === currentYear;
+        });
+        
+        console.log(`📅 Filtering surveys by year ${currentYear}:`, {
+          totalSurveys: uploadedSurveys.length,
+          yearFilteredSurveys: yearFilteredSurveys.length,
+          availableYears: [...new Set(uploadedSurveys.map((s: any) => s.year || s.surveyYear))].sort()
+        });
+        
+        if (yearFilteredSurveys.length === 0) {
+          setError(`No surveys found for year ${currentYear}. Available years: ${[...new Set(uploadedSurveys.map((s: any) => s.year || s.surveyYear))].join(', ')}`);
           return;
         }
         
@@ -597,10 +1027,10 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
         
         // PERFORMANCE OPTIMIZATION: Load surveys in batches
         const batchSize = 3; // Load 3 surveys at a time
-        for (let i = 0; i < uploadedSurveys.length; i += batchSize) {
-          const batch = uploadedSurveys.slice(i, i + batchSize);
+        for (let i = 0; i < yearFilteredSurveys.length; i += batchSize) {
+          const batch = yearFilteredSurveys.slice(i, i + batchSize);
           
-          await Promise.all(batch.map(async (survey) => {
+          await Promise.all(batch.map(async (survey: any) => {
             try {
               const surveyType = (survey as any).type;
               const data = await dataService.getSurveyData(survey.id, undefined, { limit: 10000 });
@@ -754,42 +1184,52 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       
       if (!selectedMapping) return; // Skip if no mapping found
       
-      const metrics = {
+      // Dynamic metrics calculation for any variable type
+      const metrics: any = {
         n_orgs: groupRows.reduce((sum, r) => sum + (Number(r.n_orgs) || 0), 0),
         n_incumbents: groupRows.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0),
-        tcc_p25: calculatePercentile(groupRows.map(r => Number(r.tcc_p25) || 0).filter(Boolean), 25),
-        tcc_p50: calculatePercentile(groupRows.map(r => Number(r.tcc_p50) || 0).filter(Boolean), 50),
-        tcc_p75: calculatePercentile(groupRows.map(r => Number(r.tcc_p75) || 0).filter(Boolean), 75),
-        tcc_p90: calculatePercentile(groupRows.map(r => Number(r.tcc_p90) || 0).filter(Boolean), 90),
-        wrvu_p25: calculatePercentile(groupRows.map(r => Number(r.wrvu_p25) || 0).filter(Boolean), 25),
-        wrvu_p50: calculatePercentile(groupRows.map(r => Number(r.wrvu_p50) || 0).filter(Boolean), 50),
-        wrvu_p75: calculatePercentile(groupRows.map(r => Number(r.wrvu_p75) || 0).filter(Boolean), 75),
-        wrvu_p90: calculatePercentile(groupRows.map(r => Number(r.wrvu_p90) || 0).filter(Boolean), 90),
-        cf_p25: calculatePercentile(groupRows.map(r => Number(r.cf_p25) || 0).filter(Boolean), 25),
-        cf_p50: calculatePercentile(groupRows.map(r => Number(r.cf_p50) || 0).filter(Boolean), 50),
-        cf_p75: calculatePercentile(groupRows.map(r => Number(r.cf_p75) || 0).filter(Boolean), 75),
-        cf_p90: calculatePercentile(groupRows.map(r => Number(r.cf_p90) || 0).filter(Boolean), 90),
       };
+      
+      // Standard compensation metrics
+      const standardMetrics = ['tcc', 'wrvu', 'cf'];
+      standardMetrics.forEach(type => {
+        ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
+          const fieldName = `${type}_${percentile}`;
+          metrics[fieldName] = calculatePercentile(
+            groupRows.map(r => Number(r[fieldName]) || 0).filter(Boolean), 
+            parseInt(percentile.replace('p', ''))
+          );
+        });
+      });
+      
+      // Dynamic metrics for any other variable types
+      const allFields = new Set<string>();
+      groupRows.forEach(row => {
+        Object.keys(row).forEach(key => {
+          if (key.includes('_p25') || key.includes('_p50') || key.includes('_p75') || key.includes('_p90')) {
+            allFields.add(key);
+          }
+        });
+      });
+      
+      allFields.forEach(fieldName => {
+        if (!metrics[fieldName]) {
+          const percentile = fieldName.match(/_p(\d+)$/)?.[1];
+          if (percentile) {
+            metrics[fieldName] = calculatePercentile(
+              groupRows.map(r => Number(r[fieldName]) || 0).filter(Boolean),
+              parseInt(percentile)
+            );
+          }
+        }
+      });
 
       rows.push({
         standardizedName: selectedMapping.standardizedName,
         surveySource: String(row.surveySource || ''),
         surveySpecialty: String(row.specialty || ''),
         geographicRegion: String(row.geographicRegion || ''),
-        n_orgs: metrics.n_orgs,
-        n_incumbents: metrics.n_incumbents,
-        tcc_p25: metrics.tcc_p25,
-        tcc_p50: metrics.tcc_p50,
-        tcc_p75: metrics.tcc_p75,
-        tcc_p90: metrics.tcc_p90,
-        wrvu_p25: metrics.wrvu_p25,
-        wrvu_p50: metrics.wrvu_p50,
-        wrvu_p75: metrics.wrvu_p75,
-        wrvu_p90: metrics.wrvu_p90,
-        cf_p25: metrics.cf_p25,
-        cf_p50: metrics.cf_p50,
-        cf_p75: metrics.cf_p75,
-        cf_p90: metrics.cf_p90
+        ...metrics // Include all dynamic metrics
       });
     });
 
@@ -833,7 +1273,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
   // PERFORMANCE OPTIMIZATION: Debounced filter change handler
   const debouncedFilterChange = useMemo(
     () => performanceMonitor.debounce((filterName: string, value: string) => {
-      setFilters(prev => {
+      setFilters((prev: typeof filters) => {
         const newFilters = { ...prev, [filterName]: value };
         
         if (filterName === 'specialty') {
@@ -952,18 +1392,20 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
             <h3 className="text-xl font-semibold text-gray-900">Data Filters</h3>
             <p className="text-sm text-gray-600 mt-1">Refine your survey analytics view</p>
           </div>
-          <div className="flex items-center space-x-3">
-            {/* Download Button */}
-            <button
-              onClick={exportToCSV}
-              disabled={filteredData.length === 0}
-              className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-all duration-200"
-            >
-              <DocumentTextIcon className="h-4 w-4 mr-2" />
-              Download to Excel
-            </button>
-          </div>
+                     <div className="flex items-center space-x-3">
+             {/* Download Button */}
+             <button
+               onClick={exportToCSV}
+               disabled={filteredData.length === 0}
+               className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-all duration-200"
+             >
+               <DocumentTextIcon className="h-4 w-4 mr-2" />
+               Download to Excel
+             </button>
+           </div>
         </div>
+
+
 
         {/* Filter Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
@@ -1168,7 +1610,14 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
           <div className="flex justify-end">
             <button
               onClick={() => {
-                setFilters({ specialty: '', providerType: '', region: '', surveySource: '' });
+                const clearedFilters = { specialty: '', providerType: '', region: '', surveySource: '' };
+                setFilters(clearedFilters);
+                // Also clear from localStorage
+                try {
+                  localStorage.setItem('analyticsFilters', JSON.stringify(clearedFilters));
+                } catch (error) {
+                  console.warn('Failed to clear saved filters:', error);
+                }
               }}
               className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
               title="Clear all filters"

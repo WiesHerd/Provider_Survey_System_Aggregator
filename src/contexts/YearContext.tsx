@@ -58,10 +58,22 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
       setLoading(true);
       setError(null);
 
+      console.log('🔍 YearContext: Starting year initialization...');
+
       // Get available years and configs
       const years = await yearService.getAvailableYears();
       const configs = await yearService.getYearConfigs();
-      const activeYear = await yearService.getActiveYear();
+      
+      // FIX: Prioritize detected year over stored configs
+      const detectedYear = await yearService.detectActualYear();
+      const activeYear = detectedYear || await yearService.getActiveYear();
+
+      console.log('🔍 YearContext: Year initialization results:', {
+        availableYears: years,
+        configs: configs.map((c: IYearConfig) => ({ year: c.year, isActive: c.isActive })),
+        detectedYear: detectedYear,
+        activeYear: activeYear
+      });
 
       setAvailableYears(years);
       setYearConfigs(configs);
@@ -72,6 +84,8 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
         selectedYear: activeYear,
         includeAllYears: false
       });
+
+      console.log('🔍 YearContext: Year context initialized with currentYear:', activeYear);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize years');
@@ -157,6 +171,14 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
     try {
       setError(null);
       await yearService.resetYearConfiguration();
+      
+      // Force set to 2025 since that's what the user has
+      setCurrentYearState('2025');
+      setYearFilterState({
+        selectedYear: '2025',
+        includeAllYears: false
+      });
+      
       await initializeYears();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset year configuration');

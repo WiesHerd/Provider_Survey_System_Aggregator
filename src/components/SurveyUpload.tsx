@@ -137,44 +137,49 @@ const SurveyUpload: React.FC = () => {
         
         console.log('Loading surveys for year:', currentYear);
         
-        // Load from both regular storage and year-specific storage
+        // Load surveys from DataService (which handles year filtering internally)
         const surveys = await dataService.getAllSurveys();
-        console.log('Loaded surveys from regular storage:', surveys);
+        console.log('Loaded surveys:', surveys);
         
-        // Also load year-specific surveys
-        const yearService = new (await import('../services/YearManagementService')).YearManagementService();
-        const yearSurveys = await yearService.getYearData(currentYear, 'surveys');
-        console.log(`Loaded surveys from year ${currentYear}:`, yearSurveys);
-        console.log('Year surveys type:', typeof yearSurveys);
-        console.log('Year surveys is array:', Array.isArray(yearSurveys));
-        if (yearSurveys && typeof yearSurveys === 'object') {
-          console.log('Year surveys keys:', Object.keys(yearSurveys));
-        }
+        // Filter surveys by current year
+        const surveysAny = surveys as any[];
+        const yearFilteredSurveys = surveysAny.filter((survey: any) => {
+          const surveyYear = survey.year || survey.surveyYear || '';
+          return surveyYear === currentYear;
+        });
         
-        // Handle case where yearSurveys might not be an array
-        const yearSurveysArray = Array.isArray(yearSurveys) ? yearSurveys : [];
-        console.log('Year surveys array:', yearSurveysArray);
+        console.log(`Filtered surveys for year ${currentYear}:`, yearFilteredSurveys);
         
-        // Combine surveys from both sources
-        const allSurveys = [...surveys, ...yearSurveysArray];
-        console.log('Combined surveys:', allSurveys);
+        const allSurveys = yearFilteredSurveys;
         
         // Build lightweight survey list; fetch detailed rows only when a survey is selected
-        const processedSurveys = allSurveys.map((survey: any) => ({
-          id: survey.id,
-          fileName: survey.name || '',
-          surveyType: survey.type || '',
-          surveyYear: survey.year?.toString() || currentYear,
-          uploadDate: new Date(survey.uploadDate || new Date()),
-          fileContent: '',
-          rows: [],
-          stats: {
-            totalRows: survey.rowCount ?? survey.row_count ?? 0,
-            uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
-            totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
-          },
-          columnMappings: {}
-        }));
+        // Remove duplicates by using a Map with a unique key
+        const surveyMap = new Map();
+        
+        allSurveys.forEach((survey: any) => {
+          // Create a unique key based on name, type, and year to identify duplicates
+          const uniqueKey = `${survey.name || ''}-${survey.type || ''}-${survey.year || ''}`;
+          
+          if (!surveyMap.has(uniqueKey)) {
+            surveyMap.set(uniqueKey, {
+              id: survey.id,
+              fileName: survey.name || '',
+              surveyType: survey.type || '',
+              surveyYear: survey.year?.toString() || currentYear,
+              uploadDate: new Date(survey.uploadDate || new Date()),
+              fileContent: '',
+              rows: [],
+              stats: {
+                totalRows: survey.rowCount ?? survey.row_count ?? 0,
+                uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
+                totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
+              },
+              columnMappings: {}
+            });
+          }
+        });
+        
+        const processedSurveys = Array.from(surveyMap.values());
 
         console.log('Processed surveys:', processedSurveys);
         setUploadedSurveys(processedSurveys);
@@ -363,17 +368,11 @@ const SurveyUpload: React.FC = () => {
 
       setUploadProgress(80);
 
-      // Save survey and data to IndexedDB with year-specific storage
+      // Save survey and data to IndexedDB
       console.log('Saving survey to data service:', survey);
       await dataService.createSurvey(survey);
       console.log('Saving survey data to data service:', surveyId);
       await dataService.saveSurveyData(surveyId, parsedRows);
-      
-      // Also save to year-specific storage
-      console.log('Saving to year-specific storage:', surveyYear);
-      const yearService = new (await import('../services/YearManagementService')).YearManagementService();
-      await yearService.saveYearData(surveyYear, 'surveys', [survey]);
-      await yearService.saveYearData(surveyYear, 'surveyData', parsedRows);
 
       setUploadProgress(100);
 
@@ -417,6 +416,8 @@ const SurveyUpload: React.FC = () => {
   const handleClearAll = () => {
     setShowClearAllConfirmation(true);
   };
+
+
 
   const confirmClearAll = async () => {
     try {

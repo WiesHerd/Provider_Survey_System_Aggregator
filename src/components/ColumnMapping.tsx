@@ -1,22 +1,27 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import {
+  TextField,
+  Typography,
+  Paper,
+  InputAdornment
+} from '@mui/material';
 import { 
-  PlusIcon as AddIcon,
   MagnifyingGlassIcon as SearchIcon,
   BoltIcon,
-  TrashIcon as DeleteSweepIcon,
   LightBulbIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  XMarkIcon
+  XMarkIcon,
+  ExclamationTriangleIcon as WarningIcon
 } from '@heroicons/react/24/outline';
+import { CheckIcon } from '@heroicons/react/24/solid';
 
 import { getDataService } from '../services/DataService';
 import { IColumnMapping, IColumnInfo } from '../types/column';
-import LoadingSpinner from './ui/loading-spinner';
+import { LoadingSpinner, SuspenseSpinner } from '../shared/components';
 
 // Lazy load components for better performance
 const MappedColumns = lazy(() => import('./MappedColumns').then(module => ({ default: module.default })));
 const AutoMapping = lazy(() => import('../features/mapping/components/AutoMapping').then(module => ({ default: module.AutoMapping })));
+const LearnedColumnMappings = lazy(() => import('./LearnedColumnMappings').then(module => ({ default: module.default })));
 
 interface ColumnCardProps {
   column: IColumnInfo;
@@ -24,148 +29,170 @@ interface ColumnCardProps {
   onSelect: (column: IColumnInfo) => void;
 }
 
-const ColumnCard: React.FC<ColumnCardProps> = ({ column, isSelected, onSelect }) => (
-  <button
-    onClick={() => onSelect(column)}
-    className={`w-full p-2 mb-1.5 text-left rounded-md transition-all text-sm ${
-      isSelected 
-        ? 'bg-indigo-100 border-2 border-indigo-500' 
-        : 'bg-white hover:bg-gray-50 border border-gray-200'
-    }`}
-  >
-    <div className="font-medium text-sm">{column.name}</div>
-    <div className="text-xs text-gray-500">Type: {column.dataType}</div>
-  </button>
-);
+// Helper function to get survey source color (copied from Specialty Mapping)
+const getSurveySourceColor = (surveySource: string): string => {
+  const colors: Record<string, string> = {
+    'MGMA': '#10B981',      // Green
+    'SullivanCotter': '#3B82F6',  // Blue
+    'Gallagher': '#8B5CF6', // Purple
+    'ECG': '#F59E0B',       // Amber
+    'AMGA': '#EF4444',      // Red
+    'Unknown': '#6B7280'    // Gray
+  };
+  return colors[surveySource] || colors['Unknown'];
+};
+
+const ColumnCard: React.FC<ColumnCardProps> = ({ column, isSelected, onSelect }) => {
+  const handleClick = () => {
+    onSelect(column);
+  };
+
+  return (
+    <Paper 
+      onClick={handleClick}
+      role="button"
+      className={`p-3 relative transition-all duration-200 border cursor-pointer ${
+        isSelected 
+          ? 'bg-indigo-50 border-2 border-indigo-500 ring-2 ring-indigo-200 shadow-md' 
+          : 'bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-md'
+      }`}
+      style={{ 
+        borderLeftColor: getSurveySourceColor(column.surveySource), 
+        borderLeftWidth: isSelected ? '5px' : '3px' 
+      }}
+    >
+      {/* Green checkmark for selected items */}
+      {isSelected && (
+        <div className="absolute top-2 right-2 w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center shadow">
+          <CheckIcon className="w-4 h-4 text-white" />
+        </div>
+      )}
+      
+      <div className="flex justify-between items-center">
+        <div className="flex-1">
+          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+            {column.name}
+          </Typography>
+          <Typography variant="caption" className="text-gray-500 text-xs">
+            Frequency: {(column as any).frequency || 'N/A'}
+          </Typography>
+        </div>
+        <div className="ml-2">
+          <Typography 
+            variant="caption" 
+            style={{ color: getSurveySourceColor(column.surveySource) }} 
+            className="text-xs font-medium whitespace-nowrap"
+          >
+            {column.surveySource}
+          </Typography>
+        </div>
+      </div>
+    </Paper>
+  );
+};
 
 // Memoized tab content component for instant switching
 const TabContent = React.memo(({ 
-  activeTab, 
   searchTerm, 
   setSearchTerm, 
   columnsBySurvey, 
   selectedColumns, 
   handleColumnSelect,
-  mappings,
-  mappedSearchTerm,
-  setMappedSearchTerm,
-  handleDelete
+  onRefresh
 }: {
-  activeTab: string;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   columnsBySurvey: Map<string, IColumnInfo[]>;
   selectedColumns: IColumnInfo[];
   handleColumnSelect: (column: IColumnInfo) => void;
-  mappings: IColumnMapping[];
-  mappedSearchTerm: string;
-  setMappedSearchTerm: (term: string) => void;
-  handleDelete: (mappingId: string) => Promise<void>;
+  onRefresh: () => void;
 }) => {
-  // Memoize search components to prevent re-renders
-  const searchComponents = useMemo(() => ({
-    unmapped: (
-      <div className="relative mb-4">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <SearchIcon className="h-5 w-5 text-gray-400" />
-        </div>
-        <input
-          type="text"
-          placeholder="Search columns..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-        />
-      </div>
-    ),
-    mapped: (
-      <div className="relative mb-4">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <SearchIcon className="h-5 w-5 text-gray-400" />
-        </div>
-        <input
-          type="text"
-          placeholder="Search mapped columns..."
-          value={mappedSearchTerm}
-          onChange={(e) => setMappedSearchTerm(e.target.value)}
-          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-        />
-      </div>
-    )
-  }), [searchTerm, setSearchTerm, mappedSearchTerm, setMappedSearchTerm]);
+  // Memoize search component to prevent re-renders (Material-UI style like Specialty Mapping)
+  const searchComponent = useMemo(() => (
+    <div className="mb-4">
+      <TextField
+        fullWidth
+        placeholder="Search across all surveys..."
+        value={searchTerm}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon className="h-5 w-5 text-gray-400" />
+            </InputAdornment>
+          ),
+        }}
+        variant="outlined"
+        size="small"
+      />
+    </div>
+  ), [searchTerm, setSearchTerm]);
 
   // Memoize tab content to prevent unnecessary re-renders
   const content = useMemo(() => {
-    switch (activeTab) {
-      case 'unmapped':
-        return (
-          <div className="space-y-4">
-            {searchComponents.unmapped}
-            {/* Columns by Survey Source */}
-            {Array.from(columnsBySurvey.entries()).map(([surveySource, columns]) => (
-              <div key={surveySource} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900">{surveySource}</h4>
-                  <p className="text-xs text-gray-500">{columns.length} unmapped columns</p>
-                </div>
-                <div className="p-4 space-y-2">
+    return (
+      <>
+        {/* Search Bar */}
+        {searchComponent}
+
+        {/* Compensation Fields Grid - EXACT same layout as Specialty Mapping */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from(columnsBySurvey.entries()).map(([source, columns]) => {
+            const color = getSurveySourceColor(source);
+            
+            return (
+              <Paper key={source} className="p-3 relative overflow-hidden">
+                <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
+                  <span style={{ color }}>{source}</span>
+                  <Typography variant="caption" color="textSecondary" className="text-xs">
+                    {columns.length} fields
+                  </Typography>
+                </Typography>
+                <div className="space-y-1.5">
                   {columns.map((column) => (
                     <ColumnCard
-                      key={column.name}
+                      key={`${column.name}-${column.surveySource}`}
                       column={column}
                       isSelected={selectedColumns.some(c => c.name === column.name && c.surveySource === column.surveySource)}
                       onSelect={handleColumnSelect}
                     />
                   ))}
                 </div>
-              </div>
-            ))}
+                <div className="absolute bottom-0 inset-x-0 h-1" style={{ backgroundColor: color }} />
+              </Paper>
+            );
+          })}
+        </div>
 
-            {Array.from(columnsBySurvey.entries()).length === 0 && (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">No unmapped columns found</p>
+        {/* Empty State - Consistent large cue with refresh action */}
+        {Array.from(columnsBySurvey.entries()).length === 0 && (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                <WarningIcon className="w-6 h-6 text-gray-500" />
               </div>
-            )}
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Unmapped Columns Found</h3>
+              <p className="text-gray-600 mb-4">All columns are mapped, or no survey data is available.</p>
+              <button
+                onClick={onRefresh}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <BoltIcon className="h-4 w-4 mr-2" />
+                Refresh Data
+              </button>
+            </div>
           </div>
-        );
-      case 'mapped':
-        return (
-          <div className="space-y-4">
-            {searchComponents.mapped}
-            <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
-              {/* Mapped Columns */}
-              <div className="space-y-3">
-                {mappings
-                  .filter(mapping => 
-                    mapping.standardizedName.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
-                    mapping.sourceColumns.some(col => col.name.toLowerCase().includes(mappedSearchTerm.toLowerCase()))
-                  )
-                  .map((mapping) => (
-                    <MappedColumns
-                      key={mapping.id}
-                      mapping={mapping}
-                      onDelete={() => handleDelete(mapping.id)}
-                    />
-                  ))}
-              </div>
-
-              {mappings.length === 0 && (
-                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">No mapped columns found</p>
-                </div>
-              )}
-            </Suspense>
-          </div>
-        );
-      default:
-        return null;
-    }
-  }, [activeTab, searchComponents, columnsBySurvey, selectedColumns, handleColumnSelect, mappings, mappedSearchTerm, handleDelete]);
+        )}
+      </>
+    );
+  }, [searchComponent, columnsBySurvey, selectedColumns, handleColumnSelect, onRefresh]);
 
   return content;
 });
 
 TabContent.displayName = 'TabContent';
+
+
 
 const ColumnMapping: React.FC = () => {
   // State for data
@@ -174,11 +201,12 @@ const ColumnMapping: React.FC = () => {
   const [selectedColumns, setSelectedColumns] = useState<IColumnInfo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
+  const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
   
   // State for UI
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped'>('unmapped');
+  const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
   const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false); // Prevent multiple simultaneous loads
@@ -198,18 +226,21 @@ const ColumnMapping: React.FC = () => {
       setError(null);
       
       console.log('Starting data load...');
-      const [mappingsData, unmappedData] = await Promise.all([
+      const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getAllColumnMappings(),
-        dataService.getUnmappedColumns()
+        dataService.getUnmappedColumns(),
+        dataService.getLearnedMappings('column')
       ]);
       
       console.log('Data load completed:', { 
         mappings: mappingsData.length, 
-        unmapped: unmappedData.length 
+        unmapped: unmappedData.length,
+        learned: Object.keys(learnedData).length
       });
       
       setMappings(mappingsData);
       setUnmappedColumns(unmappedData);
+      setLearnedMappings(learnedData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load column data. Please check your connection and try again.');
@@ -223,21 +254,6 @@ const ColumnMapping: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Smart tab selection based on data availability
-  useEffect(() => {
-    if (!loading && !isLoadingData) {
-      // If there are mappings, default to mapped tab
-      if (mappings.length > 0 && activeTab === 'unmapped') {
-        setActiveTab('mapped');
-      }
-      // If there are unmapped columns and no mappings, default to unmapped tab
-      else if (unmappedColumns.length > 0 && mappings.length === 0 && activeTab === 'mapped') {
-        setActiveTab('unmapped');
-      }
-      // Otherwise, keep current tab
-    }
-  }, [loading, isLoadingData, mappings.length, unmappedColumns.length, activeTab]);
 
   const filteredUnmapped = useMemo(() => {
     return unmappedColumns.filter(column => 
@@ -290,16 +306,86 @@ const ColumnMapping: React.FC = () => {
         createdAt: new Date(),
         updatedAt: new Date()
       });
+
+      // Save learned mappings for each selected column
+      for (const column of selectedColumns) {
+        try {
+          await dataService.saveLearnedMapping('column', column.name, standardizedName);
+        } catch (learnedError) {
+          console.warn('Failed to save learned mapping for', column.name, learnedError);
+        }
+      }
+
       setSelectedColumns([]);
       
       // Refresh data without showing loading spinner for better UX
       await loadData();
-      setActiveTab('mapped');
     } catch (error) {
       console.error('Error creating mapping:', error);
       setError('Failed to create mapping. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Selection helpers (match specialty mapping experience)
+  const handleSelectAll = useCallback(() => {
+    setSelectedColumns(prevSelected => {
+      const result = [...prevSelected];
+      const exists = (c: IColumnInfo) => result.some(r => r.name === c.name && r.surveySource === c.surveySource);
+      filteredUnmapped.forEach(c => {
+        if (!exists(c)) result.push(c);
+      });
+      return result;
+    });
+  }, [filteredUnmapped]);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedColumns([]);
+  }, []);
+
+  // Dynamic select/deselect all toggle
+  const allUnmappedCount = filteredUnmapped.length;
+  const [isBulkSelected, setIsBulkSelected] = useState(false);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isBulkSelected) {
+      setSelectedColumns([]);
+      setIsBulkSelected(false);
+    } else {
+      setSelectedColumns(prevSelected => {
+        const result = [...prevSelected];
+        const exists = (c: IColumnInfo) => result.some(r => r.name === c.name && r.surveySource === c.surveySource);
+        filteredUnmapped.forEach(c => { if (!exists(c)) result.push(c); });
+        return result;
+      });
+      setIsBulkSelected(true);
+    }
+  }, [isBulkSelected, filteredUnmapped]);
+
+  // Clear all mappings in mapped tab
+  const handleClearAllMappings = async () => {
+    if (!window.confirm('Clear all column mappings? This cannot be undone.')) return;
+    try {
+      setLoading(true);
+      await dataService.clearAllColumnMappings();
+      await loadData();
+    } catch (e) {
+      console.error('Failed to clear mappings:', e);
+      setError('Failed to clear mappings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Remove learned mapping
+  const handleRemoveLearnedMapping = async (original: string) => {
+    try {
+      await dataService.removeLearnedMapping('column', original);
+      await loadData(); // Refresh to update learned mappings
+    } catch (error) {
+      console.error('Error removing learned mapping:', error);
+      setError('Failed to remove learned mapping');
     }
   };
 
@@ -354,7 +440,6 @@ const ColumnMapping: React.FC = () => {
 
       // Refresh data and close dialog
       await loadData();
-      setActiveTab('mapped');
       setIsAutoMapOpen(false);
     } catch (error) {
       console.error('Auto-mapping error:', error);
@@ -380,65 +465,10 @@ const ColumnMapping: React.FC = () => {
 
 
 
+
+
         {/* Main Mapping Section */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-semibold text-gray-900">Column Mapping</h3>
-              <button
-                onClick={() => setShowHelp(true)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-300 transform hover:scale-110"
-                aria-label="Show help"
-              >
-                <LightBulbIcon className="h-5 w-5 text-indigo-600" />
-              </button>
-            </div>
-            <div className="flex space-x-2">
-              {activeTab !== 'mapped' && (
-                <button
-                  onClick={() => setIsAutoMapOpen(true)}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                >
-                  <BoltIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
-                  Auto Map
-                </button>
-              )}
-              <button
-                onClick={handleCreateMapping}
-                disabled={selectedColumns.length === 0}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                title={selectedColumns.length === 1 ? "Create mapping for selected column" : `Create mapping for ${selectedColumns.length} selected columns`}
-              >
-                <AddIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
-                Create Mapping ({selectedColumns.length})
-              </button>
-              {activeTab === 'mapped' && (
-                <button
-                  onClick={async () => {
-                    if (window.confirm('Are you sure you want to clear all mappings? This cannot be undone.')) {
-                      try {
-                        console.log('User confirmed clear all mappings');
-                        await dataService.clearAllColumnMappings();
-                        console.log('Successfully cleared all mappings from database');
-                        setMappings([]);
-                        setActiveTab('unmapped');
-                        await loadData();
-                        console.log('UI updated after clearing mappings');
-                      } catch (error) {
-                        console.error('Error clearing all mappings:', error);
-                        setError('Failed to clear all mappings. Please try again.');
-                      }
-                    }
-                  }}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-300 transform hover:scale-105 hover:shadow-md border border-red-200 hover:border-red-300 hover:shadow-red-100"
-                >
-                  <DeleteSweepIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
-                  Clear All
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Error Display */}
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -455,16 +485,25 @@ const ColumnMapping: React.FC = () => {
             </div>
           )}
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 mb-4">
-            <nav className="-mb-px flex space-x-8">
+          {/* Tabs with Action Buttons */}
+          <div className="border-b border-gray-200 mb-4 flex items-center justify-between">
+            <div className="flex items-center">
+              <button
+                onClick={() => setShowHelp(true)}
+                className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                aria-label="Show help"
+              >
+                <LightBulbIcon className="h-5 w-5 text-indigo-600" />
+              </button>
+              <nav className="-mb-px flex space-x-8">
               {[
-                { key: 'unmapped', label: 'Unmapped Columns' },
-                { key: 'mapped', label: 'Mapped Columns' }
+                { key: 'unmapped', label: `Unmapped Columns (${unmappedColumns.length})` },
+                { key: 'mapped', label: `Mapped Columns (${mappings.length})` },
+                { key: 'learned', label: `Learned Mappings (${Object.keys(learnedMappings).length})` }
               ].map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key as 'unmapped' | 'mapped')}
+                  onClick={() => setActiveTab(tab.key as 'unmapped' | 'mapped' | 'learned')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
                     activeTab === tab.key
                       ? 'border-indigo-500 text-indigo-600'
@@ -474,23 +513,127 @@ const ColumnMapping: React.FC = () => {
                   {tab.label}
                 </button>
               ))}
-            </nav>
+              </nav>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center space-x-3 mb-4">
+              <button
+                onClick={() => setIsAutoMapOpen(true)}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
+                title="Auto Map Columns"
+              >
+                <BoltIcon className="h-4 w-4 mr-2" />
+                Auto Map
+              </button>
+
+              {/* Google/Microsoft-style master checkbox with indeterminate state */}
+              <button
+                onClick={handleToggleSelectAll}
+                disabled={allUnmappedCount === 0}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  isBulkSelected
+                    ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {isBulkSelected && <CheckIcon className="w-4 h-4" />}
+                {isBulkSelected ? `Selected (${allUnmappedCount})` : `Select (${allUnmappedCount})`}
+              </button>
+
+              {/* Clear All shown on Mapped tab */}
+              {activeTab === 'mapped' && (
+                <button
+                  onClick={handleClearAllMappings}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                >
+                  Clear All Mappings
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Tab Content - Optimized for instant switching */}
           <div className="min-h-[400px]">
-            <TabContent
-              activeTab={activeTab}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              columnsBySurvey={columnsBySurvey}
-              selectedColumns={selectedColumns}
-              handleColumnSelect={handleColumnSelect}
-              mappings={mappings}
-              mappedSearchTerm={mappedSearchTerm}
-              setMappedSearchTerm={setMappedSearchTerm}
-              handleDelete={handleDelete}
-            />
+            {activeTab === 'unmapped' ? (
+              <TabContent
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                columnsBySurvey={columnsBySurvey}
+                selectedColumns={selectedColumns}
+                handleColumnSelect={handleColumnSelect}
+                onRefresh={loadData}
+              />
+            ) : activeTab === 'learned' ? (
+              <Suspense fallback={<SuspenseSpinner />}>
+                <LearnedColumnMappings
+                  learnedMappings={learnedMappings}
+                  searchTerm={mappedSearchTerm}
+                  onSearchChange={setMappedSearchTerm}
+                  onRemoveMapping={handleRemoveLearnedMapping}
+                />
+              </Suspense>
+            ) : (
+              <div className="space-y-4">
+                <div className="mb-4">
+                  <TextField
+                    fullWidth
+                    placeholder="Search mapped compensation fields..."
+                    value={mappedSearchTerm}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon className="h-5 w-5 text-gray-400" />
+                        </InputAdornment>
+                      ),
+                    }}
+                    variant="outlined"
+                    size="small"
+                  />
+                </div>
+                <Suspense fallback={<SuspenseSpinner />}>
+                  {/* Mapped Columns */}
+                  <div className="space-y-3">
+                    {mappings
+                      .filter(mapping => 
+                        mapping.standardizedName.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+                        mapping.sourceColumns.some(col => col.name.toLowerCase().includes(mappedSearchTerm.toLowerCase()))
+                      )
+                      .sort((a, b) => {
+                        // Define logical order for compensation columns
+                        const order = ['n_orgs', 'n_incumbents', 'p25', 'p50', 'p75', 'p90'];
+                        const aIndex = order.indexOf(a.standardizedName.toLowerCase());
+                        const bIndex = order.indexOf(b.standardizedName.toLowerCase());
+                        
+                        // If both are in the order array, sort by their position
+                        if (aIndex !== -1 && bIndex !== -1) {
+                          return aIndex - bIndex;
+                        }
+                        // If only one is in the order array, prioritize it
+                        if (aIndex !== -1) return -1;
+                        if (bIndex !== -1) return 1;
+                        // If neither is in the order array, sort alphabetically
+                        return a.standardizedName.localeCompare(b.standardizedName);
+                      })
+                      .map((mapping) => (
+                        <MappedColumns
+                          key={mapping.id}
+                          mapping={mapping}
+                          selected={isBulkSelected}
+                          onDelete={() => handleDelete(mapping.id)}
+                        />
+                      ))}
+                  </div>
+
+                  {mappings.length === 0 && (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <p className="text-gray-500">No mapped columns found</p>
+                    </div>
+                  )}
+                </Suspense>
+              </div>
+            )}
           </div>
         </div>
 

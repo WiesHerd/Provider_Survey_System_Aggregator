@@ -15,7 +15,7 @@ import { BoltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline
 import { ButtonSpinner } from './ui/loading-spinner';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import { LocalStorageService } from '../services/StorageService';
-import { IAutoMappingConfig, IMappingSuggestion } from '../types/specialty';
+import { IAutoMappingConfig } from '../types/specialty';
 
 interface AutoMapSpecialtiesProps {
   onClose?: () => void;
@@ -48,28 +48,13 @@ const AutoMapSpecialties: React.FC<AutoMapSpecialtiesProps> = ({ onClose, onMapp
         useFuzzyMatching
       };
 
-      const suggestions = await mappingService.generateMappingSuggestions(config);
+      // Use the autoMapSpecialties method instead
+      const newMappings = await mappingService.autoMapSpecialties(config);
       
-      // Auto-apply suggestions with confidence above threshold
-      for (const suggestion of suggestions) {
-        if (suggestion.confidence >= confidenceThreshold) {
-          await mappingService.createMapping(
-            suggestion.standardizedName,
-            suggestion.specialties.map((s: { name: string; surveySource: string }) => ({
-              id: crypto.randomUUID(),
-              specialty: s.name,
-              originalName: s.name,
-              surveySource: s.surveySource,
-              mappingId: ''
-            }))
-          );
-        }
-      }
-
       setResults({
-        total: suggestions.length,
-        mapped: suggestions.filter((s: IMappingSuggestion) => s.confidence >= confidenceThreshold).length,
-        skipped: suggestions.filter((s: IMappingSuggestion) => s.confidence < confidenceThreshold).length
+        total: newMappings.length,
+        mapped: newMappings.length,
+        skipped: 0
       });
 
       // Notify parent component that mappings were created

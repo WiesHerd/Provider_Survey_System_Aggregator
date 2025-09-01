@@ -33,6 +33,7 @@ import {
 import { UploadedSurveysProps } from '../types/upload';
 import { formatDate } from '@/shared/utils';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { InlineSpinner } from '../../../shared/components';
 
 /**
  * Uploaded Surveys component for displaying and managing uploaded surveys
@@ -114,7 +115,7 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
         </Box>
         
         {loading && (
-          <Chip label="Loading..." size="small" color="primary" />
+          <InlineSpinner size="sm" />
         )}
       </Box>
 

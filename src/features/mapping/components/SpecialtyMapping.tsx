@@ -8,6 +8,7 @@ import {
   LightBulbIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import { CheckIcon } from '@heroicons/react/24/solid';
 import { SpecialtyMappingProps } from '../types/mapping';
 import { useMappingData } from '../hooks/useMappingData';
 import { UnmappedSpecialties } from './UnmappedSpecialties';
@@ -30,6 +31,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
   const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
   const [isAutoMapping, setIsAutoMapping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isBulkSelected, setIsBulkSelected] = useState(false);
 
   // Custom hook for data management
   const {
@@ -100,6 +102,19 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
     }
   };
 
+  // Dynamic select/deselect all toggle
+  const allUnmappedCount = filteredUnmapped.length;
+  
+  const handleToggleSelectAll = () => {
+    if (isBulkSelected) {
+      clearSelectedSpecialties();
+      setIsBulkSelected(false);
+    } else {
+      selectAllSpecialties();
+      setIsBulkSelected(true);
+    }
+  };
+
   // Notify parent components of changes
   useEffect(() => {
     onMappingChange?.(mappings);
@@ -128,72 +143,88 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
 
           {/* Main Mapping Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold text-gray-900">Specialty Mapping</h3>
+            {/* Tabs with Action Buttons */}
+            <div className="border-b border-gray-200 mb-4 flex items-center justify-between">
+              <div className="flex items-center">
                 <button
                   onClick={() => setShowHelp(true)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-300 transform hover:scale-110"
+                  className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-all duration-200"
                   aria-label="Show help"
                 >
                   <LightBulbIcon className="h-5 w-5 text-indigo-600" />
                 </button>
+                <nav className="-mb-px flex space-x-8">
+                  {[
+                    { key: 'unmapped', label: `Unmapped Specialties (${unmappedSpecialties.length})` },
+                    { key: 'mapped', label: `Mapped Specialties (${mappings.length})` },
+                    { key: 'learned', label: `Learned Mappings (${Object.keys(learnedMappings).length})` }
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key as 'unmapped' | 'mapped' | 'learned')}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
+                        activeTab === tab.key
+                          ? 'border-indigo-500 text-indigo-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
               </div>
-              <div className="flex space-x-2">
+
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-3 mb-4">
                 {activeTab === 'unmapped' && (
                   <>
-                                                              <button
-                       onClick={() => setIsAutoMapOpen(true)}
-                       className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                     >
-                       <BoltIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
-                       Auto Map
-                     </button>
-                                           <button
-                        onClick={createMapping}
-                        disabled={selectedSpecialties.length === 0}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                        title={selectedSpecialties.length === 1 ? "Map selected specialty individually" : `Map ${selectedSpecialties.length} selected specialties as individual mappings`}
-                      >
-                        <AddIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
-                        Map as Singles ({selectedSpecialties.length})
-                      </button>
-                      <button
-                        onClick={createGroupedMapping}
-                        disabled={selectedSpecialties.length === 0}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                        title={selectedSpecialties.length === 1 ? "Map selected specialty" : `Map ${selectedSpecialties.length} selected specialties together as one group`}
-                      >
-                        <AddIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
-                        Map Selected ({selectedSpecialties.length})
-                      </button>
-                     
-                     <button
-                       onClick={selectAllSpecialties}
-                       disabled={unmappedSpecialties.length === 0}
-                       className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-600 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-300 transform hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none border border-gray-200 hover:border-gray-300 hover:shadow-gray-100"
-                     >
-                       Select All
-                     </button>
-                     <button
-                       onClick={deselectAllSpecialties}
-                       disabled={selectedSpecialties.length === 0}
-                       className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-600 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-300 transform hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none border border-gray-200 hover:border-gray-300 hover:shadow-gray-100"
-                     >
-                       Deselect All
-                     </button>
-                     
+                    <button
+                      onClick={() => setIsAutoMapOpen(true)}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
+                      title="Auto Map Columns"
+                    >
+                      <BoltIcon className="h-4 w-4 mr-2" />
+                      Auto Map
+                    </button>
+                    <button
+                      onClick={selectedSpecialties.length === 1 ? createMapping : createGroupedMapping}
+                      disabled={selectedSpecialties.length === 0}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={
+                        selectedSpecialties.length === 1 
+                          ? "Map this specialty individually" 
+                          : `Map ${selectedSpecialties.length} specialties together as one group`
+                      }
+                    >
+                      <AddIcon className="h-4 w-4 mr-2" />
+                      {selectedSpecialties.length === 1 
+                        ? `Map Specialty (${selectedSpecialties.length})`
+                        : `Map Specialties (${selectedSpecialties.length})`
+                      }
+                    </button>
+                    <button
+                      onClick={handleToggleSelectAll}
+                      disabled={allUnmappedCount === 0}
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isBulkSelected
+                          ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
+                      }`}
+                    >
+                      {isBulkSelected && <CheckIcon className="w-4 h-4" />}
+                      {isBulkSelected ? `Selected (${allUnmappedCount})` : `Select (${allUnmappedCount})`}
+                    </button>
                   </>
                 )}
-                                 {activeTab === 'mapped' && (
-                   <button
-                     onClick={handleClearAllMappings}
-                     className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-300 transform hover:scale-105 hover:shadow-md border border-red-200 hover:border-red-300 hover:shadow-red-100"
-                   >
-                     <DeleteSweepIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
-                     Clear All
-                   </button>
-                 )}
+                {activeTab === 'mapped' && (
+                  <button
+                    onClick={handleClearAllMappings}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                  >
+                    <DeleteSweepIcon className="h-4 w-4 mr-2" />
+                    Clear All
+                  </button>
+                )}
               </div>
             </div>
 
@@ -213,28 +244,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
               </div>
             )}
 
-            {/* Tabs */}
-            <div className="border-b border-gray-200 mb-4">
-              <nav className="-mb-px flex space-x-8">
-                {[
-                  { key: 'unmapped', label: 'Unmapped Specialties' },
-                  { key: 'mapped', label: 'Mapped Specialties' },
-                  { key: 'learned', label: 'Learned Mappings' }
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key as 'unmapped' | 'mapped' | 'learned')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                      activeTab === tab.key
-                        ? 'border-indigo-500 text-indigo-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </nav>
-            </div>
+
 
             {/* Tab Content - Simple and instant */}
             <div className="min-h-[400px]">
@@ -267,13 +277,18 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
             </div>
           </div>
 
-                     {/* Auto-Mapping Dialog */}
-           <AutoMapping
-             isOpen={isAutoMapOpen}
-             onClose={() => setIsAutoMapOpen(false)}
-             onAutoMap={handleAutoMap}
-             loading={isAutoMapping}
-           />
+                               {/* Auto-Mapping Dialog */}
+          <AutoMapping
+            isOpen={isAutoMapOpen}
+            onClose={() => setIsAutoMapOpen(false)}
+            onAutoMap={handleAutoMap}
+            loading={isAutoMapping}
+            title="Auto-Map Specialties"
+            description="Automatically map similar specialty names across your surveys"
+            iconColor="indigo"
+            iconColorClass="text-indigo-600"
+            bgColorClass="bg-indigo-100"
+          />
 
            {/* Help Modal */}
            {showHelp && (
