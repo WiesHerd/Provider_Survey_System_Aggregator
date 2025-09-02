@@ -27,7 +27,8 @@ import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
 import LoadingSpinner from './ui/loading-spinner';
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import { formatSpecialtyForDisplay, formatRegionForDisplay } from '../shared/utils/formatters';
+import { fuzzyMatchSpecialty } from '../shared/utils/specialtyMatching';
 import { useYear } from '../contexts/YearContext';
 import { performanceMonitor } from '../shared/utils/performance';
 const SHOW_DEBUG = false; // Set to false for production performance
@@ -1671,7 +1672,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 <MenuItem value="">All Regions</MenuItem>
                 {uniqueValues.regions.map((region) => (
                   <MenuItem key={region} value={region}>
-                    {region}
+                    {formatRegionForDisplay(region)}
                   </MenuItem>
                 ))}
               </Select>
