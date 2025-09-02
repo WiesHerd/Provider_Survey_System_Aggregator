@@ -546,6 +546,23 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
       }
     }
     
+    // Always attempt to extract organization and incumbent counts from raw columns
+    // even when other columns were mapped successfully (these counts are often
+    // independent of percentile mappings and may not be in column mappings)
+    if (transformedRow.n_orgs === 0 || transformedRow.n_orgs === undefined ||
+        transformedRow.n_incumbents === 0 || transformedRow.n_incumbents === undefined) {
+      for (const [originalColumn, value] of Object.entries(row)) {
+        const columnName = String(originalColumn || '').toLowerCase();
+        const numValue = Number(value) || 0;
+        if ((transformedRow.n_orgs === 0 || transformedRow.n_orgs === undefined) && columnName.includes('org') && !columnName.includes('incumbent')) {
+          transformedRow.n_orgs = numValue;
+        }
+        if ((transformedRow.n_incumbents === 0 || transformedRow.n_incumbents === undefined) && columnName.includes('incumbent')) {
+          transformedRow.n_incumbents = numValue;
+        }
+      }
+    }
+
     // ULTIMATE FALLBACK: Direct column name matching for compensation data
     if (mappedColumns === 0) {
       for (const [originalColumn, value] of Object.entries(row)) {
@@ -1000,13 +1017,27 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       }
     });
 
+    // Build region options from parent (standardized) region mappings when available
+    const parentRegionSet = new Set<string>();
+    if (Array.isArray(regionMappings) && regionMappings.length > 0) {
+      regionMappings.forEach((mapping: any) => {
+        if (mapping && mapping.standardizedName) {
+          parentRegionSet.add(String(mapping.standardizedName));
+        }
+      });
+    }
+
+    const regionOptions = parentRegionSet.size > 0
+      ? Array.from(parentRegionSet).sort()
+      : Array.from(values.regions).sort();
+
     return {
       specialties: Array.from(values.specialties).sort(),
       providerTypes: Array.from(values.providerTypes).sort(),
-      regions: Array.from(values.regions).sort(),
+      regions: regionOptions,
       surveySources: Array.from(values.surveySources).sort()
     };
-  }, [processedData, mappings, filters]);
+  }, [processedData, mappings, filters, regionMappings]);
 
   // PERFORMANCE OPTIMIZATION: Optimize data loading with pagination
   useEffect(() => {
@@ -1630,6 +1661,13 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
               <Select
                 value={filters.region}
                 onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
+                renderValue={(value: unknown) => {
+                  const v = (value as string) || '';
+                  if (!v) {
+                    return <span style={{ color: '#9ca3af' }}>All Regions</span>;
+                  }
+                  return formatRegionForDisplay(v);
+                }}
                 sx={{
                   backgroundColor: 'white',
                   border: '1px solid #d1d5db',
@@ -1870,28 +1908,28 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
+                            }} align="right">{formatCurrency(row.tcc_p25, 2)}</TableCell>
                             <TableCell sx={{ 
                               width: '8.75%', 
                               minWidth: '100px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p50)}</TableCell>
+                            }} align="right">{formatCurrency(row.tcc_p50, 2)}</TableCell>
                             <TableCell sx={{ 
                               width: '8.75%', 
                               minWidth: '100px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p75)}</TableCell>
+                            }} align="right">{formatCurrency(row.tcc_p75, 2)}</TableCell>
                             <TableCell sx={{ 
                               width: '8.75%', 
                               minWidth: '100px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p90)}</TableCell>
+                            }} align="right">{formatCurrency(row.tcc_p90, 2)}</TableCell>
                             
                             {/* wRVU Values */}
                             <TableCell sx={{ 
