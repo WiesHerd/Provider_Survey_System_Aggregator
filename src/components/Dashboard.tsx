@@ -172,7 +172,7 @@ const Dashboard: React.FC = () => {
                 <img 
                   src={process.env.PUBLIC_URL + '/favicon-32x32.svg?v=6'} 
                   alt="BenchPoint Logo" 
-                  className="w-16 h-16 object-contain"
+                  className="w-16 h-16 object-contain transition-transform duration-300 hover:scale-110 hover:rotate-12 cursor-pointer"
                   onError={(e) => {
                     console.log('Dashboard logo failed to load:', (e.target as HTMLImageElement).src);
                     // Replace with inline SVG fallback
@@ -181,7 +181,7 @@ const Dashboard: React.FC = () => {
                     const parent = target.parentElement;
                     if (parent) {
                       parent.innerHTML = `
-                        <svg class="w-16 h-16" fill="currentColor" viewBox="0 0 64 64">
+                        <svg class="w-16 h-16 transition-transform duration-300 hover:scale-110 hover:rotate-12 cursor-pointer" fill="currentColor" viewBox="0 0 64 64">
                           <defs>
                             <linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                               <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
@@ -229,24 +229,29 @@ const Dashboard: React.FC = () => {
             <motion.div
               key={section.title}
               variants={cardVariants}
-              className="space-y-6"
+              className="relative"
             >
-              {/* Section Header */}
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  {section.title}
-                </h2>
-                <p className="text-gray-600 max-w-2xl mx-auto">
-                  {section.description}
-                </p>
+              {/* Modern Section Header */}
+              <div className="flex items-center gap-6 mb-8">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">
+                    {section.title}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {section.description}
+                  </p>
+                </div>
+                <div className="hidden sm:block flex-shrink-0">
+                  <div className="w-16 h-px bg-gradient-to-r from-gray-300 to-transparent"></div>
+                </div>
               </div>
 
-              {/* Section Cards */}
+              {/* Modern Card Grid */}
               <div className={cn(
-                "grid gap-6 justify-center",
-                section.cards.length === 4 ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto" :
-                section.cards.length === 6 ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto" :
-                "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto"
+                "grid gap-4",
+                section.cards.length === 4 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" :
+                section.cards.length === 6 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
+                "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
               )}>
                 {section.cards.map((card) => (
                   <motion.div
@@ -257,50 +262,64 @@ const Dashboard: React.FC = () => {
                       transition: { duration: 0.2 }
                     }}
                     whileTap={{ scale: 0.98 }}
+                    className="group"
                   >
                     <button
                       onClick={() => navigate(card.path)}
-                      className="w-full h-full group"
+                      className="w-full h-full"
                     >
-                      <div className="relative h-full bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-200 overflow-hidden">
-                        {/* Gradient Background */}
-                        <div className={cn(
-                          "absolute inset-0 bg-gradient-to-br opacity-5 group-hover:opacity-10 transition-opacity duration-200",
-                          card.gradient
-                        )} />
-                        
+                      <div className="relative h-full bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200">
                         {/* Icon */}
-                        <div className="relative mb-4">
-                          <div className={cn(
-                            "inline-flex p-3 rounded-xl shadow-sm",
-                            card.color
-                          )}>
-                            <card.icon className="w-6 h-6 text-white" />
+                        <div className="mb-4">
+                          <div 
+                            className={cn(
+                              "inline-flex p-2.5 rounded-xl transition-all duration-300 transform",
+                              card.color
+                            )}
+                            style={{
+                              transition: 'transform 0.3s ease, box-shadow 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              console.log('Icon hover enter!'); // Debug log
+                              e.currentTarget.style.transform = 'scale(1.15) rotate(8deg)';
+                              e.currentTarget.style.boxShadow = '0 10px 25px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
+                            }}
+                            onMouseLeave={(e) => {
+                              console.log('Icon hover leave!'); // Debug log
+                              e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+                              e.currentTarget.style.boxShadow = '';
+                            }}
+                          >
+                            <card.icon className="w-5 h-5 text-white" />
                           </div>
                         </div>
 
                         {/* Content */}
-                        <div className="relative">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-gray-700 transition-colors duration-200">
+                        <div>
+                          <h3 className="text-base font-medium text-gray-900 mb-2">
                             {card.title}
                           </h3>
-                          <p className="text-sm text-gray-600 leading-relaxed">
+                          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
                             {card.description}
                           </p>
                         </div>
 
-                        {/* Hover Effect */}
-                        <div className="absolute inset-0 border-2 border-transparent rounded-xl group-hover:border-indigo-200 transition-colors duration-200 pointer-events-none" />
+                        {/* Subtle hover indicator */}
+                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
                       </div>
                     </button>
                   </motion.div>
                 ))}
               </div>
 
-              {/* Section Divider */}
+              {/* Modern Section Divider */}
               {sectionIndex < cardSections.length - 1 && (
-                <div className="flex justify-center pt-8">
-                  <div className="w-24 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+                <div className="mt-16 mb-4">
+                  <div className="w-full h-px bg-gray-200"></div>
                 </div>
               )}
             </motion.div>
