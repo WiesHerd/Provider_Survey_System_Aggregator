@@ -280,26 +280,6 @@ const createIntelligentMappings = (row: any, surveySource: string): Array<{sourc
   return mappings;
 };
 
-// Fuzzy matching function for specialty names (word-based, not letter-based)
-const fuzzyMatchSpecialty = (specialty1: string, specialty2: string): boolean => {
-  const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const norm1 = normalize(specialty1);
-  const norm2 = normalize(specialty2);
-
-  if (!norm1 || !norm2) return false;
-
-  // Exact or simple contains
-  if (norm1 === norm2) return true;
-  if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
-
-  const words1 = norm1.split(/\s+/).filter((w: string) => w.length > 2);
-  const words2 = norm2.split(/\s+/).filter((w: string) => w.length > 2);
-  if (words1.length === 0 || words2.length === 0) return false;
-
-  const common = words1.filter((w: string) => words2.includes(w));
-  const jaccard = common.length / new Set([...words1, ...words2]).size;
-
-  return jaccard >= 0.6 || common.length >= Math.min(words1.length, words2.length) * 0.8;
 };
 
 // Extract clean survey name from filename
