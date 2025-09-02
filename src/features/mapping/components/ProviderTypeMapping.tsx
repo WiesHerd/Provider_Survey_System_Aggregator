@@ -100,6 +100,24 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
     }
   };
 
+  // Handle create mapping (auto-join - no modal)
+  const handleCreateMapping = async () => {
+    if (selectedProviderTypes.length === 0) return;
+
+    try {
+      // Auto-generate standardized name from first provider type
+      const standardizedName = selectedProviderTypes[0].name;
+      
+      await createGroupedMapping(standardizedName, selectedProviderTypes);
+      
+      // Clear selections and switch to mapped tab
+      clearSelectedProviderTypes();
+      setActiveTab('mapped');
+    } catch (error) {
+      console.error('Failed to create provider type mapping:', error);
+    }
+  };
+
   // Notify parent components of changes
   useEffect(() => {
     onMappingChange?.(mappings);
@@ -183,6 +201,16 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                     >
                       Deselect All
                     </button>
+                    {selectedProviderTypes.length > 0 && (
+                      <button
+                        onClick={handleCreateMapping}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                        title="Create Manual Mapping"
+                      >
+                        <AddIcon className="h-4 w-4 mr-2" />
+                        Create Mapping ({selectedProviderTypes.length})
+                      </button>
+                    )}
                   </>
                 )}
                 {activeTab === 'mapped' && (

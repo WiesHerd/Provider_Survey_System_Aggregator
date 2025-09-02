@@ -6,6 +6,7 @@ interface VariableMappingDialogProps {
   isOpen: boolean;
   mapping?: IVariableMapping | null;
   unmappedVariables: IUnmappedVariable[];
+  preSelectedVariables?: IUnmappedVariable[];
   onClose: () => void;
   onSave: (mapping: Partial<IVariableMapping>) => Promise<void>;
 }
@@ -14,6 +15,7 @@ export const VariableMappingDialog: React.FC<VariableMappingDialogProps> = ({
   isOpen,
   mapping,
   unmappedVariables,
+  preSelectedVariables = [],
   onClose,
   onSave
 }) => {
@@ -23,11 +25,12 @@ export const VariableMappingDialog: React.FC<VariableMappingDialogProps> = ({
   const [selectedVariables, setSelectedVariables] = useState<IUnmappedVariable[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Initialize form when mapping changes
+  // Initialize form when mapping or preSelectedVariables change
   useEffect(() => {
     if (mapping) {
       setStandardizedName(mapping.standardizedName);
       setVariableType(mapping.variableType);
+      setVariableSubType(mapping.variableSubType || '');
       // Convert source variables back to unmapped variables for selection
       const mappedVariables = mapping.sourceVariables.map(source => ({
         id: `${source.surveySource}-${source.originalVariableName}`,
@@ -41,9 +44,10 @@ export const VariableMappingDialog: React.FC<VariableMappingDialogProps> = ({
       setStandardizedName('');
       setVariableType('compensation');
       setVariableSubType('');
-      setSelectedVariables([]);
+      // Initialize with pre-selected variables for new mappings
+      setSelectedVariables(preSelectedVariables);
     }
-  }, [mapping]);
+  }, [mapping, preSelectedVariables]);
 
   const handleSave = async () => {
     if (!standardizedName.trim() || !variableType || !variableSubType.trim() || selectedVariables.length === 0) {

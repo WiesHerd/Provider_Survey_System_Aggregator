@@ -33,7 +33,7 @@ interface UseProviderTypeMappingDataReturn {
   // Data operations
   loadData: () => Promise<void>;
   createMapping: () => Promise<void>;
-  createGroupedMapping: () => Promise<void>;
+  createGroupedMapping: (standardizedName: string, providerTypes: IUnmappedProviderType[]) => Promise<void>;
   deleteMapping: (mappingId: string) => Promise<void>;
   clearAllMappings: () => Promise<void>;
   removeLearnedMapping: (original: string) => void;
@@ -170,14 +170,12 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     }
   }, [selectedProviderTypes, loadData]);
 
-  const createGroupedMapping = useCallback(async () => {
-    if (selectedProviderTypes.length === 0) return;
-    
+  const createGroupedMapping = useCallback(async (standardizedName: string, providerTypes: IUnmappedProviderType[]) => {
     try {
       const mapping: IProviderTypeMapping = {
         id: `providerType_group_${Date.now()}`,
-        standardizedName: selectedProviderTypes[0].name,
-        sourceProviderTypes: selectedProviderTypes.map(p => ({
+        standardizedName,
+        sourceProviderTypes: providerTypes.map(p => ({
           providerType: p.name,
           surveySource: p.surveySource,
           frequency: p.frequency
@@ -186,12 +184,21 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
         updatedAt: new Date()
       } as any;
       await dataService.createProviderTypeMapping(mapping);
-      setSelectedProviderTypes([]);
+      
+      // Save learned mappings for each provider type
+      for (const providerType of providerTypes) {
+        try {
+          await dataService.saveLearnedMapping('providerType', providerType.name, standardizedName);
+        } catch (learnedError) {
+          console.warn('Failed to save learned mapping for', providerType.name, learnedError);
+        }
+      }
+      
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create grouped provider type mapping');
     }
-  }, [selectedProviderTypes, loadData]);
+  }, [loadData]);
 
   const deleteMapping = useCallback(async (mappingId: string) => {
     try {

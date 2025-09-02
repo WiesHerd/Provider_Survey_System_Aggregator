@@ -14,7 +14,6 @@ import { VariableMappingProps, IVariableMapping, IUnmappedVariable } from '../ty
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
-import { VariableMappingDialog } from './VariableMappingDialog';
 import { AutoMapping } from './AutoMapping';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 
@@ -29,8 +28,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   onVariableMappingChange,
   onUnmappedVariableChange
 }) => {
-  // Variable mapping dialog state
-  const [isMappingDialogOpen, setIsMappingDialogOpen] = useState(false);
+  // State for editing mappings (keep for future use)
   const [editingMapping, setEditingMapping] = useState<IVariableMapping | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
@@ -103,45 +101,33 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     }
   };
 
-  // Handle create new mapping
-  const handleCreateMapping = () => {
-    setEditingMapping(null);
-    setIsMappingDialogOpen(true);
-  };
+  // Handle create new mapping (auto-join like auto-mapping)
+  const handleCreateMapping = async () => {
+    if (selectedVariables.length === 0) return;
 
-  // Handle edit mapping
-  const handleEditMapping = (mapping: IVariableMapping) => {
-    setEditingMapping(mapping);
-    setIsMappingDialogOpen(true);
+    try {
+      // Auto-generate standardized name from first variable (like auto-mapping)
+      const standardizedName = selectedVariables[0].name.toLowerCase().replace(/\s+/g, '_');
+      
+      await createGroupedVariableMapping(
+        standardizedName,
+        'compensation', // Default to compensation for consistency
+        'general', // Default subtype
+        selectedVariables
+      );
+      
+      // Clear selections and switch to mapped tab
+      clearSelectedVariables();
+      setActiveTab('mapped');
+    } catch (error) {
+      console.error('Failed to create variable mapping:', error);
+    }
   };
 
   // Handle delete mapping
   const handleDeleteMapping = (mappingId: string) => {
     if (window.confirm('Are you sure you want to delete this variable mapping?')) {
       deleteVariableMapping(mappingId);
-    }
-  };
-
-  // Handle mapping dialog close
-  const handleMappingDialogClose = () => {
-    setIsMappingDialogOpen(false);
-    setEditingMapping(null);
-  };
-
-  // Handle mapping save
-  const handleMappingSave = async (mapping: Partial<IVariableMapping>) => {
-    try {
-      if (editingMapping) {
-        // Update existing mapping
-        // await updateVariableMapping(editingMapping.id, mapping);
-      } else {
-        // Create new mapping
-        await createVariableMapping(mapping);
-      }
-      setIsMappingDialogOpen(false);
-      setEditingMapping(null);
-    } catch (error) {
-      console.error('Failed to save variable mapping:', error);
     }
   };
 
@@ -231,6 +217,16 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                     >
                       Deselect All
                     </button>
+                    {selectedVariables.length > 0 && (
+                      <button
+                        onClick={handleCreateMapping}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                        title="Create Manual Mapping"
+                      >
+                        <AddIcon className="h-4 w-4 mr-2" />
+                        Create Mapping ({selectedVariables.length})
+                      </button>
+                    )}
                   </>
                 )}
                 {activeTab === 'mapped' && (
@@ -300,7 +296,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                   searchTerm={mappedSearchTerm}
                   onSearchChange={setMappedSearchTerm}
                   onDeleteMapping={handleDeleteMapping}
-                  onEditMapping={handleEditMapping}
+                  onEditMapping={undefined}
                 />
               )}
               {activeTab === 'learned' && (
@@ -310,6 +306,8 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
               )}
             </div>
           </div>
+
+
 
           {/* Auto-Mapping Dialog */}
           <AutoMapping

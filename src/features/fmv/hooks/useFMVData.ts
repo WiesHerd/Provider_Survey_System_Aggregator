@@ -345,7 +345,7 @@ export const useFMVData = () => {
   /**
    * Calculates cascading filter values based on current filters
    */
-  const calculateCascadingValues = useCallback((currentFilters: FMVFilters, allRows: any[]) => {
+  const calculateCascadingValues = useCallback(async (currentFilters: FMVFilters, allRows: any[]) => {
     // For specialties, always show all available specialties
     const allSpecialties = [...new Set(allRows.map(row => row.specialty).filter(Boolean))].sort();
     
@@ -354,9 +354,35 @@ export const useFMVData = () => {
 
     // Apply filters progressively to calculate available options for OTHER dropdowns
     if (currentFilters.specialty) {
-      filteredRows = filteredRows.filter(row => 
-        normalizeString(row.specialty) === normalizeString(currentFilters.specialty)
+      // Use specialty mappings to find all source specialties that map to the selected standardized specialty
+      const dataService = getDataService();
+      const allMappings = await dataService.getAllSpecialtyMappings();
+      
+      const mapping = allMappings.find(m => 
+        normalizeString(m.standardizedName) === normalizeString(currentFilters.specialty)
       );
+      
+      if (mapping) {
+        // Filter by all mapped source specialties
+        const mappedSpecialtyNames = mapping.sourceSpecialties.map(s => normalizeString(s.specialty));
+        console.log(`🔍 FMV Cascading - Filtering for specialty "${currentFilters.specialty}" using mapped sources:`, mappedSpecialtyNames);
+        
+        filteredRows = filteredRows.filter(row => {
+          const rowSpecialty = normalizeString(row.specialty);
+          const matches = mappedSpecialtyNames.some(mappedName => 
+            rowSpecialty.includes(mappedName) || mappedName.includes(rowSpecialty)
+          );
+          return matches;
+        });
+      } else {
+        // Fallback to direct match if no mapping found
+        console.log(`🔍 FMV Cascading - No mapping found for "${currentFilters.specialty}", using direct match`);
+        filteredRows = filteredRows.filter(row => 
+          normalizeString(row.specialty) === normalizeString(currentFilters.specialty)
+        );
+      }
+      
+      console.log(`🔍 FMV Cascading - After specialty filter: ${filteredRows.length} rows`);
     }
 
     if (currentFilters.providerType) {
@@ -429,10 +455,13 @@ export const useFMVData = () => {
       console.log('FMV Debug - Updating filters:', updatedFilters);
       console.log('FMV Debug - All survey rows available:', allSurveyRows.length);
       
-      // Update cascading filter values
-      const cascadingValues = calculateCascadingValues(updatedFilters, allSurveyRows);
-      console.log('FMV Debug - Cascading values calculated:', cascadingValues);
-      setUniqueValues(cascadingValues);
+      // Update cascading filter values (async)
+      const updateCascadingValues = async () => {
+        const cascadingValues = await calculateCascadingValues(updatedFilters, allSurveyRows);
+        console.log('FMV Debug - Cascading values calculated:', cascadingValues);
+        setUniqueValues(cascadingValues);
+      };
+      updateCascadingValues();
       
       return updatedFilters;
     });

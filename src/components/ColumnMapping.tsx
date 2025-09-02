@@ -10,7 +10,8 @@ import {
   BoltIcon,
   LightBulbIcon,
   XMarkIcon,
-  ExclamationTriangleIcon as WarningIcon
+  ExclamationTriangleIcon as WarningIcon,
+  PlusIcon as AddIcon
 } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 
@@ -283,15 +284,16 @@ const ColumnMapping: React.FC = () => {
     });
   };
 
+  // Handle create mapping (auto-join - no modal)
   const handleCreateMapping = async () => {
     if (selectedColumns.length === 0) return;
 
     try {
-      const standardizedName = prompt('Enter standardized column name:');
-      if (!standardizedName) return;
-
       setLoading(true);
       setError(null);
+      
+      // Auto-generate standardized name from first column
+      const standardizedName = selectedColumns[0].name.toLowerCase().replace(/\s+/g, '_');
       
       await dataService.createColumnMapping({
         id: crypto.randomUUID(),
@@ -316,7 +318,9 @@ const ColumnMapping: React.FC = () => {
         }
       }
 
+      // Clear selections and switch to mapped tab
       setSelectedColumns([]);
+      setActiveTab('mapped');
       
       // Refresh data without showing loading spinner for better UX
       await loadData();
@@ -541,6 +545,18 @@ const ColumnMapping: React.FC = () => {
                 {isBulkSelected ? `Selected (${allUnmappedCount})` : `Select (${allUnmappedCount})`}
               </button>
 
+              {/* Create Mapping button when columns are selected */}
+              {selectedColumns.length > 0 && (
+                <button
+                  onClick={handleCreateMapping}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                  title="Create Manual Mapping"
+                >
+                  <AddIcon className="h-4 w-4 mr-2" />
+                  Create Mapping ({selectedColumns.length})
+                </button>
+              )}
+
               {/* Clear All shown on Mapped tab */}
               {activeTab === 'mapped' && (
                 <button
@@ -648,6 +664,8 @@ const ColumnMapping: React.FC = () => {
             description="Configure automatic column mapping"
           />
         </Suspense>
+
+
 
         {/* Help Modal */}
         {showHelp && (

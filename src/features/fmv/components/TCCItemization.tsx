@@ -37,6 +37,8 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
   };
 
   const total = calculateTotalTCC(components);
+  const normalizedTotal = fte > 0 ? total / fte : 0;
+  const showNormalization = fte < 1.0 && fte > 0;
 
   return (
     <div className="space-y-6">
@@ -192,12 +194,31 @@ export const TCCItemization: React.FC<TCCItemizationProps> = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-1">Total Cash Compensation</h3>
             <p className="text-sm text-gray-600">Sum of all compensation components</p>
+            {showNormalization && (
+              <div className="mt-3">
+                <div className="text-sm text-gray-700 mb-1">
+                  Normalized to 1.0 FTE: <span className="font-semibold text-gray-900">${normalizedTotal.toLocaleString()}</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  ${total.toLocaleString()} ÷ {fte} FTE = ${normalizedTotal.toLocaleString()} at 1.0 FTE
+                </div>
+              </div>
+            )}
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold text-blue-600">${total.toLocaleString()}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {components.length} component{components.length !== 1 ? 's' : ''}
-            </div>
+            {showNormalization && (
+              <>
+                <div className="text-sm text-gray-600 font-medium mt-1">
+                  @ {fte} FTE
+                </div>
+                <hr className="my-2 border-gray-300" />
+                <div className="text-3xl font-bold text-gray-700">${normalizedTotal.toLocaleString()}</div>
+                <div className="text-sm text-gray-500 font-medium">
+                  @ 1.0 FTE
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -100,6 +100,24 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     }
   };
 
+  // Handle create mapping (auto-join like Variable Mapping - no modal)
+  const handleCreateMapping = async () => {
+    if (selectedRegions.length === 0) return;
+
+    try {
+      // Auto-generate standardized name from first region (like Variable Mapping)
+      const standardizedName = selectedRegions[0].name;
+      
+      await createGroupedMapping(standardizedName, selectedRegions);
+      
+      // Clear selections and switch to mapped tab
+      clearSelectedRegions();
+      setActiveTab('mapped');
+    } catch (error) {
+      console.error('Failed to create region mapping:', error);
+    }
+  };
+
   // Load data on mount
   useEffect(() => {
     loadData();
@@ -186,6 +204,16 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                     >
                       Deselect All
                     </button>
+                    {selectedRegions.length > 0 && (
+                      <button
+                        onClick={handleCreateMapping}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                        title="Create Manual Mapping"
+                      >
+                        <AddIcon className="h-4 w-4 mr-2" />
+                        Create Mapping ({selectedRegions.length})
+                      </button>
+                    )}
                   </>
                 )}
                 {activeTab === 'mapped' && (
@@ -263,6 +291,8 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
             iconColorClass="text-indigo-600"
             bgColorClass="bg-indigo-100"
           />
+
+
 
           {/* Help Modal */}
           {showHelp && (
