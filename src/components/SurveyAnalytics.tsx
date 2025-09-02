@@ -111,10 +111,18 @@ const detectVariableType = (variableName: string): { type: string; standardizedN
   const name = variableName.toLowerCase();
   
   // Define patterns for different variable types
+  // NOTE: Order matters! More specific patterns should come first
   const patterns = {
+    // Conversion factors (ratios) - check these FIRST before generic TCC
+    cf: [
+      'conversion', 'cf', 'factor', 'conversion factor',
+      'tcc per rvu', 'tcc per work rvu', 'compensation per rvu', 
+      'dollars per rvu', 'per work rvu', 'per rvu', 'tcc/rvu',
+      'compensation/rvu', 'comp per rvu', 'cash per rvu'
+    ],
+    // Now check generic compensation patterns
     tcc: ['compensation', 'salary', 'total cash', 'tcc', 'total compensation'],
     wrvu: ['rvu', 'relative value', 'work rvu', 'wrvu', 'work relative value'],
-    cf: ['conversion', 'cf', 'factor', 'conversion factor'],
     bonus: ['bonus', 'incentive', 'performance', 'productivity'],
     quality: ['quality', 'metrics', 'score', 'outcome'],
     stipend: ['stipend', 'allowance', 'supplement'],
@@ -126,7 +134,19 @@ const detectVariableType = (variableName: string): { type: string; standardizedN
   
   // Find matching pattern
   for (const [type, keywords] of Object.entries(patterns)) {
-    if (keywords.some(keyword => name.includes(keyword))) {
+    const matchedKeyword = keywords.find(keyword => name.includes(keyword));
+    if (matchedKeyword) {
+      // Debug: Log TCC per RVU detection
+      if (name.includes('tcc') && name.includes('rvu')) {
+        console.log('🔍 TCC per RVU detection:', {
+          originalName: variableName,
+          normalizedName: name,
+          detectedType: type,
+          matchedKeyword,
+          standardizedName: `${type}_variable`
+        });
+      }
+      
       return { 
         type, 
         standardizedName: `${type}_variable` 
@@ -196,11 +216,11 @@ const createIntelligentMappings = (row: any, surveySource: string): Array<{sourc
     { pattern: /wrvu.*p75|p75.*wrvu|work.*rvu.*75|75.*work.*rvu/i, target: 'wrvu_p75', confidence: 0.9 },
     { pattern: /wrvu.*p90|p90.*wrvu|work.*rvu.*90|90.*work.*rvu/i, target: 'wrvu_p90', confidence: 0.9 },
     
-    // CF patterns (Conversion Factor)
-    { pattern: /cf.*p25|p25.*cf|conversion.*factor.*25|25.*conversion.*factor/i, target: 'cf_p25', confidence: 0.9 },
-    { pattern: /cf.*p50|p50.*cf|conversion.*factor.*50|50.*conversion.*factor|median.*cf|cf.*median/i, target: 'cf_p50', confidence: 0.9 },
-    { pattern: /cf.*p75|p75.*cf|conversion.*factor.*75|75.*conversion.*factor/i, target: 'cf_p75', confidence: 0.9 },
-    { pattern: /cf.*p90|p90.*cf|conversion.*factor.*90|90.*conversion.*factor/i, target: 'cf_p90', confidence: 0.9 },
+    // CF patterns (Conversion Factor) - including TCC per RVU ratios
+    { pattern: /cf.*p25|p25.*cf|conversion.*factor.*25|25.*conversion.*factor|tcc.*per.*rvu.*25|25.*tcc.*per.*rvu|compensation.*per.*rvu.*25|25.*compensation.*per.*rvu/i, target: 'cf_p25', confidence: 0.9 },
+    { pattern: /cf.*p50|p50.*cf|conversion.*factor.*50|50.*conversion.*factor|median.*cf|cf.*median|tcc.*per.*rvu.*50|50.*tcc.*per.*rvu|compensation.*per.*rvu.*50|50.*compensation.*per.*rvu|tcc.*per.*rvu.*median|median.*tcc.*per.*rvu/i, target: 'cf_p50', confidence: 0.9 },
+    { pattern: /cf.*p75|p75.*cf|conversion.*factor.*75|75.*conversion.*factor|tcc.*per.*rvu.*75|75.*tcc.*per.*rvu|compensation.*per.*rvu.*75|75.*compensation.*per.*rvu/i, target: 'cf_p75', confidence: 0.9 },
+    { pattern: /cf.*p90|p90.*cf|conversion.*factor.*90|90.*conversion.*factor|tcc.*per.*rvu.*90|90.*tcc.*per.*rvu|compensation.*per.*rvu.*90|90.*compensation.*per.*rvu/i, target: 'cf_p90', confidence: 0.9 },
     
     // Organization and incumbent patterns
     { pattern: /n_orgs|orgs|organizations|number.*org/i, target: 'n_orgs', confidence: 0.8 },
@@ -225,7 +245,7 @@ const createIntelligentMappings = (row: any, surveySource: string): Array<{sourc
   
   // Test each column against patterns
   Object.keys(row).forEach(columnName => {
-    let bestMatch = null;
+    let bestMatch: string | null = null;
     let highestConfidence = 0;
     
     columnPatterns.forEach(pattern => {
@@ -238,6 +258,16 @@ const createIntelligentMappings = (row: any, surveySource: string): Array<{sourc
     });
     
     if (bestMatch && highestConfidence > 0.7) {
+      // Debug: Log TCC per RVU intelligent mappings
+      if (columnName.toLowerCase().includes('tcc') && columnName.toLowerCase().includes('rvu')) {
+        console.log('🎯 TCC per RVU intelligent mapping:', {
+          sourceColumn: columnName,
+          targetColumn: bestMatch,
+          confidence: highestConfidence,
+          isCorrectType: (bestMatch as string).includes('cf') ? 'CORRECT (CF)' : 'WRONG (should be CF)'
+        });
+      }
+      
       mappings.push({
         sourceColumn: columnName,
         targetColumn: bestMatch,
