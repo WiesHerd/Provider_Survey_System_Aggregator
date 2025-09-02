@@ -156,12 +156,12 @@ const PageContent = () => {
     }
   }, [location.pathname]);
 
-  // Render all pages with sidebar for consistent branding
+  // Render dashboard without sidebar, other pages with sidebar
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      {!isDashboard && <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
       
-      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'pl-64' : 'pl-20'}`}>
+      <div className={`flex-1 transition-all duration-300 ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
         {!isDashboard && (
           <PageHeader 
             title={headerContent.title} 

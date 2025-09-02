@@ -82,13 +82,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
 				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
 			]
-		},
-		{
-			name: 'Support',
-			items: [
-				{ name: 'Instructions', icon: InformationCircleIcon, path: '/instructions' },
-				{ name: 'Download Test', icon: ClipboardDocumentListIcon, path: '/download-test' },
-			]
 		}
 	];
 
