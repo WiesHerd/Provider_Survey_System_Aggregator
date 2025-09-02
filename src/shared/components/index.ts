@@ -9,3 +9,5 @@ export {
   SuspenseSpinner,
   TableSpinner
 } from './LoadingSpinner';
+
+export { SpecialtyAutocomplete } from './SpecialtyAutocomplete';

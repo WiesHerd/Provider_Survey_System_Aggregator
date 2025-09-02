@@ -23,6 +23,8 @@ import {
   LinearProgress,
   Alert
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
 import { SelectChangeEvent } from '@mui/material/Select';
 import {
   ChevronDownIcon,
@@ -33,6 +35,7 @@ import {
 import { UploadedSurveysProps } from '../types/upload';
 import { formatDate } from '@/shared/utils';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { filterSpecialtyOptions } from '../../../shared/utils/specialtyMatching';
 import { InlineSpinner } from '../../../shared/components';
 
 /**
@@ -131,26 +134,33 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
             <Grid container spacing={2}>
               <Grid item xs={12} sm={4}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Specialty</InputLabel>
-                  <Select
+                  <Autocomplete
                     value={globalFilters.specialty}
-                    label="Specialty"
-                    onChange={handleFilterChange('specialty')}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: '8px',
-                      }
-                    }}
-                  >
-                    <MenuItem value="">
-                      <em>All Specialties</em>
-                    </MenuItem>
-                    {specialtyOptions.map((specialty) => (
-                      <MenuItem key={specialty} value={specialty}>
-                        {formatSpecialtyForDisplay(specialty)}
-                      </MenuItem>
-                    ))}
-                  </Select>
+                    onChange={(event: any, newValue: string | null) => onFilterChange('specialty', newValue || '')}
+                    options={specialtyOptions}
+                    getOptionLabel={(option: string) => option ? formatSpecialtyForDisplay(option) : ''}
+                    renderInput={(params: any) => (
+                      <TextField
+                        {...params}
+                        label="Specialty"
+                        placeholder="Search specialties..."
+                        size="small"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            backgroundColor: 'white',
+                            borderRadius: '8px',
+                            height: '40px',
+                            border: '1px solid #d1d5db',
+                            '&:hover': { borderColor: '#9ca3af' },
+                            '&.Mui-focused': { boxShadow: 'none', borderColor: '#3b82f6' }
+                          }
+                        }}
+                      />
+                    )}
+                    filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
+                    clearOnBlur={false}
+                    blurOnSelect={true}
+                  />
                 </FormControl>
               </Grid>
               
