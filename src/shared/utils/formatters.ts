@@ -382,8 +382,7 @@ export const sortSpecialtiesForDisplay = (specialties: string[]): string[] => {
 
   return sorted;
 };
- 
- 
+
 /**
  * Format region name for display with proper capitalization
  * @param region - Raw region name to format
