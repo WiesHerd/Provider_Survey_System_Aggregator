@@ -40,6 +40,7 @@ import {
 import { getDataService } from '../services/DataService';
 import LoadingSpinner from './ui/loading-spinner';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping } from '../types/specialty';
 
@@ -1161,6 +1162,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 noOptionsText="No specialties found"
                 clearOnBlur={false}
                 disableCloseOnSelect={true}
+                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
               />
             </FormControl>
 
