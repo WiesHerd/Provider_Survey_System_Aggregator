@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import { FMVFiltersProps } from '../types/fmv';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { filterSpecialtyOptions } from '../../../shared/utils/specialtyMatching';
 
 /**
  * FMV Filters component for filtering market data
@@ -86,6 +87,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
               noOptionsText="No specialties found"
               clearOnBlur={false}
               blurOnSelect={true}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
             />
           </FormControl>
         </div>

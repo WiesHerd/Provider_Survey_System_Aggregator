@@ -28,7 +28,7 @@ import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
 import LoadingSpinner from './ui/loading-spinner';
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { formatSpecialtyForDisplay, formatRegionForDisplay } from '../shared/utils/formatters';
-import { fuzzyMatchSpecialty } from '../shared/utils/specialtyMatching';
+import { fuzzyMatchSpecialty, filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { useYear } from '../contexts/YearContext';
 import { performanceMonitor } from '../shared/utils/performance';
 const SHOW_DEBUG = false; // Set to false for production performance
@@ -1568,14 +1568,9 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 );
               }}
               filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                if (inputValue === '') {
-                  return options;
-                }
-                return options.filter((option: string) => 
-                  option === '' || 
-                  formatSpecialtyForDisplay(option).toLowerCase().includes(inputValue.toLowerCase()) ||
-                  option.toLowerCase().includes(inputValue.toLowerCase())
-                );
+                const base = filterSpecialtyOptions(options, inputValue);
+                // Keep "All Specialties" if present
+                return options[0] === '' && base.indexOf('') === -1 ? ['', ...base.filter(o => o !== '')] : base;
               }}
             />
           </div>

@@ -174,3 +174,79 @@ export const standardizeSpecialty = (specialty: string): string => {
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
 };
+
+/**
+ * Shared specialty filtering for Autocomplete components.
+ * Provides order-insensitive token matching, light stemming/synonyms, and
+ * token-level fuzzy tolerance for small typos.
+ */
+export const filterSpecialtyOptions = (
+  options: string[],
+  inputValue: string
+): string[] => {
+  if (!inputValue) return options;
+
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const toTokens = (s: string) => normalize(s).split(' ').filter(Boolean);
+  const stem = (t: string) => {
+    const synonyms: Record<string, string> = {
+      pediatrics: 'pediatric',
+      pediatric: 'pediatric',
+      pedia: 'pediatric',
+      cardio: 'cardiology',
+      ent: 'otolaryngology',
+      gyn: 'gynecology',
+      ob: 'obstetrics'
+    };
+    const singular = t.endsWith('s') ? t.slice(0, -1) : t;
+    return synonyms[t] || synonyms[singular] || singular;
+  };
+  const levenshtein = (a: string, b: string): number => {
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp: number[] = new Array(n + 1).fill(0);
+    for (let j = 0; j <= n; j++) dp[j] = j;
+    for (let i = 1; i <= m; i++) {
+      let prev = i - 1;
+      dp[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const temp = dp[j];
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[j] = Math.min(
+          dp[j] + 1,
+          dp[j - 1] + 1,
+          prev + cost
+        );
+        prev = temp;
+      }
+    }
+    return dp[n];
+  };
+  const tokenMatch = (query: string, candidate: string) => {
+    const qTokens = toTokens(query).map(stem);
+    const cTokens = toTokens(candidate).map(stem);
+    return qTokens.every(qt => cTokens.includes(qt));
+  };
+  const tokenFuzzyMatch = (query: string, candidate: string) => {
+    const qTokens = toTokens(query).map(stem);
+    const cTokens = toTokens(candidate).map(stem);
+    if (qTokens.length === 0 || cTokens.length === 0) return false;
+    return qTokens.every(qt => cTokens.some(ct => {
+      if (ct.includes(qt) || qt.includes(ct)) return true;
+      const dist = levenshtein(qt, ct);
+      const allowed = qt.length <= 5 ? 1 : 2;
+      return dist <= allowed;
+    }));
+  };
+
+  return options.filter((option: string) => {
+    if (option === '') return true;
+    return (
+      tokenMatch(inputValue, option) ||
+      tokenFuzzyMatch(inputValue, option) ||
+      fuzzyMatchSpecialty(inputValue, option) ||
+      fuzzyMatchSpecialty(inputValue, standardizeSpecialty(option))
+    );
+  });
+};
