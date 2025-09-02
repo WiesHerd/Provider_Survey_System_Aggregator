@@ -1106,17 +1106,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   <TextField
                     {...params}
                     placeholder="Search and select specialties..."
+                    size="small"
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         backgroundColor: 'white',
-                        borderRadius: '12px',
-                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        height: '40px',
+                        border: '1px solid #d1d5db',
                         '&:hover': {
-                          borderColor: '#6366f1',
+                          borderColor: '#9ca3af',
                         },
                         '&.Mui-focused': {
-                          borderColor: '#6366f1',
-                          boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
+                          borderColor: '#3b82f6',
+                          boxShadow: 'none',
                         }
                       }
                     }}
@@ -1146,16 +1148,17 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'white',
                     border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
                     maxHeight: '300px'
                   },
                   '& .MuiAutocomplete-option': {
+                    padding: '8px 12px',
+                    fontSize: '0.875rem',
                     '&:hover': { backgroundColor: '#f3f4f6' },
                     '&.Mui-selected': { 
                       backgroundColor: '#ede9fe',
-                      color: '#5b21b6',
-                      '&:hover': { backgroundColor: '#ddd6fe' }
+                      color: '#5b21b6'
                     }
                   }
                 }}
@@ -1181,28 +1184,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   <TextField
                     {...params}
                     placeholder="Select regions..."
+                    size="small"
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         backgroundColor: 'white',
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         fontSize: '0.875rem',
-                        border: '2px solid #e5e7eb',
+                        height: '40px',
+                        border: '1px solid #d1d5db',
                         '&:hover': {
-                          borderColor: '#6366f1',
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          borderColor: '#9ca3af',
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)'
                         },
                         '&.Mui-focused': {
                           backgroundColor: 'white',
-                          boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
-                          borderColor: '#6366f1',
+                          boxShadow: 'none',
+                          borderColor: '#3b82f6'
                         }
-                      },
-                      '& .MuiInputBase-input': {
-                        paddingTop: '12px',
-                        paddingBottom: '12px',
-                        paddingLeft: '14px',
-                        paddingRight: '14px',
-                        fontSize: '0.875rem',
                       }
                     }}
                   />
@@ -1232,20 +1230,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'white',
                     border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
                     maxHeight: '300px',
                     marginTop: '4px'
                   },
                   '& .MuiAutocomplete-option': {
-                    padding: '12px 16px',
+                    padding: '8px 12px',
                     fontSize: '0.875rem',
                     '&:hover': { backgroundColor: '#f3f4f6' },
                     '&.Mui-selected': { 
-                      backgroundColor: '#d1fae5',
-                      color: '#047857',
-                      fontWeight: '500',
-                      '&:hover': { backgroundColor: '#a7f3d0' }
+                      backgroundColor: '#e5f3ee',
+                      color: '#065f46',
+                      fontWeight: 500
                     }
                   }
                 }}
@@ -1270,28 +1267,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   <TextField
                     {...params}
                     placeholder="Select survey sources..."
+                    size="small"
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         backgroundColor: 'white',
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         fontSize: '0.875rem',
-                        border: '2px solid #e5e7eb',
+                        height: '40px',
+                        border: '1px solid #d1d5db',
                         '&:hover': {
-                          borderColor: '#6366f1',
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          borderColor: '#9ca3af',
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)'
                         },
                         '&.Mui-focused': {
                           backgroundColor: 'white',
-                          boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
-                          borderColor: '#6366f1',
+                          boxShadow: 'none',
+                          borderColor: '#3b82f6'
                         }
-                      },
-                      '& .MuiInputBase-input': {
-                        paddingTop: '12px',
-                        paddingBottom: '12px',
-                        paddingLeft: '14px',
-                        paddingRight: '14px',
-                        fontSize: '0.875rem',
                       }
                     }}
                   />
@@ -1321,20 +1313,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'white',
                     border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
                     maxHeight: '300px',
                     marginTop: '4px'
                   },
                   '& .MuiAutocomplete-option': {
-                    padding: '12px 16px',
+                    padding: '8px 12px',
                     fontSize: '0.875rem',
                     '&:hover': { backgroundColor: '#f3f4f6' },
                     '&.Mui-selected': { 
-                      backgroundColor: '#fee2e2',
-                      color: '#dc2626',
-                      fontWeight: '500',
-                      '&:hover': { backgroundColor: '#fecaca' }
+                      backgroundColor: '#fde8e8',
+                      color: '#b91c1c',
+                      fontWeight: 500
                     }
                   }
                 }}

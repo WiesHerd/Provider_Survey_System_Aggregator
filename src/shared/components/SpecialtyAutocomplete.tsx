@@ -36,6 +36,21 @@ export const SpecialtyAutocomplete: React.FC<SpecialtyAutocompleteProps> = ({
             label={label}
             placeholder={placeholder}
             size={size}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                height: size === 'small' ? '40px' : undefined,
+                border: '1px solid #d1d5db',
+                '&:hover': {
+                  borderColor: '#9ca3af'
+                },
+                '&.Mui-focused': {
+                  boxShadow: 'none',
+                  borderColor: '#3b82f6'
+                }
+              }
+            }}
           />
         )}
         filterOptions={(opts: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(opts, inputValue)}
