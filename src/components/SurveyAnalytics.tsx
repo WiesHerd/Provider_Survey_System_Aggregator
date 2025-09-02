@@ -291,12 +291,13 @@ const extractCleanSurveyName = (filename: string): string => {
 };
 
 // PERFORMANCE OPTIMIZATION: Optimized data transformation function
-const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string, variableMappings: VariableMapping[] = []): any[] => {
+const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMappings: any[], surveySource: string, variableMappings: VariableMapping[] = [], regionMappings: any[] = []): any[] => {
   if (rawData.length === 0) return [];
 
   // PERFORMANCE OPTIMIZATION: Pre-compute lookups once
   const columnMappingLookup = new Map();
   const specialtyMappingLookup = new Map();
+  const regionMappingLookup = new Map();
   
   // Build column mapping lookup for this survey source
   columnMappings.forEach(mapping => {
@@ -312,6 +313,15 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
     mapping.sourceSpecialties.forEach((specialty: any) => {
       if (specialty.surveySource === surveySource) {
         specialtyMappingLookup.set(specialty.specialty.toLowerCase(), mapping.standardizedName);
+      }
+    });
+  });
+
+  // Build region mapping lookup for this survey source
+  regionMappings.forEach(mapping => {
+    mapping.sourceRegions.forEach((region: any) => {
+      if (region.surveySource === surveySource) {
+        regionMappingLookup.set(region.region.toLowerCase(), mapping.standardizedName);
       }
     });
   });
@@ -399,12 +409,34 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
     // PERFORMANCE OPTIMIZATION: Apply column mappings efficiently
     let mappedColumns = 0;
     
-    // Apply categorical variable mappings
-    if (row.geographicRegion) {
-      const regionMapping = findVariableMapping(row.geographicRegion, surveySource, variableMappings, 'categorical', 'region');
-      if (regionMapping) {
-        transformedRow.geographicRegion = regionMapping.standardizedName;
-        transformedRow.originalRegion = row.geographicRegion;
+    // Apply region mappings
+    const originalRegion = String(row.geographicRegion || row.geographic_region || '').toLowerCase();
+    if (originalRegion) {
+      const standardizedRegion = regionMappingLookup.get(originalRegion);
+      if (standardizedRegion) {
+        transformedRow.geographicRegion = standardizedRegion;
+        transformedRow.originalRegion = row.geographicRegion || row.geographic_region;
+        
+        // Debug: Log successful region mapping
+        if (Math.random() < 0.1) { // Log 10% of successful mappings
+          console.log('🌍 Region mapping applied:', {
+            originalRegion: row.geographicRegion || row.geographic_region,
+            standardizedRegion,
+            surveySource
+          });
+        }
+      } else {
+        transformedRow.geographicRegion = row.geographicRegion || row.geographic_region || '';
+        transformedRow.originalRegion = row.geographicRegion || row.geographic_region || '';
+        
+        // Debug: Log unmapped regions
+        if (Math.random() < 0.05) { // Log 5% of unmapped regions
+          console.log('⚠️ Region not mapped:', {
+            originalRegion: row.geographicRegion || row.geographic_region,
+            availableMappings: Array.from(regionMappingLookup.keys()).slice(0, 5),
+            surveySource
+          });
+        }
       }
     }
     
@@ -752,6 +784,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
   const [error, setError] = useState<string | null>(null);
   const [mappings, setMappings] = useState<ISpecialtyMapping[]>([]);
   const [columnMappings, setColumnMappings] = useState<any[]>([]);
+  const [regionMappings, setRegionMappings] = useState<any[]>([]);
   const [surveys, setSurveys] = useState<Record<string, ISurveyRow[]>>({});
   // Persist filters in localStorage to survive component re-renders (e.g., sidebar toggle)
   const [filters, setFilters] = useState(() => {
@@ -834,7 +867,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       const allData: any[] = [];
       Object.entries(surveys).forEach(([surveyId, surveyData]) => {
         if (surveyData && surveyData.length > 0) {
-          const transformed = transformSurveyData(surveyData, columnMappings, mappings, surveyId, variableMappings);
+          const transformed = transformSurveyData(surveyData, columnMappings, mappings, surveyId, variableMappings, regionMappings);
           allData.push(...transformed);
         }
       });
@@ -985,6 +1018,17 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
           }))
         });
         setColumnMappings(loadedColumnMappings);
+
+        // Load region mappings
+        const loadedRegionMappings = await dataService.getRegionMappings();
+        console.log('🌍 Loaded region mappings:', {
+          count: loadedRegionMappings.length,
+          mappings: loadedRegionMappings.map(m => ({
+            standardizedName: m.standardizedName,
+            sourceRegions: m.sourceRegions?.length || 0
+          }))
+        });
+        setRegionMappings(loadedRegionMappings);
 
         // Get survey data from DataService with pagination
         const uploadedSurveys = await dataService.getAllSurveys();
