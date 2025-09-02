@@ -280,8 +280,6 @@ const createIntelligentMappings = (row: any, surveySource: string): Array<{sourc
   return mappings;
 };
 
-};
-
 // Extract clean survey name from filename
 const extractCleanSurveyName = (filename: string): string => {
   if (!filename) return 'Survey';
