@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { parseCSVLine } from '../shared/utils/csvParser';
 
 interface SurveyDataRow {
   region: string;
@@ -22,7 +23,7 @@ export const useSurveyData = () => {
         // Parse CSV
         const rows = text.split('\n').slice(1); // Skip header
         const parsedData = rows.map(row => {
-          const [region, tcc, cf, wrvus] = row.split(',').map(val => val.trim());
+          const [region, tcc, cf, wrvus] = parseCSVLine(row);
           return {
             region,
             tcc: parseFloat(tcc),

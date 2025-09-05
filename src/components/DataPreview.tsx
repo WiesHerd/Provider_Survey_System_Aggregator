@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import {
   FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Box,
   Autocomplete,
   TextField
@@ -150,7 +147,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         console.log('Survey data returned:', {
           rowCount: surveyData.length,
           sampleRows: surveyData.slice(0, 3),
-          sampleSpecialties: [...new Set(surveyData.map(row => row.specialty))].slice(0, 5)
+          sampleSpecialties: [...new Set(surveyData.map(row => row.specialty))].slice(0, 5),
+          appliedFilters: filters,
+          firstRowKeys: surveyData.length > 0 ? Object.keys(surveyData[0]) : []
         });
         
         if (!isCancelled) {
@@ -257,6 +256,20 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         const providerTypes = [...new Set(rows.map(row => String(row[providerTypeField] || '')).filter(Boolean))].sort();
         const regions = [...new Set(rows.map(row => String(row[regionField] || '')).filter(Boolean))].sort();
         const variables = [...new Set(rows.map(row => String(row[variableField] || '')).filter(Boolean))].sort();
+        
+        console.log('🔍 DEBUG - Filter data source:', {
+          surveyId: file.id,
+          totalRows: rows.length,
+          specialtyField,
+          providerTypeField,
+          regionField,
+          variableField
+        });
+        
+        console.log('🔍 DEBUG - First 3 rows of data:', rows.slice(0, 3));
+        
+        console.log('🔍 DEBUG - All provider types found:', providerTypes);
+        console.log('🔍 DEBUG - All specialties found:', specialties);
         
         console.log('Extracted filter options:', {
           specialties: specialties.slice(0, 10),

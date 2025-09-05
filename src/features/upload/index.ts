@@ -3,14 +3,6 @@
  * This file provides a clean import interface for all upload components and utilities
  */
 
-// Main component
-export { SurveyUpload } from './components/SurveyUpload';
-
-// Sub-components
-export { UploadForm } from './components/UploadForm';
-export { FileUpload } from './components/FileUpload';
-export { UploadedSurveys } from './components/UploadedSurveys';
-
 // Hooks
 export { useUploadData } from './hooks/useUploadData';
 

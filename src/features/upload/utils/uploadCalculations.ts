@@ -10,6 +10,7 @@ import {
   UploadGlobalFilters,
   FileWithPreview 
 } from '../types/upload';
+import { parseCSVLine } from '../../../shared/utils/csvParser';
 import { formatFileSize, formatDate } from '../../../shared/utils';
 
 /**
@@ -28,7 +29,7 @@ export const calculateSurveyStats = (fileContent: string) => {
   }
 
   const lines = fileContent.split('\n').filter(line => line.trim());
-  const headers = lines[0]?.split(',').map(h => h.trim().toLowerCase()) || [];
+  const headers = lines[0] ? parseCSVLine(lines[0]).map(h => h.trim().toLowerCase()) : [];
   
   // Find specialty column index
   const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
@@ -39,7 +40,7 @@ export const calculateSurveyStats = (fileContent: string) => {
   
   if (specialtyIdx >= 0) {
     lines.slice(1).forEach(line => {
-      const values = line.split(',').map(v => v.trim());
+      const values = parseCSVLine(line);
       if (values[specialtyIdx]) {
         specialties.add(values[specialtyIdx]);
       }
@@ -72,14 +73,14 @@ export const extractUniqueValues = (surveys: UploadedSurvey[]): UniqueValues => 
     if (!survey.fileContent) return;
     
     const lines = survey.fileContent.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
     
     const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
     const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
     const regionIdx = headers.findIndex(h => h.includes('region') || h.includes('geography'));
 
     lines.slice(1).forEach(line => {
-      const values = line.split(',').map(v => v.trim());
+      const values = parseCSVLine(line);
       if (specialtyIdx >= 0 && values[specialtyIdx]) {
         uniqueValues.specialties.add(values[specialtyIdx]);
       }
@@ -111,7 +112,7 @@ export const filterSurveys = (surveys: UploadedSurvey[], filters: UploadGlobalFi
     if (!survey.fileContent) return false;
     
     const lines = survey.fileContent.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
     
     const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
     const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
@@ -119,7 +120,7 @@ export const filterSurveys = (surveys: UploadedSurvey[], filters: UploadGlobalFi
 
     // Check if any row matches the filters
     return lines.slice(1).some(line => {
-      const values = line.split(',').map(v => v.trim());
+      const values = parseCSVLine(line);
       
       const specialtyMatch = !filters.specialty || 
         (specialtyIdx >= 0 && values[specialtyIdx] === filters.specialty);
@@ -509,9 +510,9 @@ export const generateSurveyPreview = (fileContent: string, maxRows: number = 5) 
   }
 
   const lines = fileContent.split('\n').filter(line => line.trim());
-  const headers = lines[0]?.split(',').map(h => h.trim()) || [];
+  const headers = lines[0] ? parseCSVLine(lines[0]).map(h => h.trim()) : [];
   const previewRows = lines.slice(1, maxRows + 1).map(line => 
-    line.split(',').map(cell => cell.trim())
+    parseCSVLine(line)
   );
 
   return {

@@ -1,13 +1,12 @@
 import React from 'react';
-import SurveyAnalytics from './SurveyAnalytics';
+import { AnalyticsContainer } from '../features/analytics';
 
 /**
  * Analytics Wrapper Component
- * This ensures the analytics screen works properly with the legacy component
- * while we plan the refactoring to the feature-based version
+ * Now uses the refactored analytics feature for better maintainability
  */
 const AnalyticsWrapper: React.FC = () => {
-  return <SurveyAnalytics />;
+  return <AnalyticsContainer />;
 };
 
 export default AnalyticsWrapper;

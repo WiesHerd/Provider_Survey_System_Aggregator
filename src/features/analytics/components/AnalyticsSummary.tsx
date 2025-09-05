@@ -1,225 +1,117 @@
 /**
- * Analytics Summary component
- * This component displays key statistics and summary information
+ * Analytics Summary Component
+ * Displays summary statistics for analytics data
  */
 
 import React, { memo } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Grid,
-  Chip,
-  Divider
+  Card,
+  CardContent,
 } from '@mui/material';
 import { AnalyticsSummaryProps } from '../types/analytics';
-import { formatCurrency, formatNumber } from '../../../shared/utils';
+import { formatNumber } from '../utils/analyticsCalculations';
+import LoadingSpinner from '../../../components/ui/loading-spinner';
 
 /**
- * Analytics Summary component for displaying key statistics
+ * Analytics Summary component for displaying summary statistics
  * 
- * @param data - Analytics data array
- * @param filters - Current active filters
+ * @param data - The analytics data to summarize
+ * @param loading - Whether data is loading
  */
-export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
-  data,
-  filters
+export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({ 
+  data, 
+  loading 
 }) => {
-  // Calculate summary statistics
-  const totalRecords = data.length;
-  const totalOrganizations = data.reduce((sum, row) => sum + row.n_orgs, 0);
-  const totalIncumbents = data.reduce((sum, row) => sum + row.n_incumbents, 0);
-  
-  const tccP50Values = data.map(row => row.tcc_p50).filter(val => val > 0);
-  const wrvuP50Values = data.map(row => row.wrvu_p50).filter(val => val > 0);
-  const cfP50Values = data.map(row => row.cf_p50).filter(val => val > 0);
+  if (loading) {
+    return (
+      <Box className="flex items-center justify-center p-8">
+        <LoadingSpinner message="Loading summary..." size="sm" variant="primary" />
+      </Box>
+    );
+  }
 
-  const averageTccP50 = tccP50Values.length > 0 
-    ? tccP50Values.reduce((sum, val) => sum + val, 0) / tccP50Values.length 
-    : 0;
-  const averageWrvuP50 = wrvuP50Values.length > 0 
-    ? wrvuP50Values.reduce((sum, val) => sum + val, 0) / wrvuP50Values.length 
-    : 0;
-  const averageCfP50 = cfP50Values.length > 0 
-    ? cfP50Values.reduce((sum, val) => sum + val, 0) / cfP50Values.length 
-    : 0;
+  const summaryStats = {
+    totalRecords: data.length,
+    uniqueSpecialties: new Set(data.map(row => row.surveySpecialty)).size,
+    uniqueRegions: new Set(data.map(row => row.geographicRegion)).size,
+    uniqueSurveySources: new Set(data.map(row => row.surveySource)).size,
+    totalOrganizations: data.reduce((sum, row) => sum + row.n_orgs, 0),
+    totalIncumbents: data.reduce((sum, row) => sum + row.n_incumbents, 0)
+  };
 
-  const uniqueSpecialties = new Set(data.map(row => row.surveySpecialty));
-  const uniqueSources = new Set(data.map(row => row.surveySource));
-  const uniqueRegions = new Set(data.map(row => row.geographicRegion));
-
-  const activeFiltersCount = Object.values(filters).filter(value => value !== undefined && value !== '').length;
+  const summaryCards = [
+    {
+      title: 'Total Records',
+      value: formatNumber(summaryStats.totalRecords),
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50'
+    },
+    {
+      title: 'Unique Specialties',
+      value: formatNumber(summaryStats.uniqueSpecialties),
+      color: 'text-green-600',
+      bgColor: 'bg-green-50'
+    },
+    {
+      title: 'Unique Regions',
+      value: formatNumber(summaryStats.uniqueRegions),
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50'
+    },
+    {
+      title: 'Survey Sources',
+      value: formatNumber(summaryStats.uniqueSurveySources),
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50'
+    },
+    {
+      title: 'Total Organizations',
+      value: formatNumber(summaryStats.totalOrganizations),
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50'
+    },
+    {
+      title: 'Total Incumbents',
+      value: formatNumber(summaryStats.totalIncumbents),
+      color: 'text-pink-600',
+      bgColor: 'bg-pink-50'
+    }
+  ];
 
   return (
-    <Card sx={{ mb: 3, borderRadius: '8px' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" component="h2">
-            Analytics Summary
-          </Typography>
-          {activeFiltersCount > 0 && (
-            <Chip 
-              label={`${activeFiltersCount} filter${activeFiltersCount > 1 ? 's' : ''} active`}
-              size="small"
-              color="primary"
-              variant="outlined"
-            />
-          )}
-        </Box>
-
-        <Grid container spacing={3}>
-          {/* Data Volume Metrics */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Data Volume
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="primary">
-                    {formatNumber(totalRecords)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Records
+    <Box className="mb-6">
+      <Typography variant="h6" className="font-semibold text-gray-900 mb-4">
+        Summary Statistics
+      </Typography>
+      
+      <Grid container spacing={3}>
+        {summaryCards.map((card, index) => (
+          <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
+            <Card className="rounded-xl shadow-sm border border-gray-200">
+              <CardContent className="p-4">
+                <Box className={`${card.bgColor} rounded-lg p-3 mb-3`}>
+                  <Typography 
+                    variant="h4" 
+                    className={`font-bold ${card.color}`}
+                  >
+                    {card.value}
                   </Typography>
                 </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="primary">
-                    {formatNumber(totalOrganizations)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Organizations
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="primary">
-                    {formatNumber(totalIncumbents)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Incumbents
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="primary">
-                    {uniqueSpecialties.size}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Specialties
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
+                <Typography 
+                  variant="body2" 
+                  className="text-gray-600 font-medium"
+                >
+                  {card.title}
+                </Typography>
+              </CardContent>
+            </Card>
           </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Divider orientation="vertical" flexItem />
-          </Grid>
-
-          {/* Compensation Metrics */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Average Compensation (P50)
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="success.main">
-                    {formatCurrency(averageTccP50)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    TCC P50
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="success.main">
-                    {formatNumber(averageWrvuP50)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    WRVU P50
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="success.main">
-                    {formatCurrency(averageCfP50)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    CF P50
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <Typography variant="h4" component="div" color="success.main">
-                    {averageCfP50 > 0 ? formatCurrency(averageTccP50 / averageCfP50) : '$0'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    TCC/CF Ratio
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-          </Grid>
-        </Grid>
-
-        {/* Data Diversity */}
-        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Data Diversity
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Chip 
-              label={`${uniqueSources.size} Survey Sources`}
-              size="small"
-              variant="outlined"
-            />
-            <Chip 
-              label={`${uniqueRegions.size} Geographic Regions`}
-              size="small"
-              variant="outlined"
-            />
-            <Chip 
-              label={`${uniqueSpecialties.size} Medical Specialties`}
-              size="small"
-              variant="outlined"
-            />
-          </Box>
-        </Box>
-
-        {/* Active Filters Display */}
-        {activeFiltersCount > 0 && (
-          <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Active Filters
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {Object.entries(filters).map(([key, value]) => {
-                if (!value) return null;
-                return (
-                  <Chip
-                    key={key}
-                    label={`${key}: ${value}`}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                );
-              })}
-            </Box>
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+        ))}
+      </Grid>
+    </Box>
   );
 });
 

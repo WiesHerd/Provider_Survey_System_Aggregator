@@ -1,210 +1,108 @@
 /**
  * Custom hook for managing analytics data
- * Extracted from SurveyAnalytics.tsx to improve maintainability
+ * Extracted from SurveyAnalytics.tsx for better organization
  */
 
-import { useState, useEffect, useMemo } from 'react';
-import { getDataService } from '../../../services/DataService';
-import { ISurveyRow } from '../../../types/survey';
-import { ISpecialtyMapping } from '../../../types/specialty';
-import { AggregatedData, AnalyticsFilters } from '../types/analytics';
-import { performanceMonitor } from '../../../shared/utils/performance';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { AggregatedData, AnalyticsFilters, AnalyticsState } from '../types/analytics';
+import { analyticsDataService } from '../services/analyticsDataService';
 
-interface UseAnalyticsDataReturn {
-  data: AggregatedData[];
-  loading: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-  filters: AnalyticsFilters;
-  setFilters: (filters: AnalyticsFilters) => void;
-  filteredData: AggregatedData[];
-}
-
-
-
-const SHOW_DEBUG = false; // Set to false for production performance
-
-export const useAnalyticsData = (): UseAnalyticsDataReturn => {
+/**
+ * Custom hook for analytics data management
+ * 
+ * @param initialFilters - Initial filter values
+ * @returns Analytics state and actions
+ */
+export const useAnalyticsData = (initialFilters: Partial<AnalyticsFilters> = {}) => {
+  // State declarations
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<AnalyticsFilters>({});
+  const [filters, setFilters] = useState<AnalyticsFilters>({
+    specialty: '',
+    providerType: '',
+    region: '',
+    variable: '',
+    surveySource: '',
+    ...initialFilters
+  });
 
-  // Fetch and process analytics data
-  const fetchAnalyticsData = async () => {
+  // Memoized unique values
+  const uniqueValues = useMemo(() => {
+    return analyticsDataService.getUniqueValues(data);
+  }, [data]);
+
+  // Memoized filtered data
+  const filteredData = useMemo(() => {
+    return analyticsDataService.filterData(data, filters);
+  }, [data, filters]);
+
+  // Memoized summary statistics
+  const summaryStats = useMemo(() => {
+    return analyticsDataService.getSummaryStats(filteredData);
+  }, [filteredData]);
+
+  // Load analytics data
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
-      const dataService = getDataService();
-      const surveys = await dataService.getAllSurveys();
-      const mappings = await dataService.getAllSpecialtyMappings();
-
-      if (SHOW_DEBUG) {
-        console.log('Fetched surveys:', surveys.length);
-        console.log('Fetched mappings:', mappings.length);
-      }
-
-      // Process data asynchronously to avoid blocking UI
-      const processedData = await processSurveyData(surveys, mappings);
-      setData(processedData);
-
+      
+      const analyticsData = await analyticsDataService.loadAnalyticsData();
+      setData(analyticsData);
     } catch (err) {
-      console.error('Error fetching analytics data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load analytics data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load analytics data';
+      setError(errorMessage);
+      console.error('Error loading analytics data:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Process survey data into aggregated format
-  const processSurveyData = async (surveys: any[], mappings: ISpecialtyMapping[]): Promise<AggregatedData[]> => {
-    return new Promise((resolve) => {
-      // Use setTimeout to make this asynchronous and avoid blocking UI
-      setTimeout(() => {
-        const processedData = performanceMonitor.measureTime('Data Processing', () => {
-          const aggregatedData: Record<string, AggregatedData> = {};
-
-          surveys.forEach(survey => {
-            // Create unique key for aggregation
-            const key = `${survey.surveySource}_${survey.surveySpecialty}_${survey.geographicRegion}`;
-            
-            if (!aggregatedData[key]) {
-              aggregatedData[key] = {
-                id: key, // Use the key as the ID
-                standardizedName: survey.standardizedName || '',
-                surveySource: survey.surveySource,
-                surveySpecialty: survey.surveySpecialty,
-                geographicRegion: survey.geographicRegion,
-                providerType: survey.providerType || 'Unknown',
-                surveyYear: survey.surveyYear || 'Unknown',
-                
-                // TCC metrics with their own organizational data
-                tcc_n_orgs: 0,
-                tcc_n_incumbents: 0,
-                tcc_p25: 0,
-                tcc_p50: 0,
-                tcc_p75: 0,
-                tcc_p90: 0,
-                
-                // wRVU metrics with their own organizational data
-                wrvu_n_orgs: 0,
-                wrvu_n_incumbents: 0,
-                wrvu_p25: 0,
-                wrvu_p50: 0,
-                wrvu_p75: 0,
-                wrvu_p90: 0,
-                
-                // CF metrics with their own organizational data
-                cf_n_orgs: 0,
-                cf_n_incumbents: 0,
-                cf_p25: 0,
-                cf_p50: 0,
-                cf_p75: 0,
-                cf_p90: 0,
-                
-                // Legacy fields for backward compatibility
-                n_orgs: 0,
-                n_incumbents: 0,
-                
-                rawData: survey.rawData || {}
-              };
-            }
-
-            // Aggregate data
-            const record = aggregatedData[key];
-            
-            // Legacy fields (sum all)
-            record.n_orgs += survey.n_orgs || 0;
-            record.n_incumbents += survey.n_incumbents || 0;
-
-            // TCC metrics with their own organizational data
-            if (survey.tcc_p50 > 0) {
-              record.tcc_n_orgs += survey.n_orgs || 0;
-              record.tcc_n_incumbents += survey.n_incumbents || 0;
-            }
-            if (survey.tcc_p25) record.tcc_p25 += survey.tcc_p25;
-            if (survey.tcc_p50) record.tcc_p50 += survey.tcc_p50;
-            if (survey.tcc_p75) record.tcc_p75 += survey.tcc_p75;
-            if (survey.tcc_p90) record.tcc_p90 += survey.tcc_p90;
-
-            // wRVU metrics with their own organizational data
-            if (survey.wrvu_p50 > 0) {
-              record.wrvu_n_orgs += survey.n_orgs || 0;
-              record.wrvu_n_incumbents += survey.n_incumbents || 0;
-            }
-            if (survey.wrvu_p25) record.wrvu_p25 += survey.wrvu_p25;
-            if (survey.wrvu_p50) record.wrvu_p50 += survey.wrvu_p50;
-            if (survey.wrvu_p75) record.wrvu_p75 += survey.wrvu_p75;
-            if (survey.wrvu_p90) record.wrvu_p90 += survey.wrvu_p90;
-
-            // CF metrics with their own organizational data
-            if (survey.cf_p50 > 0) {
-              record.cf_n_orgs += survey.n_orgs || 0;
-              record.cf_n_incumbents += survey.n_incumbents || 0;
-            }
-            if (survey.cf_p25) record.cf_p25 += survey.cf_p25;
-            if (survey.cf_p50) record.cf_p50 += survey.cf_p50;
-            if (survey.cf_p75) record.cf_p75 += survey.cf_p75;
-            if (survey.cf_p90) record.cf_p90 += survey.cf_p90;
-          });
-
-          return Object.values(aggregatedData);
-        });
-
-        resolve(processedData);
-      }, 0);
-    });
-  };
-
-  // Apply filters to data
-  const filteredData = useMemo(() => {
-    return data.filter(row => {
-      // Specialty filter
-      if (filters.specialty && row.surveySpecialty !== filters.specialty) {
-        return false;
-      }
-
-      // Region filter
-      if (filters.region && row.geographicRegion !== filters.region) {
-        return false;
-      }
-
-      // Survey source filter
-      if (filters.surveySource && row.surveySource !== filters.surveySource) {
-        return false;
-      }
-
-      // Search filter (case-insensitive)
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const matchesSearch = 
-          row.standardizedName.toLowerCase().includes(searchLower) ||
-          row.surveySpecialty.toLowerCase().includes(searchLower) ||
-          row.geographicRegion.toLowerCase().includes(searchLower) ||
-          row.surveySource.toLowerCase().includes(searchLower);
-        
-        if (!matchesSearch) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [data, filters]);
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchAnalyticsData();
   }, []);
 
-  return {
-    data,
+  // Update filters
+  const updateFilters = useCallback((newFilters: Partial<AnalyticsFilters>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  }, []);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setFilters({
+      specialty: '',
+      providerType: '',
+      region: '',
+      variable: '',
+      surveySource: ''
+    });
+  }, []);
+
+  // Refresh data
+  const refreshData = useCallback(() => {
+    loadData();
+  }, [loadData]);
+
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Return analytics state and actions
+  const analyticsState: AnalyticsState = {
+    data: filteredData,
     loading,
     error,
-    refetch: fetchAnalyticsData,
     filters,
-    setFilters,
-    filteredData
+    uniqueValues
+  };
+
+  return {
+    // State
+    ...analyticsState,
+    summaryStats,
+    
+    // Actions
+    updateFilters,
+    clearFilters,
+    refreshData,
+    loadData
   };
 };

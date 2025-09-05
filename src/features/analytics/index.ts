@@ -1,46 +1,46 @@
 /**
- * Analytics feature barrel exports
- * This file provides a clean import interface for all analytics components and utilities
+ * Analytics Feature - Barrel Export
+ * Public API for the analytics feature
  */
 
-// Main component
-export { SurveyAnalytics } from './components/SurveyAnalytics';
-
-// Sub-components
+// Components
+export { AnalyticsContainer } from './components/AnalyticsContainer';
+export { AnalyticsTable } from './components/AnalyticsTable';
 export { AnalyticsFilters } from './components/AnalyticsFilters';
 export { AnalyticsSummary } from './components/AnalyticsSummary';
-export { AnalyticsTable } from './components/AnalyticsTable';
+export { AnalyticsExport } from './components/AnalyticsExport';
 
 // Hooks
 export { useAnalyticsData } from './hooks/useAnalyticsData';
 
 // Types
-export type {
+export type { 
   AggregatedData,
   AnalyticsFilters as AnalyticsFiltersType,
-  AnalyticsTableRow,
-  AnalyticsSummary as AnalyticsSummaryType,
-  AnalyticsChartData,
-  AnalyticsTableColumn,
-  AnalyticsTableConfig,
-  AnalyticsProps,
+  AnalyticsState,
+  AnalyticsContainerProps,
   AnalyticsTableProps,
   AnalyticsFiltersProps,
-  AnalyticsChartsProps,
   AnalyticsSummaryProps,
-  DataTransformationResult,
-  AnalyticsExportConfig,
-  AnalyticsApiResponse
+  AnalyticsExportProps,
+  VariableMapping
 } from './types/analytics';
 
+// Services
+export { analyticsDataService } from './services/analyticsDataService';
+
 // Utilities
-export {
+export { 
+  calculatePercentile, 
+  formatCurrency, 
+  formatNumber,
   calculateAnalyticsSummary,
-  applyAnalyticsFilters,
-  sortAnalyticsData,
-  calculateWeightedCompensation,
-  calculateCompensationRanges,
-  groupAnalyticsData,
-  calculateGroupedStatistics,
-  validateAnalyticsData
+  filterAnalyticsData,
+  sortAnalyticsData
 } from './utils/analyticsCalculations';
+
+export {
+  transformSurveyData,
+  getVariableMappings,
+  extractUniqueValues
+} from './utils/dataTransformation';

@@ -2,6 +2,7 @@ import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
 import { IColumnMapping } from '../types/column';
 import { IUnmappedVariable } from '../features/mapping/types/mapping';
+import { parseCSVLine } from '../shared/utils/csvParser';
 
 interface Survey {
   id: string;
@@ -23,6 +24,7 @@ interface SurveyData {
   specialty?: string;
   providerType?: string;
   region?: string;
+  variable?: string;
   tcc?: number;
   cf?: number;
   wrvu?: number;
@@ -196,16 +198,25 @@ export class IndexedDBService {
   async deleteAllSurveys(): Promise<void> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['surveys', 'surveyData'], 'readwrite');
+      // Clear ALL object stores to ensure complete data removal
+      const objectStoreNames = Array.from(db.objectStoreNames);
+      const transaction = db.transaction(objectStoreNames, 'readwrite');
       
-      const surveyStore = transaction.objectStore('surveys');
-      const dataStore = transaction.objectStore('surveyData');
-      
-      surveyStore.clear();
-      dataStore.clear();
+      // Clear each object store
+      objectStoreNames.forEach(storeName => {
+        const store = transaction.objectStore(storeName);
+        store.clear();
+      });
 
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+      transaction.oncomplete = () => {
+        console.log('✅ All IndexedDB data cleared successfully');
+        console.log('🗑️ Cleared object stores:', objectStoreNames);
+        resolve();
+      };
+      transaction.onerror = () => {
+        console.error('❌ Error clearing IndexedDB data:', transaction.error);
+        reject(transaction.error);
+      };
     });
   }
 
@@ -217,49 +228,111 @@ export class IndexedDBService {
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
     try {
-      // Parse CSV file
+      // Parse CSV file with proper column mappings
       const text = await file.text();
-              const rows = this.parseCSV(text);
+      const rows = this.parseCSVWithMappings(text, surveyType);
       
 
       
-              // Create survey record
-        const surveyId = crypto.randomUUID();
-        const survey = {
-          id: surveyId,
-          name: surveyName,
-          year: surveyYear.toString(),
-          type: surveyType,
-          uploadDate: new Date(),
-          rowCount: rows.length,
-          specialtyCount: 0, // Will be calculated
-          dataPoints: rows.length,
-          colorAccent: '#6366F1',
-          metadata: {}
-        };
+      // Create survey record
+      const surveyId = crypto.randomUUID();
+      const survey = {
+        id: surveyId,
+        name: surveyName,
+        year: surveyYear.toString(),
+        type: surveyType,
+        uploadDate: new Date(),
+        rowCount: rows.length,
+        specialtyCount: 0, // Will be calculated
+        dataPoints: rows.length,
+        colorAccent: '#6366F1',
+        metadata: {}
+      };
 
-        // Save survey
-        await this.createSurvey(survey);
-        
-        // Save survey data
-        await this.saveSurveyData(surveyId, rows);
-        
-        // Calculate specialty count
-        const uniqueSpecialties = new Set<string>();
-        rows.forEach((row: any) => {
-          const specialty = row.specialty || row.Specialty || row['Provider Type'];
-          if (specialty) uniqueSpecialties.add(specialty);
-          });
-        
-        // Update survey with specialty count
-        const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
-        await this.updateSurvey(updatedSurvey);
+      // Save survey
+      await this.createSurvey(survey);
+      
+      // Save survey data
+      await this.saveSurveyData(surveyId, rows);
+      
+      // Calculate specialty count
+      const uniqueSpecialties = new Set<string>();
+      rows.forEach((row: any) => {
+        const specialty = row.specialty || row.Specialty || row['Provider Type'];
+        if (specialty) uniqueSpecialties.add(specialty);
+        });
+      
+      // Update survey with specialty count
+      const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
+      await this.updateSurvey(updatedSurvey);
 
-        return { surveyId, rowCount: rows.length };
+      return { surveyId, rowCount: rows.length };
     } catch (error) {
       console.error('Error uploading survey to IndexedDB:', error);
       throw error;
     }
+  }
+
+  private parseCSVWithMappings(text: string, surveyType: string): any[] {
+    const lines = text.split('\n').filter(line => line.trim()); // Remove empty lines
+    if (lines.length === 0) return [];
+    
+    console.log('Total CSV lines:', lines.length);
+    console.log('First 3 lines:', lines.slice(0, 3));
+    
+    // Parse headers from first line using proper CSV parsing
+    const headers = parseCSVLine(lines[0]);
+    console.log('CSV Headers:', headers);
+    
+    // Get column mappings for this survey type
+    const columnMappings = this.getColumnMappingsForSurveyType(surveyType);
+    console.log('Column mappings for', surveyType, ':', columnMappings);
+    
+    // Create reverse mapping for faster lookups
+    const reverseColumnMapping: Record<string, string> = {};
+    Object.entries(columnMappings).forEach(([standard, source]) => {
+      reverseColumnMapping[source] = standard;
+    });
+    
+    console.log('Reverse column mapping:', reverseColumnMapping);
+    
+    // Parse data rows - start from index 1 (skip header row)
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const values = parseCSVLine(line);
+      
+      const row: any = {};
+      headers.forEach((header, index) => {
+        // Apply column mapping if available
+        const standardColumn = reverseColumnMapping[header];
+        if (standardColumn) {
+          row[standardColumn.toLowerCase()] = values[index] || '';
+        } else {
+          // Keep original column name if no mapping found
+          row[header] = values[index] || '';
+        }
+      });
+      
+      rows.push(row);
+    }
+    
+    console.log('CSV Parsed Rows with mappings:', rows.length, 'rows');
+    if (rows.length > 0) {
+      console.log('First parsed row:', rows[0]);
+      console.log('Last parsed row:', rows[rows.length - 1]);
+    }
+    
+    return rows;
+  }
+
+
+  private getColumnMappingsForSurveyType(surveyType: string): Record<string, string> {
+    // Import the column mappings from the config
+    const { COLUMN_MAPPINGS } = require('../config/surveyMappings');
+    return COLUMN_MAPPINGS[surveyType] || {};
   }
 
   private parseCSV(text: string): any[] {
@@ -269,8 +342,8 @@ export class IndexedDBService {
     console.log('Total CSV lines:', lines.length);
     console.log('First 3 lines:', lines.slice(0, 3));
     
-    // Parse headers from first line
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    // Parse headers from first line using proper CSV parsing
+    const headers = parseCSVLine(lines[0]);
     console.log('CSV Headers:', headers);
     
     // Parse data rows - start from index 1 (skip header row)
@@ -279,7 +352,7 @@ export class IndexedDBService {
       const line = lines[i].trim();
       if (!line) continue;
       
-      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+      const values = parseCSVLine(line);
       
       const row: any = {};
       headers.forEach((header, index) => {
@@ -326,6 +399,9 @@ export class IndexedDBService {
         // Apply filters to the data
         let filteredData = data;
         
+        console.log('IndexedDB getSurveyData - Raw data count:', data.length);
+        console.log('IndexedDB getSurveyData - Applied filters:', filters);
+        
         if (filters && Object.keys(filters).length > 0) {
           filteredData = data.filter((item: SurveyData) => {
             // Filter by specialty
@@ -338,7 +414,7 @@ export class IndexedDBService {
             
             // Filter by provider type
             if (filters.providerType && filters.providerType.trim() !== '') {
-              const itemProviderType = item.providerType || item.data?.providerType || item.data?.['Provider Type'] || '';
+              const itemProviderType = item.providerType || item.data?.providerType || item.data?.provider_type || item.data?.['Provider Type'] || '';
               if (!itemProviderType.toLowerCase().includes(filters.providerType.toLowerCase())) {
                 return false;
               }
@@ -346,37 +422,24 @@ export class IndexedDBService {
             
             // Filter by region
             if (filters.region && filters.region.trim() !== '') {
-              const itemRegion = item.region || item.data?.region || item.data?.Region || '';
+              const itemRegion = item.region || item.data?.region || item.data?.geographic_region || item.data?.Region || '';
               if (!itemRegion.toLowerCase().includes(filters.region.toLowerCase())) {
                 return false;
               }
             }
             
-            // Filter by variable (TCC, wRVU, CF)
+            // Filter by variable (TCC, wRVU, CF) - exact match
             if (filters.variable && filters.variable.trim() !== '') {
-              const variableLower = filters.variable.toLowerCase();
-              
-              // Check if the variable filter matches the type of compensation data
-              // This should filter by the column names or data structure, not the values
-              const hasTccData = item.tcc || item.data?.tcc || item.data?.TCC || item.data?.tcc_p25 || item.data?.tcc_p50 || item.data?.tcc_p75 || item.data?.tcc_p90;
-              const hasWrvuData = item.wrvu || item.data?.wrvu || item.data?.wRVU || item.data?.wrvu_p25 || item.data?.wrvu_p50 || item.data?.wrvu_p75 || item.data?.wrvu_p90;
-              const hasCfData = item.cf || item.data?.cf || item.data?.CF || item.data?.cf_p25 || item.data?.cf_p50 || item.data?.cf_p75 || item.data?.cf_p90;
-              
-              // Variable filter should match the type of compensation data available
-              if (variableLower.includes('tcc') || variableLower.includes('total') || variableLower.includes('cash')) {
-                if (!hasTccData) return false;
-              } else if (variableLower.includes('wrvu') || variableLower.includes('rvu')) {
-                if (!hasWrvuData) return false;
-              } else if (variableLower.includes('cf') || variableLower.includes('conversion')) {
-                if (!hasCfData) return false;
-              } else {
-                // If it's a general search, check if any compensation data exists
-                if (!hasTccData && !hasWrvuData && !hasCfData) return false;
+              const itemVariable = item.variable || item.data?.variable || '';
+              if (itemVariable.toLowerCase() !== filters.variable.toLowerCase()) {
+                return false;
               }
             }
             
             return true;
           });
+          
+          console.log('IndexedDB getSurveyData - After filtering:', filteredData.length, 'rows');
         }
         
         const rows = filteredData.map((item: SurveyData) => {
@@ -1109,14 +1172,28 @@ export class IndexedDBService {
       const providerTypeCounts = new Map<string, { count: number; sources: Set<string> }>();
 
       for (const survey of surveys) {
-        const { rows } = await this.getSurveyData(survey.id);
+        const { rows } = await this.getSurveyData(survey.id, {}, { limit: 10000 }); // Get ALL data
         
         // Get survey source with proper fallbacks
         const surveySource = survey.type || survey.name || 'Unknown';
         
+        console.log(`🔍 Processing survey ${surveySource}: ${rows.length} rows`);
+        
         rows.forEach(row => {
           // Look for provider type in different possible column names
           const providerType = row.providerType || row['Provider Type'] || row.provider_type || row['provider_type'];
+          
+          // Debug: Log the first few rows to see what's in the data
+          if (rows.indexOf(row) < 3) {
+            console.log(`🔍 Row ${rows.indexOf(row)}:`, {
+              providerType: row.providerType,
+              providerTypeWithSpaces: row['Provider Type'],
+              provider_type: row.provider_type,
+              provider_typeWithQuotes: row['provider_type'],
+              allKeys: Object.keys(row)
+            });
+          }
+          
           if (providerType && typeof providerType === 'string' && !mappedNames.has(providerType.toLowerCase())) {
             const key = providerType.toLowerCase();
             const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
@@ -1139,6 +1216,7 @@ export class IndexedDBService {
         });
       });
 
+      console.log('🎯 Final unmapped provider types:', unmapped);
       return unmapped;
     } catch (error) {
       console.error('Error getting unmapped provider types:', error);
@@ -1163,7 +1241,7 @@ export class IndexedDBService {
       const regionCounts = new Map<string, { count: number; sources: Set<string> }>();
 
       for (const survey of surveys) {
-        const { rows } = await this.getSurveyData(survey.id);
+        const { rows } = await this.getSurveyData(survey.id, {}, { limit: 10000 }); // Get ALL data
         
         // Get survey source with proper fallbacks
         const surveySource = survey.type || survey.name || 'Unknown';

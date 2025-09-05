@@ -4,11 +4,10 @@ import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUp
 import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
-import { ISurveyRow, ISurveyMetadata } from '../types/survey';
+import { ISurveyRow } from '../types/survey';
 import LoadingSpinner from './ui/loading-spinner';
 import { useYear } from '../contexts/YearContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
-import { ColumnValidationDisplay } from '../features/upload/components/ColumnValidationDisplay';
 import { downloadSampleFile } from '../utils/downloadUtils';
 
 
@@ -100,7 +99,6 @@ const SurveyUpload: React.FC = () => {
   const [customSurveyName, setCustomSurveyName] = useState('');
   const [surveyYear, setSurveyYear] = useState(currentYear);
   const [isCustom, setIsCustom] = useState(false);
-  const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -253,7 +251,6 @@ const SurveyUpload: React.FC = () => {
       id: Math.random().toString(36).substring(7)
     }));
     setFiles(prev => [...prev, ...newFiles]);
-    setError('');
     setColumnValidation(null); // Clear previous validation
   }, []);
 
@@ -363,7 +360,7 @@ const SurveyUpload: React.FC = () => {
       setColumnValidation(validation);
       
       if (!validation.isValid) {
-        setError('File has missing required columns. Please check the validation details below.');
+        // File has missing required columns - validation will show in UI
         setIsUploading(false);
         setUploadProgress(0);
         return;
@@ -511,8 +508,8 @@ const SurveyUpload: React.FC = () => {
 
 
   const handleError = (errorMessage: string) => {
-    setError(errorMessage);
-    setTimeout(() => setError(''), 5000);
+    console.error('Upload error:', errorMessage);
+    // Error handling - could show toast notification here
   };
 
   // Add helper function to calculate survey statistics
@@ -769,10 +766,23 @@ const SurveyUpload: React.FC = () => {
 
                              {/* Column Validation Display */}
                {columnValidation && (
-                 <ColumnValidationDisplay 
-                   validation={columnValidation} 
-                   fileName={files[0]?.name || ''} 
-                 />
+                 <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                   <h4 className="text-sm font-medium text-yellow-800 mb-2">
+                     Column Validation for {files[0]?.name || 'file'}
+                   </h4>
+                   {columnValidation.isValid ? (
+                     <p className="text-sm text-green-700">✅ All required columns are present</p>
+                   ) : (
+                     <div>
+                       <p className="text-sm text-red-700 mb-2">❌ Missing required columns:</p>
+                       <ul className="text-sm text-red-600 list-disc list-inside">
+                         {columnValidation.missingColumns?.map((col: string) => (
+                           <li key={col}>{col}</li>
+                         ))}
+                       </ul>
+                     </div>
+                   )}
+                 </div>
                )}
             </>
             )}
@@ -828,7 +838,10 @@ const SurveyUpload: React.FC = () => {
                       return (
                         <div key={survey.id} className="relative group inline-flex items-center">
                           <button
-                            onClick={() => setSelectedSurvey(survey.id)}
+                            onClick={() => {
+                              console.log('Survey selected:', survey.id, survey.surveyType);
+                              setSelectedSurvey(survey.id);
+                            }}
                             className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
                             title={`${survey.surveyType} • ${survey.surveyYear}`}
                           >
@@ -882,7 +895,11 @@ const SurveyUpload: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="w-full overflow-x-auto">
               <DataPreview
-                file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
+                file={(() => {
+                  const file = uploadedSurveys.find(s => s.id === selectedSurvey);
+                  console.log('DataPreview file prop:', file);
+                  return file;
+                })()!}
                 onError={handleError}
                 globalFilters={globalFilters}
                 onFilterChange={handleFilterChange}

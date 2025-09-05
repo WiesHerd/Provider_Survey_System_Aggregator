@@ -57,7 +57,45 @@ async function processSurveyData(messageData: ProcessMessageData) {
     }
 
     console.log('Worker: Processing headers');
-    const headers = lines[0].split(',').map(h => h.trim());
+    // Import parseCSVLine function
+    const parseCSVLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      let i = 0;
+
+      while (i < line.length) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            // Escaped quote - add one quote to current field
+            current += '"';
+            i += 2; // Skip both quotes
+            continue;
+          } else {
+            // Toggle quote state
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          // Field separator - add current field to result
+          result.push(current.trim());
+          current = '';
+        } else {
+          // Regular character - add to current field
+          current += char;
+        }
+        i++;
+      }
+
+      // Add the last field
+      result.push(current.trim());
+
+      return result;
+    };
+
+    const headers = parseCSVLine(lines[0]);
     
     if (headers.length === 0) {
       throw new Error('No headers found in file');
@@ -97,7 +135,7 @@ async function processSurveyData(messageData: ProcessMessageData) {
       const processedChunk = chunk
         .filter(line => line.trim())
         .map(line => {
-          const values = line.split(',').map(v => v.trim());
+          const values = parseCSVLine(line);
           if (values.length !== headers.length) {
             console.warn('Worker: Mismatched column count in row', i, 'Expected:', headers.length, 'Got:', values.length);
             return null;
