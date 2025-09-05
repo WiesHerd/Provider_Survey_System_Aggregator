@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
@@ -12,13 +12,43 @@ import { ColumnValidationDisplay } from '../features/upload/components/ColumnVal
 import { downloadSampleFile } from '../utils/downloadUtils';
 
 
-const SURVEY_OPTIONS = [
-  'SullivanCotter',
-  'MGMA',
-  'Gallagher',
-  'ECG',
-  'AMGA'
-];
+// Provider type categories for survey selection
+const SURVEY_OPTIONS = {
+  PHYSICIAN: {
+    label: 'Physician Surveys',
+    options: ['SullivanCotter Physician', 'MGMA Physician', 'Gallagher Physician', 'ECG Physician', 'AMGA Physician']
+  },
+  APP: {
+    label: 'Advanced Practice Provider Surveys', 
+    options: ['SullivanCotter APP', 'MGMA APP', 'Gallagher APP', 'ECG APP', 'AMGA APP']
+  }
+};
+
+// Function to shorten survey type display text based on provider type
+const getShortenedSurveyType = (surveyType: string, providerType: ProviderType): string => {
+  if (surveyType === 'CUSTOM') {
+    return 'Custom Survey Type';
+  }
+  
+  // Handle custom survey types by taking first 3 letters
+  if (surveyType.toLowerCase().includes('custom')) {
+    return surveyType.substring(0, 3).toUpperCase();
+  }
+  
+  // Replace provider type text with shortened versions and add hyphen with spaces
+  let shortenedType = surveyType;
+  
+  if (providerType === 'PHYSICIAN') {
+    shortenedType = surveyType.replace('Physician', ' - PHYS');
+  } else if (providerType === 'APP') {
+    shortenedType = surveyType.replace('APP', ' - APP'); // Add hyphen with spaces before APP
+  }
+  
+  return shortenedType;
+};
+
+// Provider type enum for type safety
+type ProviderType = 'PHYSICIAN' | 'APP' | 'CUSTOM';
 
 interface FileWithPreview extends File {
   preview?: string;
@@ -34,6 +64,7 @@ interface UploadedSurveyMetadata {
   id: string;
   fileName: string;
   surveyType: string;
+  providerType: ProviderType | string; // Allow custom provider types as strings
   surveyYear: string;
   uploadDate: Date;
   stats: {
@@ -62,8 +93,11 @@ const SurveyUpload: React.FC = () => {
   const { currentYear } = useYear();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
+  const [providerType, setProviderType] = useState<ProviderType>('PHYSICIAN');
+  const [customProviderType, setCustomProviderType] = useState('');
   const [surveyType, setSurveyType] = useState('');
   const [customSurveyType, setCustomSurveyType] = useState('');
+  const [customSurveyName, setCustomSurveyName] = useState('');
   const [surveyYear, setSurveyYear] = useState(currentYear);
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string>('');
@@ -85,7 +119,8 @@ const SurveyUpload: React.FC = () => {
   const [globalFilters, setGlobalFilters] = useState({
     specialty: '',
     providerType: '',
-    region: ''
+    region: '',
+    variable: ''
   });
 
   // Add state for column validation
@@ -95,10 +130,24 @@ const SurveyUpload: React.FC = () => {
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
 
+  // Filter survey options based on selected provider type
+  const availableSurveyTypes = useMemo(() => {
+    if (providerType === 'CUSTOM') {
+      return []; // Custom surveys will be handled separately
+    }
+    return SURVEY_OPTIONS[providerType]?.options || [];
+  }, [providerType]);
+
   // Update surveyYear when currentYear changes
   useEffect(() => {
     setSurveyYear(currentYear);
   }, [currentYear]);
+
+  // Reset survey type when provider type changes
+  useEffect(() => {
+    setSurveyType('');
+    setIsCustom(false);
+  }, [providerType]);
 
 
 
@@ -228,10 +277,22 @@ const SurveyUpload: React.FC = () => {
     setSelectedSurvey(null);
   };
 
+  const handleProviderTypeChange = (e: any) => {
+    const newProviderType = e.target.value as ProviderType;
+    setProviderType(newProviderType);
+    setCustomProviderType(''); // Reset custom provider type
+    setSurveyType(''); // Reset survey type
+    setCustomSurveyType(''); // Reset custom survey type
+    setCustomSurveyName(''); // Reset custom survey name
+    setIsCustom(false); // Reset custom flag
+    setFiles([]); // Clear any selected file
+  };
+
   const handleSurveyTypeChange = (e: React.ChangeEvent<{ value: unknown }>) => {
     const value = e.target.value as string;
-    setIsCustom(value === 'custom');
+    setIsCustom(value === 'CUSTOM');
     setSurveyType(value);
+    setCustomSurveyName(''); // Reset custom survey name
     // Clear any selected file when survey type changes
     setFiles([]);
   };
@@ -279,7 +340,9 @@ const SurveyUpload: React.FC = () => {
 
   const handleSurveyUpload = async () => {
     const file = files[0];
-    if (!file || !surveyType || !surveyYear) {
+    if (!file || !surveyType || !surveyYear || 
+        (providerType === 'CUSTOM' && !customProviderType) ||
+        (surveyType === 'CUSTOM' && !customSurveyName.trim())) {
       handleError('Please fill in all required fields');
       return;
     }
@@ -322,7 +385,8 @@ const SurveyUpload: React.FC = () => {
 
       // Create survey object
       const surveyId = crypto.randomUUID();
-      const surveyName = file.name.replace('.csv', '');
+      const defaultSurveyName = file.name.replace('.csv', '');
+      const surveyName = (surveyType === 'CUSTOM' && customSurveyName.trim()) ? customSurveyName.trim() : defaultSurveyName;
       const surveyTypeName = isCustom ? customSurveyType : surveyType;
       
       const survey = {
@@ -330,6 +394,7 @@ const SurveyUpload: React.FC = () => {
         name: surveyName,
         year: surveyYear,
         type: surveyTypeName,
+        providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
         uploadDate: new Date(),
         rowCount: parsedRows.length,
         specialtyCount: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
@@ -349,6 +414,7 @@ const SurveyUpload: React.FC = () => {
         id: surveyId,
         fileName: surveyName,
         surveyType: surveyTypeName,
+        providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
         surveyYear,
         uploadDate: new Date(),
         fileContent: '',
@@ -512,8 +578,50 @@ const SurveyUpload: React.FC = () => {
             {!isUploadSectionCollapsed && (
               <>
                 <div className="grid grid-cols-12 gap-4">
+                {/* Provider Type Selection */}
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Provider Type
+                  </label>
+                  <FormControl fullWidth>
+                    <Select
+                      value={providerType}
+                      onChange={handleProviderTypeChange}
+                      sx={{
+                        backgroundColor: 'white',
+                        height: '40px',
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px',
+                          borderRadius: '8px',
+                        },
+                        '& .MuiSelect-select': {
+                          paddingTop: '8px',
+                          paddingBottom: '8px',
+                          textAlign: 'left',
+                        }
+                      }}
+                    >
+                      <MenuItem value="PHYSICIAN">Physician</MenuItem>
+                      <MenuItem value="APP">Advanced Practice Provider</MenuItem>
+                      <MenuItem value="CUSTOM">Custom</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {providerType === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={customProviderType}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProviderType(e.target.value)}
+                      placeholder="Enter custom provider type"
+                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        placeholder-gray-400 text-sm transition-colors duration-200"
+                    />
+                  )}
+                </div>
+
                 {/* Survey Type Selection */}
-                <div className="col-span-4">
+                <div className="col-span-3">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Type
                   </label>
@@ -522,6 +630,7 @@ const SurveyUpload: React.FC = () => {
                       value={surveyType}
                       onChange={handleSurveyTypeChange}
                       displayEmpty
+                      disabled={providerType === 'CUSTOM' && !isCustom}
                       sx={{
                         backgroundColor: 'white',
                         height: '40px',
@@ -538,20 +647,22 @@ const SurveyUpload: React.FC = () => {
                       }}
                     >
                       <MenuItem value="" disabled>
-                        Select a survey type
+                        {providerType === 'CUSTOM' ? 'Enter custom type below' : 'Select a survey type'}
                       </MenuItem>
-                      {SURVEY_OPTIONS.map(option => (
-                        <MenuItem key={option} value={option}>{option}</MenuItem>
+                      {availableSurveyTypes.map((option: string) => (
+                        <MenuItem key={option} value={option}>
+                          {getShortenedSurveyType(option, providerType)}
+                        </MenuItem>
                       ))}
-                      <MenuItem value="custom">Custom Survey Type</MenuItem>
+                      <MenuItem value="CUSTOM">{getShortenedSurveyType('CUSTOM', providerType)}</MenuItem>
                     </Select>
                   </FormControl>
-                  {isCustom && (
+                  {surveyType === 'CUSTOM' && (
                     <input
                       type="text"
-                      value={customSurveyType}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveyType(e.target.value)}
-                      placeholder="Enter custom survey type"
+                      value={customSurveyName}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveyName(e.target.value)}
+                      placeholder="Enter custom survey type name"
                       className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                         placeholder-gray-400 text-sm transition-colors duration-200"
@@ -560,7 +671,7 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* Survey Year Selection */}
-                <div className="col-span-4">
+                <div className="col-span-2">
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
@@ -605,7 +716,7 @@ const SurveyUpload: React.FC = () => {
                     <input {...getInputProps()} />
                     <button
                       type="button"
-                      className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 flex items-center justify-center h-10"
+                      className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 flex items-center justify-center h-10"
                     >
                       <CloudArrowUpIcon className="h-5 w-5 mr-2" />
                       Select File
@@ -614,9 +725,13 @@ const SurveyUpload: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSurveyUpload}
-                    disabled={files.length === 0 || !surveyType || !surveyYear || isUploading}
-                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
+                    disabled={files.length === 0 || !surveyType || !surveyYear || 
+                             (providerType === 'CUSTOM' && !customProviderType) ||
+                             (surveyType === 'CUSTOM' && !customSurveyName.trim()) || 
+                             isUploading}
+                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
                   >
+                    <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
                     {isUploading ? 'Uploading...' : 'Upload Survey'}
                   </button>
                 </div>
@@ -717,7 +832,7 @@ const SurveyUpload: React.FC = () => {
                             className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
                             title={`${survey.surveyType} • ${survey.surveyYear}`}
                           >
-                            <span className="font-medium">{survey.surveyType}</span>
+                            <span className="font-medium">{getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType)}</span>
                             <span className={`text-xs ${isActive ? 'text-indigo-100' : 'text-gray-500'}`}>{survey.surveyYear}</span>
                           </button>
                           <button
@@ -802,7 +917,7 @@ const SurveyUpload: React.FC = () => {
       )}
       {/* Deleting Progress Modal */}
       {isDeleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-md p-6">
             <div className="flex items-start justify-between">
               <div>
@@ -830,7 +945,7 @@ const SurveyUpload: React.FC = () => {
       {/* Individual Survey Delete Confirmation Modal */}
       {showDeleteConfirmation && surveyToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-lg shadow-lg border border-green-400 w-full max-w-sm p-6">
+          <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
             <p className="text-sm text-gray-700 mb-6">
               Are you sure you want to delete this item?
@@ -842,14 +957,14 @@ const SurveyUpload: React.FC = () => {
                   setShowDeleteConfirmation(false);
                   setSurveyToDelete(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteSurvey}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
               >
                 Delete
               </button>
@@ -861,7 +976,7 @@ const SurveyUpload: React.FC = () => {
       {/* Clear All Surveys Confirmation Modal */}
       {showClearAllConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-lg shadow-lg border border-green-400 w-full max-w-sm p-6">
+          <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
             <p className="text-sm text-gray-700 mb-6">
               Are you sure you want to delete this item?
@@ -870,14 +985,14 @@ const SurveyUpload: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowClearAllConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmClearAll}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
               >
                 Delete
               </button>

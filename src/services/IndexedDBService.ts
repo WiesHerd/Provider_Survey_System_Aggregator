@@ -219,41 +219,43 @@ export class IndexedDBService {
     try {
       // Parse CSV file
       const text = await file.text();
-      const rows = this.parseCSV(text);
+              const rows = this.parseCSV(text);
       
-      // Create survey record
-      const surveyId = crypto.randomUUID();
-      const survey = {
-        id: surveyId,
-        name: surveyName,
-        year: surveyYear.toString(),
-        type: surveyType,
-        uploadDate: new Date(),
-        rowCount: rows.length,
-        specialtyCount: 0, // Will be calculated
-        dataPoints: rows.length,
-        colorAccent: '#6366F1',
-        metadata: {}
-      };
 
-      // Save survey
-      await this.createSurvey(survey);
       
-      // Save survey data
-      await this.saveSurveyData(surveyId, rows);
-      
-      // Calculate specialty count
-      const uniqueSpecialties = new Set<string>();
-      rows.forEach(row => {
-        const specialty = row.specialty || row.Specialty || row['Provider Type'];
-        if (specialty) uniqueSpecialties.add(specialty);
-      });
-      
-      // Update survey with specialty count
-      const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
-      await this.updateSurvey(updatedSurvey);
+              // Create survey record
+        const surveyId = crypto.randomUUID();
+        const survey = {
+          id: surveyId,
+          name: surveyName,
+          year: surveyYear.toString(),
+          type: surveyType,
+          uploadDate: new Date(),
+          rowCount: rows.length,
+          specialtyCount: 0, // Will be calculated
+          dataPoints: rows.length,
+          colorAccent: '#6366F1',
+          metadata: {}
+        };
 
-      return { surveyId, rowCount: rows.length };
+        // Save survey
+        await this.createSurvey(survey);
+        
+        // Save survey data
+        await this.saveSurveyData(surveyId, rows);
+        
+        // Calculate specialty count
+        const uniqueSpecialties = new Set<string>();
+        rows.forEach((row: any) => {
+          const specialty = row.specialty || row.Specialty || row['Provider Type'];
+          if (specialty) uniqueSpecialties.add(specialty);
+          });
+        
+        // Update survey with specialty count
+        const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
+        await this.updateSurvey(updatedSurvey);
+
+        return { surveyId, rowCount: rows.length };
     } catch (error) {
       console.error('Error uploading survey to IndexedDB:', error);
       throw error;
@@ -261,26 +263,36 @@ export class IndexedDBService {
   }
 
   private parseCSV(text: string): any[] {
-    const lines = text.split('\n');
+    const lines = text.split('\n').filter(line => line.trim()); // Remove empty lines
     if (lines.length === 0) return [];
     
-    // Parse headers
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    console.log('Total CSV lines:', lines.length);
+    console.log('First 3 lines:', lines.slice(0, 3));
     
-    // Parse data rows
+    // Parse headers from first line
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    console.log('CSV Headers:', headers);
+    
+    // Parse data rows - start from index 1 (skip header row)
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
       
       const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-      const row: any = {};
       
+      const row: any = {};
       headers.forEach((header, index) => {
         row[header] = values[index] || '';
       });
       
       rows.push(row);
+    }
+    
+    console.log('CSV Parsed Rows:', rows.length, 'rows');
+    if (rows.length > 0) {
+      console.log('First parsed row:', rows[0]);
+      console.log('Last parsed row:', rows[rows.length - 1]);
     }
     
     return rows;
@@ -310,7 +322,64 @@ export class IndexedDBService {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const data = request.result || [];
-        const rows = data.map((item: SurveyData) => {
+        
+        // Apply filters to the data
+        let filteredData = data;
+        
+        if (filters && Object.keys(filters).length > 0) {
+          filteredData = data.filter((item: SurveyData) => {
+            // Filter by specialty
+            if (filters.specialty && filters.specialty.trim() !== '') {
+              const itemSpecialty = item.specialty || item.data?.specialty || item.data?.Specialty || '';
+              if (!itemSpecialty.toLowerCase().includes(filters.specialty.toLowerCase())) {
+                return false;
+              }
+            }
+            
+            // Filter by provider type
+            if (filters.providerType && filters.providerType.trim() !== '') {
+              const itemProviderType = item.providerType || item.data?.providerType || item.data?.['Provider Type'] || '';
+              if (!itemProviderType.toLowerCase().includes(filters.providerType.toLowerCase())) {
+                return false;
+              }
+            }
+            
+            // Filter by region
+            if (filters.region && filters.region.trim() !== '') {
+              const itemRegion = item.region || item.data?.region || item.data?.Region || '';
+              if (!itemRegion.toLowerCase().includes(filters.region.toLowerCase())) {
+                return false;
+              }
+            }
+            
+            // Filter by variable (TCC, wRVU, CF)
+            if (filters.variable && filters.variable.trim() !== '') {
+              const variableLower = filters.variable.toLowerCase();
+              
+              // Check if the variable filter matches the type of compensation data
+              // This should filter by the column names or data structure, not the values
+              const hasTccData = item.tcc || item.data?.tcc || item.data?.TCC || item.data?.tcc_p25 || item.data?.tcc_p50 || item.data?.tcc_p75 || item.data?.tcc_p90;
+              const hasWrvuData = item.wrvu || item.data?.wrvu || item.data?.wRVU || item.data?.wrvu_p25 || item.data?.wrvu_p50 || item.data?.wrvu_p75 || item.data?.wrvu_p90;
+              const hasCfData = item.cf || item.data?.cf || item.data?.CF || item.data?.cf_p25 || item.data?.cf_p50 || item.data?.cf_p75 || item.data?.cf_p90;
+              
+              // Variable filter should match the type of compensation data available
+              if (variableLower.includes('tcc') || variableLower.includes('total') || variableLower.includes('cash')) {
+                if (!hasTccData) return false;
+              } else if (variableLower.includes('wrvu') || variableLower.includes('rvu')) {
+                if (!hasWrvuData) return false;
+              } else if (variableLower.includes('cf') || variableLower.includes('conversion')) {
+                if (!hasCfData) return false;
+              } else {
+                // If it's a general search, check if any compensation data exists
+                if (!hasTccData && !hasWrvuData && !hasCfData) return false;
+              }
+            }
+            
+            return true;
+          });
+        }
+        
+        const rows = filteredData.map((item: SurveyData) => {
           const rowData = { ...item.data };
           return {
             ...rowData,
@@ -318,13 +387,60 @@ export class IndexedDBService {
             surveyId: item.surveyId
           } as ISurveyRow;
         });
-        resolve({ rows });
+        
+        console.log('Raw rows from IndexedDB:', rows.length);
+        if (rows.length > 0) {
+          console.log('First row from IndexedDB:', rows[0]);
+          console.log('First row values:', Object.values(rows[0]));
+        }
+        
+        // Filter out any rows that look like headers
+        const filteredRows = rows.filter(row => {
+          const values = Object.values(row).filter(val => val !== row.id && val !== row.surveyId);
+          
+          // Check if this row contains header-like values
+          const headerKeywords = [
+            'specialty', 'provider_type', 'geographic_region', 'variable', 
+            'n_orgs', 'n_incumbents', 'p25', 'p50', 'p75', 'p90',
+            'tcc', 'wrvu', 'cf', 'providerType', 'geographicRegion'
+          ];
+          
+          // For normalized format data, be more careful about filtering
+          // Only filter out rows where ALL values are header keywords (exact matches)
+          const headerMatches = values.filter(val => 
+            typeof val === 'string' && 
+            headerKeywords.some(keyword => 
+              val.toLowerCase() === keyword.toLowerCase()
+            )
+          ).length;
+          
+          // Only filter out if ALL values are exact header matches
+          // This prevents filtering out legitimate data like "Work RVUs" in the variable column
+          const isHeaderRow = headerMatches === values.length && values.length > 0;
+          
+          if (isHeaderRow) {
+            console.log('Filtering out header row:', values);
+          }
+          
+          return !isHeaderRow;
+        });
+        
+        console.log('Filtered rows after header removal:', filteredRows.length);
+        if (filteredRows.length > 0) {
+          console.log('First filtered row:', filteredRows[0]);
+        }
+        
+        resolve({ rows: filteredRows });
       };
     });
   }
 
   async saveSurveyData(surveyId: string, rows: any[]): Promise<void> {
     const db = await this.ensureDB();
+    console.log('Saving survey data:', surveyId, 'with', rows.length, 'rows');
+    console.log('First row to save:', rows[0]);
+    console.log('Last row to save:', rows[rows.length - 1]);
+    
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['surveyData'], 'readwrite');
       const store = transaction.objectStore('surveyData');
@@ -912,6 +1028,8 @@ export class IndexedDBService {
       timestamp: new Date().toISOString()
     };
   }
+
+
 
   // Variable Mapping Methods
   async getVariableMappings(): Promise<any[]> {
