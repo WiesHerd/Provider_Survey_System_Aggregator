@@ -24,6 +24,7 @@ export {
   truncateText,
   capitalizeWords,
   formatSpecialtyForDisplay,
+  formatRegionForDisplay,
   sortSpecialtiesForDisplay
 } from './formatters';
 

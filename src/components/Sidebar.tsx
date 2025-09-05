@@ -77,6 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 		{
 			name: 'Analytics & Reports',
 			items: [
+				{ name: 'Normalized Data', icon: TableCellsIcon, path: '/normalized-data' },
 				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
 				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },

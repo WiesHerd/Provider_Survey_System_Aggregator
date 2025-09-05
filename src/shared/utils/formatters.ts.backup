@@ -382,15 +382,3 @@ export const sortSpecialtiesForDisplay = (specialties: string[]): string[] => {
 
   return sorted;
 };
-
-/**
- * Format region name for display with proper capitalization
- * @param region - Raw region name to format
- * @returns Properly formatted region name
- */
-export const formatRegionForDisplay = (region: string): string => {
-  if (!region) return '';
-  return region.split(' ').map(word =>
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(' ');
-};

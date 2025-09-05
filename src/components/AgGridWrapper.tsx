@@ -15,6 +15,8 @@ interface AgGridWrapperProps {
   onGridReady?: (params: any) => void;
   pagination?: boolean;
   paginationPageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
   domLayout?: 'normal' | 'autoHeight' | 'print';
   suppressRowHoverHighlight?: boolean;
   rowHeight?: number;
@@ -32,6 +34,8 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
   onGridReady,
   pagination = true,
   paginationPageSize = 25,
+  onPageChange,
+  onPageSizeChange,
   domLayout = 'autoHeight',
   suppressRowHoverHighlight = true,
   rowHeight = 48,
@@ -47,6 +51,11 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
   const [pageSize, setPageSize] = useState(paginationPageSize);
   const [gridApi, setGridApi] = useState<any>(null);
   const [totalRows, setTotalRows] = useState(rowData?.length || 0);
+
+  // Update page size when external paginationPageSize changes
+  useEffect(() => {
+    setPageSize(paginationPageSize);
+  }, [paginationPageSize]);
 
   // Handle grid ready
   const handleGridReady = useCallback((params: any) => {
@@ -67,18 +76,35 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
-  }, []);
+    onPageChange?.(page);
+  }, [onPageChange]);
 
   // Handle page size change
   const handlePageSizeChange = useCallback((newPageSize: number) => {
     setPageSize(newPageSize);
     setCurrentPage(1);
-  }, []);
+    onPageSizeChange?.(newPageSize);
+  }, [onPageSizeChange]);
 
   // Update total rows when data changes
   useEffect(() => {
     setTotalRows(rowData?.length || 0);
   }, [rowData]);
+
+  // Handle page size changes for autoHeight layout
+  useEffect(() => {
+    if (domLayout === 'autoHeight' && gridApi && paginatedData.length > 0) {
+      // Force AG Grid to recalculate its height after page size changes
+      setTimeout(() => {
+        try {
+          gridApi.redrawRows();
+          gridApi.sizeColumnsToFit();
+        } catch (error) {
+          console.log('Grid height recalculation failed:', error);
+        }
+      }, 100);
+    }
+  }, [domLayout, gridApi, paginatedData.length, pageSize]);
 
   // Debug logging
   useEffect(() => {
@@ -99,15 +125,15 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
         {`
           .ag-theme-quartz {
             border-radius: ${pagination && totalRows > 0 ? '8px 8px 0 0' : '8px'} !important;
-            overflow: hidden !important;
+            overflow: ${domLayout === 'autoHeight' ? 'visible' : 'hidden'} !important;
           }
           .ag-theme-quartz .ag-root-wrapper {
             border-radius: ${pagination && totalRows > 0 ? '8px 8px 0 0' : '8px'} !important;
-            overflow: hidden !important;
+            overflow: ${domLayout === 'autoHeight' ? 'visible' : 'hidden'} !important;
           }
           .ag-theme-quartz .ag-root {
             border-radius: ${pagination && totalRows > 0 ? '8px 8px 0 0' : '8px'} !important;
-            overflow: hidden !important;
+            overflow: ${domLayout === 'autoHeight' ? 'visible' : 'hidden'} !important;
           }
           
           /* Remove bold from specialty column */
@@ -143,16 +169,16 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
           }
         `}
       </style>
-      <div 
+              <div 
         className={`ag-theme-quartz ${className} w-full`} 
         style={{ 
           // COMPLETELY NEW MODERN DESIGN - matches the image exactly
           borderRadius: pagination && totalRows > 0 ? '8px 8px 0 0' : '8px',
-          overflow: 'hidden',
+          overflow: domLayout === 'autoHeight' ? 'visible' : 'hidden',
           border: '1px solid #e5e7eb',
           borderBottom: pagination && totalRows > 0 ? 'none' : '1px solid #e5e7eb',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-          height: '500px', // Fixed height for the grid
+          height: domLayout === 'autoHeight' ? 'auto' : '500px', // Dynamic height for autoHeight, fixed for normal
           margin: '0 8px', // Add horizontal margin
           width: 'calc(100% - 16px)', // Account for margins
           
@@ -242,7 +268,7 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
           rowData={paginatedData}
           columnDefs={columnDefs}
           onGridReady={handleGridReady}
-          domLayout="normal"
+          domLayout={domLayout}
           suppressRowHoverHighlight={suppressRowHoverHighlight}
           rowHeight={rowHeight}
           suppressColumnVirtualisation={suppressColumnVirtualisation}

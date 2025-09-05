@@ -64,6 +64,8 @@ export class DataService {
     return await this.indexedDB.saveSurveyData(surveyId, rows);
   }
 
+
+
   // Specialty Mapping Methods
   async getAllSpecialtyMappings(): Promise<ISpecialtyMapping[]> {
     return await this.indexedDB.getAllSpecialtyMappings();

@@ -189,7 +189,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   }
 
   return (
-    <Paper sx={{ borderRadius: 2, overflow: 'hidden' }}>
+    <Paper sx={{ borderRadius: '8px', overflow: 'hidden' }}>
       <TableContainer>
         <Table stickyHeader>
           <TableHead>

@@ -24,6 +24,7 @@ const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReportsWrapper = lazy(() => import('./components/CustomReportsWrapper'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const DownloadTest = lazy(() => import('./components/DownloadTest').then(module => ({ default: module.DownloadTest })));
+const NormalizedDataScreen = lazy(() => import('./features/normalized').then(module => ({ default: module.NormalizedDataScreen })));
 
 // Loading component for Suspense fallback
 const AppLoadingSpinner = () => (
@@ -76,6 +77,11 @@ const PageContent = () => {
         return {
           title: 'Provider Type Mapping',
           description: 'Map provider types (MD, NP, PA) across different survey sources'
+        };
+      case '/normalized-data':
+        return {
+          title: 'Normalized Survey Data',
+          description: 'All surveys combined and normalized with mappings applied'
         };
       case '/analytics':
         return {
@@ -182,6 +188,7 @@ const PageContent = () => {
               <Route path="/variable-mapping" element={<VariableMapping />} />
         <Route path="/region-mapping" element={<RegionMapping />} />
               <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
+              <Route path="/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/survey-regional-analytics" element={<SurveyRegionalAnalytics />} />

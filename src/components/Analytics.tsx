@@ -50,7 +50,7 @@ const Analytics: React.FC = () => {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
+        <TabsList className="rounded-lg">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="comparison">Comparison</TabsTrigger>
@@ -59,7 +59,7 @@ const Analytics: React.FC = () => {
         <TabsContent value="overview" className="space-y-4">
           {/* Regional Comparison */}
           <div className="col-span-4">
-            <Card>
+            <Card className="rounded-xl shadow-sm border border-gray-200">
               <CardHeader>
                 <CardTitle>Regional Comparison</CardTitle>
               </CardHeader>

@@ -52,7 +52,7 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
   const activeFiltersCount = Object.values(filters).filter(value => value !== undefined && value !== '').length;
 
   return (
-    <Card sx={{ mb: 3, borderRadius: 2 }}>
+    <Card sx={{ mb: 3, borderRadius: '8px' }}>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h2">

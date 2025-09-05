@@ -14,8 +14,23 @@ export interface AggregatedData extends BaseEntity, CompensationMetrics {
   surveySpecialty: string;
   geographicRegion: GeographicRegion;
   providerType: ProviderType;
+  
+  // TCC metrics with their own organizational data
+  tcc_n_orgs: number;
+  tcc_n_incumbents: number;
+  
+  // wRVU metrics with their own organizational data
+  wrvu_n_orgs: number;
+  wrvu_n_incumbents: number;
+  
+  // CF metrics with their own organizational data
+  cf_n_orgs: number;
+  cf_n_incumbents: number;
+  
+  // Legacy fields for backward compatibility
   n_orgs: number;
   n_incumbents: number;
+  
   surveyYear: string;
   rawData?: Record<string, any>;
 }

@@ -50,7 +50,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
   const hasActiveFilters = Object.values(filters).some(value => value !== undefined && value !== '');
 
   return (
-    <Box sx={{ mb: 3, p: 3, bgcolor: 'background.paper', borderRadius: 2, boxShadow: 1 }}>
+    <Box sx={{ mb: 3, p: 3, bgcolor: 'background.paper', borderRadius: '8px', boxShadow: 1 }}>
       <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
         Filters
         {hasActiveFilters && (

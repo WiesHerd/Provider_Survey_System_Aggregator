@@ -5,6 +5,7 @@ import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
 import LoadingSpinner from './ui/loading-spinner';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 
 const REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
 
@@ -563,6 +564,7 @@ export const RegionalAnalytics: React.FC = () => {
                     }}
                   />
                 )}
+                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
                 sx={{
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',

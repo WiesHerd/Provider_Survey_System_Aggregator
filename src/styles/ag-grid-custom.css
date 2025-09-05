@@ -308,8 +308,35 @@
   --ag-border-color: #e2e8f0;
   --ag-header-column-separator-display: block;
   --ag-header-column-separator-height: 100%;
-  --ag-header-column-separator-width: 1px;
-  --ag-header-column-separator-color: #cbd5e1;
+  --ag-header-column-separator-width: 0.5px;
+  --ag-header-column-separator-color: rgba(203, 213, 225, 0.3);
+  
+  /* Ensure proper corner connection */
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+/* Column group styling for percentile columns */
+.ag-theme-quartz .tcc-header {
+  background-color: #fef3c7 !important; /* Light yellow for TCC */
+  border-right: 2px solid #f59e0b !important;
+}
+
+.ag-theme-quartz .wrvu-header {
+  background-color: #dbeafe !important; /* Light blue for wRVU */
+  border-right: 2px solid #3b82f6 !important;
+}
+
+.ag-theme-quartz .cf-header {
+  background-color: #dcfce7 !important; /* Light green for CF */
+  border-right: 2px solid #10b981 !important;
+}
+
+/* Alternative: No column separators for ultra-clean look */
+.ag-theme-quartz.no-separators {
+  --ag-header-column-separator-display: none;
+  --ag-borders: none;
 }
 
 /* ===== CUSTOMIZATION OPTIONS ===== */

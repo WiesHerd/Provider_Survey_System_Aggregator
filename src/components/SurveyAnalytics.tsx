@@ -27,7 +27,8 @@ import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
 import LoadingSpinner from './ui/loading-spinner';
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import { formatSpecialtyForDisplay, formatRegionForDisplay } from '../shared/utils/formatters';
+import { fuzzyMatchSpecialty, filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { useYear } from '../contexts/YearContext';
 import { performanceMonitor } from '../shared/utils/performance';
 const SHOW_DEBUG = false; // Set to false for production performance
@@ -54,14 +55,26 @@ interface AggregatedData {
   geographicRegion: string;
   n_orgs: number;
   n_incumbents: number;
+  
+  // TCC metrics with their own organizational data
+  tcc_n_orgs?: number;
+  tcc_n_incumbents?: number;
   tcc_p25: number;
   tcc_p50: number;
   tcc_p75: number;
   tcc_p90: number;
+  
+  // wRVU metrics with their own organizational data
+  wrvu_n_orgs?: number;
+  wrvu_n_incumbents?: number;
   wrvu_p25: number;
   wrvu_p50: number;
   wrvu_p75: number;
   wrvu_p90: number;
+  
+  // CF metrics with their own organizational data
+  cf_n_orgs?: number;
+  cf_n_incumbents?: number;
   cf_p25: number;
   cf_p50: number;
   cf_p75: number;
@@ -277,28 +290,6 @@ const createIntelligentMappings = (row: any, surveySource: string): Array<{sourc
   });
   
   return mappings;
-};
-
-// Fuzzy matching function for specialty names (word-based, not letter-based)
-const fuzzyMatchSpecialty = (specialty1: string, specialty2: string): boolean => {
-  const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const norm1 = normalize(specialty1);
-  const norm2 = normalize(specialty2);
-
-  if (!norm1 || !norm2) return false;
-
-  // Exact or simple contains
-  if (norm1 === norm2) return true;
-  if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
-
-  const words1 = norm1.split(/\s+/).filter((w: string) => w.length > 2);
-  const words2 = norm2.split(/\s+/).filter((w: string) => w.length > 2);
-  if (words1.length === 0 || words2.length === 0) return false;
-
-  const common = words1.filter((w: string) => words2.includes(w));
-  const jaccard = common.length / new Set([...words1, ...words2]).size;
-
-  return jaccard >= 0.6 || common.length >= Math.min(words1.length, words2.length) * 0.8;
 };
 
 // Extract clean survey name from filename
@@ -567,6 +558,23 @@ const transformSurveyData = (rawData: any[], columnMappings: any[], specialtyMap
       }
     }
     
+    // Always attempt to extract organization and incumbent counts from raw columns
+    // even when other columns were mapped successfully (these counts are often
+    // independent of percentile mappings and may not be in column mappings)
+    if (transformedRow.n_orgs === 0 || transformedRow.n_orgs === undefined ||
+        transformedRow.n_incumbents === 0 || transformedRow.n_incumbents === undefined) {
+      for (const [originalColumn, value] of Object.entries(row)) {
+        const columnName = String(originalColumn || '').toLowerCase();
+        const numValue = Number(value) || 0;
+        if ((transformedRow.n_orgs === 0 || transformedRow.n_orgs === undefined) && columnName.includes('org') && !columnName.includes('incumbent')) {
+          transformedRow.n_orgs = numValue;
+        }
+        if ((transformedRow.n_incumbents === 0 || transformedRow.n_incumbents === undefined) && columnName.includes('incumbent')) {
+          transformedRow.n_incumbents = numValue;
+        }
+      }
+    }
+
     // ULTIMATE FALLBACK: Direct column name matching for compensation data
     if (mappedColumns === 0) {
       for (const [originalColumn, value] of Object.entries(row)) {
@@ -1021,13 +1029,27 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       }
     });
 
+    // Build region options from parent (standardized) region mappings when available
+    const parentRegionSet = new Set<string>();
+    if (Array.isArray(regionMappings) && regionMappings.length > 0) {
+      regionMappings.forEach((mapping: any) => {
+        if (mapping && mapping.standardizedName) {
+          parentRegionSet.add(String(mapping.standardizedName));
+        }
+      });
+    }
+
+    const regionOptions = parentRegionSet.size > 0
+      ? Array.from(parentRegionSet).sort()
+      : Array.from(values.regions).sort();
+
     return {
       specialties: Array.from(values.specialties).sort(),
       providerTypes: Array.from(values.providerTypes).sort(),
-      regions: Array.from(values.regions).sort(),
+      regions: regionOptions,
       surveySources: Array.from(values.surveySources).sort()
     };
-  }, [processedData, mappings, filters]);
+  }, [processedData, mappings, filters, regionMappings]);
 
   // PERFORMANCE OPTIMIZATION: Optimize data loading with pagination
   useEffect(() => {
@@ -1217,6 +1239,16 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
         mappedName.toLowerCase().includes(rowSpecialty.toLowerCase())
       );
       
+      // Debug: Log specialty matching for General Pediatrics specifically
+      if (filters.specialty.toLowerCase().includes('pediatrics') || rowSpecialty.toLowerCase().includes('pediatrics')) {
+        console.log('🔍 Pediatrics specialty matching:', {
+          rowSpecialty: rowSpecialty,
+          mappedSpecialtyNames: mappedSpecialtyNames,
+          specialtyMatch: specialtyMatch,
+          surveySource: surveySource
+        });
+      }
+      
       // Debug: Log the comparison for heart-related specialties
       if (rowSpecialty.toLowerCase().includes('heart') || mappedSpecialtyNames.some(name => name.toLowerCase().includes('heart'))) {
         console.log('Comparing:', {
@@ -1238,12 +1270,41 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
     });
 
     console.log('Matching rows found:', allMatchingRows.length);
+    
+    // Debug: Show what rows are being matched for the selected specialty
+    if (allMatchingRows.length > 0) {
+      console.log('🔍 Debug: Rows being aggregated for specialty:', filters.specialty);
+      console.log('Total matching rows:', allMatchingRows.length);
+      
+      // Show unique combinations to understand the data structure
+      const uniqueCombinations = new Map<string, number>();
+      allMatchingRows.forEach(row => {
+        const combo = `${row.surveySource}-${row.providerType}-${row.geographicRegion}`;
+        uniqueCombinations.set(combo, (uniqueCombinations.get(combo) || 0) + 1);
+      });
+      
+      console.log('🔍 Unique survey-provider-region combinations:', Array.from(uniqueCombinations.entries()));
+      
+      console.log('Sample matching rows:', allMatchingRows.slice(0, 3).map(row => ({
+        surveySource: row.surveySource,
+        specialty: row.specialty,
+        providerType: row.providerType,
+        geographicRegion: row.geographicRegion,
+        tcc_p50: row.tcc_p50,
+        wrvu_p50: row.wrvu_p50,
+        cf_p50: row.cf_p50,
+        n_orgs: row.n_orgs,
+        n_incumbents: row.n_incumbents
+      })));
+    }
 
     if (allMatchingRows.length === 0) return [];
 
-    // Group rows by survey source, provider type, and region
+    // Group rows by survey source, provider type, and region only
+    // Since we're already filtering by specialty, we don't need to include it in the grouping key
     const groupedRows = new Map<string, ISurveyRow[]>();
     allMatchingRows.forEach(row => {
+      // Group by survey source, provider type, and region only
       const key = `${row.surveySource || ''}-${row.providerType || ''}-${row.geographicRegion || ''}`;
       if (!groupedRows.has(key)) {
         groupedRows.set(key, []);
@@ -1253,8 +1314,28 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
 
     // Create aggregated rows for each group
     const rows: AggregatedData[] = [];
+    
+    // Debug: Show grouping information
+    console.log('🔍 Debug: Grouping results for specialty:', filters.specialty);
+    console.log('Number of groups created:', groupedRows.size);
+    
     groupedRows.forEach((groupRows, key) => {
       const row = groupRows[0];
+      
+      // Debug: Show what's in each group
+      console.log('🔍 Group key:', key, 'contains', groupRows.length, 'rows');
+      console.log('🔍 Group specialties:', [...new Set(groupRows.map(r => r.specialty))]);
+      
+      if (groupRows.length > 1) {
+        console.log('⚠️ Multiple rows in group - checking for data consistency:', {
+          groupKey: key,
+          rowCount: groupRows.length,
+          specialties: [...new Set(groupRows.map(r => r.specialty))],
+          tccValues: groupRows.map(r => r.tcc_p50).filter(v => Number(v) > 0),
+          wrvuValues: groupRows.map(r => r.wrvu_p50).filter(v => Number(v) > 0),
+          cfValues: groupRows.map(r => r.cf_p50).filter(v => Number(v) > 0)
+        });
+      }
       
       if (!selectedMapping) return; // Skip if no mapping found
       
@@ -1264,15 +1345,47 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
         n_incumbents: groupRows.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0),
       };
       
-      // Standard compensation metrics
+      // Standard compensation metrics with their own organizational data
       const standardMetrics = ['tcc', 'wrvu', 'cf'];
       standardMetrics.forEach(type => {
+        // Calculate metric-specific organizational data
+        const metricOrgField = `${type}_n_orgs`;
+        const metricIncField = `${type}_n_incumbents`;
+        
+        // For metric-specific orgs/incumbents, only count rows that have data for this metric
+        const rowsWithMetricData = groupRows.filter(r => {
+          const hasData = ['p25', 'p50', 'p75', 'p90'].some(percentile => {
+            const fieldName = `${type}_${percentile}`;
+            return Number(r[fieldName]) > 0;
+          });
+          return hasData;
+        });
+        
+        // Calculate metric-specific organizational counts
+        metrics[metricOrgField] = rowsWithMetricData.reduce((sum, r) => sum + (Number(r.n_orgs) || 0), 0);
+        metrics[metricIncField] = rowsWithMetricData.reduce((sum, r) => sum + (Number(r.n_incumbents) || 0), 0);
+        
+        // Calculate percentiles
         ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
           const fieldName = `${type}_${percentile}`;
-          metrics[fieldName] = calculatePercentile(
-            groupRows.map(r => Number(r[fieldName]) || 0).filter(Boolean), 
-            parseInt(percentile.replace('p', ''))
-          );
+          // Only include non-zero values in percentile calculations to prevent inflation
+          const validValues = groupRows.map(r => Number(r[fieldName]) || 0).filter(v => v > 0);
+          if (validValues.length > 0) {
+            metrics[fieldName] = calculatePercentile(validValues, parseInt(percentile.replace('p', '')));
+            
+            // Debug: Log percentile calculations for high values
+            if (metrics[fieldName] > 500000) {
+              console.log('⚠️ High value detected in percentile calculation:', {
+                fieldName,
+                validValues,
+                calculatedPercentile: metrics[fieldName],
+                groupKey: key,
+                rowCount: groupRows.length
+              });
+            }
+          } else {
+            metrics[fieldName] = 0;
+          }
         });
       });
       
@@ -1290,10 +1403,13 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
         if (!metrics[fieldName]) {
           const percentile = fieldName.match(/_p(\d+)$/)?.[1];
           if (percentile) {
-            metrics[fieldName] = calculatePercentile(
-              groupRows.map(r => Number(r[fieldName]) || 0).filter(Boolean),
-              parseInt(percentile)
-            );
+            // Only include non-zero values in percentile calculations to prevent inflation
+            const validValues = groupRows.map(r => Number(r[fieldName]) || 0).filter(v => v > 0);
+            if (validValues.length > 0) {
+              metrics[fieldName] = calculatePercentile(validValues, parseInt(percentile));
+            } else {
+              metrics[fieldName] = 0;
+            }
           }
         }
       });
@@ -1308,6 +1424,24 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
     });
 
     console.log('Generated rows for filtered specialty:', rows.length);
+    
+    // Debug: Show final aggregated results
+    if (rows.length > 0) {
+      console.log('🔍 Final aggregated results for specialty:', filters.specialty);
+      rows.forEach((row, index) => {
+        console.log(`Row ${index + 1}:`, {
+          surveySource: row.surveySource,
+          specialty: row.surveySpecialty,
+          region: row.geographicRegion,
+          tcc_p50: row.tcc_p50,
+          wrvu_p50: row.wrvu_p50,
+          cf_p50: row.cf_p50,
+          n_orgs: row.n_orgs,
+          n_incumbents: row.n_incumbents
+        });
+      });
+    }
+    
     return rows;
   }, [filters, mappings, processedData]);
 
@@ -1397,14 +1531,23 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       geographicRegion: '',
       n_orgs: 0,
       n_incumbents: 0,
+      // TCC metrics with organizational data
+      tcc_n_orgs: rows.reduce((sum, r) => sum + (r.tcc_n_orgs || 0), 0),
+      tcc_n_incumbents: rows.reduce((sum, r) => sum + (r.tcc_n_incumbents || 0), 0),
       tcc_p25: calculateAverage(rows.map(r => r.tcc_p25)),
       tcc_p50: calculateAverage(rows.map(r => r.tcc_p50)),
       tcc_p75: calculateAverage(rows.map(r => r.tcc_p75)),
       tcc_p90: calculateAverage(rows.map(r => r.tcc_p90)),
+      // wRVU metrics with organizational data
+      wrvu_n_orgs: rows.reduce((sum, r) => sum + (r.wrvu_n_orgs || 0), 0),
+      wrvu_n_incumbents: rows.reduce((sum, r) => sum + (r.wrvu_n_incumbents || 0), 0),
       wrvu_p25: calculateAverage(rows.map(r => r.wrvu_p25)),
       wrvu_p50: calculateAverage(rows.map(r => r.wrvu_p50)),
       wrvu_p75: calculateAverage(rows.map(r => r.wrvu_p75)),
       wrvu_p90: calculateAverage(rows.map(r => r.wrvu_p90)),
+      // CF metrics with organizational data
+      cf_n_orgs: rows.reduce((sum, r) => sum + (r.cf_n_orgs || 0), 0),
+      cf_n_incumbents: rows.reduce((sum, r) => sum + (r.cf_n_incumbents || 0), 0),
       cf_p25: calculateAverage(rows.map(r => r.cf_p25)),
       cf_p50: calculateAverage(rows.map(r => r.cf_p50)),
       cf_p75: calculateAverage(rows.map(r => r.cf_p75)),
@@ -1418,14 +1561,23 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
       geographicRegion: '',
       n_orgs: 0,
       n_incumbents: totalIncumbents,
+      // TCC metrics with organizational data
+      tcc_n_orgs: rows.reduce((sum, r) => sum + (r.tcc_n_orgs || 0), 0),
+      tcc_n_incumbents: rows.reduce((sum, r) => sum + (r.tcc_n_incumbents || 0), 0),
       tcc_p25: calculateWeightedAverage(rows.map(r => r.tcc_p25), rows.map(r => r.n_incumbents)),
       tcc_p50: calculateWeightedAverage(rows.map(r => r.tcc_p50), rows.map(r => r.n_incumbents)),
       tcc_p75: calculateWeightedAverage(rows.map(r => r.tcc_p75), rows.map(r => r.n_incumbents)),
       tcc_p90: calculateWeightedAverage(rows.map(r => r.tcc_p90), rows.map(r => r.n_incumbents)),
+      // wRVU metrics with organizational data
+      wrvu_n_orgs: rows.reduce((sum, r) => sum + (r.wrvu_n_orgs || 0), 0),
+      wrvu_n_incumbents: rows.reduce((sum, r) => sum + (r.wrvu_n_incumbents || 0), 0),
       wrvu_p25: calculateWeightedAverage(rows.map(r => r.wrvu_p25), rows.map(r => r.n_incumbents)),
       wrvu_p50: calculateWeightedAverage(rows.map(r => r.wrvu_p50), rows.map(r => r.n_incumbents)),
       wrvu_p75: calculateWeightedAverage(rows.map(r => r.wrvu_p75), rows.map(r => r.n_incumbents)),
       wrvu_p90: calculateWeightedAverage(rows.map(r => r.wrvu_p90), rows.map(r => r.n_incumbents)),
+      // CF metrics with organizational data
+      cf_n_orgs: rows.reduce((sum, r) => sum + (r.cf_n_orgs || 0), 0),
+      cf_n_incumbents: rows.reduce((sum, r) => sum + (r.cf_n_incumbents || 0), 0),
       cf_p25: calculateWeightedAverage(rows.map(r => r.cf_p25), rows.map(r => r.n_incumbents)),
       cf_p50: calculateWeightedAverage(rows.map(r => r.cf_p50), rows.map(r => r.n_incumbents)),
       cf_p75: calculateWeightedAverage(rows.map(r => r.cf_p75), rows.map(r => r.n_incumbents)),
@@ -1558,14 +1710,9 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 );
               }}
               filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                if (inputValue === '') {
-                  return options;
-                }
-                return options.filter((option: string) => 
-                  option === '' || 
-                  formatSpecialtyForDisplay(option).toLowerCase().includes(inputValue.toLowerCase()) ||
-                  option.toLowerCase().includes(inputValue.toLowerCase())
-                );
+                const base = filterSpecialtyOptions(options, inputValue);
+                // Keep "All Specialties" if present
+                return options[0] === '' && base.indexOf('') === -1 ? ['', ...base.filter(o => o !== '')] : base;
               }}
             />
           </div>
@@ -1651,6 +1798,13 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
               <Select
                 value={filters.region}
                 onChange={(e: React.ChangeEvent<{ value: unknown }>) => handleFilterChange('region', e.target.value as string)}
+                renderValue={(value: unknown) => {
+                  const v = (value as string) || '';
+                  if (!v) {
+                    return <span style={{ color: '#9ca3af' }}>All Regions</span>;
+                  }
+                  return formatRegionForDisplay(v);
+                }}
                 sx={{
                   backgroundColor: 'white',
                   border: '1px solid #d1d5db',
@@ -1671,7 +1825,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 <MenuItem value="">All Regions</MenuItem>
                 {uniqueValues.regions.map((region) => (
                   <MenuItem key={region} value={region}>
-                    {region}
+                    {formatRegionForDisplay(region)}
                   </MenuItem>
                 ))}
               </Select>
@@ -1769,16 +1923,16 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
               <Table size="small" sx={{ width: '100%' }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell colSpan={4} sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', borderBottom: '2px solid #e2e8f0' }}>
+                    <TableCell colSpan={2} sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', borderBottom: '2px solid #e2e8f0' }}>
                       Survey Information
                     </TableCell>
-                    <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#dbeafe', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
+                    <TableCell colSpan={6} align="center" sx={{ backgroundColor: '#dbeafe', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
                       Total Cash Compensation (TCC)
                     </TableCell>
-                    <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#dcfce7', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
+                    <TableCell colSpan={6} align="center" sx={{ backgroundColor: '#dcfce7', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
                       Work RVUs (wRVU)
                     </TableCell>
-                    <TableCell colSpan={4} align="center" sx={{ backgroundColor: '#fef3c7', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
+                    <TableCell colSpan={6} align="center" sx={{ backgroundColor: '#fef3c7', fontWeight: 'bold', borderLeft: '2px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
                       Conversion Factor (CF)
                     </TableCell>
                   </TableRow>
@@ -1804,26 +1958,31 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                       wordWrap: 'break-word',
                       lineHeight: '1.4'
                     }}>Region</TableCell>
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right', width: '8%', minWidth: '80px' }}># Orgs</TableCell>
-                    <TableCell sx={{ backgroundColor: '#f8fafc', fontWeight: 'bold', fontSize: '0.875rem', textAlign: 'right', width: '10%', minWidth: '100px' }}># Incumbents</TableCell>
+
                     
                     {/* TCC Headers - Increased for currency formatting */}
-                    <TableCell sx={{ backgroundColor: '#dbeafe', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P25</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P50</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P75</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '8.75%', minWidth: '100px' }}>P90</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>N Orgs</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>N Inc</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dbeafe', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P90</TableCell>
                     
                     {/* wRVU Headers - Increased for decimal formatting */}
-                    <TableCell sx={{ backgroundColor: '#dcfce7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P25</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P50</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P75</TableCell>
-                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '8%', minWidth: '90px' }}>P90</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>N Orgs</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>N Inc</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#dcfce7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P90</TableCell>
                     
                     {/* CF Headers - Increased for currency formatting */}
-                    <TableCell sx={{ backgroundColor: '#fef3c7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P25</TableCell>
-                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P50</TableCell>
-                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P75</TableCell>
-                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7.5%', minWidth: '80px' }}>P90</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', borderLeft: '2px solid #e2e8f0', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>N Orgs</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>N Inc</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P25</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P50</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P75</TableCell>
+                    <TableCell sx={{ backgroundColor: '#fef3c7', textAlign: 'right', fontSize: '0.875rem', width: '7%', minWidth: '80px' }}>P90</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1866,80 +2025,93 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }}>{row.geographicRegion || 'N/A'}</TableCell>
-                            <TableCell align="right" sx={{ 
-                              fontSize: '0.875rem', 
-                              width: '8%', 
-                              minWidth: '80px',
-                              padding: '12px 16px',
-                              verticalAlign: 'top',
-                              borderBottom: '1px solid #e5e7eb'
-                            }}>{row.n_orgs.toLocaleString()}</TableCell>
-                            <TableCell align="right" sx={{ 
-                              fontSize: '0.875rem', 
-                              width: '10%', 
-                              minWidth: '100px',
-                              padding: '12px 16px',
-                              verticalAlign: 'top',
-                              borderBottom: '1px solid #e5e7eb'
-                            }}>{row.n_incumbents.toLocaleString()}</TableCell>
+
                             
                             {/* TCC Values */}
                             <TableCell sx={{ 
                               borderLeft: '2px solid #e2e8f0', 
-                              width: '8.75%', 
-                              minWidth: '100px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p25)}</TableCell>
+                            }} align="right">{row.tcc_n_orgs?.toLocaleString() || row.n_orgs?.toLocaleString() || '0'}</TableCell>
                             <TableCell sx={{ 
-                              width: '8.75%', 
-                              minWidth: '100px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p50)}</TableCell>
+                            }} align="right">{row.tcc_n_incumbents?.toLocaleString() || row.n_incumbents?.toLocaleString() || '0'}</TableCell>
                             <TableCell sx={{ 
-                              width: '8.75%', 
-                              minWidth: '100px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p75)}</TableCell>
+                            }} align="right">{formatCurrency(row.tcc_p25, 2)}</TableCell>
                             <TableCell sx={{ 
-                              width: '8.75%', 
-                              minWidth: '100px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
-                            }} align="right">{formatCurrency(row.tcc_p90)}</TableCell>
+                            }} align="right">{formatCurrency(row.tcc_p50, 2)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.tcc_p75, 2)}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{formatCurrency(row.tcc_p90, 2)}</TableCell>
                             
                             {/* wRVU Values */}
                             <TableCell sx={{ 
                               borderLeft: '2px solid #e2e8f0', 
-                              width: '8%', 
-                              minWidth: '90px',
+                              width: '7%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{row.wrvu_n_orgs?.toLocaleString() || row.n_orgs?.toLocaleString() || '0'}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{row.wrvu_n_incumbents?.toLocaleString() || row.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }} align="right">{formatNumber(row.wrvu_p25)}</TableCell>
                             <TableCell sx={{ 
-                              width: '8%', 
-                              minWidth: '90px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }} align="right">{formatNumber(row.wrvu_p50)}</TableCell>
                             <TableCell sx={{ 
-                              width: '8%', 
-                              minWidth: '90px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }} align="right">{formatNumber(row.wrvu_p75)}</TableCell>
                             <TableCell sx={{ 
-                              width: '8%', 
-                              minWidth: '90px',
+                              width: '7%', 
+                              minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
@@ -1948,28 +2120,42 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                             {/* CF Values */}
                             <TableCell sx={{ 
                               borderLeft: '2px solid #e2e8f0', 
-                              width: '7.5%', 
+                              width: '7%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{row.cf_n_orgs?.toLocaleString() || row.n_orgs?.toLocaleString() || '0'}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7%', 
+                              minWidth: '80px',
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              borderBottom: '1px solid #e5e7eb'
+                            }} align="right">{row.cf_n_incumbents?.toLocaleString() || row.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                            <TableCell sx={{ 
+                              width: '7%', 
                               minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
                             <TableCell sx={{ 
-                              width: '7.5%', 
+                              width: '7%', 
                               minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }} align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
                             <TableCell sx={{ 
-                              width: '7.5%', 
+                              width: '7%', 
                               minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
                               borderBottom: '1px solid #e5e7eb'
                             }} align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
                             <TableCell sx={{ 
-                              width: '7.5%', 
+                              width: '7%', 
                               minWidth: '80px',
                               padding: '12px 16px',
                               verticalAlign: 'top',
@@ -2001,44 +2187,43 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }}>-</TableCell>
-                                <TableCell align="right" sx={{ 
-                                  fontSize: '0.875rem',
-                                  width: '8%', 
-                                  minWidth: '80px',
-                                  padding: '12px 16px',
-                                  verticalAlign: 'top'
-                                }}>{simple.n_orgs}</TableCell>
-                                <TableCell align="right" sx={{ 
-                                  fontSize: '0.875rem',
-                                  width: '10%', 
-                                  minWidth: '100px',
-                                  padding: '12px 16px',
-                                  verticalAlign: 'top'
-                                }}>{simple.n_incumbents}</TableCell>
+
                                 
                                 {/* TCC Values */}
                                 <TableCell sx={{ 
                                   borderLeft: '2px solid #e2e8f0',
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{simple.tcc_n_orgs?.toLocaleString() || simple.n_orgs?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{simple.tcc_n_incumbents?.toLocaleString() || simple.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.tcc_p25)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.tcc_p50)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.tcc_p75)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.tcc_p90)}</TableCell>
@@ -2046,26 +2231,38 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                                 {/* wRVU Values */}
                                 <TableCell sx={{ 
                                   borderLeft: '2px solid #e2e8f0',
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{simple.wrvu_n_orgs?.toLocaleString() || simple.n_orgs?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{simple.wrvu_n_incumbents?.toLocaleString() || simple.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(simple.wrvu_p25)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(simple.wrvu_p50)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(simple.wrvu_p75)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(simple.wrvu_p90)}</TableCell>
@@ -2073,25 +2270,37 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                                 {/* CF Values */}
                                 <TableCell sx={{ 
                                   borderLeft: '2px solid #e2e8f0',
-                                  width: '7.5%', 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{simple.cf_n_orgs?.toLocaleString() || simple.n_orgs?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{simple.cf_n_incumbents?.toLocaleString() || simple.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.cf_p25, 2)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '7.5%', 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.cf_p50, 2)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '7.5%', 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(simple.cf_p75, 2)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '7.5%', 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
@@ -2116,44 +2325,43 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }}>-</TableCell>
-                                <TableCell align="right" sx={{ 
-                                  fontSize: '0.875rem',
-                                  width: '8%', 
-                                  minWidth: '80px',
-                                  padding: '12px 16px',
-                                  verticalAlign: 'top'
-                                }}>{weighted.n_orgs}</TableCell>
-                                <TableCell align="right" sx={{ 
-                                  fontSize: '0.875rem',
-                                  width: '10%', 
-                                  minWidth: '100px',
-                                  padding: '12px 16px',
-                                  verticalAlign: 'top'
-                                }}>{weighted.n_incumbents}</TableCell>
+
                                 
                                 {/* TCC Values */}
                                 <TableCell sx={{ 
                                   borderLeft: '2px solid #e2e8f0',
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{weighted.tcc_n_orgs?.toLocaleString() || weighted.n_orgs?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{weighted.tcc_n_incumbents?.toLocaleString() || weighted.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.tcc_p25)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.tcc_p50)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.tcc_p75)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8.75%', 
-                                  minWidth: '100px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.tcc_p90)}</TableCell>
@@ -2161,26 +2369,38 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                                 {/* wRVU Values */}
                                 <TableCell sx={{ 
                                   borderLeft: '2px solid #e2e8f0',
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{weighted.wrvu_n_orgs?.toLocaleString() || weighted.n_orgs?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{weighted.wrvu_n_incumbents?.toLocaleString() || weighted.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(weighted.wrvu_p25)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(weighted.wrvu_p50)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(weighted.wrvu_p75)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '8%', 
-                                  minWidth: '90px',
+                                  width: '7%', 
+                                  minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatNumber(weighted.wrvu_p90)}</TableCell>
@@ -2188,25 +2408,37 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                                 {/* CF Values */}
                                 <TableCell sx={{ 
                                   borderLeft: '2px solid #e2e8f0',
-                                  width: '7.5%', 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{weighted.cf_n_orgs?.toLocaleString() || weighted.n_orgs?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
+                                  minWidth: '80px',
+                                  padding: '12px 16px',
+                                  verticalAlign: 'top'
+                                }} align="right">{weighted.cf_n_incumbents?.toLocaleString() || weighted.n_incumbents?.toLocaleString() || '0'}</TableCell>
+                                <TableCell sx={{ 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.cf_p25, 2)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '7.5%', 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.cf_p50, 2)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '7.5%', 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'
                                 }} align="right">{formatCurrency(weighted.cf_p75, 2)}</TableCell>
                                 <TableCell sx={{ 
-                                  width: '7.5%', 
+                                  width: '7%', 
                                   minWidth: '80px',
                                   padding: '12px 16px',
                                   verticalAlign: 'top'

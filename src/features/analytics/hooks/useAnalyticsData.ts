@@ -78,40 +78,71 @@ export const useAnalyticsData = (): UseAnalyticsDataReturn => {
                 geographicRegion: survey.geographicRegion,
                 providerType: survey.providerType || 'Unknown',
                 surveyYear: survey.surveyYear || 'Unknown',
-                n_orgs: 0,
-                n_incumbents: 0,
+                
+                // TCC metrics with their own organizational data
+                tcc_n_orgs: 0,
+                tcc_n_incumbents: 0,
                 tcc_p25: 0,
                 tcc_p50: 0,
                 tcc_p75: 0,
                 tcc_p90: 0,
+                
+                // wRVU metrics with their own organizational data
+                wrvu_n_orgs: 0,
+                wrvu_n_incumbents: 0,
                 wrvu_p25: 0,
                 wrvu_p50: 0,
                 wrvu_p75: 0,
                 wrvu_p90: 0,
+                
+                // CF metrics with their own organizational data
+                cf_n_orgs: 0,
+                cf_n_incumbents: 0,
                 cf_p25: 0,
                 cf_p50: 0,
                 cf_p75: 0,
                 cf_p90: 0,
+                
+                // Legacy fields for backward compatibility
+                n_orgs: 0,
+                n_incumbents: 0,
+                
                 rawData: survey.rawData || {}
               };
             }
 
             // Aggregate data
             const record = aggregatedData[key];
+            
+            // Legacy fields (sum all)
             record.n_orgs += survey.n_orgs || 0;
             record.n_incumbents += survey.n_incumbents || 0;
 
-            // Aggregate compensation metrics
+            // TCC metrics with their own organizational data
+            if (survey.tcc_p50 > 0) {
+              record.tcc_n_orgs += survey.n_orgs || 0;
+              record.tcc_n_incumbents += survey.n_incumbents || 0;
+            }
             if (survey.tcc_p25) record.tcc_p25 += survey.tcc_p25;
             if (survey.tcc_p50) record.tcc_p50 += survey.tcc_p50;
             if (survey.tcc_p75) record.tcc_p75 += survey.tcc_p75;
             if (survey.tcc_p90) record.tcc_p90 += survey.tcc_p90;
 
+            // wRVU metrics with their own organizational data
+            if (survey.wrvu_p50 > 0) {
+              record.wrvu_n_orgs += survey.n_orgs || 0;
+              record.wrvu_n_incumbents += survey.n_incumbents || 0;
+            }
             if (survey.wrvu_p25) record.wrvu_p25 += survey.wrvu_p25;
             if (survey.wrvu_p50) record.wrvu_p50 += survey.wrvu_p50;
             if (survey.wrvu_p75) record.wrvu_p75 += survey.wrvu_p75;
             if (survey.wrvu_p90) record.wrvu_p90 += survey.wrvu_p90;
 
+            // CF metrics with their own organizational data
+            if (survey.cf_p50 > 0) {
+              record.cf_n_orgs += survey.n_orgs || 0;
+              record.cf_n_incumbents += survey.n_incumbents || 0;
+            }
             if (survey.cf_p25) record.cf_p25 += survey.cf_p25;
             if (survey.cf_p50) record.cf_p50 += survey.cf_p50;
             if (survey.cf_p75) record.cf_p75 += survey.cf_p75;

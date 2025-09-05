@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import { FMVFiltersProps } from '../types/fmv';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { SpecialtyAutocomplete } from '../../../shared/components/SpecialtyAutocomplete';
 
 /**
  * FMV Filters component for filtering market data
@@ -35,59 +36,12 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
       {/* All filters in one row */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div>
-          <FormControl fullWidth>
-            <Autocomplete
-              value={filters.specialty}
-              onChange={(event: any, newValue: string | null) => {
-                console.log('FMV Debug - Specialty dropdown change:', newValue);
-                handleFilterChange('specialty', newValue || '');
-              }}
-              options={['', ...uniqueValues.specialties]}
-              getOptionLabel={(option: string) => option === '' ? 'All Specialties' : formatSpecialtyForDisplay(option)}
-              renderInput={(params: any) => (
-                <TextField
-                  {...params}
-                  label="Specialty"
-                  size="small"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#3b82f6',
-                      },
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#3b82f6',
-                        borderWidth: '2px',
-                      },
-                    },
-                    '& .MuiInputLabel-root.Mui-focused': {
-                      color: '#3b82f6',
-                    },
-                  }}
-                />
-              )}
-              sx={{
-                '& .MuiAutocomplete-paper': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                  maxHeight: '300px'
-                },
-                '& .MuiAutocomplete-option': {
-                  '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
-                  '&.Mui-selected': { 
-                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                    '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
-                  }
-                }
-              }}
-              noOptionsText="No specialties found"
-              clearOnBlur={false}
-              blurOnSelect={true}
-            />
-          </FormControl>
+          <SpecialtyAutocomplete
+            value={filters.specialty}
+            options={['', ...uniqueValues.specialties]}
+            label="Specialty"
+            onChange={(val) => handleFilterChange('specialty', val)}
+          />
         </div>
 
         <div>

@@ -9,6 +9,9 @@ import {
   Stack
 } from '@mui/material';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import Autocomplete from '@mui/material/Autocomplete';
+import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
+import { SpecialtyAutocomplete } from '../shared/components/SpecialtyAutocomplete';
 
 interface TableFiltersProps {
   specialties: string[];
@@ -49,22 +52,11 @@ export const TableFilters: React.FC<TableFiltersProps> = ({
         }}
       >
         <FormControl fullWidth>
-          <InputLabel id="specialty-label">Specialty</InputLabel>
-          <Select
-            labelId="specialty-label"
-            id="specialty"
-            name="specialty"
+          <SpecialtyAutocomplete
             value={filters.specialty}
-            label="Specialty"
-            onChange={handleChange}
-          >
-            <MenuItem value="">All Specialties</MenuItem>
-            {specialties.map((specialty) => (
-              <MenuItem key={specialty} value={specialty}>
-                {formatSpecialtyForDisplay(specialty)}
-              </MenuItem>
-            ))}
-          </Select>
+            options={[...specialties]}
+            onChange={(val) => onFilterChange('specialty', val)}
+          />
         </FormControl>
 
         <FormControl fullWidth>
