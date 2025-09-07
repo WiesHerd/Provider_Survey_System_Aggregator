@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { ISurveyData, ISurveyRow } from '../types/survey';
+import { parseCSVLine } from '../shared/utils/csvParser';
 
 /* eslint-disable no-restricted-globals */
 const ctx = self;
@@ -57,7 +58,7 @@ async function processSurveyData(messageData: ProcessMessageData) {
     }
 
     console.log('Worker: Processing headers');
-    const headers = lines[0].split(',').map(h => h.trim());
+    const headers = parseCSVLine(lines[0]);
     
     if (headers.length === 0) {
       throw new Error('No headers found in file');
@@ -97,9 +98,11 @@ async function processSurveyData(messageData: ProcessMessageData) {
       const processedChunk = chunk
         .filter(line => line.trim())
         .map(line => {
-          const values = line.split(',').map(v => v.trim());
+          const values = parseCSVLine(line);
           if (values.length !== headers.length) {
             console.warn('Worker: Mismatched column count in row', i, 'Expected:', headers.length, 'Got:', values.length);
+            console.warn('Worker: Problematic line:', line);
+            console.warn('Worker: Parsed values:', values);
             return null;
           }
 

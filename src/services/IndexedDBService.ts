@@ -2,6 +2,7 @@ import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
 import { IColumnMapping } from '../types/column';
 import { IUnmappedVariable } from '../features/mapping/types/mapping';
+import { parseCSVLine } from '../shared/utils/csvParser';
 
 interface Survey {
   id: string;
@@ -270,8 +271,8 @@ export class IndexedDBService {
     console.log('Total CSV lines:', lines.length);
     console.log('First 3 lines:', lines.slice(0, 3));
     
-    // Parse headers from first line
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    // Parse headers from first line using proper CSV parsing
+    const headers = parseCSVLine(lines[0]);
     console.log('CSV Headers:', headers);
     
     // Parse data rows - start from index 1 (skip header row)
@@ -280,7 +281,7 @@ export class IndexedDBService {
       const line = lines[i].trim();
       if (!line) continue;
       
-      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+      const values = parseCSVLine(line);
       
       const row: any = {};
       headers.forEach((header, index) => {

@@ -37,3 +37,10 @@ export {
   groupSimilarSpecialties,
   standardizeSpecialty
 } from './specialtyMatching';
+
+// CSV parsing utilities
+export {
+  parseCSVLine,
+  parseCSVContent,
+  testCSVParsing
+} from './csvParser';
