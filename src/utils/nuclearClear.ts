@@ -16,12 +16,63 @@ export const nuclearClear = async (): Promise<void> => {
       'benchpoint-db'
     ];
     
+    // First, try to clear data from within each database before deleting
+    for (const dbName of dbNames) {
+      try {
+        console.log(`🔍 Attempting to clear data from ${dbName}...`);
+        const request = indexedDB.open(dbName);
+        await new Promise((resolve) => {
+          request.onsuccess = () => {
+            const db = request.result;
+            try {
+              // Clear all object stores
+              const objectStoreNames = Array.from(db.objectStoreNames);
+              const transaction = db.transaction(objectStoreNames, 'readwrite');
+              
+              objectStoreNames.forEach(storeName => {
+                try {
+                  const store = transaction.objectStore(storeName);
+                  store.clear();
+                  console.log(`✅ Cleared object store: ${storeName} in ${dbName}`);
+                } catch (error) {
+                  console.log(`ℹ️ Could not clear store ${storeName}:`, error);
+                }
+              });
+              
+              transaction.oncomplete = () => {
+                db.close();
+                console.log(`✅ Cleared all data from ${dbName}`);
+                resolve(true);
+              };
+              
+              transaction.onerror = () => {
+                db.close();
+                console.log(`ℹ️ Transaction failed for ${dbName}, will try delete`);
+                resolve(true);
+              };
+            } catch (error) {
+              db.close();
+              console.log(`ℹ️ Could not clear data from ${dbName}:`, error);
+              resolve(true);
+            }
+          };
+          request.onerror = () => {
+            console.log(`ℹ️ Could not open ${dbName} for clearing`);
+            resolve(true);
+          };
+        });
+      } catch (error) {
+        console.log(`ℹ️ Error clearing data from ${dbName}:`, error);
+      }
+    }
+    
+    // Now delete the databases
     for (const dbName of dbNames) {
       try {
         const request = indexedDB.deleteDatabase(dbName);
         await new Promise((resolve) => {
           request.onsuccess = () => {
-            console.log(`✅ Cleared database: ${dbName}`);
+            console.log(`✅ Deleted database: ${dbName}`);
             resolve(true);
           };
           request.onerror = () => {
@@ -30,7 +81,7 @@ export const nuclearClear = async (): Promise<void> => {
           };
         });
       } catch (error) {
-        console.log(`ℹ️ Could not clear ${dbName}:`, error);
+        console.log(`ℹ️ Could not delete ${dbName}:`, error);
       }
     }
     
