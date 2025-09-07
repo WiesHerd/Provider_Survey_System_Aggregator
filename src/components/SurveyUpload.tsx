@@ -12,6 +12,7 @@ import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { clearStorage } from '../utils/clearStorage';
 import { nuclearClear, inspectIndexedDB } from '../utils/nuclearClear';
+import { parseCSVLine } from '../shared/utils/csvParser';
 
 
 // Provider type categories for survey selection
@@ -357,7 +358,7 @@ const SurveyUpload: React.FC = () => {
       const text = await file.text();
       
       const rows = text.split('\n').filter(row => row.trim());
-      const headers = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const headers = parseCSVLine(rows[0]);
       const dataRows = rows.slice(1).filter(row => row.trim());
 
       // Validate columns before processing
@@ -375,7 +376,7 @@ const SurveyUpload: React.FC = () => {
 
       // Parse CSV data
       const parsedRows = dataRows.map(row => {
-        const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
+        const values = parseCSVLine(row);
         const rowData: any = {};
         headers.forEach((header: string, index: number) => {
           rowData[header] = values[index] || '';
