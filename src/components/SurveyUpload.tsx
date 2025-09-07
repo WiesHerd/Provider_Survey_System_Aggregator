@@ -8,7 +8,7 @@ import { ISurveyRow, ISurveyMetadata } from '../types/survey';
 import LoadingSpinner from './ui/loading-spinner';
 import { useYear } from '../contexts/YearContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
-import { ColumnValidationDisplay } from '../features/upload/components/ColumnValidationDisplay';
+import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
 
 

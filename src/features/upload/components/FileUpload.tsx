@@ -24,7 +24,7 @@ import {
   DocumentIcon
 } from '@heroicons/react/24/outline';
 import { FileUploadProps } from '../types/upload';
-import { formatFileSize } from '@/shared/utils';
+import { formatFileSize } from '../../../shared/utils';
 
 /**
  * File Upload component for drag-and-drop file handling

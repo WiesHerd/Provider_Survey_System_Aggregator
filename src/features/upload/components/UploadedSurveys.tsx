@@ -33,7 +33,7 @@ import {
   DocumentIcon
 } from '@heroicons/react/24/outline';
 import { UploadedSurveysProps } from '../types/upload';
-import { formatDate } from '@/shared/utils';
+import { formatDate } from '../../../shared/utils';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../../../shared/utils/specialtyMatching';
 import { InlineSpinner } from '../../../shared/components';

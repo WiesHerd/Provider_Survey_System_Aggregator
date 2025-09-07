@@ -23,6 +23,7 @@ interface SurveyData {
   specialty?: string;
   providerType?: string;
   region?: string;
+  variable?: string;
   tcc?: number;
   cf?: number;
   wrvu?: number;
@@ -327,56 +328,83 @@ export class IndexedDBService {
         let filteredData = data;
         
         if (filters && Object.keys(filters).length > 0) {
+          console.log('Filtering data with filters:', filters);
+          console.log('Total data items before filtering:', data.length);
+          
           filteredData = data.filter((item: SurveyData) => {
-            // Filter by specialty
+            // Filter by specialty - EXACT MATCH ONLY
             if (filters.specialty && filters.specialty.trim() !== '') {
               const itemSpecialty = item.specialty || item.data?.specialty || item.data?.Specialty || '';
+              console.log('Checking specialty:', { 
+                filterSpecialty: filters.specialty, 
+                itemSpecialty, 
+                matches: itemSpecialty.toLowerCase() === filters.specialty.toLowerCase() 
+              });
               if (itemSpecialty.toLowerCase() !== filters.specialty.toLowerCase()) {
                 return false;
               }
             }
             
-            // Filter by provider type
+            // Filter by provider type - EXACT MATCH ONLY
             if (filters.providerType && filters.providerType.trim() !== '') {
-              const itemProviderType = item.providerType || item.data?.providerType || item.data?.['Provider Type'] || '';
+              const itemProviderType = item.providerType || item.data?.providerType || item.data?.['Provider Type'] || item.data?.provider_type || '';
+              console.log('Checking provider type:', { 
+                filterProviderType: filters.providerType, 
+                itemProviderType, 
+                matches: itemProviderType.toLowerCase() === filters.providerType.toLowerCase() 
+              });
               if (itemProviderType.toLowerCase() !== filters.providerType.toLowerCase()) {
                 return false;
               }
             }
             
-            // Filter by region
+            // Filter by region - EXACT MATCH ONLY
             if (filters.region && filters.region.trim() !== '') {
-              const itemRegion = item.region || item.data?.region || item.data?.Region || '';
+              const itemRegion = item.region || item.data?.region || item.data?.Region || item.data?.geographic_region || '';
               if (itemRegion.toLowerCase() !== filters.region.toLowerCase()) {
                 return false;
               }
             }
             
-            // Filter by variable (TCC, wRVU, CF)
+            // Filter by variable - EXACT MATCH ONLY
             if (filters.variable && filters.variable.trim() !== '') {
-              const variableLower = filters.variable.toLowerCase();
-              
-              // Check if the variable filter matches the type of compensation data
-              // This should filter by the column names or data structure, not the values
-              const hasTccData = item.tcc || item.data?.tcc || item.data?.TCC || item.data?.tcc_p25 || item.data?.tcc_p50 || item.data?.tcc_p75 || item.data?.tcc_p90;
-              const hasWrvuData = item.wrvu || item.data?.wrvu || item.data?.wRVU || item.data?.wrvu_p25 || item.data?.wrvu_p50 || item.data?.wrvu_p75 || item.data?.wrvu_p90;
-              const hasCfData = item.cf || item.data?.cf || item.data?.CF || item.data?.cf_p25 || item.data?.cf_p50 || item.data?.cf_p75 || item.data?.cf_p90;
-              
-              // Variable filter should match the type of compensation data available
-              if (variableLower.includes('tcc') || variableLower.includes('total') || variableLower.includes('cash')) {
-                if (!hasTccData) return false;
-              } else if (variableLower.includes('wrvu') || variableLower.includes('rvu')) {
-                if (!hasWrvuData) return false;
-              } else if (variableLower.includes('cf') || variableLower.includes('conversion')) {
-                if (!hasCfData) return false;
-              } else {
-                // If it's a general search, check if any compensation data exists
-                if (!hasTccData && !hasWrvuData && !hasCfData) return false;
+              const itemVariable = item.variable || item.data?.variable || '';
+              console.log('Checking variable:', { 
+                filterVariable: filters.variable, 
+                itemVariable, 
+                matches: itemVariable.toLowerCase() === filters.variable.toLowerCase() 
+              });
+              if (itemVariable.toLowerCase() !== filters.variable.toLowerCase()) {
+                return false;
               }
             }
             
             return true;
           });
+          
+          console.log('Filtered data items after filtering:', filteredData.length);
+          
+          // Debug: Show what specialties actually exist in the data
+          if (data.length > 0) {
+            const actualSpecialties = [...new Set(data.map(item => 
+              item.specialty || item.data?.specialty || item.data?.Specialty || ''
+            ))].filter(Boolean).sort();
+            console.log('Actual specialties in data:', actualSpecialties);
+            
+            const actualProviderTypes = [...new Set(data.map(item => 
+              item.providerType || item.data?.providerType || item.data?.['Provider Type'] || item.data?.provider_type || ''
+            ))].filter(Boolean).sort();
+            console.log('Actual provider types in data:', actualProviderTypes);
+            
+            // Debug: Show the actual data structure
+            if (data.length > 0) {
+              console.log('Sample data item structure:', data[0]);
+              console.log('Sample data item keys:', Object.keys(data[0]));
+              if (data[0].data) {
+                console.log('Sample data.data keys:', Object.keys(data[0].data));
+              }
+            }
+          }
         }
         
         const rows = filteredData.map((item: SurveyData) => {

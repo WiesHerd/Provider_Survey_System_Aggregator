@@ -104,6 +104,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       value: event.target.value,
       currentFilters: globalFilters
     });
+    
+    // Simple filter change - no cascading reset for now
+    // This ensures basic filtering works without interference
     onFilterChange(event.target.name, event.target.value);
   };
 
@@ -281,7 +284,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return () => { cancelled = true; };
   }, [file.id]);
 
-  // Cascading filter options based on current selections
+  // Simple filter options - disable cascading for now to fix basic filtering
   const cascadingFilterOptions = useMemo(() => {
     // Use server-side filter options which have access to the full dataset
     // Only apply cascading logic if we have server options
@@ -294,8 +297,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       };
     }
 
-    // For now, return all server options until we implement proper server-side cascading
-    // The server /filters endpoint already has access to the full dataset
+    // For now, return all server options to ensure basic filtering works
+    // TODO: Implement proper cascading logic once basic filtering is stable
     return {
       specialties: serverSpecialties,
       providerTypes: serverProviderTypes,

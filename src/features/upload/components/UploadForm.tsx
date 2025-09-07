@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { UploadFormProps } from '../types/upload';
-import { SURVEY_SOURCES } from '@/shared/constants';
+import { SURVEY_SOURCES } from '../../../shared/constants';
 
 /**
  * Upload Form component for survey type and year selection
