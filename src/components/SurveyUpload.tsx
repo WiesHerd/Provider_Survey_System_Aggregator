@@ -972,7 +972,7 @@ const SurveyUpload: React.FC = () => {
             <div className="flex items-start justify-between">
               <div>
                 <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900">Clearing surveys…</h3>
-                <p className="mt-1 text-sm text-gray-500">Deleting all surveys from Azure. This can take a few seconds.</p>
+                <p className="mt-1 text-sm text-gray-500">Clearing all data from local storage. This can take a few seconds.</p>
               </div>
               <LoadingSpinner size="sm" variant="primary" />
             </div>
