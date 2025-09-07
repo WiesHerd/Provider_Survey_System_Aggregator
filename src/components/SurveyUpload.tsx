@@ -654,6 +654,25 @@ const SurveyUpload: React.FC = () => {
                 >
                   🚨 Nuclear Clear
                 </button>
+                <button
+                  onClick={async () => {
+                    if (confirm('🔄 FORCE RE-PARSE: This will clear all data and show instructions to re-upload your files with the fixed CSV parser. This will fix the CT/MRI delimitation issue. Continue?')) {
+                      try {
+                        await nuclearClear();
+                        setTimeout(() => {
+                          alert('✅ Data cleared! Now re-upload your CSV files - they will be parsed correctly with the fixed CSV parser that handles commas in parentheses properly.');
+                        }, 2000);
+                      } catch (error) {
+                        console.error('Force re-parse failed:', error);
+                        alert('Force re-parse failed. Check console for details.');
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-green-800 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                  title="Force re-parse - clears data and prompts to re-upload with fixed CSV parser"
+                >
+                  🔄 Force Re-parse
+                </button>
               </div>
             </div>
             
