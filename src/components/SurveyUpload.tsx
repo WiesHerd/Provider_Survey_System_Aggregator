@@ -493,20 +493,48 @@ const SurveyUpload: React.FC = () => {
       
       // Clear all surveys first
       await dataService.deleteAllSurveys();
-      setDeleteProgress(30);
+      setDeleteProgress(20);
       
-      // Clear all IndexedDB data including mappings
-      await clearStorage.clearIndexedDB();
+      // Clear both possible IndexedDB databases
+      await clearStorage.clearIndexedDB(); // SurveyAggregatorDB
+      setDeleteProgress(40);
+      
+      // Also clear the old survey-data database if it exists
+      try {
+        const oldDbRequest = indexedDB.deleteDatabase('survey-data');
+        await new Promise((resolve, reject) => {
+          oldDbRequest.onsuccess = () => {
+            console.log('✅ Cleared old survey-data database');
+            resolve(true);
+          };
+          oldDbRequest.onerror = () => {
+            console.log('ℹ️ Old survey-data database not found (this is normal)');
+            resolve(true); // Not an error if it doesn't exist
+          };
+        });
+      } catch (error) {
+        console.log('ℹ️ Could not clear old survey-data database:', error);
+      }
       setDeleteProgress(60);
       
       // Clear localStorage as well
       clearStorage.clearLocalStorage();
+      setDeleteProgress(80);
+      
+      // Force reload the page to ensure all data is cleared
       setDeleteProgress(90);
       
       setUploadedSurveys([]);
       setSelectedSurvey(null);
       
       console.log('✅ All data cleared successfully - ready for fresh upload with fixed CSV parser');
+      
+      // Show success message and reload page
+      setTimeout(() => {
+        alert('✅ All data cleared successfully! The page will reload to ensure a clean state.');
+        window.location.reload();
+      }, 1000);
+      
     } catch (error) {
       console.error('Error clearing all data:', error);
       handleError('Error clearing data');
