@@ -615,14 +615,6 @@ const SurveyUpload: React.FC = () => {
                 >
                   Download Sample
                 </button>
-                <button
-                  onClick={handleClearAll}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
-                  title="Clear all uploaded data and start fresh"
-                >
-                  <XMarkIcon className="h-4 w-4 mr-1" />
-                  Clear All Data
-                </button>
               </div>
             </div>
             
