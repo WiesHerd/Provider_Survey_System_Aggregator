@@ -10,6 +10,7 @@ import { useYear } from '../contexts/YearContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
+import { clearStorage } from '../utils/clearStorage';
 
 
 // Provider type categories for survey selection
@@ -490,14 +491,25 @@ const SurveyUpload: React.FC = () => {
       setIsDeleting(true);
       setDeleteProgress(10);
       
+      // Clear all surveys first
       await dataService.deleteAllSurveys();
+      setDeleteProgress(30);
+      
+      // Clear all IndexedDB data including mappings
+      await clearStorage.clearIndexedDB();
+      setDeleteProgress(60);
+      
+      // Clear localStorage as well
+      clearStorage.clearLocalStorage();
       setDeleteProgress(90);
       
       setUploadedSurveys([]);
       setSelectedSurvey(null);
+      
+      console.log('✅ All data cleared successfully - ready for fresh upload with fixed CSV parser');
     } catch (error) {
-      console.error('Error clearing all surveys:', error);
-      handleError('Error clearing surveys');
+      console.error('Error clearing all data:', error);
+      handleError('Error clearing data');
     } finally {
       setDeleteProgress(100);
       setTimeout(() => {
@@ -561,18 +573,28 @@ const SurveyUpload: React.FC = () => {
                 </button>
                 <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
               </div>
-              <button
-                onClick={async () => {
-                  try {
-                    await downloadSampleFile();
-                  } catch (error) {
-                    console.error('Download failed:', error);
-                  }
-                }}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
-              >
-                Download Sample
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await downloadSampleFile();
+                    } catch (error) {
+                      console.error('Download failed:', error);
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                >
+                  Download Sample
+                </button>
+                <button
+                  onClick={handleClearAll}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                  title="Clear all data to fix CSV parsing issues (CT, MRI appearing as separate entries)"
+                >
+                  <XMarkIcon className="h-4 w-4 mr-1" />
+                  Clear All Data
+                </button>
+              </div>
             </div>
             
             {!isUploadSectionCollapsed && (
