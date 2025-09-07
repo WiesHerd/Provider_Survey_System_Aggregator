@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "testCases": [
+    {
+      "id": "TC001",
+      "input": {
+        "source": "Gallagher",
+        "rawName": "Cardiology"
+      },
+      "expectedCanonicalId": "CARD-GENERAL",
+      "expectedConfidence": 0.95,
+      "description": "Basic cardiology mapping",
+      "tags": ["basic", "cardiology", "gallagher"]
+    },
+    {
+      "id": "TC002",
+      "input": {
+        "source": "MGMA",
+        "rawName": "Cardiology: Interventional"
+      },
+      "expectedCanonicalId": "CARD-INTERVENTIONAL",
+      "expectedConfidence": 0.95,
+      "description": "MGMA interventional cardiology with colon",
+      "tags": ["mgma", "cardiology", "interventional", "colon"]
+    },
+    {
+      "id": "TC003",
+      "input": {
+        "source": "SullivanCotter",
+        "rawName": "Pediatric Cardiology"
+      },
+      "expectedCanonicalId": "PEDS-CARD-GENERAL",
+      "expectedConfidence": 0.95,
+      "description": "Pediatric cardiology mapping",
+      "tags": ["pediatric", "cardiology", "sullivancotter"]
+    },
+    {
+      "id": "TC004",
+      "input": {
+        "source": "MGMA",
+        "rawName": "Neurology - Interventional"
+      },
+      "expectedCanonicalId": "NEURO-INTERVENTIONAL",
+      "expectedConfidence": 0.95,
+      "description": "MGMA interventional neurology with dash",
+      "tags": ["mgma", "neurology", "interventional", "dash"]
+    },
+    {
+      "id": "TC005",
+      "input": {
+        "source": "Gallagher",
+        "rawName": "Radiology Nocturnist"
+      },
+      "expectedCanonicalId": "RAD-NOCTURNIST",
+      "expectedConfidence": 0.95,
+      "description": "Radiology nocturnist mapping",
+      "tags": ["radiology", "nocturnist", "gallagher"]
+    }
+  ]
+}

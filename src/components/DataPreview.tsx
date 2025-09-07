@@ -527,260 +527,123 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Filter Dropdowns - Perfectly Aligned */}
         <div className="grid grid-cols-4 gap-4">
           <FormControl fullWidth size="small">
-            <Autocomplete
-              options={cascadingFilterOptions.specialties}
+            <Select
               value={globalFilters.specialty}
-              onChange={(event: any, newValue: string | null) => {
-                console.log('Autocomplete specialty change:', {
-                  newValue,
-                  currentFilters: globalFilters
-                });
-                // Use the same pattern as other dropdowns
+              onChange={(event: any) => {
                 const syntheticEvent = {
                   target: {
                     name: 'specialty',
-                    value: newValue || ''
+                    value: event.target.value
                   }
                 };
                 handleFilterChange(syntheticEvent);
               }}
-              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                return options.filter((option: string) =>
-                  option.toLowerCase().includes(inputValue.toLowerCase())
-                );
-              }}
-              getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
-              isOptionEqualToValue={(option: string, value: string) => option === value}
-              clearOnBlur={false}
-              selectOnFocus
-              freeSolo
-              renderInput={(params: any) => (
-                <TextField
-                  {...params}
-                  label="Specialty"
-                                     placeholder="Search specialties"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                      </svg>
-                    ),
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                    },
-                    '& .MuiAutocomplete-input': {
-                      padding: '8px 12px',
-                    },
-                    '& .MuiAutocomplete-inputRoot': {
-                      padding: '0 8px',
-                    },
-                  }}
-                />
-              )}
+              displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
                 },
-                '& .MuiAutocomplete-input': {
-                  padding: '8px 12px',
-                },
-                '& .MuiAutocomplete-inputRoot': {
-                  padding: '0 8px',
-                },
               }}
-            />
+            >
+              <MenuItem value="">
+                <em>All Specialties</em>
+              </MenuItem>
+              {cascadingFilterOptions.specialties.map((specialty) => (
+                <MenuItem key={specialty} value={specialty}>
+                  {formatSpecialtyForDisplay(specialty)}
+                </MenuItem>
+              ))}
+            </Select>
           </FormControl>
 
           <FormControl fullWidth size="small">
-            <Autocomplete
-              options={cascadingFilterOptions.providerTypes}
+            <Select
               value={globalFilters.providerType}
-              onChange={(event: any, newValue: string | null) => {
+              onChange={(event: any) => {
                 const syntheticEvent = {
                   target: {
                     name: 'providerType',
-                    value: newValue || ''
+                    value: event.target.value
                   }
                 };
                 handleFilterChange(syntheticEvent);
               }}
-              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                return options.filter((option: string) =>
-                  option.toLowerCase().includes(inputValue.toLowerCase())
-                );
-              }}
-              getOptionLabel={(option: string) => option}
-              isOptionEqualToValue={(option: string, value: string) => option === value}
-              clearOnBlur={false}
-              selectOnFocus
-              freeSolo
-              renderInput={(params: any) => (
-                <TextField
-                  {...params}
-                  label="Provider Type"
-                                     placeholder="Search provider types"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                      </svg>
-                    ),
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                    },
-                    '& .MuiAutocomplete-input': {
-                      padding: '8px 12px',
-                    },
-                    '& .MuiAutocomplete-inputRoot': {
-                      padding: '0 8px',
-                    },
-                  }}
-                />
-              )}
+              displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
                 },
-                '& .MuiAutocomplete-input': {
-                  padding: '8px 12px',
-                },
-                '& .MuiAutocomplete-inputRoot': {
-                  padding: '0 8px',
-                },
               }}
-            />
+            >
+              <MenuItem value="">
+                <em>All Provider Types</em>
+              </MenuItem>
+              {cascadingFilterOptions.providerTypes.map((providerType) => (
+                <MenuItem key={providerType} value={providerType}>
+                  {providerType}
+                </MenuItem>
+              ))}
+            </Select>
           </FormControl>
 
           <FormControl fullWidth size="small">
-            <Autocomplete
-              options={cascadingFilterOptions.regions}
+            <Select
               value={globalFilters.region}
-              onChange={(event: any, newValue: string | null) => {
+              onChange={(event: any) => {
                 const syntheticEvent = {
                   target: {
                     name: 'region',
-                    value: newValue || ''
+                    value: event.target.value
                   }
                 };
                 handleFilterChange(syntheticEvent);
               }}
-              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                return options.filter((option: string) =>
-                  option.toLowerCase().includes(inputValue.toLowerCase())
-                );
-              }}
-              getOptionLabel={(option: string) => option}
-              isOptionEqualToValue={(option: string, value: string) => option === value}
-              clearOnBlur={false}
-              selectOnFocus
-              freeSolo
-              renderInput={(params: any) => (
-                <TextField
-                  {...params}
-                  label="Geographic Region"
-                                     placeholder="Search regions"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                      </svg>
-                    ),
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                    },
-                    '& .MuiAutocomplete-input': {
-                      padding: '8px 12px',
-                    },
-                    '& .MuiAutocomplete-inputRoot': {
-                      padding: '0 8px',
-                    },
-                  }}
-                />
-              )}
+              displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
                 },
-                '& .MuiAutocomplete-input': {
-                  padding: '8px 12px',
-                },
-                '& .MuiAutocomplete-inputRoot': {
-                  padding: '0 8px',
-                },
               }}
-            />
+            >
+              <MenuItem value="">
+                <em>All Regions</em>
+              </MenuItem>
+              {cascadingFilterOptions.regions.map((region) => (
+                <MenuItem key={region} value={region}>
+                  {region}
+                </MenuItem>
+              ))}
+            </Select>
           </FormControl>
 
           <FormControl fullWidth size="small">
-            <Autocomplete
-              options={cascadingFilterOptions.variables}
+            <Select
               value={globalFilters.variable}
-              onChange={(event: any, newValue: string | null) => {
+              onChange={(event: any) => {
                 const syntheticEvent = {
                   target: {
                     name: 'variable',
-                    value: newValue || ''
+                    value: event.target.value
                   }
                 };
                 handleFilterChange(syntheticEvent);
               }}
-              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                return options.filter((option: string) =>
-                  option.toLowerCase().includes(inputValue.toLowerCase())
-                );
-              }}
-              getOptionLabel={(option: string) => option}
-              isOptionEqualToValue={(option: string, value: string) => option === value}
-              clearOnBlur={false}
-              selectOnFocus
-              freeSolo
-              renderInput={(params: any) => (
-                <TextField
-                  {...params}
-                  label="Variable"
-                  placeholder="Search variables"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                      </svg>
-                    ),
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                    },
-                    '& .MuiAutocomplete-input': {
-                      padding: '8px 12px',
-                    },
-                    '& .MuiAutocomplete-inputRoot': {
-                      padding: '0 8px',
-                    },
-                  }}
-                />
-              )}
+              displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
                 },
-                '& .MuiAutocomplete-input': {
-                  padding: '8px 12px',
-                },
-                '& .MuiAutocomplete-inputRoot': {
-                  padding: '0 8px',
-                },
               }}
-            />
+            >
+              <MenuItem value="">
+                <em>All Variables</em>
+              </MenuItem>
+              {cascadingFilterOptions.variables.map((variable) => (
+                <MenuItem key={variable} value={variable}>
+                  {variable}
+                </MenuItem>
+              ))}
+            </Select>
           </FormControl>
         </div>
       </Box>

@@ -13,7 +13,7 @@ import {
   Chip,
   Divider
 } from '@mui/material';
-import { AnalyticsSummaryProps } from '../types/analytics';
+import { AnalyticsSummaryProps, AggregatedData } from '../types/analytics';
 import { formatCurrency, formatNumber } from '../../../shared/utils';
 
 /**
@@ -28,26 +28,30 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
 }) => {
   // Calculate summary statistics
   const totalRecords = data.length;
-  const totalOrganizations = data.reduce((sum, row) => sum + row.n_orgs, 0);
-  const totalIncumbents = data.reduce((sum, row) => sum + row.n_incumbents, 0);
+  const totalTccOrganizations = data.reduce((sum: number, row: AggregatedData) => sum + row.tcc_n_orgs, 0);
+  const totalTccIncumbents = data.reduce((sum: number, row: AggregatedData) => sum + row.tcc_n_incumbents, 0);
+  const totalWrvuOrganizations = data.reduce((sum: number, row: AggregatedData) => sum + row.wrvu_n_orgs, 0);
+  const totalWrvuIncumbents = data.reduce((sum: number, row: AggregatedData) => sum + row.wrvu_n_incumbents, 0);
+  const totalCfOrganizations = data.reduce((sum: number, row: AggregatedData) => sum + row.cf_n_orgs, 0);
+  const totalCfIncumbents = data.reduce((sum: number, row: AggregatedData) => sum + row.cf_n_incumbents, 0);
   
-  const tccP50Values = data.map(row => row.tcc_p50).filter(val => val > 0);
-  const wrvuP50Values = data.map(row => row.wrvu_p50).filter(val => val > 0);
-  const cfP50Values = data.map(row => row.cf_p50).filter(val => val > 0);
+  const tccP50Values = data.map((row: AggregatedData) => row.tcc_p50).filter((val: number) => val > 0);
+  const wrvuP50Values = data.map((row: AggregatedData) => row.wrvu_p50).filter((val: number) => val > 0);
+  const cfP50Values = data.map((row: AggregatedData) => row.cf_p50).filter((val: number) => val > 0);
 
   const averageTccP50 = tccP50Values.length > 0 
-    ? tccP50Values.reduce((sum, val) => sum + val, 0) / tccP50Values.length 
+    ? tccP50Values.reduce((sum: number, val: number) => sum + val, 0) / tccP50Values.length 
     : 0;
   const averageWrvuP50 = wrvuP50Values.length > 0 
-    ? wrvuP50Values.reduce((sum, val) => sum + val, 0) / wrvuP50Values.length 
+    ? wrvuP50Values.reduce((sum: number, val: number) => sum + val, 0) / wrvuP50Values.length 
     : 0;
   const averageCfP50 = cfP50Values.length > 0 
-    ? cfP50Values.reduce((sum, val) => sum + val, 0) / cfP50Values.length 
+    ? cfP50Values.reduce((sum: number, val: number) => sum + val, 0) / cfP50Values.length 
     : 0;
 
-  const uniqueSpecialties = new Set(data.map(row => row.surveySpecialty));
-  const uniqueSources = new Set(data.map(row => row.surveySource));
-  const uniqueRegions = new Set(data.map(row => row.geographicRegion));
+  const uniqueSpecialties = new Set(data.map((row: AggregatedData) => row.surveySpecialty));
+  const uniqueSources = new Set(data.map((row: AggregatedData) => row.surveySource));
+  const uniqueRegions = new Set(data.map((row: AggregatedData) => row.geographicRegion));
 
   const activeFiltersCount = Object.values(filters).filter(value => value !== undefined && value !== '').length;
 
@@ -88,7 +92,7 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
               <Grid item xs={6}>
                 <Box>
                   <Typography variant="h4" component="div" color="primary">
-                    {formatNumber(totalOrganizations)}
+                    {formatNumber(totalTccOrganizations + totalWrvuOrganizations + totalCfOrganizations)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Organizations
@@ -98,7 +102,7 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
               <Grid item xs={6}>
                 <Box>
                   <Typography variant="h4" component="div" color="primary">
-                    {formatNumber(totalIncumbents)}
+                    {formatNumber(totalTccIncumbents + totalWrvuIncumbents + totalCfIncumbents)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Incumbents

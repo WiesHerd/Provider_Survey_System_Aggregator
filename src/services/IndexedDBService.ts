@@ -331,7 +331,7 @@ export class IndexedDBService {
             // Filter by specialty
             if (filters.specialty && filters.specialty.trim() !== '') {
               const itemSpecialty = item.specialty || item.data?.specialty || item.data?.Specialty || '';
-              if (!itemSpecialty.toLowerCase().includes(filters.specialty.toLowerCase())) {
+              if (itemSpecialty.toLowerCase() !== filters.specialty.toLowerCase()) {
                 return false;
               }
             }
@@ -339,7 +339,7 @@ export class IndexedDBService {
             // Filter by provider type
             if (filters.providerType && filters.providerType.trim() !== '') {
               const itemProviderType = item.providerType || item.data?.providerType || item.data?.['Provider Type'] || '';
-              if (!itemProviderType.toLowerCase().includes(filters.providerType.toLowerCase())) {
+              if (itemProviderType.toLowerCase() !== filters.providerType.toLowerCase()) {
                 return false;
               }
             }
@@ -347,7 +347,7 @@ export class IndexedDBService {
             // Filter by region
             if (filters.region && filters.region.trim() !== '') {
               const itemRegion = item.region || item.data?.region || item.data?.Region || '';
-              if (!itemRegion.toLowerCase().includes(filters.region.toLowerCase())) {
+              if (itemRegion.toLowerCase() !== filters.region.toLowerCase()) {
                 return false;
               }
             }

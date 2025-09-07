@@ -1,9 +1,11 @@
 /**
- * Analytics Table component
- * This component handles data display in a table format with sorting and interaction
+ * Analytics Feature - Data Table Component
+ * 
+ * This component displays analytics data in a structured table format.
+ * Following enterprise patterns for component composition and performance.
  */
 
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import {
   Table,
   TableBody,
@@ -12,285 +14,351 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Typography,
   Box,
-  IconButton,
-  Tooltip,
-  TablePagination,
-  Alert
+  Typography,
+  Button
 } from '@mui/material';
-import { 
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon,
-  Sort as SortIcon
-} from '@mui/icons-material';
-import { AnalyticsTableProps, AnalyticsTableRow, AggregatedData } from '../types/analytics';
-import { formatCurrency, formatNumber } from '../../../shared/utils';
+import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import { AnalyticsTableProps } from '../types/analytics';
+import { groupBySpecialty, calculateSummaryRows } from '../utils/analyticsCalculations';
 
 /**
- * Analytics Table component for displaying survey data
+ * Format number without dollar sign, with proper comma separators and decimals
+ * Following user preference for number formatting
+ */
+const formatNumber = (value: number, decimals: number = 0): string => {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+};
+
+/**
+ * AnalyticsTable component for displaying analytics data
  * 
- * @param data - Table data array
- * @param config - Table configuration
- * @param onRowClick - Callback when a row is clicked
- * @param onSort - Callback when sorting changes
- * @param onFilter - Callback when filtering changes
+ * @param data - The analytics data to display
  * @param loading - Loading state
  * @param error - Error state
+ * @param onExport - Export callback function
  */
 export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   data,
-  config,
-  onRowClick,
-  onSort,
-  onFilter,
-  loading = false,
-  error = null
+  loading,
+  error,
+  onExport
 }) => {
-  // Table columns configuration
-  const columns = useMemo(() => [
-    {
-      key: 'standardizedName' as const,
-      label: 'Standardized Name',
-      type: 'string' as const,
-      sortable: true,
-      width: 200
-    },
-    {
-      key: 'surveySpecialty' as const,
-      label: 'Specialty',
-      type: 'string' as const,
-      sortable: true,
-      width: 150
-    },
-    {
-      key: 'surveySource' as const,
-      label: 'Survey Source',
-      type: 'string' as const,
-      sortable: true,
-      width: 120
-    },
-    {
-      key: 'geographicRegion' as const,
-      label: 'Region',
-      type: 'string' as const,
-      sortable: true,
-      width: 120
-    },
-    {
-      key: 'n_orgs' as const,
-      label: 'Organizations',
-      type: 'number' as const,
-      sortable: true,
-      width: 100,
-      align: 'right' as const
-    },
-    {
-      key: 'n_incumbents' as const,
-      label: 'Incumbents',
-      type: 'number' as const,
-      sortable: true,
-      width: 100,
-      align: 'right' as const
-    },
-    {
-      key: 'tcc_p50' as const,
-      label: 'TCC P50',
-      type: 'currency' as const,
-      sortable: true,
-      width: 120,
-      align: 'right' as const
-    },
-    {
-      key: 'wrvu_p50' as const,
-      label: 'WRVU P50',
-      type: 'number' as const,
-      sortable: true,
-      width: 120,
-      align: 'right' as const
-    },
-    {
-      key: 'cf_p50' as const,
-      label: 'CF P50',
-      type: 'currency' as const,
-      sortable: true,
-      width: 120,
-      align: 'right' as const
-    }
-  ], []);
-
-  // Event handlers
-  const handleSort = (column: keyof AggregatedData) => {
-    if (!onSort) return;
-    
-    const currentDirection = config.sorting?.column === column ? config.sorting.direction : 'asc';
-    const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
-    onSort(column, newDirection);
-  };
-
-  const handleRowClick = (row: AnalyticsTableRow) => {
-    if (onRowClick) {
-      onRowClick(row);
-    }
-  };
-
-  // Cell value formatter
-  const formatCellValue = (value: any, type: string) => {
-    if (value == null || value === '') return '-';
-    
-    switch (type) {
-      case 'currency':
-        return formatCurrency(value);
-      case 'number':
-        return formatNumber(value);
-      case 'percentage':
-        return `${formatNumber(value)}%`;
-      default:
-        return String(value);
-    }
-  };
-
-  // Render sort icon
-  const renderSortIcon = (column: keyof AggregatedData) => {
-    if (!config.sorting || config.sorting.column !== column) {
-      return <SortIcon fontSize="small" color="disabled" />;
-    }
-    
-    return config.sorting.direction === 'asc' 
-      ? <ArrowUpwardIcon fontSize="small" color="primary" />
-      : <ArrowDownwardIcon fontSize="small" color="primary" />;
-  };
-
-  // Early returns for loading and error states
   if (loading) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography>Loading analytics data...</Typography>
-      </Box>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600">Loading analytics data...</span>
+        </div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-      </Alert>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <Button variant="contained" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography color="text.secondary">
-          No data available. Try adjusting your filters.
-        </Typography>
-      </Box>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+          <p className="text-gray-500">Try adjusting your filters to see results</p>
+        </div>
+      </div>
     );
   }
 
+  const groupedData = groupBySpecialty(data);
+
   return (
-    <Paper sx={{ borderRadius: '8px', overflow: 'hidden' }}>
-      <TableContainer>
-        <Table stickyHeader>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-xl font-semibold text-gray-900">Survey Analytics Data</h3>
+        </div>
+        <Button
+          variant="outlined"
+          startIcon={<DocumentTextIcon className="w-4 h-4" />}
+          onClick={onExport}
+          className="rounded-lg"
+        >
+          Export Data
+        </Button>
+      </div>
+
+      <TableContainer component={Paper} sx={{ maxHeight: 600, overflow: 'auto' }}>
+        <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
-              {columns.map((column) => (
-                <TableCell
-                  key={column.key}
-                  align={column.align || 'left'}
-                  sx={{
-                    fontWeight: 'bold',
-                    backgroundColor: 'background.paper',
-                    borderBottom: 2,
-                    borderColor: 'divider',
-                    minWidth: column.width,
-                    cursor: column.sortable ? 'pointer' : 'default',
-                    '&:hover': column.sortable ? {
-                      backgroundColor: 'action.hover'
-                    } : {}
-                  }}
-                  onClick={() => column.sortable && handleSort(column.key)}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="subtitle2">
-                      {column.label}
-                    </Typography>
-                    {column.sortable && (
-                      <IconButton
-                        size="small"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                          e.stopPropagation();
-                          handleSort(column.key);
-                        }}
-                        sx={{ p: 0.5 }}
-                      >
-                        {renderSortIcon(column.key)}
-                      </IconButton>
-                    )}
-                  </Box>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.100' }}>Survey Source</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.100' }}>Specialty</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.100' }}>Region</TableCell>
+              
+              {/* TCC Section Header */}
+              <TableCell sx={{ 
+                fontWeight: 'bold', 
+                backgroundColor: '#E3F2FD', 
+                borderRight: '1px solid #E0E0E0',
+                textAlign: 'center',
+                color: '#1976D2'
+              }} colSpan={6}>
+                Total Cash Compensation
+              </TableCell>
+              
+              {/* wRVU Section Header */}
+              <TableCell sx={{ 
+                fontWeight: 'bold', 
+                backgroundColor: '#E8F5E8', 
+                borderRight: '1px solid #E0E0E0',
+                textAlign: 'center',
+                color: '#388E3C'
+              }} colSpan={6}>
+                Productivity - wRVUs
+              </TableCell>
+              
+              {/* CF Section Header */}
+              <TableCell sx={{ 
+                fontWeight: 'bold',
+                backgroundColor: '#FFF3E0', 
+                textAlign: 'center',
+                color: '#F57C00'
+              }} colSpan={6}>
+                Conversion Factors
                 </TableCell>
-              ))}
+            </TableRow>
+            
+            {/* Sub-header row with column names */}
+            <TableRow>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.100' }}></TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.100' }}></TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.100' }}></TableCell>
+              
+              {/* TCC Sub-headers */}
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Orgs</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Incumbents</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right">P25</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right">P50</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right">P75</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">P90</TableCell>
+              
+              {/* wRVU Sub-headers */}
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right"># Orgs</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right"># Incumbents</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right">P25</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right">P50</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right">P75</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }} align="right">P90</TableCell>
+              
+              {/* CF Sub-headers */}
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right"># Orgs</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right"># Incumbents</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">P25</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">P50</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">P75</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">P90</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.map((row, index) => (
-              <TableRow
-                key={row.id || index}
-                onClick={() => handleRowClick(row)}
-                sx={{
-                  cursor: onRowClick ? 'pointer' : 'default',
-                  '&:hover': {
-                    backgroundColor: 'action.hover'
-                  },
-                  '&:nth-of-type(odd)': {
-                    backgroundColor: 'action.hover'
-                  }
-                }}
-              >
-                {columns.map((column) => (
-                  <TableCell
-                    key={column.key}
-                    align={column.align || 'left'}
-                    sx={{
-                      borderBottom: 1,
-                      borderColor: 'divider',
-                      minWidth: column.width
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {formatCellValue(row[column.key], column.type)}
-                    </Typography>
-                  </TableCell>
+            {Object.entries(groupedData).slice(0, 25).map(([specialty, rows]) => (
+              <React.Fragment key={specialty}>
+                {/* Data Rows */}
+                {rows.map((row, index) => (
+                  <TableRow key={`${row.surveySource}-${row.geographicRegion}-${index}`} hover>
+                    <TableCell>{row.surveySource}</TableCell>
+                    <TableCell>{row.surveySpecialty}</TableCell>
+                    <TableCell>{row.geographicRegion}</TableCell>
+                    
+                    {/* TCC Section */}
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{row.tcc_n_orgs.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{row.tcc_n_incumbents.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatNumber(row.tcc_p25, 0)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatNumber(row.tcc_p50, 0)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatNumber(row.tcc_p75, 0)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">{formatNumber(row.tcc_p90, 0)}</TableCell>
+                    
+                    {/* wRVU Section */}
+                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_n_orgs.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_n_incumbents.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_p25.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_p50.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_p75.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }} align="right">{row.wrvu_p90.toLocaleString()}</TableCell>
+                    
+                    {/* CF Section */}
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{row.cf_n_orgs.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{row.cf_n_incumbents.toLocaleString()}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p25, 1)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p50, 1)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p75, 1)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p90, 1)}</TableCell>
+                  </TableRow>
                 ))}
+
+                {/* Summary Rows */}
+                {(() => {
+                  const { simple, weighted } = calculateSummaryRows(rows);
+                  return (
+                    <>
+                      <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                        <TableCell colSpan={3} sx={{ fontWeight: 'bold' }}>
+                          {specialty} - Simple Average
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {simple.tcc_n_orgs.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {simple.tcc_n_incumbents.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {formatNumber(simple.tcc_p25, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {formatNumber(simple.tcc_p50, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {formatNumber(simple.tcc_p75, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
+                          {formatNumber(simple.tcc_p90, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {simple.wrvu_n_orgs.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {simple.wrvu_n_incumbents.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {simple.wrvu_p25.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {simple.wrvu_p50.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {simple.wrvu_p75.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
+                          {simple.wrvu_p90.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {simple.cf_n_orgs.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {simple.cf_n_incumbents.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(simple.cf_p25, 1)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(simple.cf_p50, 1)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(simple.cf_p75, 1)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(simple.cf_p90, 1)}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow sx={{ backgroundColor: 'primary.50' }}>
+                        <TableCell colSpan={3} sx={{ fontWeight: 'bold' }}>
+                          {specialty} - Weighted Average
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {weighted.tcc_n_orgs.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {weighted.tcc_n_incumbents.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {formatNumber(weighted.tcc_p25, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {formatNumber(weighted.tcc_p50, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                          {formatNumber(weighted.tcc_p75, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
+                          {formatNumber(weighted.tcc_p90, 0)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {weighted.wrvu_n_orgs.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {weighted.wrvu_n_incumbents.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {weighted.wrvu_p25.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {weighted.wrvu_p50.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                          {weighted.wrvu_p75.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
+                          {weighted.wrvu_p90.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {weighted.cf_n_orgs.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {weighted.cf_n_incumbents.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(weighted.cf_p25, 1)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(weighted.cf_p50, 1)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(weighted.cf_p75, 1)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                          {formatNumber(weighted.cf_p90, 1)}
+                        </TableCell>
               </TableRow>
+                    </>
+                  );
+                })()}
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
 
-      {/* Pagination */}
-      {config.pagination && (
-        <TablePagination
-          component="div"
-          count={config.pagination.total}
-          page={config.pagination.page - 1}
-          onPageChange={(_: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
-            // Handle page change
-            console.log('Page changed to:', newPage + 1);
-          }}
-          rowsPerPage={config.pagination.pageSize}
-          onRowsPerPageChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-            // Handle rows per page change
-            console.log('Rows per page changed to:', event.target.value);
-          }}
-          rowsPerPageOptions={[10, 25, 50, 100]}
-          sx={{
-            borderTop: 1,
-            borderColor: 'divider'
-          }}
-        />
+      {Object.entries(groupedData).length > 25 && (
+        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm text-yellow-800">
+            ⚠️ Showing first 25 specialties for performance. Total: {Object.entries(groupedData).length} specialties.
+          </p>
+        </div>
       )}
-    </Paper>
+    </div>
   );
 });
 

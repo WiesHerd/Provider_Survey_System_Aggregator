@@ -31,8 +31,12 @@ export const exportToExcel = (
     'Geographic Region': row.geographicRegion,
     'Provider Type': row.providerType,
     'Survey Year': row.surveyYear,
-    '# Organizations': row.n_orgs,
-    '# Incumbents': row.n_incumbents,
+    'TCC # Orgs': row.tcc_n_orgs,
+    'TCC # Incumbents': row.tcc_n_incumbents,
+    'wRVU # Orgs': row.wrvu_n_orgs,
+    'wRVU # Incumbents': row.wrvu_n_incumbents,
+    'CF # Orgs': row.cf_n_orgs,
+    'CF # Incumbents': row.cf_n_incumbents,
     'TCC P25': row.tcc_p25,
     'TCC P50': row.tcc_p50,
     'TCC P75': row.tcc_p75,
@@ -93,15 +97,23 @@ export const exportToExcel = (
   // Add summary worksheet if requested
   if (includeSummary) {
     const totalRecords = data.length;
-    const totalOrgs = data.reduce((sum, row) => sum + row.n_orgs, 0);
-    const totalIncumbents = data.reduce((sum, row) => sum + row.n_incumbents, 0);
+    const totalTccOrgs = data.reduce((sum, row) => sum + row.tcc_n_orgs, 0);
+    const totalTccIncumbents = data.reduce((sum, row) => sum + row.tcc_n_incumbents, 0);
+    const totalWrvuOrgs = data.reduce((sum, row) => sum + row.wrvu_n_orgs, 0);
+    const totalWrvuIncumbents = data.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0);
+    const totalCfOrgs = data.reduce((sum, row) => sum + row.cf_n_orgs, 0);
+    const totalCfIncumbents = data.reduce((sum, row) => sum + row.cf_n_incumbents, 0);
     const avgTccP50 = data.reduce((sum, row) => sum + row.tcc_p50, 0) / data.length;
     const avgWrvuP50 = data.reduce((sum, row) => sum + row.wrvu_p50, 0) / data.length;
 
     const summaryData = [
       { 'Metric': 'Total Records', 'Value': totalRecords },
-      { 'Metric': 'Total Organizations', 'Value': totalOrgs },
-      { 'Metric': 'Total Incumbents', 'Value': totalIncumbents },
+      { 'Metric': 'Total TCC Organizations', 'Value': totalTccOrgs },
+      { 'Metric': 'Total TCC Incumbents', 'Value': totalTccIncumbents },
+      { 'Metric': 'Total wRVU Organizations', 'Value': totalWrvuOrgs },
+      { 'Metric': 'Total wRVU Incumbents', 'Value': totalWrvuIncumbents },
+      { 'Metric': 'Total CF Organizations', 'Value': totalCfOrgs },
+      { 'Metric': 'Total CF Incumbents', 'Value': totalCfIncumbents },
       { 'Metric': 'Average TCC P50', 'Value': Math.round(avgTccP50) },
       { 'Metric': 'Average wRVU P50', 'Value': Math.round(avgWrvuP50) },
       { 'Metric': 'Report Generated', 'Value': new Date().toLocaleString() }
@@ -135,8 +147,12 @@ export const exportToCSV = (
     'Geographic Region',
     'Provider Type',
     'Survey Year',
-    '# Organizations',
-    '# Incumbents',
+    'TCC # Orgs',
+    'TCC # Incumbents',
+    'wRVU # Orgs',
+    'wRVU # Incumbents',
+    'CF # Orgs',
+    'CF # Incumbents',
     'TCC P25',
     'TCC P50',
     'TCC P75',
@@ -157,8 +173,12 @@ export const exportToCSV = (
     row.geographicRegion,
     row.providerType,
     row.surveyYear,
-    row.n_orgs,
-    row.n_incumbents,
+    row.tcc_n_orgs,
+    row.tcc_n_incumbents,
+    row.wrvu_n_orgs,
+    row.wrvu_n_incumbents,
+    row.cf_n_orgs,
+    row.cf_n_incumbents,
     row.tcc_p25,
     row.tcc_p50,
     row.tcc_p75,

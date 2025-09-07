@@ -1,0 +1,138 @@
+version: "1.0.0"
+
+hardMaps:
+  # Pediatric-specific hard mappings
+  - id: "PEDS_CARD_GENERAL"
+    pattern: "^(pediatric|ped).*cardiology$"
+    canonicalId: "PEDS-CARD-GENERAL"
+    confidence: 0.95
+  
+  - id: "PEDS_CARD_INTERVENTIONAL"
+    pattern: "^(pediatric|ped).*(interventional|invasive).*cardiology$"
+    canonicalId: "PEDS-CARD-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "PEDS_NEURO_GENERAL"
+    pattern: "^(pediatric|ped).*neurology$"
+    canonicalId: "PEDS-NEURO-GENERAL"
+    confidence: 0.95
+  
+  - id: "PEDS_RAD_DIAGNOSTIC"
+    pattern: "^(pediatric|ped).*(diagnostic|radiology)$"
+    canonicalId: "PEDS-RAD-DIAGNOSTIC"
+    confidence: 0.95
+  
+  - id: "PEDS_RAD_INTERVENTIONAL"
+    pattern: "^(pediatric|ped).*(interventional|ir).*radiology$"
+    canonicalId: "PEDS-RAD-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "PEDS_SURG_GENERAL"
+    pattern: "^(pediatric|ped).*surgery$"
+    canonicalId: "PEDS-SURG-GENERAL"
+    confidence: 0.95
+  
+  - id: "PEDS_SURG_CT"
+    pattern: "^(pediatric|ped).*(cardiothoracic|ct).*surgery$"
+    canonicalId: "PEDS-SURG-CT"
+    confidence: 0.95
+  
+  - id: "PEDS_SURG_NEURO"
+    pattern: "^(pediatric|ped).*neurosurgery$"
+    canonicalId: "PEDS-SURG-NEURO"
+    confidence: 0.95
+  
+  - id: "PEDS_SURG_PLASTICS"
+    pattern: "^(pediatric|ped).*(plastic|reconstructive).*surgery$"
+    canonicalId: "PEDS-SURG-PLASTICS"
+    confidence: 0.95
+  
+  - id: "PEDS_ORTHO_GENERAL"
+    pattern: "^(pediatric|ped).*(orthopedics|ortho)$"
+    canonicalId: "PEDS-ORTHO-GENERAL"
+    confidence: 0.95
+  
+  - id: "PEDS_ORTHO_SPINE"
+    pattern: "^(pediatric|ped).*(spine|spinal).*ortho$"
+    canonicalId: "PEDS-ORTHO-SPINE"
+    confidence: 0.95
+  
+  - id: "PEDS_ORTHO_SPORTS"
+    pattern: "^(pediatric|ped).*(sports).*ortho$"
+    canonicalId: "PEDS-ORTHO-SPORTS"
+    confidence: 0.95
+  
+  - id: "PEDS_GENERAL"
+    pattern: "^(pediatrics|pediatric|ped)$"
+    canonicalId: "PEDS-GENERAL"
+    confidence: 0.95
+  
+  - id: "PEDS_HOSPITALIST"
+    pattern: "^(pediatric|ped).*hospitalist$"
+    canonicalId: "PEDS-HOSPITALIST"
+    confidence: 0.95
+  
+  - id: "PEDS_NICU"
+    pattern: "^(neonatal|nicu|newborn|perinatal).*ped$"
+    canonicalId: "PEDS-NICU"
+    confidence: 0.95
+  
+  - id: "PEDS_PICU"
+    pattern: "^(picu|critical care|intensivist).*ped$"
+    canonicalId: "PEDS-PICU"
+    confidence: 0.95
+  
+  - id: "PEDS_ANESTHESIA_GENERAL"
+    pattern: "^(pediatric|ped).*anesthesiology$"
+    canonicalId: "PEDS-ANESTHESIA"
+    confidence: 0.95
+  
+  - id: "PEDS_ANESTHESIA_CARDIAC"
+    pattern: "^(pediatric|ped).*(cardiac|heart).*anesthesiology$"
+    canonicalId: "PEDS-ANESTHESIA-CARDIAC"
+    confidence: 0.95
+
+blocks:
+  - id: "BLOCK_PEDS_ADULT_CROSSOVER"
+    condition: "pediatric_adult_crossover"
+    reason: "Pediatric and adult specialties are distinct domains and cannot be cross-mapped"
+  
+  - id: "BLOCK_PEDS_SURGERY_MEDICINE"
+    condition: "pediatric_surgery_medicine_conflict"
+    reason: "Pediatric surgical and medical specialties are distinct domains"
+
+bucketingHints:
+  - id: "HINT_PEDS_CARDIOVASCULAR"
+    pattern: ".*(pediatric|ped).*(cardiovascular|cardiac|heart).*"
+    parent: "Pediatric Cardiology"
+    confidence: 0.9
+  
+  - id: "HINT_PEDS_NEUROLOGICAL"
+    pattern: ".*(pediatric|ped).*(neurological|neuro|brain).*"
+    parent: "Pediatric Neurology"
+    confidence: 0.9
+  
+  - id: "HINT_PEDS_RADIOLOGICAL"
+    pattern: ".*(pediatric|ped).*(radiology|imaging).*"
+    parent: "Pediatric Radiology"
+    confidence: 0.9
+  
+  - id: "HINT_PEDS_SURGICAL"
+    pattern: ".*(pediatric|ped).*(surgery|surgical).*"
+    parent: "Pediatric Surgery"
+    confidence: 0.9
+  
+  - id: "HINT_PEDS_ORTHOPEDIC"
+    pattern: ".*(pediatric|ped).*(orthopedic|ortho|bone).*"
+    parent: "Pediatric Orthopedics"
+    confidence: 0.9
+  
+  - id: "HINT_PEDS_GENERAL"
+    pattern: ".*(pediatric|pediatrics|ped|peds|child|children).*"
+    parent: "Pediatrics"
+    confidence: 0.9
+  
+  - id: "HINT_PEDS_ANESTHESIA"
+    pattern: ".*(pediatric|ped).*(anesthesiology|anesthesia).*"
+    parent: "Pediatric Anesthesia"
+    confidence: 0.9

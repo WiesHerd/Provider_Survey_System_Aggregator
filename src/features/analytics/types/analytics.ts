@@ -1,207 +1,157 @@
 /**
- * Analytics feature type definitions
- * These types are specific to the analytics feature and extend shared types
+ * Analytics Feature - Type Definitions
+ * 
+ * This file contains all TypeScript interfaces and types for the analytics feature.
+ * Following enterprise patterns for type safety and maintainability.
  */
-
-import { BaseEntity, SurveySource, ProviderType, GeographicRegion, CompensationMetrics } from '@/shared/types';
 
 /**
- * Aggregated survey data for analytics display
+ * Variable mapping interface for analytics data
  */
-export interface AggregatedData extends BaseEntity, CompensationMetrics {
+export interface VariableMapping {
+  id: string;
   standardizedName: string;
-  surveySource: SurveySource;
+  variableType: 'compensation' | 'categorical';
+  variableSubType: string;
+  sourceVariables: Array<{
+    surveySource: string;
+    originalVariableName: string;
+    frequency?: number;
+  }>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Aggregated analytics data structure
+ * Each metric section (TCC, wRVU, CF) has independent organizational data
+ */
+export interface AggregatedData {
+  standardizedName: string;
+  surveySource: string;
   surveySpecialty: string;
-  geographicRegion: GeographicRegion;
-  providerType: ProviderType;
+  geographicRegion: string;
+  providerType?: string;
+  surveyYear?: string;
   
-  // TCC metrics with their own organizational data
+  // TCC (Total Cash Compensation) metrics with independent organizational data
   tcc_n_orgs: number;
   tcc_n_incumbents: number;
+  tcc_p25: number;
+  tcc_p50: number;
+  tcc_p75: number;
+  tcc_p90: number;
   
-  // wRVU metrics with their own organizational data
+  // wRVU (Productivity - wRVUs) metrics with independent organizational data
   wrvu_n_orgs: number;
   wrvu_n_incumbents: number;
+  wrvu_p25: number;
+  wrvu_p50: number;
+  wrvu_p75: number;
+  wrvu_p90: number;
   
-  // CF metrics with their own organizational data
+  // CF (Conversion Factors) metrics with independent organizational data
   cf_n_orgs: number;
   cf_n_incumbents: number;
-  
-  // Legacy fields for backward compatibility
-  n_orgs: number;
-  n_incumbents: number;
-  
-  surveyYear: string;
-  rawData?: Record<string, any>;
+  cf_p25: number;
+  cf_p50: number;
+  cf_p75: number;
+  cf_p90: number;
 }
 
 /**
- * Analytics filters for data filtering
+ * Analytics filter state
  */
 export interface AnalyticsFilters {
-  specialty?: string;
-  providerType?: ProviderType;
-  region?: GeographicRegion;
-  surveySource?: SurveySource;
-  year?: string;
-  search?: string;
+  specialty: string;
+  surveySource: string;
+  geographicRegion: string;
+  providerType: string;
+  year: string;
 }
 
 /**
- * Analytics table row data
+ * Summary calculation result
  */
-export interface AnalyticsTableRow extends AggregatedData {
-  // Additional properties specific to table display
-  isSelected?: boolean;
-  isHighlighted?: boolean;
-}
-
-/**
- * Analytics summary statistics
- */
-export interface AnalyticsSummary {
-  totalRecords: number;
-  totalOrganizations: number;
-  totalIncumbents: number;
-  averageTccP50: number;
-  averageWrvuP50: number;
-  averageCfP50: number;
-  specialtiesCount: number;
-  sourcesCount: number;
-  regionsCount: number;
-}
-
-/**
- * Chart data for analytics visualizations
- */
-export interface AnalyticsChartData {
-  labels: string[];
-  datasets: Array<{
-    label: string;
-    data: number[];
-    backgroundColor?: string;
-    borderColor?: string;
-    borderWidth?: number;
-  }>;
-}
-
-/**
- * Analytics table column definition
- */
-export interface AnalyticsTableColumn {
-  key: keyof AggregatedData;
-  label: string;
-  type: 'string' | 'number' | 'currency' | 'percentage';
-  sortable?: boolean;
-  filterable?: boolean;
-  width?: number;
-  align?: 'left' | 'center' | 'right';
-  formatter?: (value: any) => string;
-}
-
-/**
- * Analytics table configuration
- */
-export interface AnalyticsTableConfig {
-  columns: AnalyticsTableColumn[];
-  data: AnalyticsTableRow[];
-  pagination?: {
-    page: number;
-    pageSize: number;
-    total: number;
+export interface SummaryCalculation {
+  simple: {
+    tcc_n_orgs: number;
+    tcc_n_incumbents: number;
+    tcc_p25: number;
+    tcc_p50: number;
+    tcc_p75: number;
+    tcc_p90: number;
+    wrvu_n_orgs: number;
+    wrvu_n_incumbents: number;
+    wrvu_p25: number;
+    wrvu_p50: number;
+    wrvu_p75: number;
+    wrvu_p90: number;
+    cf_n_orgs: number;
+    cf_n_incumbents: number;
+    cf_p25: number;
+    cf_p50: number;
+    cf_p75: number;
+    cf_p90: number;
   };
-  sorting?: {
-    column: keyof AggregatedData;
-    direction: 'asc' | 'desc';
+  weighted: {
+    tcc_n_orgs: number;
+    tcc_n_incumbents: number;
+    tcc_p25: number;
+    tcc_p50: number;
+    tcc_p75: number;
+    tcc_p90: number;
+    wrvu_n_orgs: number;
+    wrvu_n_incumbents: number;
+    wrvu_p25: number;
+    wrvu_p50: number;
+    wrvu_p75: number;
+    wrvu_p90: number;
+    cf_n_orgs: number;
+    cf_n_incumbents: number;
+    cf_p25: number;
+    cf_p50: number;
+    cf_p75: number;
+    cf_p90: number;
   };
-  filters?: AnalyticsFilters;
 }
 
 /**
  * Analytics component props
  */
-export interface AnalyticsProps {
-  initialFilters?: AnalyticsFilters;
-  onDataChange?: (data: AggregatedData[]) => void;
-  onFiltersChange?: (filters: AnalyticsFilters) => void;
-}
-
-/**
- * Analytics table component props
- */
 export interface AnalyticsTableProps {
-  data: AnalyticsTableRow[];
-  config: AnalyticsTableConfig;
-  onRowClick?: (row: AnalyticsTableRow) => void;
-  onSort?: (column: keyof AggregatedData, direction: 'asc' | 'desc') => void;
-  onFilter?: (filters: AnalyticsFilters) => void;
-  loading?: boolean;
-  error?: string | null;
-}
-
-/**
- * Analytics filters component props
- */
-export interface AnalyticsFiltersProps {
-  filters: AnalyticsFilters;
-  onFiltersChange: (filters: AnalyticsFilters) => void;
-  onClearFilters: () => void;
-  availableOptions: {
-    specialties: string[];
-    providerTypes: ProviderType[];
-    regions: GeographicRegion[];
-    surveySources: SurveySource[];
-    years: string[];
-  };
-}
-
-/**
- * Analytics charts component props
- */
-export interface AnalyticsChartsProps {
   data: AggregatedData[];
-  filters: AnalyticsFilters;
-  onChartClick?: (chartData: any) => void;
+  loading: boolean;
+  error: string | null;
+  onExport: () => void;
 }
 
-/**
- * Analytics summary component props
- */
 export interface AnalyticsSummaryProps {
   data: AggregatedData[];
   filters: AnalyticsFilters;
 }
 
-/**
- * Analytics data transformation result
- */
-export interface DataTransformationResult {
-  transformedData: AggregatedData[];
-  summary: AnalyticsSummary;
-  chartData: AnalyticsChartData;
-  errors: string[];
-  warnings: string[];
-}
-
-/**
- * Analytics export configuration
- */
-export interface AnalyticsExportConfig {
-  format: 'csv' | 'excel' | 'pdf';
-  filename?: string;
-  includeFilters?: boolean;
-  includeSummary?: boolean;
-  columns?: (keyof AggregatedData)[];
-}
-
-/**
- * Analytics API response
- */
-export interface AnalyticsApiResponse {
-  data: AggregatedData[];
-  summary: AnalyticsSummary;
-  total: number;
-  page: number;
-  pageSize: number;
+export interface AnalyticsFiltersProps {
   filters: AnalyticsFilters;
+  onFiltersChange: (filters: AnalyticsFilters) => void;
+  availableSpecialties: string[];
+  availableSources: string[];
+  availableRegions: string[];
+  availableProviderTypes: string[];
+  availableYears: string[];
+}
+
+/**
+ * Analytics hook return type
+ */
+export interface UseAnalyticsReturn {
+  data: AggregatedData[];
+  allData: AggregatedData[];
+  loading: boolean;
+  error: string | null;
+  filters: AnalyticsFilters;
+  setFilters: (filters: AnalyticsFilters) => void;
+  refetch: () => Promise<void>;
+  exportToExcel: () => void;
+  exportToCSV: () => void;
 }

@@ -1,0 +1,541 @@
+version: "1.0.0"
+
+specialties:
+  # CARDIOLOGY - ADULT
+  - id: "CARD-GENERAL"
+    parent: "Cardiology"
+    name: "General Cardiology"
+    domain: "ADULT"
+    tags: ["cardiology", "general", "adult"]
+
+  - id: "CARD-INTERVENTIONAL"
+    parent: "Cardiology"
+    name: "Interventional Cardiology"
+    domain: "ADULT"
+    tags: ["cardiology", "interventional", "invasive", "adult"]
+
+  - id: "CARD-EP"
+    parent: "Cardiology"
+    name: "Electrophysiology"
+    domain: "ADULT"
+    tags: ["cardiology", "electrophysiology", "ep", "adult"]
+
+  - id: "CARD-IMAGING"
+    parent: "Cardiology"
+    name: "Cardiac Imaging"
+    domain: "ADULT"
+    tags: ["cardiology", "imaging", "echo", "ct", "mri", "nuclear", "adult"]
+
+  - id: "CARD-ADVANCED-HF"
+    parent: "Cardiology"
+    name: "Advanced Heart Failure & Transplant"
+    domain: "ADULT"
+    tags: ["cardiology", "heart-failure", "transplant", "advanced", "adult"]
+
+  - id: "CARD-STRUCTURAL"
+    parent: "Cardiology"
+    name: "Structural Heart Disease"
+    domain: "ADULT"
+    tags: ["cardiology", "structural", "valve", "adult"]
+
+  # CARDIOLOGY - PEDIATRIC
+  - id: "PEDS-CARD-GENERAL"
+    parent: "Pediatric Cardiology"
+    name: "General Pediatric Cardiology"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "cardiology", "general", "peds"]
+
+  - id: "PEDS-CARD-INTERVENTIONAL"
+    parent: "Pediatric Cardiology"
+    name: "Pediatric Interventional Cardiology"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "cardiology", "interventional", "peds"]
+
+  # NEUROLOGY - ADULT
+  - id: "NEURO-GENERAL"
+    parent: "Neurology"
+    name: "General Neurology"
+    domain: "ADULT"
+    tags: ["neurology", "general", "adult"]
+
+  - id: "NEURO-INTERVENTIONAL"
+    parent: "Neurology"
+    name: "Interventional Neurology"
+    domain: "ADULT"
+    tags: ["neurology", "interventional", "vascular", "adult"]
+
+  - id: "NEURO-EPILEPSY"
+    parent: "Neurology"
+    name: "Epilepsy"
+    domain: "ADULT"
+    tags: ["neurology", "epilepsy", "seizure", "adult"]
+
+  - id: "NEURO-MS"
+    parent: "Neurology"
+    name: "Multiple Sclerosis"
+    domain: "ADULT"
+    tags: ["neurology", "multiple-sclerosis", "ms", "adult"]
+
+  - id: "NEURO-MOVEMENT"
+    parent: "Neurology"
+    name: "Movement Disorders"
+    domain: "ADULT"
+    tags: ["neurology", "movement", "parkinson", "adult"]
+
+  # NEUROLOGY - PEDIATRIC
+  - id: "PEDS-NEURO-GENERAL"
+    parent: "Pediatric Neurology"
+    name: "General Pediatric Neurology"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "neurology", "general", "peds"]
+
+  # PULMONOLOGY - ADULT
+  - id: "PULM-GENERAL"
+    parent: "Pulmonology"
+    name: "General Pulmonology"
+    domain: "ADULT"
+    tags: ["pulmonology", "pulmonary", "general", "adult"]
+
+  - id: "PULM-INTERVENTIONAL"
+    parent: "Pulmonology"
+    name: "Interventional Pulmonology"
+    domain: "ADULT"
+    tags: ["pulmonology", "interventional", "adult"]
+
+  - id: "PULM-CRITICAL-CARE"
+    parent: "Pulmonology"
+    name: "Critical Care Medicine"
+    domain: "ADULT"
+    tags: ["pulmonology", "critical-care", "intensivist", "icu", "adult"]
+
+  # RADIOLOGY - ADULT
+  - id: "RAD-DIAGNOSTIC"
+    parent: "Radiology"
+    name: "Diagnostic Radiology"
+    domain: "ADULT"
+    tags: ["radiology", "diagnostic", "imaging", "adult"]
+
+  - id: "RAD-INTERVENTIONAL"
+    parent: "Radiology"
+    name: "Interventional Radiology"
+    domain: "ADULT"
+    tags: ["radiology", "interventional", "ir", "adult"]
+
+  - id: "RAD-NEURO-IR"
+    parent: "Radiology"
+    name: "Neuro-Interventional Radiology"
+    domain: "ADULT"
+    tags: ["radiology", "neuro", "interventional", "adult"]
+
+  - id: "RAD-MAMMOGRAPHY"
+    parent: "Radiology"
+    name: "Mammography"
+    domain: "ADULT"
+    tags: ["radiology", "mammography", "breast", "adult"]
+
+  - id: "RAD-NUCLEAR"
+    parent: "Radiology"
+    name: "Nuclear Medicine"
+    domain: "ADULT"
+    tags: ["radiology", "nuclear", "medicine", "adult"]
+
+  - id: "RAD-MSK"
+    parent: "Radiology"
+    name: "Musculoskeletal Radiology"
+    domain: "ADULT"
+    tags: ["radiology", "msk", "musculoskeletal", "adult"]
+
+  - id: "RAD-NOCTURNIST"
+    parent: "Radiology"
+    name: "Radiology Nocturnist"
+    domain: "ADULT"
+    tags: ["radiology", "nocturnist", "night", "adult"]
+
+  # RADIOLOGY - PEDIATRIC
+  - id: "PEDS-RAD-DIAGNOSTIC"
+    parent: "Pediatric Radiology"
+    name: "Pediatric Diagnostic Radiology"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "radiology", "diagnostic", "peds"]
+
+  - id: "PEDS-RAD-INTERVENTIONAL"
+    parent: "Pediatric Radiology"
+    name: "Pediatric Interventional Radiology"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "radiology", "interventional", "peds"]
+
+  # SURGERY - ADULT
+  - id: "SURG-GENERAL"
+    parent: "Surgery"
+    name: "General Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "general", "adult"]
+
+  - id: "SURG-CT"
+    parent: "Surgery"
+    name: "Cardiothoracic Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "cardiothoracic", "ct", "cardiac", "thoracic", "adult"]
+
+  - id: "SURG-THORACIC"
+    parent: "Surgery"
+    name: "Thoracic Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "thoracic", "adult"]
+
+  - id: "SURG-VASCULAR"
+    parent: "Surgery"
+    name: "Vascular Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "vascular", "adult"]
+
+  - id: "SURG-TRAUMA"
+    parent: "Surgery"
+    name: "Trauma Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "trauma", "adult"]
+
+  - id: "SURG-TRANSPLANT"
+    parent: "Surgery"
+    name: "Transplant Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "transplant", "adult"]
+
+  - id: "SURG-BARIATRIC"
+    parent: "Surgery"
+    name: "Bariatric Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "bariatric", "weight-loss", "adult"]
+
+  - id: "SURG-BREAST"
+    parent: "Surgery"
+    name: "Breast Surgery"
+    domain: "ADULT"
+    tags: ["surgery", "breast", "adult"]
+
+  # SURGERY - PEDIATRIC
+  - id: "PEDS-SURG-GENERAL"
+    parent: "Pediatric Surgery"
+    name: "General Pediatric Surgery"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "surgery", "general", "peds"]
+
+  - id: "PEDS-SURG-CT"
+    parent: "Pediatric Surgery"
+    name: "Pediatric Cardiothoracic Surgery"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "surgery", "cardiothoracic", "peds"]
+
+  - id: "PEDS-SURG-NEURO"
+    parent: "Pediatric Surgery"
+    name: "Pediatric Neurosurgery"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "surgery", "neurosurgery", "peds"]
+
+  - id: "PEDS-SURG-PLASTICS"
+    parent: "Pediatric Surgery"
+    name: "Pediatric Plastic Surgery"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "surgery", "plastic", "peds"]
+
+  # OB/GYN - ADULT
+  - id: "OBGYN-GENERAL"
+    parent: "Obstetrics and Gynecology"
+    name: "General Obstetrics and Gynecology"
+    domain: "ADULT"
+    tags: ["obgyn", "obstetrics", "gynecology", "general", "adult"]
+
+  - id: "OBGYN-MFM"
+    parent: "Obstetrics and Gynecology"
+    name: "Maternal-Fetal Medicine"
+    domain: "ADULT"
+    tags: ["obgyn", "maternal-fetal", "mfm", "high-risk", "adult"]
+
+  - id: "OBGYN-REI"
+    parent: "Obstetrics and Gynecology"
+    name: "Reproductive Endocrinology and Infertility"
+    domain: "ADULT"
+    tags: ["obgyn", "reproductive", "endocrinology", "infertility", "rei", "adult"]
+
+  - id: "OBGYN-UROGYN"
+    parent: "Obstetrics and Gynecology"
+    name: "Female Pelvic Medicine and Reconstructive Surgery"
+    domain: "ADULT"
+    tags: ["obgyn", "urogynecology", "pelvic", "reconstructive", "adult"]
+
+  - id: "OBGYN-GYN-ONC"
+    parent: "Obstetrics and Gynecology"
+    name: "Gynecologic Oncology"
+    domain: "ADULT"
+    tags: ["obgyn", "gynecologic", "oncology", "cancer", "adult"]
+
+  - id: "OBGYN-HOSPITALIST"
+    parent: "Obstetrics and Gynecology"
+    name: "OB/GYN Hospitalist"
+    domain: "ADULT"
+    tags: ["obgyn", "hospitalist", "laborist", "adult"]
+
+  - id: "OBGYN-MIGS"
+    parent: "Obstetrics and Gynecology"
+    name: "Minimally Invasive Gynecologic Surgery"
+    domain: "ADULT"
+    tags: ["obgyn", "minimally-invasive", "migs", "laparoscopic", "adult"]
+
+  # ENT/OTO - ADULT
+  - id: "ENT-GENERAL"
+    parent: "Otolaryngology"
+    name: "General Otolaryngology"
+    domain: "ADULT"
+    tags: ["ent", "otolaryngology", "general", "adult"]
+
+  - id: "ENT-RHINOLOGY"
+    parent: "Otolaryngology"
+    name: "Rhinology"
+    domain: "ADULT"
+    tags: ["ent", "rhinology", "sinus", "nasal", "adult"]
+
+  - id: "ENT-OTOLOGY"
+    parent: "Otolaryngology"
+    name: "Otology/Neurotology"
+    domain: "ADULT"
+    tags: ["ent", "otology", "neurotology", "hearing", "adult"]
+
+  - id: "ENT-HEAD-NECK"
+    parent: "Otolaryngology"
+    name: "Head and Neck Surgery"
+    domain: "ADULT"
+    tags: ["ent", "head-neck", "oncology", "adult"]
+
+  - id: "ENT-FACIAL-PLASTICS"
+    parent: "Otolaryngology"
+    name: "Facial Plastic and Reconstructive Surgery"
+    domain: "ADULT"
+    tags: ["ent", "facial-plastics", "reconstructive", "adult"]
+
+  # ORTHOPEDICS - ADULT
+  - id: "ORTHO-GENERAL"
+    parent: "Orthopedics"
+    name: "General Orthopedics"
+    domain: "ADULT"
+    tags: ["orthopedics", "ortho", "general", "adult"]
+
+  - id: "ORTHO-HAND"
+    parent: "Orthopedics"
+    name: "Hand Surgery"
+    domain: "ADULT"
+    tags: ["orthopedics", "hand", "adult"]
+
+  - id: "ORTHO-FOOT-ANKLE"
+    parent: "Orthopedics"
+    name: "Foot and Ankle Surgery"
+    domain: "ADULT"
+    tags: ["orthopedics", "foot", "ankle", "adult"]
+
+  - id: "ORTHO-SPINE"
+    parent: "Orthopedics"
+    name: "Spine Surgery"
+    domain: "ADULT"
+    tags: ["orthopedics", "spine", "adult"]
+
+  - id: "ORTHO-SPORTS"
+    parent: "Orthopedics"
+    name: "Sports Medicine"
+    domain: "ADULT"
+    tags: ["orthopedics", "sports", "medicine", "adult"]
+
+  - id: "ORTHO-ONCOLOGY"
+    parent: "Orthopedics"
+    name: "Orthopedic Oncology"
+    domain: "ADULT"
+    tags: ["orthopedics", "oncology", "cancer", "adult"]
+
+  - id: "ORTHO-SHOULDER-ELBOW"
+    parent: "Orthopedics"
+    name: "Shoulder and Elbow Surgery"
+    domain: "ADULT"
+    tags: ["orthopedics", "shoulder", "elbow", "adult"]
+
+  - id: "ORTHO-HIP-KNEE"
+    parent: "Orthopedics"
+    name: "Hip and Knee Surgery"
+    domain: "ADULT"
+    tags: ["orthopedics", "hip", "knee", "adult"]
+
+  # ORTHOPEDICS - PEDIATRIC
+  - id: "PEDS-ORTHO-GENERAL"
+    parent: "Pediatric Orthopedics"
+    name: "General Pediatric Orthopedics"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "orthopedics", "general", "peds"]
+
+  - id: "PEDS-ORTHO-SPINE"
+    parent: "Pediatric Orthopedics"
+    name: "Pediatric Spine Surgery"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "orthopedics", "spine", "peds"]
+
+  - id: "PEDS-ORTHO-SPORTS"
+    parent: "Pediatric Orthopedics"
+    name: "Pediatric Sports Medicine"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "orthopedics", "sports", "peds"]
+
+  # PATHOLOGY - ADULT
+  - id: "PATH-AP"
+    parent: "Pathology"
+    name: "Anatomic Pathology"
+    domain: "ADULT"
+    tags: ["pathology", "anatomic", "ap", "adult"]
+
+  - id: "PATH-CP"
+    parent: "Pathology"
+    name: "Clinical Pathology"
+    domain: "ADULT"
+    tags: ["pathology", "clinical", "cp", "adult"]
+
+  - id: "PATH-AP-CP"
+    parent: "Pathology"
+    name: "Anatomic and Clinical Pathology"
+    domain: "ADULT"
+    tags: ["pathology", "anatomic", "clinical", "ap-cp", "adult"]
+
+  - id: "PATH-DERM"
+    parent: "Pathology"
+    name: "Dermatopathology"
+    domain: "ADULT"
+    tags: ["pathology", "dermatopathology", "dermpath", "adult"]
+
+  - id: "PATH-CYTO"
+    parent: "Pathology"
+    name: "Cytopathology"
+    domain: "ADULT"
+    tags: ["pathology", "cytopathology", "cyto", "adult"]
+
+  - id: "PATH-BLOOD-BANK"
+    parent: "Pathology"
+    name: "Blood Bank/Transfusion Medicine"
+    domain: "ADULT"
+    tags: ["pathology", "blood-bank", "transfusion", "adult"]
+
+  # PSYCHIATRY - ADULT
+  - id: "PSYCH-GENERAL"
+    parent: "Psychiatry"
+    name: "General Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "general", "adult"]
+
+  - id: "PSYCH-INPATIENT"
+    parent: "Psychiatry"
+    name: "Inpatient Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "inpatient", "adult"]
+
+  - id: "PSYCH-OUTPATIENT"
+    parent: "Psychiatry"
+    name: "Outpatient Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "outpatient", "adult"]
+
+  - id: "PSYCH-GERIATRIC"
+    parent: "Psychiatry"
+    name: "Geriatric Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "geriatric", "elderly", "adult"]
+
+  - id: "PSYCH-CONSULT-LIAISON"
+    parent: "Psychiatry"
+    name: "Consultation-Liaison Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "consultation", "liaison", "adult"]
+
+  - id: "PSYCH-FORENSIC"
+    parent: "Psychiatry"
+    name: "Forensic Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "forensic", "legal", "adult"]
+
+  - id: "PSYCH-ADDICTION"
+    parent: "Psychiatry"
+    name: "Addiction Psychiatry"
+    domain: "ADULT"
+    tags: ["psychiatry", "addiction", "substance", "adult"]
+
+  # PEDIATRICS - GENERAL
+  - id: "PEDS-GENERAL"
+    parent: "Pediatrics"
+    name: "General Pediatrics"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "general", "peds"]
+
+  - id: "PEDS-HOSPITALIST"
+    parent: "Pediatrics"
+    name: "Pediatric Hospitalist"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "hospitalist", "peds"]
+
+  - id: "PEDS-NICU"
+    parent: "Pediatrics"
+    name: "Neonatal-Perinatal Medicine"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "neonatal", "nicu", "perinatal", "peds"]
+
+  - id: "PEDS-PICU"
+    parent: "Pediatrics"
+    name: "Pediatric Critical Care"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "critical-care", "picu", "intensivist", "peds"]
+
+  - id: "PEDS-ANESTHESIA"
+    parent: "Pediatric Anesthesia"
+    name: "General Pediatric Anesthesia"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "anesthesia", "general", "peds"]
+
+  - id: "PEDS-ANESTHESIA-CARDIAC"
+    parent: "Pediatric Anesthesia"
+    name: "Pediatric Cardiac Anesthesia"
+    domain: "PEDIATRIC"
+    tags: ["pediatric", "anesthesia", "cardiac", "peds"]
+
+  # OTHER SPECIALTIES - ADULT
+  - id: "DERM-GENERAL"
+    parent: "Dermatology"
+    name: "General Dermatology"
+    domain: "ADULT"
+    tags: ["dermatology", "derm", "general", "adult"]
+
+  - id: "ANESTH-GENERAL"
+    parent: "Anesthesiology"
+    name: "General Anesthesiology"
+    domain: "ADULT"
+    tags: ["anesthesiology", "anesthesia", "general", "adult"]
+
+  - id: "EM-GENERAL"
+    parent: "Emergency Medicine"
+    name: "General Emergency Medicine"
+    domain: "ADULT"
+    tags: ["emergency", "medicine", "er", "ed", "general", "adult"]
+
+  - id: "FM-GENERAL"
+    parent: "Family Medicine"
+    name: "General Family Medicine"
+    domain: "ADULT"
+    tags: ["family", "medicine", "general", "adult"]
+
+  - id: "IM-GENERAL"
+    parent: "Internal Medicine"
+    name: "General Internal Medicine"
+    domain: "ADULT"
+    tags: ["internal", "medicine", "general", "adult"]
+
+  - id: "IM-HOSPITALIST"
+    parent: "Internal Medicine"
+    name: "Internal Medicine Hospitalist"
+    domain: "ADULT"
+    tags: ["internal", "medicine", "hospitalist", "adult"]
+
+  - id: "IM-NOCTURNIST"
+    parent: "Internal Medicine"
+    name: "Internal Medicine Nocturnist"
+    domain: "ADULT"
+    tags: ["internal", "medicine", "nocturnist", "night", "adult"]

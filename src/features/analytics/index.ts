@@ -1,15 +1,13 @@
 /**
- * Analytics feature barrel exports
- * This file provides a clean import interface for all analytics components and utilities
+ * Analytics Feature - Public API
+ * 
+ * This file provides the public API for the analytics feature.
+ * Following enterprise patterns for clean imports and module boundaries.
  */
 
-// Main component
-export { SurveyAnalytics } from './components/SurveyAnalytics';
-
-// Sub-components
-export { AnalyticsFilters } from './components/AnalyticsFilters';
-export { AnalyticsSummary } from './components/AnalyticsSummary';
+// Components
 export { AnalyticsTable } from './components/AnalyticsTable';
+export { AnalyticsFilters } from './components/AnalyticsFilters';
 
 // Hooks
 export { useAnalyticsData } from './hooks/useAnalyticsData';
@@ -18,29 +16,19 @@ export { useAnalyticsData } from './hooks/useAnalyticsData';
 export type {
   AggregatedData,
   AnalyticsFilters as AnalyticsFiltersType,
-  AnalyticsTableRow,
-  AnalyticsSummary as AnalyticsSummaryType,
-  AnalyticsChartData,
-  AnalyticsTableColumn,
-  AnalyticsTableConfig,
-  AnalyticsProps,
   AnalyticsTableProps,
   AnalyticsFiltersProps,
-  AnalyticsChartsProps,
-  AnalyticsSummaryProps,
-  DataTransformationResult,
-  AnalyticsExportConfig,
-  AnalyticsApiResponse
+  UseAnalyticsReturn,
+  VariableMapping,
+  SummaryCalculation
 } from './types/analytics';
 
 // Utilities
 export {
-  calculateAnalyticsSummary,
-  applyAnalyticsFilters,
-  sortAnalyticsData,
-  calculateWeightedCompensation,
-  calculateCompensationRanges,
-  groupAnalyticsData,
-  calculateGroupedStatistics,
-  validateAnalyticsData
+  calculatePercentile,
+  formatCurrency,
+  groupBySpecialty,
+  calculateSummaryRows,
+  transformSurveyData,
+  filterAnalyticsData
 } from './utils/analyticsCalculations';

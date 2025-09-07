@@ -17,14 +17,14 @@ const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
 const VariableMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.VariableMapping })));
 const RegionMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.RegionMapping })));
 const ProviderTypeMapping = lazy(() => import('./features/mapping').then(module => ({ default: module.ProviderTypeMapping })));
-const SurveyAnalytics = lazy(() => import('./components/AnalyticsWrapper'));
+const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const SurveyRegionalAnalytics = lazy(() => import('./components/SurveyRegionalAnalytics').then(module => ({ default: module.SurveyRegionalAnalytics })));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReportsWrapper = lazy(() => import('./components/CustomReportsWrapper'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const DownloadTest = lazy(() => import('./components/DownloadTest').then(module => ({ default: module.DownloadTest })));
-const NormalizedDataScreen = lazy(() => import('./features/normalized').then(module => ({ default: module.NormalizedDataScreen })));
+const NormalizedDataScreen = lazy(() => import('./features/normalized/components/NormalizedDataScreen'));
 
 // Loading component for Suspense fallback
 const AppLoadingSpinner = () => (

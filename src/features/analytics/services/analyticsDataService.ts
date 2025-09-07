@@ -63,9 +63,16 @@ export class AnalyticsDataService {
   /**
    * Get all analytics data with proper normalization
    */
-  async getAnalyticsData(filters: AnalyticsFilters = {}): Promise<AggregatedData[]> {
+  async getAnalyticsData(filters: AnalyticsFilters = {
+    specialty: '',
+    surveySource: '',
+    geographicRegion: '',
+    providerType: '',
+    year: ''
+  }): Promise<AggregatedData[]> {
     try {
       console.log('🔍 AnalyticsDataService: Starting data retrieval with filters:', filters);
+      console.log('🔍 AnalyticsDataService: This function is being called!');
       
       // Get all surveys and mappings
       const surveys = await this.dataService.getAllSurveys();
@@ -74,6 +81,11 @@ export class AnalyticsDataService {
       
       console.log(`🔍 AnalyticsDataService: Found ${surveys.length} surveys, ${specialtyMappings.length} specialty mappings, ${columnMappings.length} column mappings`);
       
+      if (surveys.length === 0) {
+        console.log('🔍 AnalyticsDataService: No surveys found, returning empty array');
+        return [];
+      }
+      
       // Process each survey and normalize data
       const allNormalizedRows: NormalizedRow[] = [];
       
@@ -81,9 +93,13 @@ export class AnalyticsDataService {
         console.log(`🔍 AnalyticsDataService: Processing survey: ${survey.name} (${survey.type})`);
         
         try {
-          // Get survey data with filters applied
-          const surveyData = await this.dataService.getSurveyData(survey.id, filters);
+          // Get ALL survey data (no filters applied at database level)
+          const surveyData = await this.dataService.getSurveyData(survey.id, {});
           console.log(`🔍 AnalyticsDataService: Survey ${survey.name} returned ${surveyData.rows.length} rows`);
+          
+          if (surveyData.rows.length > 0) {
+            console.log(`🔍 AnalyticsDataService: Sample row from ${survey.name}:`, surveyData.rows[0]);
+          }
           
           // Normalize each row
           const normalizedRows = surveyData.rows.map(row => 
@@ -99,11 +115,15 @@ export class AnalyticsDataService {
       
       console.log(`🔍 AnalyticsDataService: Total normalized rows: ${allNormalizedRows.length}`);
       
+      if (allNormalizedRows.length === 0) {
+        console.log('🔍 AnalyticsDataService: No normalized rows found, returning empty array');
+        return [];
+      }
+      
       // Stack and aggregate the normalized data
-      const aggregatedData = this.stackAndAggregateData(allNormalizedRows, filters);
+      const aggregatedData = this.stackAndAggregateData(allNormalizedRows);
       
       console.log(`🔍 AnalyticsDataService: Final aggregated records: ${aggregatedData.length}`);
-      
       return aggregatedData;
       
     } catch (error) {
@@ -114,39 +134,259 @@ export class AnalyticsDataService {
 
   /**
    * Normalize a raw survey row using mappings
+   * Data is in long format: each row has a 'variable' field (TCC, wRVU, CF) and p25/p50/p75/p90 values
    */
   private normalizeRow(
-    row: RawSurveyRow, 
+    row: any, 
     survey: any, 
     specialtyMappings: ISpecialtyMapping[], 
     columnMappings: IColumnMapping[]
   ): NormalizedRow {
+    // The row might be a SurveyData object with the actual data in the 'data' property
+    const actualRowData = row.data || row;
+    
+    console.log('🔍 AnalyticsDataService: Processing row:', {
+      hasDataProperty: !!row.data,
+      actualRowDataKeys: Object.keys(actualRowData),
+      sampleData: {
+        specialty: actualRowData.specialty,
+        tcc_p50: actualRowData.tcc_p50,
+        wrvu_p50: actualRowData.wrvu_p50,
+        cf_p50: actualRowData.cf_p50
+      }
+    });
+    
+    // Extract specialty - check multiple possible locations and formats
+    const rawSpecialty = actualRowData.specialty || actualRowData.Specialty || 
+                        actualRowData.normalizedSpecialty || actualRowData['Provider Type'] ||
+                        row.specialty || 'Unknown';
+    
     // Normalize specialty using specialty mappings
     const normalizedSpecialty = this.normalizeSpecialty(
-      row.specialty || row.surveySpecialty || row.normalizedSpecialty || 'Unknown',
+      rawSpecialty,
       specialtyMappings,
       survey.type
     );
     
+    // Extract provider type
+    const rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
+                           actualRowData.provider_type || row.providerType || 'Physician';
+    
     // Normalize provider type
-    const normalizedProviderType = this.normalizeProviderType(
-      row.provider_type || row.providerType || 'Physician'
-    );
+    const normalizedProviderType = this.normalizeProviderType(rawProviderType);
+    
+    // Extract region
+    const rawRegion = actualRowData.geographicRegion || actualRowData.region || 
+                     actualRowData.Region || actualRowData.geographic_region ||
+                     row.region || 'National';
     
     // Normalize region
-    const normalizedRegion = this.normalizeRegion(
-      row.geographic_region || row.region || row.geographicRegion || 'National'
+    const normalizedRegion = this.normalizeRegion(rawRegion);
+    
+    // Extract organizational data
+    const extractOrgNumber = (value: any): number => {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const parsed = parseInt(value.replace(/[,$]/g, ''));
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+    
+    const n_orgs = extractOrgNumber(
+      actualRowData.n_orgs || actualRowData.N_orgs || actualRowData.n_org || actualRowData.N_org || 
+      actualRowData['# Orgs'] || actualRowData['# Organizations'] || actualRowData['Number of Organizations'] ||
+      actualRowData['N Orgs'] || actualRowData['N Organizations'] || 
+      row.n_orgs || 0
     );
     
-    // Normalize compensation metrics using column mappings
-    const normalizedMetrics = this.normalizeCompensationMetrics(row, columnMappings);
+    const n_incumbents = extractOrgNumber(
+      actualRowData.n_incumbents || actualRowData.N_incumbents || actualRowData.n_incumbent || actualRowData.N_incumbent ||
+      actualRowData['# Incumbents'] || actualRowData['Number of Incumbents'] || actualRowData['Incumbents'] ||
+      actualRowData['N Incumbents'] || actualRowData['N Incumbent'] ||
+      row.n_incumbents || 0
+    );
     
-    // Extract organizational data - check both the raw row and the SurveyData interface
-    // The organizational data is now stored in the SurveyData interface from IndexedDBService
-    const n_orgs = row.n_orgs || row.N_orgs || row.n_org || row.N_org || 0;
-    const n_incumbents = row.n_incumbents || row.N_incumbents || row.n_incumbent || row.N_incumbent || 0;
+    // Handle both WIDE format (separate columns) and LONG format (variable field)
+    const hasVariableField = actualRowData.variable !== undefined;
     
-    console.log(`🔍 AnalyticsDataService: Extracted organizational data - n_orgs: ${n_orgs}, n_incumbents: ${n_incumbents}`);
+    // Initialize all metrics to 0
+    const normalizedMetrics = {
+      tcc_p25: 0, tcc_p50: 0, tcc_p75: 0, tcc_p90: 0,
+      wrvu_p25: 0, wrvu_p50: 0, wrvu_p75: 0, wrvu_p90: 0,
+      cf_p25: 0, cf_p50: 0, cf_p75: 0, cf_p90: 0
+    };
+    
+    if (hasVariableField) {
+      // LONG FORMAT: Data has a 'variable' field (TCC, Work RVUs, TCC per Work RVU)
+      const variable = String(actualRowData.variable).toLowerCase();
+      const p25 = this.extractNumber(actualRowData.p25);
+      const p50 = this.extractNumber(actualRowData.p50);
+      const p75 = this.extractNumber(actualRowData.p75);
+      const p90 = this.extractNumber(actualRowData.p90);
+      
+      console.log('🔍 AnalyticsDataService: Processing LONG format data - variable:', actualRowData.variable, 'values:', { p25, p50, p75, p90 });
+      
+      // Set the appropriate metrics based on the variable type
+      // IMPORTANT: Order matters - check most specific patterns first
+      if (variable.includes('tcc per work rvu') || variable.includes('conversion factor')) {
+        // This is definitely a conversion factor
+        normalizedMetrics.cf_p25 = p25;
+        normalizedMetrics.cf_p50 = p50;
+        normalizedMetrics.cf_p75 = p75;
+        normalizedMetrics.cf_p90 = p90;
+        console.log('🔍 AnalyticsDataService: Set CF metrics (TCC per Work RVU):', { p25, p50, p75, p90 });
+      } else if (variable === 'tcc' || variable.includes('total cash compensation')) {
+        // This is total cash compensation
+        normalizedMetrics.tcc_p25 = p25;
+        normalizedMetrics.tcc_p50 = p50;
+        normalizedMetrics.tcc_p75 = p75;
+        normalizedMetrics.tcc_p90 = p90;
+        console.log('🔍 AnalyticsDataService: Set TCC metrics:', { p25, p50, p75, p90 });
+      } else if (variable.includes('work rvu') || variable.includes('wrvu')) {
+        // This is work RVUs (but NOT if it contains "per" or "conversion")
+        if (!variable.includes('per') && !variable.includes('conversion')) {
+          // Additional check: wRVU values are typically much larger than CF values
+          // If the values are small (< 1000), they're likely conversion factors
+          if (p50 > 1000) {
+            normalizedMetrics.wrvu_p25 = p25;
+            normalizedMetrics.wrvu_p50 = p50;
+            normalizedMetrics.wrvu_p75 = p75;
+            normalizedMetrics.wrvu_p90 = p90;
+            console.log('🔍 AnalyticsDataService: Set wRVU metrics (large values):', { p25, p50, p75, p90 });
+          } else {
+            // Small values in wRVU field are likely conversion factors
+            normalizedMetrics.cf_p25 = p25;
+            normalizedMetrics.cf_p50 = p50;
+            normalizedMetrics.cf_p75 = p75;
+            normalizedMetrics.cf_p90 = p90;
+            console.log('🔍 AnalyticsDataService: Set CF metrics (small values in wRVU field):', { p25, p50, p75, p90 });
+          }
+        } else {
+          // This is actually a conversion factor disguised as wRVU
+          normalizedMetrics.cf_p25 = p25;
+          normalizedMetrics.cf_p50 = p50;
+          normalizedMetrics.cf_p75 = p75;
+          normalizedMetrics.cf_p90 = p90;
+          console.log('🔍 AnalyticsDataService: Set CF metrics (disguised as wRVU):', { p25, p50, p75, p90 });
+        }
+      } else if (variable.includes('cf') || variable.includes('conversion')) {
+        // This is a conversion factor
+        normalizedMetrics.cf_p25 = p25;
+        normalizedMetrics.cf_p50 = p50;
+        normalizedMetrics.cf_p75 = p75;
+        normalizedMetrics.cf_p90 = p90;
+        console.log('🔍 AnalyticsDataService: Set CF metrics:', { p25, p50, p75, p90 });
+      } else {
+        console.log('🔍 AnalyticsDataService: Unknown variable type:', variable, 'values:', { p25, p50, p75, p90 });
+      }
+    } else {
+      // WIDE FORMAT: Data has separate columns for each metric
+      console.log('🔍 AnalyticsDataService: Processing WIDE format data');
+      console.log('🔍 AnalyticsDataService: Available columns:', Object.keys(actualRowData));
+      console.log('🔍 AnalyticsDataService: Sample wRVU values:', {
+        wrvu_p25: actualRowData.wrvu_p25,
+        wrvu_p50: actualRowData.wrvu_p50,
+        wrvu_p75: actualRowData.wrvu_p75,
+        wrvu_p90: actualRowData.wrvu_p90
+      });
+      console.log('🔍 AnalyticsDataService: Sample CF values:', {
+        cf_p25: actualRowData.cf_p25,
+        cf_p50: actualRowData.cf_p50,
+        cf_p75: actualRowData.cf_p75,
+        cf_p90: actualRowData.cf_p90
+      });
+      console.log('🔍 AnalyticsDataService: Sample TCC values:', {
+        tcc_p25: actualRowData.tcc_p25,
+        tcc_p50: actualRowData.tcc_p50,
+        tcc_p75: actualRowData.tcc_p75,
+        tcc_p90: actualRowData.tcc_p90
+      });
+      
+      // Extract TCC metrics with fallback column names
+      normalizedMetrics.tcc_p25 = this.extractNumber(
+        actualRowData.tcc_p25 || actualRowData['TCC P25'] || actualRowData['tcc_p25'] || actualRowData['TCC_p25']
+      );
+      normalizedMetrics.tcc_p50 = this.extractNumber(
+        actualRowData.tcc_p50 || actualRowData['TCC P50'] || actualRowData['tcc_p50'] || actualRowData['TCC_p50'] || actualRowData['TCC Median']
+      );
+      normalizedMetrics.tcc_p75 = this.extractNumber(
+        actualRowData.tcc_p75 || actualRowData['TCC P75'] || actualRowData['tcc_p75'] || actualRowData['TCC_p75']
+      );
+      normalizedMetrics.tcc_p90 = this.extractNumber(
+        actualRowData.tcc_p90 || actualRowData['TCC P90'] || actualRowData['tcc_p90'] || actualRowData['TCC_p90']
+      );
+      
+      // Extract wRVU metrics with fallback column names
+      normalizedMetrics.wrvu_p25 = this.extractNumber(
+        actualRowData.wrvu_p25 || actualRowData['wRVU P25'] || actualRowData['WRVU P25'] || actualRowData['wrvu_p25'] || actualRowData['WRVU_p25']
+      );
+      normalizedMetrics.wrvu_p50 = this.extractNumber(
+        actualRowData.wrvu_p50 || actualRowData['wRVU P50'] || actualRowData['WRVU P50'] || actualRowData['wrvu_p50'] || actualRowData['WRVU_p50'] || actualRowData['wRVU Median']
+      );
+      normalizedMetrics.wrvu_p75 = this.extractNumber(
+        actualRowData.wrvu_p75 || actualRowData['wRVU P75'] || actualRowData['WRVU P75'] || actualRowData['wrvu_p75'] || actualRowData['WRVU_p75']
+      );
+      normalizedMetrics.wrvu_p90 = this.extractNumber(
+        actualRowData.wrvu_p90 || actualRowData['wRVU P90'] || actualRowData['WRVU P90'] || actualRowData['wrvu_p90'] || actualRowData['WRVU_p90']
+      );
+      
+      // Extract CF metrics with fallback column names
+      normalizedMetrics.cf_p25 = this.extractNumber(
+        actualRowData.cf_p25 || actualRowData['CF P25'] || actualRowData['cf_p25'] || actualRowData['CF_p25'] || actualRowData['Conversion Factor P25']
+      );
+      normalizedMetrics.cf_p50 = this.extractNumber(
+        actualRowData.cf_p50 || actualRowData['CF P50'] || actualRowData['cf_p50'] || actualRowData['CF_p50'] || actualRowData['Conversion Factor P50'] || actualRowData['CF Median']
+      );
+      normalizedMetrics.cf_p75 = this.extractNumber(
+        actualRowData.cf_p75 || actualRowData['CF P75'] || actualRowData['cf_p75'] || actualRowData['CF_p75'] || actualRowData['Conversion Factor P75']
+      );
+      normalizedMetrics.cf_p90 = this.extractNumber(
+        actualRowData.cf_p90 || actualRowData['CF P90'] || actualRowData['cf_p90'] || actualRowData['CF_p90'] || actualRowData['Conversion Factor P90']
+      );
+      
+      // If we still don't have wRVU or CF data, try intelligent column matching
+      if (normalizedMetrics.wrvu_p50 === 0 || normalizedMetrics.cf_p50 === 0) {
+        console.log('🔍 AnalyticsDataService: Attempting intelligent column matching for missing data');
+        
+        // Try to find wRVU columns using pattern matching
+        for (const [key, value] of Object.entries(actualRowData)) {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.includes('wrvu') || lowerKey.includes('rvu') || lowerKey.includes('work')) {
+            if (lowerKey.includes('25') && normalizedMetrics.wrvu_p25 === 0) {
+              normalizedMetrics.wrvu_p25 = this.extractNumber(value);
+            } else if (lowerKey.includes('50') && normalizedMetrics.wrvu_p50 === 0) {
+              normalizedMetrics.wrvu_p50 = this.extractNumber(value);
+            } else if (lowerKey.includes('75') && normalizedMetrics.wrvu_p75 === 0) {
+              normalizedMetrics.wrvu_p75 = this.extractNumber(value);
+            } else if (lowerKey.includes('90') && normalizedMetrics.wrvu_p90 === 0) {
+              normalizedMetrics.wrvu_p90 = this.extractNumber(value);
+            }
+          }
+          
+          // Try to find CF columns using pattern matching
+          if (lowerKey.includes('cf') || lowerKey.includes('conversion') || lowerKey.includes('factor')) {
+            if (lowerKey.includes('25') && normalizedMetrics.cf_p25 === 0) {
+              normalizedMetrics.cf_p25 = this.extractNumber(value);
+            } else if (lowerKey.includes('50') && normalizedMetrics.cf_p50 === 0) {
+              normalizedMetrics.cf_p50 = this.extractNumber(value);
+            } else if (lowerKey.includes('75') && normalizedMetrics.cf_p75 === 0) {
+              normalizedMetrics.cf_p75 = this.extractNumber(value);
+            } else if (lowerKey.includes('90') && normalizedMetrics.cf_p90 === 0) {
+              normalizedMetrics.cf_p90 = this.extractNumber(value);
+            }
+          }
+        }
+      }
+      
+      console.log('🔍 AnalyticsDataService: After extraction:', {
+        tcc_p50: normalizedMetrics.tcc_p50,
+        wrvu_p50: normalizedMetrics.wrvu_p50,
+        cf_p50: normalizedMetrics.cf_p50
+      });
+      
+      console.log('🔍 AnalyticsDataService: Extracted metrics:', normalizedMetrics);
+    }
     
     return {
       specialty: normalizedSpecialty,
@@ -157,8 +397,23 @@ export class AnalyticsDataService {
       ...normalizedMetrics,
       surveySource: survey.type || survey.name || 'Unknown',
       surveyYear: survey.year?.toString() || 'Unknown',
-      rawData: row
+      rawData: actualRowData
     };
+  }
+  
+  /**
+   * Extract number from various formats
+   */
+  private extractNumber(value: any): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      // Handle "***" values as 0
+      if (value === '***' || value === '' || value === 'null' || value === 'undefined') return 0;
+      const parsed = parseFloat(value.replace(/[,$]/g, ''));
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    if (value === null || value === undefined) return 0;
+    return 0;
   }
 
   /**
@@ -171,7 +426,7 @@ export class AnalyticsDataService {
   ): string {
     if (!specialty || specialty === 'Unknown') return 'Unknown';
     
-    // Find mapping that includes this specialty
+    // First, try exact mapping match
     for (const mapping of mappings) {
       const hasSourceSpecialty = mapping.sourceSpecialties.some(source => 
         source.surveySource === surveySource && 
@@ -179,12 +434,42 @@ export class AnalyticsDataService {
       );
       
       if (hasSourceSpecialty) {
+        console.log('🔍 AnalyticsDataService: Found exact specialty mapping:', specialty, '->', mapping.standardizedName);
         return mapping.standardizedName;
       }
     }
     
-    // If no mapping found, return original
-    return specialty;
+    // If no exact mapping found, try fuzzy matching for common variations
+    const normalizedSpecialty = this.normalizeSpecialtyName(specialty);
+    for (const mapping of mappings) {
+      const hasSourceSpecialty = mapping.sourceSpecialties.some(source => {
+        const normalizedSourceSpecialty = this.normalizeSpecialtyName(source.specialty);
+        return source.surveySource === surveySource && 
+               normalizedSourceSpecialty === normalizedSpecialty;
+      });
+      
+      if (hasSourceSpecialty) {
+        console.log('🔍 AnalyticsDataService: Found fuzzy specialty mapping:', specialty, '->', mapping.standardizedName);
+        return mapping.standardizedName;
+      }
+    }
+    
+    // If still no mapping found, return normalized version
+    console.log('🔍 AnalyticsDataService: No specialty mapping found for:', specialty, 'returning normalized version');
+    return normalizedSpecialty;
+  }
+
+  /**
+   * Normalize specialty name for fuzzy matching
+   */
+  private normalizeSpecialtyName(specialty: string): string {
+    if (!specialty) return '';
+    
+    return specialty
+      .toLowerCase()
+      .replace(/\s+and\s+/g, ' ')  // Replace "and" with space
+      .replace(/\s+/g, ' ')        // Normalize multiple spaces
+      .trim();
   }
 
   /**
@@ -233,51 +518,16 @@ export class AnalyticsDataService {
     return region;
   }
 
-  /**
-   * Normalize compensation metrics using column mappings
-   */
-  private normalizeCompensationMetrics(row: RawSurveyRow, columnMappings: IColumnMapping[]): {
-    tcc_p25: number;
-    tcc_p50: number;
-    tcc_p75: number;
-    tcc_p90: number;
-    wrvu_p25: number;
-    wrvu_p50: number;
-    wrvu_p75: number;
-    wrvu_p90: number;
-    cf_p25: number;
-    cf_p50: number;
-    cf_p75: number;
-    cf_p90: number;
-  } {
-    // For now, use direct column access since column mappings may not be fully implemented
-    // This will be enhanced when column mappings are properly set up
-    
-    return {
-      tcc_p25: row.tcc_p25 || 0,
-      tcc_p50: row.tcc_p50 || 0,
-      tcc_p75: row.tcc_p75 || 0,
-      tcc_p90: row.tcc_p90 || 0,
-      wrvu_p25: row.wrvu_p25 || 0,
-      wrvu_p50: row.wrvu_p50 || 0,
-      wrvu_p75: row.wrvu_p75 || 0,
-      wrvu_p90: row.wrvu_p90 || 0,
-      cf_p25: row.cf_p25 || 0,
-      cf_p50: row.cf_p50 || 0,
-      cf_p75: row.cf_p75 || 0,
-      cf_p90: row.cf_p90 || 0,
-    };
-  }
 
   /**
    * Stack and aggregate normalized data
    * This is the key function that ensures each metric section has its own n_orgs/n_incumbents
    */
   private stackAndAggregateData(
-    normalizedRows: NormalizedRow[], 
-    filters: AnalyticsFilters
+    normalizedRows: NormalizedRow[]
   ): AggregatedData[] {
     console.log('🔍 AnalyticsDataService: Starting data stacking and aggregation');
+    console.log('🔍 AnalyticsDataService: Total normalized rows to process:', normalizedRows.length);
     
     // Group rows by specialty, provider type, region, and survey source
     const groupedData = new Map<string, NormalizedRow[]>();
@@ -301,48 +551,63 @@ export class AnalyticsDataService {
     groupedData.forEach((rows, key) => {
       if (rows.length === 0) return;
       
-      const firstRow = rows[0];
+      console.log('🔍 AnalyticsDataService: Processing group:', key, 'with', rows.length, 'rows');
       
-      // Create aggregated record with separate organizational data for each metric section
+      // For long format data, we need to combine multiple rows (one for each variable type)
+      // For wide format data, each row contains all metrics
+      
+      // Find the best representative row for organizational data
+      const representativeRow = rows.find(r => r.n_orgs > 0 && r.n_incumbents > 0) || rows[0];
+      
+      // Find rows with each metric type
+      const tccRow = rows.find(r => r.tcc_p50 > 0);
+      const wrvuRow = rows.find(r => r.wrvu_p50 > 0);
+      const cfRow = rows.find(r => r.cf_p50 > 0);
+      
+      console.log('🔍 AnalyticsDataService: Found metric rows - TCC:', !!tccRow, 'wRVU:', !!wrvuRow, 'CF:', !!cfRow);
+      
       const aggregatedRecord: AggregatedData = {
-        id: key,
-        standardizedName: firstRow.specialty,
-        surveySource: firstRow.surveySource as any,
-        surveySpecialty: firstRow.specialty,
-        geographicRegion: firstRow.region as any,
-        providerType: firstRow.providerType as any,
-        surveyYear: firstRow.surveyYear,
+        standardizedName: representativeRow.specialty,
+        surveySource: representativeRow.surveySource as any,
+        surveySpecialty: representativeRow.specialty,
+        geographicRegion: representativeRow.region as any,
+        providerType: representativeRow.providerType as any,
+        surveyYear: representativeRow.surveyYear,
         
-        // TCC metrics with their own n_orgs/n_incumbents
-        tcc_n_orgs: this.calculateTccNOrgs(rows),
-        tcc_n_incumbents: this.calculateTccNIncumbents(rows),
-        tcc_p25: this.calculatePercentile(rows.map(r => r.tcc_p25), 25),
-        tcc_p50: this.calculatePercentile(rows.map(r => r.tcc_p50), 50),
-        tcc_p75: this.calculatePercentile(rows.map(r => r.tcc_p75), 75),
-        tcc_p90: this.calculatePercentile(rows.map(r => r.tcc_p90), 90),
+        // TCC metrics - use TCC row if available, otherwise 0
+        tcc_n_orgs: tccRow ? tccRow.n_orgs : 0,
+        tcc_n_incumbents: tccRow ? tccRow.n_incumbents : 0,
+        tcc_p25: tccRow ? tccRow.tcc_p25 : 0,
+        tcc_p50: tccRow ? tccRow.tcc_p50 : 0,
+        tcc_p75: tccRow ? tccRow.tcc_p75 : 0,
+        tcc_p90: tccRow ? tccRow.tcc_p90 : 0,
         
-        // wRVU metrics with their own n_orgs/n_incumbents
-        wrvu_n_orgs: this.calculateWrvuNOrgs(rows),
-        wrvu_n_incumbents: this.calculateWrvuNIncumbents(rows),
-        wrvu_p25: this.calculatePercentile(rows.map(r => r.wrvu_p25), 25),
-        wrvu_p50: this.calculatePercentile(rows.map(r => r.wrvu_p50), 50),
-        wrvu_p75: this.calculatePercentile(rows.map(r => r.wrvu_p75), 75),
-        wrvu_p90: this.calculatePercentile(rows.map(r => r.wrvu_p90), 90),
+        // wRVU metrics - use wRVU row if available, otherwise 0
+        wrvu_n_orgs: wrvuRow ? wrvuRow.n_orgs : 0,
+        wrvu_n_incumbents: wrvuRow ? wrvuRow.n_incumbents : 0,
+        wrvu_p25: wrvuRow ? wrvuRow.wrvu_p25 : 0,
+        wrvu_p50: wrvuRow ? wrvuRow.wrvu_p50 : 0,
+        wrvu_p75: wrvuRow ? wrvuRow.wrvu_p75 : 0,
+        wrvu_p90: wrvuRow ? wrvuRow.wrvu_p90 : 0,
         
-        // CF metrics with their own n_orgs/n_incumbents
-        cf_n_orgs: this.calculateCfNOrgs(rows),
-        cf_n_incumbents: this.calculateCfNIncumbents(rows),
-        cf_p25: this.calculatePercentile(rows.map(r => r.cf_p25), 25),
-        cf_p50: this.calculatePercentile(rows.map(r => r.cf_p50), 50),
-        cf_p75: this.calculatePercentile(rows.map(r => r.cf_p75), 75),
-        cf_p90: this.calculatePercentile(rows.map(r => r.cf_p90), 90),
-        
-        // Legacy fields for backward compatibility
-        n_orgs: this.calculateTccNOrgs(rows),
-        n_incumbents: this.calculateTccNIncumbents(rows),
-        
-        rawData: { rows, key }
+        // CF metrics - use CF row if available, otherwise 0
+        cf_n_orgs: cfRow ? cfRow.n_orgs : 0,
+        cf_n_incumbents: cfRow ? cfRow.n_incumbents : 0,
+        cf_p25: cfRow ? cfRow.cf_p25 : 0,
+        cf_p50: cfRow ? cfRow.cf_p50 : 0,
+        cf_p75: cfRow ? cfRow.cf_p75 : 0,
+        cf_p90: cfRow ? cfRow.cf_p90 : 0
       };
+      
+      console.log('🔍 AnalyticsDataService: Final aggregated record:', {
+        specialty: aggregatedRecord.standardizedName,
+        tcc_p50: aggregatedRecord.tcc_p50,
+        wrvu_p50: aggregatedRecord.wrvu_p50,
+        cf_p50: aggregatedRecord.cf_p50,
+        tcc_n_orgs: aggregatedRecord.tcc_n_orgs,
+        wrvu_n_orgs: aggregatedRecord.wrvu_n_orgs,
+        cf_n_orgs: aggregatedRecord.cf_n_orgs
+      });
       
       aggregatedData.push(aggregatedRecord);
     });
@@ -352,71 +617,6 @@ export class AnalyticsDataService {
     return aggregatedData;
   }
 
-  /**
-   * Calculate n_orgs for TCC metrics
-   */
-  private calculateTccNOrgs(rows: NormalizedRow[]): number {
-    // Sum n_orgs for rows that have TCC data
-    const tccRows = rows.filter(r => r.tcc_p50 > 0);
-    return tccRows.reduce((sum, r) => sum + (r.n_orgs || 0), 0);
-  }
-
-  /**
-   * Calculate n_incumbents for TCC metrics
-   */
-  private calculateTccNIncumbents(rows: NormalizedRow[]): number {
-    // Sum n_incumbents for rows that have TCC data
-    const tccRows = rows.filter(r => r.tcc_p50 > 0);
-    return tccRows.reduce((sum, r) => sum + (r.n_incumbents || 0), 0);
-  }
-
-  /**
-   * Calculate n_orgs for wRVU metrics
-   */
-  private calculateWrvuNOrgs(rows: NormalizedRow[]): number {
-    // Sum n_orgs for rows that have wRVU data
-    const wrvuRows = rows.filter(r => r.wrvu_p50 > 0);
-    return wrvuRows.reduce((sum, r) => sum + (r.n_orgs || 0), 0);
-  }
-
-  /**
-   * Calculate n_incumbents for wRVU metrics
-   */
-  private calculateWrvuNIncumbents(rows: NormalizedRow[]): number {
-    // Sum n_incumbents for rows that have wRVU data
-    const wrvuRows = rows.filter(r => r.wrvu_p50 > 0);
-    return wrvuRows.reduce((sum, r) => sum + (r.n_incumbents || 0), 0);
-  }
-
-  /**
-   * Calculate n_orgs for CF metrics
-   */
-  private calculateCfNOrgs(rows: NormalizedRow[]): number {
-    // Sum n_orgs for rows that have CF data
-    const cfRows = rows.filter(r => r.cf_p50 > 0);
-    return cfRows.reduce((sum, r) => sum + (r.n_orgs || 0), 0);
-  }
-
-  /**
-   * Calculate n_incumbents for CF metrics
-   */
-  private calculateCfNIncumbents(rows: NormalizedRow[]): number {
-    // Sum n_incumbents for rows that have CF data
-    const cfRows = rows.filter(r => r.cf_p50 > 0);
-    return cfRows.reduce((sum, r) => sum + (r.n_incumbents || 0), 0);
-  }
-
-  /**
-   * Calculate percentile from array of numbers
-   */
-  private calculatePercentile(values: number[], percentile: number): number {
-    const validValues = values.filter(v => v > 0 && !isNaN(v));
-    if (validValues.length === 0) return 0;
-    
-    const sorted = validValues.sort((a, b) => a - b);
-    const index = Math.floor((percentile / 100) * sorted.length);
-    return sorted[index] || 0;
-  }
 }
 
 // Export singleton instance

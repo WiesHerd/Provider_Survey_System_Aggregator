@@ -106,7 +106,3 @@ export const getAvailableSampleFiles = () => {
 
 
 
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes

@@ -1,210 +1,190 @@
 /**
- * Custom hook for managing analytics data
- * Extracted from SurveyAnalytics.tsx to improve maintainability
+ * Analytics Feature - Custom Hook for Data Management
+ * 
+ * This hook manages all analytics data fetching, filtering, and state management.
+ * Following enterprise patterns for separation of concerns and reusability.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDataService } from '../../../services/DataService';
-import { ISurveyRow } from '../../../types/survey';
-import { ISpecialtyMapping } from '../../../types/specialty';
-import { AggregatedData, AnalyticsFilters } from '../types/analytics';
-import { performanceMonitor } from '../../../shared/utils/performance';
+import { AggregatedData, AnalyticsFilters, UseAnalyticsReturn } from '../types/analytics';
+import { filterAnalyticsData } from '../utils/analyticsCalculations';
+import { AnalyticsDataService } from '../services/analyticsDataService';
 
-interface UseAnalyticsDataReturn {
-  data: AggregatedData[];
-  loading: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-  filters: AnalyticsFilters;
-  setFilters: (filters: AnalyticsFilters) => void;
-  filteredData: AggregatedData[];
-}
-
-
-
-const SHOW_DEBUG = false; // Set to false for production performance
-
-export const useAnalyticsData = (): UseAnalyticsDataReturn => {
+/**
+ * Custom hook for managing analytics data
+ * 
+ * @param initialFilters - Initial filter values
+ * @returns Object containing data, loading state, error, and actions
+ */
+export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
+  specialty: '',
+  surveySource: '',
+  geographicRegion: '',
+  providerType: '',
+  year: ''
+}): UseAnalyticsReturn => {
+  // State declarations
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<AnalyticsFilters>({});
+  const [filters, setFilters] = useState<AnalyticsFilters>(initialFilters);
+  const [mappings, setMappings] = useState<any[]>([]);
+  const [columnMappings, setColumnMappings] = useState<any[]>([]);
+  const [regionMappings, setRegionMappings] = useState<any[]>([]);
 
-  // Fetch and process analytics data
-  const fetchAnalyticsData = async () => {
+  // Memoized filtered data
+  const filteredData = useMemo(() => {
+    return filterAnalyticsData(data, filters);
+  }, [data, filters]);
+
+  // Data fetching function - fetch ALL data without filters
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
+      console.log('🔍 useAnalyticsData: Starting data fetch...');
+      
+      // Use the AnalyticsDataService to get ALL data (no filters applied)
+      const analyticsDataService = new AnalyticsDataService();
+      console.log('🔍 useAnalyticsData: Created AnalyticsDataService instance');
+      
+      const allData = await analyticsDataService.getAnalyticsData({
+        specialty: '',
+        surveySource: '',
+        geographicRegion: '',
+        providerType: '',
+        year: ''
+      });
+
+      console.log('🔍 useAnalyticsData: Fetched all data -', allData.length, 'records');
+      console.log('🔍 useAnalyticsData: Sample data:', allData[0]);
+      console.log('🔍 useAnalyticsData: Sample data wRVU/CF values:', {
+        tcc_p50: allData[0]?.tcc_p50,
+        wrvu_p50: allData[0]?.wrvu_p50,
+        cf_p50: allData[0]?.cf_p50
+      });
+      
+      // Also fetch mappings for filter options
       const dataService = getDataService();
-      const surveys = await dataService.getAllSurveys();
-      const mappings = await dataService.getAllSpecialtyMappings();
+      const [specialtyMappings, colMappings, regMappings] = await Promise.all([
+        dataService.getAllSpecialtyMappings(),
+        dataService.getAllColumnMappings(),
+        dataService.getRegionMappings()
+      ]);
 
-      if (SHOW_DEBUG) {
-        console.log('Fetched surveys:', surveys.length);
-        console.log('Fetched mappings:', mappings.length);
-      }
-
-      // Process data asynchronously to avoid blocking UI
-      const processedData = await processSurveyData(surveys, mappings);
-      setData(processedData);
-
+      setData(allData);
+      setMappings(specialtyMappings);
+      setColumnMappings(colMappings);
+      setRegionMappings(regMappings);
     } catch (err) {
-      console.error('Error fetching analytics data:', err);
+      console.error('🔍 useAnalyticsData: Error fetching analytics data:', err);
+      console.error('🔍 useAnalyticsData: Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : 'No stack trace',
+        error: err
+      });
       setError(err instanceof Error ? err.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // Remove filters dependency - fetch all data once
 
-  // Process survey data into aggregated format
-  const processSurveyData = async (surveys: any[], mappings: ISpecialtyMapping[]): Promise<AggregatedData[]> => {
-    return new Promise((resolve) => {
-      // Use setTimeout to make this asynchronous and avoid blocking UI
-      setTimeout(() => {
-        const processedData = performanceMonitor.measureTime('Data Processing', () => {
-          const aggregatedData: Record<string, AggregatedData> = {};
+  // Export functions
+  const exportToExcel = useCallback(() => {
+    const headers = [
+      'Survey Source',
+      'Survey Specialty', 
+      'Geographic Region',
+      'TCC # Orgs',
+      'TCC # Incumbents',
+      'TCC P25',
+      'TCC P50',
+      'TCC P75',
+      'TCC P90',
+      'wRVU # Orgs',
+      'wRVU # Incumbents',
+      'wRVU P25',
+      'wRVU P50',
+      'wRVU P75',
+      'wRVU P90',
+      'CF # Orgs',
+      'CF # Incumbents',
+      'CF P25',
+      'CF P50',
+      'CF P75',
+      'CF P90'
+    ];
 
-          surveys.forEach(survey => {
-            // Create unique key for aggregation
-            const key = `${survey.surveySource}_${survey.surveySpecialty}_${survey.geographicRegion}`;
-            
-            if (!aggregatedData[key]) {
-              aggregatedData[key] = {
-                id: key, // Use the key as the ID
-                standardizedName: survey.standardizedName || '',
-                surveySource: survey.surveySource,
-                surveySpecialty: survey.surveySpecialty,
-                geographicRegion: survey.geographicRegion,
-                providerType: survey.providerType || 'Unknown',
-                surveyYear: survey.surveyYear || 'Unknown',
-                
-                // TCC metrics with their own organizational data
-                tcc_n_orgs: 0,
-                tcc_n_incumbents: 0,
-                tcc_p25: 0,
-                tcc_p50: 0,
-                tcc_p75: 0,
-                tcc_p90: 0,
-                
-                // wRVU metrics with their own organizational data
-                wrvu_n_orgs: 0,
-                wrvu_n_incumbents: 0,
-                wrvu_p25: 0,
-                wrvu_p50: 0,
-                wrvu_p75: 0,
-                wrvu_p90: 0,
-                
-                // CF metrics with their own organizational data
-                cf_n_orgs: 0,
-                cf_n_incumbents: 0,
-                cf_p25: 0,
-                cf_p50: 0,
-                cf_p75: 0,
-                cf_p90: 0,
-                
-                // Legacy fields for backward compatibility
-                n_orgs: 0,
-                n_incumbents: 0,
-                
-                rawData: survey.rawData || {}
-              };
-            }
+    const csvData = filteredData.map(row => [
+      row.surveySource,
+      row.surveySpecialty,
+      row.geographicRegion,
+      row.tcc_n_orgs,
+      row.tcc_n_incumbents,
+      row.tcc_p25,
+      row.tcc_p50,
+      row.tcc_p75,
+      row.tcc_p90,
+      row.wrvu_n_orgs,
+      row.wrvu_n_incumbents,
+      row.wrvu_p25,
+      row.wrvu_p50,
+      row.wrvu_p75,
+      row.wrvu_p90,
+      row.cf_n_orgs,
+      row.cf_n_incumbents,
+      row.cf_p25,
+      row.cf_p50,
+      row.cf_p75,
+      row.cf_p90
+    ]);
 
-            // Aggregate data
-            const record = aggregatedData[key];
-            
-            // Legacy fields (sum all)
-            record.n_orgs += survey.n_orgs || 0;
-            record.n_incumbents += survey.n_incumbents || 0;
+    // Add headers
+    csvData.unshift(headers);
 
-            // TCC metrics with their own organizational data
-            if (survey.tcc_p50 > 0) {
-              record.tcc_n_orgs += survey.n_orgs || 0;
-              record.tcc_n_incumbents += survey.n_incumbents || 0;
-            }
-            if (survey.tcc_p25) record.tcc_p25 += survey.tcc_p25;
-            if (survey.tcc_p50) record.tcc_p50 += survey.tcc_p50;
-            if (survey.tcc_p75) record.tcc_p75 += survey.tcc_p75;
-            if (survey.tcc_p90) record.tcc_p90 += survey.tcc_p90;
+    // Convert to CSV string
+    const csvContent = csvData
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
 
-            // wRVU metrics with their own organizational data
-            if (survey.wrvu_p50 > 0) {
-              record.wrvu_n_orgs += survey.n_orgs || 0;
-              record.wrvu_n_incumbents += survey.n_incumbents || 0;
-            }
-            if (survey.wrvu_p25) record.wrvu_p25 += survey.wrvu_p25;
-            if (survey.wrvu_p50) record.wrvu_p50 += survey.wrvu_p50;
-            if (survey.wrvu_p75) record.wrvu_p75 += survey.wrvu_p75;
-            if (survey.wrvu_p90) record.wrvu_p90 += survey.wrvu_p90;
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `survey-analytics-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [filteredData]);
 
-            // CF metrics with their own organizational data
-            if (survey.cf_p50 > 0) {
-              record.cf_n_orgs += survey.n_orgs || 0;
-              record.cf_n_incumbents += survey.n_incumbents || 0;
-            }
-            if (survey.cf_p25) record.cf_p25 += survey.cf_p25;
-            if (survey.cf_p50) record.cf_p50 += survey.cf_p50;
-            if (survey.cf_p75) record.cf_p75 += survey.cf_p75;
-            if (survey.cf_p90) record.cf_p90 += survey.cf_p90;
-          });
+  const exportToCSV = useCallback(() => {
+    exportToExcel(); // Same function for now
+  }, [exportToExcel]);
 
-          return Object.values(aggregatedData);
-        });
-
-        resolve(processedData);
-      }, 0);
-    });
-  };
-
-  // Apply filters to data
-  const filteredData = useMemo(() => {
-    return data.filter(row => {
-      // Specialty filter
-      if (filters.specialty && row.surveySpecialty !== filters.specialty) {
-        return false;
-      }
-
-      // Region filter
-      if (filters.region && row.geographicRegion !== filters.region) {
-        return false;
-      }
-
-      // Survey source filter
-      if (filters.surveySource && row.surveySource !== filters.surveySource) {
-        return false;
-      }
-
-      // Search filter (case-insensitive)
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const matchesSearch = 
-          row.standardizedName.toLowerCase().includes(searchLower) ||
-          row.surveySpecialty.toLowerCase().includes(searchLower) ||
-          row.geographicRegion.toLowerCase().includes(searchLower) ||
-          row.surveySource.toLowerCase().includes(searchLower);
-        
-        if (!matchesSearch) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [data, filters]);
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchAnalyticsData();
+  // Filter update function
+  const updateFilters = useCallback((newFilters: AnalyticsFilters) => {
+    setFilters(newFilters);
   }, []);
 
+  // Initial data fetch and refetch when filters change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Return hook interface
   return {
-    data,
+    data: filteredData, // Return filtered data for display
+    allData: data, // Return all data for filter options
     loading,
     error,
-    refetch: fetchAnalyticsData,
     filters,
-    setFilters,
-    filteredData
+    setFilters: updateFilters,
+    refetch: fetchData,
+    exportToExcel,
+    exportToCSV
   };
 };

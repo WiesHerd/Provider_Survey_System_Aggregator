@@ -1,0 +1,294 @@
+version: "1.0.0"
+
+hardMaps:
+  # MGMA-specific mappings based on their exact terminology
+  - id: "MGMA_CARD_INTERVENTIONAL"
+    pattern: ".*cardiology.*invasive.*interventional.*"
+    canonicalId: "CARD-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "MGMA_CARD_EP"
+    pattern: ".*cardiology.*electrophysiology.*"
+    canonicalId: "CARD-EP"
+    confidence: 0.95
+  
+  - id: "MGMA_CARD_IMAGING"
+    pattern: ".*cardiology.*imaging.*(echo|ct|mri|nuclear).*"
+    canonicalId: "CARD-IMAGING"
+    confidence: 0.95
+  
+  - id: "MGMA_CARD_ADVANCED_HF"
+    pattern: ".*cardiology.*advanced.*heart.*failure.*"
+    canonicalId: "CARD-ADVANCED-HF"
+    confidence: 0.95
+  
+  - id: "MGMA_CARD_STRUCTURAL"
+    pattern: ".*cardiology.*structural.*heart.*"
+    canonicalId: "CARD-STRUCTURAL"
+    confidence: 0.95
+  
+  - id: "MGMA_NEURO_INTERVENTIONAL"
+    pattern: ".*neurology.*interventional.*"
+    canonicalId: "NEURO-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "MGMA_NEURO_EPILEPSY"
+    pattern: ".*neurology.*epilepsy.*"
+    canonicalId: "NEURO-EPILEPSY"
+    confidence: 0.95
+  
+  - id: "MGMA_NEURO_MS"
+    pattern: ".*neurology.*multiple.*sclerosis.*"
+    canonicalId: "NEURO-MS"
+    confidence: 0.95
+  
+  - id: "MGMA_NEURO_MOVEMENT"
+    pattern: ".*neurology.*movement.*"
+    canonicalId: "NEURO-MOVEMENT"
+    confidence: 0.95
+  
+  - id: "MGMA_PULM_INTERVENTIONAL"
+    pattern: ".*pulmonology.*interventional.*"
+    canonicalId: "PULM-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "MGMA_PULM_CRITICAL_CARE"
+    pattern: ".*pulmonology.*critical.*care.*"
+    canonicalId: "PULM-CRITICAL-CARE"
+    confidence: 0.95
+  
+  - id: "MGMA_RAD_INTERVENTIONAL"
+    pattern: ".*radiology.*interventional.*"
+    canonicalId: "RAD-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "MGMA_RAD_NEURO_IR"
+    pattern: ".*radiology.*neuro.*interventional.*"
+    canonicalId: "RAD-NEURO-IR"
+    confidence: 0.95
+  
+  - id: "MGMA_RAD_MAMMOGRAPHY"
+    pattern: ".*radiology.*mammography.*"
+    canonicalId: "RAD-MAMMOGRAPHY"
+    confidence: 0.95
+  
+  - id: "MGMA_RAD_NUCLEAR"
+    pattern: ".*radiology.*nuclear.*"
+    canonicalId: "RAD-NUCLEAR"
+    confidence: 0.95
+  
+  - id: "MGMA_RAD_MSK"
+    pattern: ".*radiology.*msk.*"
+    canonicalId: "RAD-MSK"
+    confidence: 0.95
+  
+  - id: "MGMA_RAD_NOCTURNIST"
+    pattern: ".*radiology.*nocturnist.*"
+    canonicalId: "RAD-NOCTURNIST"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_CT"
+    pattern: ".*surgery.*cardiothoracic.*"
+    canonicalId: "SURG-CT"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_THORACIC"
+    pattern: ".*surgery.*thoracic.*"
+    canonicalId: "SURG-THORACIC"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_VASCULAR"
+    pattern: ".*surgery.*vascular.*"
+    canonicalId: "SURG-VASCULAR"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_TRAUMA"
+    pattern: ".*surgery.*trauma.*"
+    canonicalId: "SURG-TRAUMA"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_TRANSPLANT"
+    pattern: ".*surgery.*transplant.*"
+    canonicalId: "SURG-TRANSPLANT"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_BARIATRIC"
+    pattern: ".*surgery.*bariatric.*"
+    canonicalId: "SURG-BARIATRIC"
+    confidence: 0.95
+  
+  - id: "MGMA_SURG_BREAST"
+    pattern: ".*surgery.*breast.*"
+    canonicalId: "SURG-BREAST"
+    confidence: 0.95
+  
+  - id: "MGMA_OBGYN_MFM"
+    pattern: ".*obgyn.*maternal.*fetal.*"
+    canonicalId: "OBGYN-MFM"
+    confidence: 0.95
+  
+  - id: "MGMA_OBGYN_REI"
+    pattern: ".*obgyn.*reproductive.*endocrinology.*"
+    canonicalId: "OBGYN-REI"
+    confidence: 0.95
+  
+  - id: "MGMA_OBGYN_UROGYN"
+    pattern: ".*obgyn.*urogynecology.*"
+    canonicalId: "OBGYN-UROGYN"
+    confidence: 0.95
+  
+  - id: "MGMA_OBGYN_GYN_ONC"
+    pattern: ".*obgyn.*gynecologic.*oncology.*"
+    canonicalId: "OBGYN-GYN-ONC"
+    confidence: 0.95
+  
+  - id: "MGMA_OBGYN_HOSPITALIST"
+    pattern: ".*obgyn.*hospitalist.*"
+    canonicalId: "OBGYN-HOSPITALIST"
+    confidence: 0.95
+  
+  - id: "MGMA_OBGYN_MIGS"
+    pattern: ".*obgyn.*minimally.*invasive.*"
+    canonicalId: "OBGYN-MIGS"
+    confidence: 0.95
+  
+  - id: "MGMA_ENT_RHINOLOGY"
+    pattern: ".*ent.*rhinology.*"
+    canonicalId: "ENT-RHINOLOGY"
+    confidence: 0.95
+  
+  - id: "MGMA_ENT_OTOLOGY"
+    pattern: ".*ent.*otology.*"
+    canonicalId: "ENT-OTOLOGY"
+    confidence: 0.95
+  
+  - id: "MGMA_ENT_HEAD_NECK"
+    pattern: ".*ent.*head.*neck.*"
+    canonicalId: "ENT-HEAD-NECK"
+    confidence: 0.95
+  
+  - id: "MGMA_ENT_FACIAL_PLASTICS"
+    pattern: ".*ent.*facial.*plastics.*"
+    canonicalId: "ENT-FACIAL-PLASTICS"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_HAND"
+    pattern: ".*ortho.*hand.*"
+    canonicalId: "ORTHO-HAND"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_FOOT_ANKLE"
+    pattern: ".*ortho.*foot.*ankle.*"
+    canonicalId: "ORTHO-FOOT-ANKLE"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_SPINE"
+    pattern: ".*ortho.*spine.*"
+    canonicalId: "ORTHO-SPINE"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_SPORTS"
+    pattern: ".*ortho.*sports.*"
+    canonicalId: "ORTHO-SPORTS"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_ONCOLOGY"
+    pattern: ".*ortho.*oncology.*"
+    canonicalId: "ORTHO-ONCOLOGY"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_SHOULDER_ELBOW"
+    pattern: ".*ortho.*shoulder.*elbow.*"
+    canonicalId: "ORTHO-SHOULDER-ELBOW"
+    confidence: 0.95
+  
+  - id: "MGMA_ORTHO_HIP_KNEE"
+    pattern: ".*ortho.*hip.*knee.*"
+    canonicalId: "ORTHO-HIP-KNEE"
+    confidence: 0.95
+  
+  - id: "MGMA_PATH_AP"
+    pattern: ".*pathology.*anatomic.*"
+    canonicalId: "PATH-AP"
+    confidence: 0.95
+  
+  - id: "MGMA_PATH_CP"
+    pattern: ".*pathology.*clinical.*"
+    canonicalId: "PATH-CP"
+    confidence: 0.95
+  
+  - id: "MGMA_PATH_AP_CP"
+    pattern: ".*pathology.*anatomic.*clinical.*"
+    canonicalId: "PATH-AP-CP"
+    confidence: 0.95
+  
+  - id: "MGMA_PATH_DERM"
+    pattern: ".*pathology.*dermatopathology.*"
+    canonicalId: "PATH-DERM"
+    confidence: 0.95
+  
+  - id: "MGMA_PATH_CYTO"
+    pattern: ".*pathology.*cytopathology.*"
+    canonicalId: "PATH-CYTO"
+    confidence: 0.95
+  
+  - id: "MGMA_PATH_BLOOD_BANK"
+    pattern: ".*pathology.*blood.*bank.*"
+    canonicalId: "PATH-BLOOD-BANK"
+    confidence: 0.95
+  
+  - id: "MGMA_PSYCH_INPATIENT"
+    pattern: ".*psychiatry.*inpatient.*"
+    canonicalId: "PSYCH-INPATIENT"
+    confidence: 0.95
+  
+  - id: "MGMA_PSYCH_OUTPATIENT"
+    pattern: ".*psychiatry.*outpatient.*"
+    canonicalId: "PSYCH-OUTPATIENT"
+    confidence: 0.95
+  
+  - id: "MGMA_PSYCH_GERIATRIC"
+    pattern: ".*psychiatry.*geriatric.*"
+    canonicalId: "PSYCH-GERIATRIC"
+    confidence: 0.95
+  
+  - id: "MGMA_PSYCH_CONSULT_LIAISON"
+    pattern: ".*psychiatry.*consultation.*liaison.*"
+    canonicalId: "PSYCH-CONSULT-LIAISON"
+    confidence: 0.95
+  
+  - id: "MGMA_PSYCH_FORENSIC"
+    pattern: ".*psychiatry.*forensic.*"
+    canonicalId: "PSYCH-FORENSIC"
+    confidence: 0.95
+  
+  - id: "MGMA_PSYCH_ADDICTION"
+    pattern: ".*psychiatry.*addiction.*"
+    canonicalId: "PSYCH-ADDICTION"
+    confidence: 0.95
+  
+  - id: "MGMA_IM_HOSPITALIST"
+    pattern: ".*internal.*medicine.*hospitalist.*"
+    canonicalId: "IM-HOSPITALIST"
+    confidence: 0.95
+  
+  - id: "MGMA_IM_NOCTURNIST"
+    pattern: ".*internal.*medicine.*nocturnist.*"
+    canonicalId: "IM-NOCTURNIST"
+    confidence: 0.95
+
+blocks:
+  - id: "MGMA_BLOCK_AMBIGUOUS"
+    condition: "mgma_ambiguous_terminology"
+    reason: "MGMA uses specific terminology that may conflict with general patterns"
+
+bucketingHints:
+  - id: "MGMA_HINT_SPECIALTY_COLON"
+    pattern: ".*:.*"
+    parent: "auto_detect"
+    confidence: 0.7
+  
+  - id: "MGMA_HINT_SPECIALTY_DASH"
+    pattern: ".*-.*"
+    parent: "auto_detect"
+    confidence: 0.7

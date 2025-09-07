@@ -48,8 +48,12 @@ export const printAnalytics = (data: AggregatedData[], filters: AnalyticsFilters
     .join(', ');
   
   const totalRecords = data.length;
-  const totalOrgs = data.reduce((sum, row) => sum + row.n_orgs, 0);
-  const totalIncumbents = data.reduce((sum, row) => sum + row.n_incumbents, 0);
+  const totalTccOrgs = data.reduce((sum, row) => sum + row.tcc_n_orgs, 0);
+  const totalTccIncumbents = data.reduce((sum, row) => sum + row.tcc_n_incumbents, 0);
+  const totalWrvuOrgs = data.reduce((sum, row) => sum + row.wrvu_n_orgs, 0);
+  const totalWrvuIncumbents = data.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0);
+  const totalCfOrgs = data.reduce((sum, row) => sum + row.cf_n_orgs, 0);
+  const totalCfIncumbents = data.reduce((sum, row) => sum + row.cf_n_incumbents, 0);
   
   const printContent = `
     <!DOCTYPE html>
@@ -87,8 +91,12 @@ export const printAnalytics = (data: AggregatedData[], filters: AnalyticsFilters
       <div class="summary">
         <h3>Summary:</h3>
         <p>Total Records: ${totalRecords.toLocaleString()}</p>
-        <p>Total Organizations: ${totalOrgs.toLocaleString()}</p>
-        <p>Total Incumbents: ${totalIncumbents.toLocaleString()}</p>
+        <p>Total TCC Organizations: ${totalTccOrgs.toLocaleString()}</p>
+        <p>Total TCC Incumbents: ${totalTccIncumbents.toLocaleString()}</p>
+        <p>Total wRVU Organizations: ${totalWrvuOrgs.toLocaleString()}</p>
+        <p>Total wRVU Incumbents: ${totalWrvuIncumbents.toLocaleString()}</p>
+        <p>Total CF Organizations: ${totalCfOrgs.toLocaleString()}</p>
+        <p>Total CF Incumbents: ${totalCfIncumbents.toLocaleString()}</p>
       </div>
       
       <table>
@@ -97,8 +105,12 @@ export const printAnalytics = (data: AggregatedData[], filters: AnalyticsFilters
             <th>Survey Source</th>
             <th>Specialty</th>
             <th>Region</th>
-            <th class="numeric"># Orgs</th>
-            <th class="numeric"># Incumbents</th>
+            <th class="numeric">TCC # Orgs</th>
+            <th class="numeric">TCC # Incumbents</th>
+            <th class="numeric">wRVU # Orgs</th>
+            <th class="numeric">wRVU # Incumbents</th>
+            <th class="numeric">CF # Orgs</th>
+            <th class="numeric">CF # Incumbents</th>
             <th class="numeric">TCC P25</th>
             <th class="numeric">TCC P50</th>
             <th class="numeric">TCC P75</th>
@@ -115,8 +127,12 @@ export const printAnalytics = (data: AggregatedData[], filters: AnalyticsFilters
               <td>${row.surveySource}</td>
               <td>${row.surveySpecialty}</td>
               <td>${row.geographicRegion}</td>
-              <td class="numeric">${row.n_orgs.toLocaleString()}</td>
-              <td class="numeric">${row.n_incumbents.toLocaleString()}</td>
+              <td class="numeric">${row.tcc_n_orgs.toLocaleString()}</td>
+              <td class="numeric">${row.tcc_n_incumbents.toLocaleString()}</td>
+              <td class="numeric">${row.wrvu_n_orgs.toLocaleString()}</td>
+              <td class="numeric">${row.wrvu_n_incumbents.toLocaleString()}</td>
+              <td class="numeric">${row.cf_n_orgs.toLocaleString()}</td>
+              <td class="numeric">${row.cf_n_incumbents.toLocaleString()}</td>
               <td class="numeric">$${row.tcc_p25.toLocaleString()}</td>
               <td class="numeric">$${row.tcc_p50.toLocaleString()}</td>
               <td class="numeric">$${row.tcc_p75.toLocaleString()}</td>

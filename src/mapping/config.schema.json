@@ -1,0 +1,310 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Specialty Mapping Configuration Schema",
+  "description": "JSON schema for validating all mapping configuration files",
+  "definitions": {
+    "domain": {
+      "type": "string",
+      "enum": ["ADULT", "PEDIATRIC", "APP_OTHER"]
+    },
+    "source": {
+      "type": "string",
+      "enum": ["Gallagher", "SullivanCotter", "MGMA"]
+    }
+  },
+  "anyOf": [
+    {
+      "title": "Taxonomy Configuration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "specialties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z]+(-[A-Z]+)*$"
+              },
+              "parent": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "domain": {
+                "$ref": "#/definitions/domain"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["id", "parent", "name", "domain", "tags"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "specialties"],
+      "additionalProperties": false
+    },
+    {
+      "title": "Synonyms Configuration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "domainHints": {
+          "type": "object",
+          "properties": {
+            "pediatric": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "adult": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["pediatric", "adult"],
+          "additionalProperties": false
+        },
+        "parentSynonyms": {
+          "type": "object",
+          "patternProperties": {
+            "^.+$": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "subspecialtyTokens": {
+          "type": "object",
+          "patternProperties": {
+            "^.+$": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "negativeTokens": {
+          "type": "object",
+          "patternProperties": {
+            "^.+$": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": ["version", "domainHints", "parentSynonyms", "subspecialtyTokens", "negativeTokens"],
+      "additionalProperties": false
+    },
+    {
+      "title": "Rules Configuration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "hardMaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z_]+$"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "canonicalId": {
+                "type": "string",
+                "pattern": "^[A-Z]+(-[A-Z]+)*$"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": ["id", "pattern", "canonicalId"],
+            "additionalProperties": false
+          }
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z_]+$"
+              },
+              "condition": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "condition", "reason"],
+            "additionalProperties": false
+          }
+        },
+        "bucketingHints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z_]+$"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": ["id", "pattern", "parent"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "hardMaps", "blocks", "bucketingHints"],
+      "additionalProperties": false
+    },
+    {
+      "title": "Overrides Configuration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "canonicalId": {
+                "type": "string",
+                "pattern": "^[A-Z]+(-[A-Z]+)*$"
+              },
+              "source": {
+                "$ref": "#/definitions/source"
+              },
+              "addedBy": {
+                "type": "string"
+              },
+              "addedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "pattern", "canonicalId", "addedBy", "addedAt"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "overrides"],
+      "additionalProperties": false
+    },
+    {
+      "title": "Test Cases Configuration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "testCases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "input": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "$ref": "#/definitions/source"
+                  },
+                  "rawName": {
+                    "type": "string"
+                  },
+                  "meta": {
+                    "type": "object"
+                  }
+                },
+                "required": ["source", "rawName"],
+                "additionalProperties": false
+              },
+              "expectedCanonicalId": {
+                "type": ["string", "null"]
+              },
+              "expectedConfidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "description": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["id", "input", "expectedCanonicalId", "description", "tags"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "testCases"],
+      "additionalProperties": false
+    }
+  ]
+}
