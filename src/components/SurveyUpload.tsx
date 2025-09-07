@@ -11,6 +11,7 @@ import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { clearStorage } from '../utils/clearStorage';
+import { nuclearClear, inspectIndexedDB } from '../utils/nuclearClear';
 
 
 // Provider type categories for survey selection
@@ -621,6 +622,37 @@ const SurveyUpload: React.FC = () => {
                 >
                   <XMarkIcon className="h-4 w-4 mr-1" />
                   Clear All Data
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const databases = await inspectIndexedDB();
+                      console.log('🔍 Found databases:', databases);
+                      alert(`Found ${databases.length} databases: ${databases.join(', ')}`);
+                    } catch (error) {
+                      console.error('Error inspecting databases:', error);
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                  title="Inspect what databases exist in IndexedDB"
+                >
+                  🔍 Inspect DB
+                </button>
+                <button
+                  onClick={async () => {
+                    if (confirm('🚨 NUCLEAR CLEAR: This will aggressively clear ALL data storage including IndexedDB, localStorage, cookies, and caches. Are you absolutely sure?')) {
+                      try {
+                        await nuclearClear();
+                      } catch (error) {
+                        console.error('Nuclear clear failed:', error);
+                        alert('Nuclear clear failed. Check console for details.');
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-red-800 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                  title="Nuclear clear - aggressively clears ALL data storage (use if normal clear doesn't work)"
+                >
+                  🚨 Nuclear Clear
                 </button>
               </div>
             </div>
