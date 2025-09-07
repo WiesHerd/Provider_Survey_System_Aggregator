@@ -11,7 +11,6 @@ import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { clearStorage } from '../utils/clearStorage';
-import { nuclearClear, inspectIndexedDB } from '../utils/nuclearClear';
 import { parseCSVLine } from '../shared/utils/csvParser';
 
 
@@ -619,60 +618,10 @@ const SurveyUpload: React.FC = () => {
                 <button
                   onClick={handleClearAll}
                   className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
-                  title="Clear all data to fix CSV parsing issues (CT, MRI appearing as separate entries)"
+                  title="Clear all uploaded data and start fresh"
                 >
                   <XMarkIcon className="h-4 w-4 mr-1" />
                   Clear All Data
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const databases = await inspectIndexedDB();
-                      console.log('🔍 Found databases:', databases);
-                      alert(`Found ${databases.length} databases: ${databases.join(', ')}`);
-                    } catch (error) {
-                      console.error('Error inspecting databases:', error);
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                  title="Inspect what databases exist in IndexedDB"
-                >
-                  🔍 Inspect DB
-                </button>
-                <button
-                  onClick={async () => {
-                    if (confirm('🚨 NUCLEAR CLEAR: This will aggressively clear ALL data storage including IndexedDB, localStorage, cookies, and caches. Are you absolutely sure?')) {
-                      try {
-                        await nuclearClear();
-                      } catch (error) {
-                        console.error('Nuclear clear failed:', error);
-                        alert('Nuclear clear failed. Check console for details.');
-                      }
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-red-800 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
-                  title="Nuclear clear - aggressively clears ALL data storage (use if normal clear doesn't work)"
-                >
-                  🚨 Nuclear Clear
-                </button>
-                <button
-                  onClick={async () => {
-                    if (confirm('🔄 FORCE RE-PARSE: This will clear all data and show instructions to re-upload your files with the fixed CSV parser. This will fix the CT/MRI delimitation issue. Continue?')) {
-                      try {
-                        await nuclearClear();
-                        setTimeout(() => {
-                          alert('✅ Data cleared! Now re-upload your CSV files - they will be parsed correctly with the fixed CSV parser that handles commas in parentheses properly.');
-                        }, 2000);
-                      } catch (error) {
-                        console.error('Force re-parse failed:', error);
-                        alert('Force re-parse failed. Check console for details.');
-                      }
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-green-800 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
-                  title="Force re-parse - clears data and prompts to re-upload with fixed CSV parser"
-                >
-                  🔄 Force Re-parse
                 </button>
               </div>
             </div>
