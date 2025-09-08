@@ -1742,6 +1742,16 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                   }
                 }}
                 displayEmpty
+                renderValue={(selected) => {
+                  if (!selected || selected === '') {
+                    return (
+                      <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                        📊 All Sources ({uniqueValues.surveySources.length} sources)
+                      </span>
+                    );
+                  }
+                  return selected;
+                }}
               >
                 <MenuItem value="">All Sources</MenuItem>
                 {uniqueValues.surveySources.map((source) => (
@@ -1778,6 +1788,16 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                   }
                 }}
                 displayEmpty
+                renderValue={(selected) => {
+                  if (!selected || selected === '') {
+                    return (
+                      <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                        👥 All Types ({uniqueValues.providerTypes.length} types)
+                      </span>
+                    );
+                  }
+                  return selected;
+                }}
               >
                 <MenuItem value="">All Types</MenuItem>
                 {uniqueValues.providerTypes.map((type) => (
@@ -1801,7 +1821,11 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 renderValue={(value: unknown) => {
                   const v = (value as string) || '';
                   if (!v) {
-                    return <span style={{ color: '#9ca3af' }}>All Regions</span>;
+                    return (
+                      <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                        🌍 All Regions ({uniqueValues.regions.length} regions)
+                      </span>
+                    );
                   }
                   return formatRegionForDisplay(v);
                 }}
