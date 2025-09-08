@@ -1742,7 +1742,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                   }
                 }}
                 displayEmpty
-                renderValue={(selected) => {
+                renderValue={(selected: unknown) => {
                   if (!selected || selected === '') {
                     return (
                       <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
@@ -1750,7 +1750,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                       </span>
                     );
                   }
-                  return selected;
+                  return selected as string;
                 }}
               >
                 <MenuItem value="">All Sources</MenuItem>
@@ -1788,7 +1788,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                   }
                 }}
                 displayEmpty
-                renderValue={(selected) => {
+                renderValue={(selected: unknown) => {
                   if (!selected || selected === '') {
                     return (
                       <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
@@ -1796,7 +1796,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                       </span>
                     );
                   }
-                  return selected;
+                  return selected as string;
                 }}
               >
                 <MenuItem value="">All Types</MenuItem>
