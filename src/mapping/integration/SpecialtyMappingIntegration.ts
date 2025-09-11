@@ -9,6 +9,7 @@ import { SpecialtyMappingEngine } from '../engine';
 import { RawInput, MappingDecision, CanonicalSpecialty, SynonymsConfig, RulesConfig } from '../types';
 import { DEFAULT_MAPPING_CONFIG } from '../config';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../../types/specialty';
+import * as yaml from 'js-yaml';
 
 /**
  * Configuration for the mapping engine integration
@@ -172,38 +173,62 @@ export class SpecialtyMappingIntegration {
    * Load taxonomy from YAML (simplified - in real implementation, use YAML loader)
    */
   private loadTaxonomy(): CanonicalSpecialty[] {
-    // This would load from taxonomy.yaml in a real implementation
-    // For now, return a basic set
-    return [
-      {
-        id: 'CARD-GENERAL',
-        parent: 'Cardiology',
-        name: 'General Cardiology',
-        domain: 'ADULT',
-        tags: ['cardiology', 'general', 'adult']
-      },
-      {
-        id: 'CARD-INTERVENTIONAL',
-        parent: 'Cardiology',
-        name: 'Interventional Cardiology',
-        domain: 'ADULT',
-        tags: ['cardiology', 'interventional', 'invasive', 'adult']
-      },
-      {
-        id: 'PEDS-CARD-GENERAL',
-        parent: 'Pediatric Cardiology',
-        name: 'General Pediatric Cardiology',
-        domain: 'PEDIATRIC',
-        tags: ['pediatric', 'cardiology', 'general', 'peds']
-      }
-      // ... more specialties would be loaded from taxonomy.yaml
-    ];
+    try {
+      // Load taxonomy from YAML file
+      const taxonomyPath = require.resolve('../taxonomy.yaml');
+      const taxonomyContent = require('fs').readFileSync(taxonomyPath, 'utf8');
+      const taxonomyData = yaml.load(taxonomyContent) as any;
+      const taxonomy = taxonomyData.specialties || [];
+      return taxonomy;
+    } catch (error) {
+      console.error('Error loading taxonomy from YAML:', error);
+      // Fallback to hardcoded taxonomy
+      return [
+        {
+          id: 'CARD-GENERAL',
+          parent: 'Cardiology',
+          name: 'General Cardiology',
+          domain: 'ADULT',
+          tags: ['cardiology', 'general', 'adult']
+        },
+        {
+          id: 'CARD-INTERVENTIONAL',
+          parent: 'Cardiology',
+          name: 'Interventional Cardiology',
+          domain: 'ADULT',
+          tags: ['cardiology', 'interventional', 'invasive', 'adult']
+        },
+        {
+          id: 'PEDS-CARD-GENERAL',
+          parent: 'Pediatric Cardiology',
+          name: 'General Pediatric Cardiology',
+          domain: 'PEDIATRIC',
+          tags: ['pediatric', 'cardiology', 'general', 'peds']
+        }
+      ];
+    }
   }
 
   /**
-   * Load synonyms from YAML (simplified)
+   * Load synonyms from YAML file
    */
   private loadSynonyms(): SynonymsConfig {
+    try {
+      // Load synonyms from YAML file
+      const synonymsPath = require.resolve('../synonyms.yaml');
+      const synonymsContent = require('fs').readFileSync(synonymsPath, 'utf8');
+      const synonyms = yaml.load(synonymsContent) as SynonymsConfig;
+      return synonyms || this.getDefaultSynonyms();
+    } catch (error) {
+      console.error('Error loading synonyms from YAML:', error);
+      return this.getDefaultSynonyms();
+    }
+  }
+
+  /**
+   * Default synonyms fallback
+   */
+  private getDefaultSynonyms(): SynonymsConfig {
     return {
       domainHints: {
         pediatric: ['pediatric', 'ped', 'peds', 'neonatal', 'nicu', 'picu'],
@@ -231,37 +256,82 @@ export class SpecialtyMappingIntegration {
   }
 
   /**
-   * Load rules from YAML files (simplified)
+   * Load rules from YAML files
    */
   private loadRules(): RulesConfig[] {
-    return [
-      {
+    try {
+      // Load base rules
+      const baseRulesPath = require.resolve('../rules.base.yaml');
+      const baseRulesContent = require('fs').readFileSync(baseRulesPath, 'utf8');
+      const baseRules = yaml.load(baseRulesContent) as any;
+
+      // Load pediatric rules
+      const pediatricRulesPath = require.resolve('../rules.pediatric.yaml');
+      const pediatricRulesContent = require('fs').readFileSync(pediatricRulesPath, 'utf8');
+      const pediatricRules = yaml.load(pediatricRulesContent) as any;
+
+      // Combine rules
+      const combinedRules = {
         version: '1.0.0',
         hardMaps: [
-          {
-            id: 'EXACT_CARD_GENERAL',
-            pattern: '^cardiology$',
-            canonicalId: 'CARD-GENERAL',
-            confidence: 0.95
-          },
-          {
-            id: 'EXACT_CARD_INTERVENTIONAL',
-            pattern: '^(interventional|invasive).*cardiology$',
-            canonicalId: 'CARD-INTERVENTIONAL',
-            confidence: 0.95
-          }
+          ...(baseRules.hardMaps || []),
+          ...(pediatricRules.hardMaps || [])
         ],
-        blocks: [],
+        blocks: [
+          ...(baseRules.blocks || []),
+          ...(pediatricRules.blocks || [])
+        ],
         bucketingHints: [
-          {
-            id: 'HINT_CARDIOVASCULAR',
-            pattern: '.*(cardiovascular|cardiac|heart).*',
-            parent: 'Cardiology',
-            confidence: 0.8
-          }
+          ...(baseRules.bucketingHints || []),
+          ...(pediatricRules.bucketingHints || [])
         ]
-      }
-    ];
+      };
+
+      return [combinedRules];
+    } catch (error) {
+      console.error('Error loading rules from YAML:', error);
+      // Fallback to hardcoded rules
+      return [
+        {
+          version: '1.0.0',
+          hardMaps: [
+            {
+              id: 'EXACT_CARD_GENERAL',
+              pattern: '^cardiology$',
+              canonicalId: 'CARD-GENERAL',
+              confidence: 0.95
+            },
+            {
+              id: 'EXACT_CARD_INTERVENTIONAL',
+              pattern: '^(interventional|invasive).*cardiology$',
+              canonicalId: 'CARD-INTERVENTIONAL',
+              confidence: 0.95
+            },
+            {
+              id: 'EXACT_CARD_IMAGING',
+              pattern: '.*cardiology.*cardiac imaging.*|.*cardiology.*imaging.*|.*cardiac imaging.*|.*echo.*cardiology.*|.*echocardiography.*cardiology.*|.*cardiology.*-.*cardiac imaging.*\\(.*echo.*ct.*mri.*nuclear.*\\)',
+              canonicalId: 'CARD-IMAGING',
+              confidence: 0.95
+            }
+          ],
+          blocks: [
+            {
+              id: 'BLOCK_IMAGING_MODALITIES',
+              condition: 'imaging_modality_standalone',
+              reason: 'Individual imaging modalities (Echo, CT, MRI, Nuclear) should not be standalone specialties'
+            }
+          ],
+          bucketingHints: [
+            {
+              id: 'HINT_CARDIOVASCULAR',
+              pattern: '.*(cardiovascular|cardiac|heart).*',
+              parent: 'Cardiology',
+              confidence: 0.8
+            }
+          ]
+        }
+      ];
+    }
   }
 
   /**

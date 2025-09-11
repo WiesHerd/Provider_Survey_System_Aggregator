@@ -5,7 +5,8 @@
 
 import React, { useState } from 'react';
 import { PlusIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { ISpecialtyMapping } from '../../../types/specialty';
+import { ISpecialtyMapping } from '../types/mapping';
+import { SurveySource } from '../../../shared/types';
 
 interface BulkMappingCreatorProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ interface MappingDraft {
   standardizedName: string;
   sourceSpecialties: Array<{
     specialty: string;
-    surveySource: string;
+    surveySource: SurveySource;
   }>;
 }
 
@@ -32,9 +33,9 @@ export const BulkMappingCreator: React.FC<BulkMappingCreatorProps> = ({
       id: '1',
       standardizedName: '',
       sourceSpecialties: [
-        { specialty: '', surveySource: 'MGMA' },
-        { specialty: '', surveySource: 'SullivanCotter' },
-        { specialty: '', surveySource: 'Gallagher' }
+        { specialty: '', surveySource: 'MGMA' as SurveySource },
+        { specialty: '', surveySource: 'SullivanCotter' as SurveySource },
+        { specialty: '', surveySource: 'Gallagher' as SurveySource }
       ]
     }
   ]);
@@ -47,9 +48,9 @@ export const BulkMappingCreator: React.FC<BulkMappingCreatorProps> = ({
       id: newId,
       standardizedName: '',
       sourceSpecialties: [
-        { specialty: '', surveySource: 'MGMA' },
-        { specialty: '', surveySource: 'SullivanCotter' },
-        { specialty: '', surveySource: 'Gallagher' }
+        { specialty: '', surveySource: 'MGMA' as SurveySource },
+        { specialty: '', surveySource: 'SullivanCotter' as SurveySource },
+        { specialty: '', surveySource: 'Gallagher' as SurveySource }
       ]
     }]);
   };
@@ -82,7 +83,7 @@ export const BulkMappingCreator: React.FC<BulkMappingCreatorProps> = ({
       m.id === mappingId 
         ? {
             ...m,
-            sourceSpecialties: [...m.sourceSpecialties, { specialty: '', surveySource: 'MGMA' }]
+            sourceSpecialties: [...m.sourceSpecialties, { specialty: '', surveySource: 'MGMA' as SurveySource }]
           }
         : m
     ));

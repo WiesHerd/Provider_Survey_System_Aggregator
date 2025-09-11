@@ -167,7 +167,7 @@ const PageContent = () => {
     <div className="flex h-screen bg-gray-50">
       {!isDashboard && <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
       
-      <div className={`flex-1 transition-all duration-300 ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
+      <div className={`flex-1 transition-all duration-300 flex flex-col ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
         {!isDashboard && (
           <PageHeader 
             title={headerContent.title} 
@@ -177,7 +177,7 @@ const PageContent = () => {
             className={location.pathname === '/analytics' ? 'mb-0' : undefined}
           />
         )}
-        <main className={`bg-gray-50 ${isDashboard ? '' : 'px-8'}`}>
+        <main className={`bg-gray-50 flex-1 overflow-auto ${isDashboard ? '' : 'px-8'}`}>
           <Suspense fallback={<SuspenseSpinner message="Loading page..." />}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

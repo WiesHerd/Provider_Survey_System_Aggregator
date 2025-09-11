@@ -43,7 +43,7 @@ hardMaps:
     confidence: 0.95
   
   - id: "PEDS_SURG_PLASTICS"
-    pattern: "^(pediatric|ped).*(plastic|reconstructive).*surgery$"
+    pattern: ".*(pediatric|ped).*(plastic|reconstructive).*surgery.*|.*(pediatric|ped).*surgery.*(plastic|reconstructive).*"
     canonicalId: "PEDS-SURG-PLASTICS"
     confidence: 0.95
   

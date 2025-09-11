@@ -7,7 +7,8 @@ import LoadingSpinner from './ui/loading-spinner';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 
-const REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
+// These will be dynamically populated from region mappings
+const DEFAULT_REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
 
 export const RegionalAnalytics: React.FC = () => {
   const [normalizedRows, setNormalizedRows] = useState<ISurveyRow[]>([]);
@@ -15,6 +16,7 @@ export const RegionalAnalytics: React.FC = () => {
   const [selectedProviderType, setSelectedProviderType] = useState<string>('');
   const [selectedSurveySource, setSelectedSurveySource] = useState<string>('');
   const [mappings, setMappings] = useState<any[]>([]);
+  const [regionMappings, setRegionMappings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,14 +25,26 @@ export const RegionalAnalytics: React.FC = () => {
         setLoading(true);
         const dataService = getDataService();
         
-        // Get specialty mappings and column mappings (needed for data transformation)
-        const [allMappings, columnMappings] = await Promise.all([
+        // Get specialty mappings, column mappings, and region mappings (needed for data transformation)
+        const [allMappings, columnMappings, regionMappings] = await Promise.all([
           dataService.getAllSpecialtyMappings(),
-          dataService.getAllColumnMappings()
+          dataService.getAllColumnMappings(),
+          dataService.getRegionMappings()
         ]);
         console.log(`📋 Loaded ${allMappings.length} specialty mappings`);
         console.log(`📋 Loaded ${columnMappings.length} column mappings`);
+        console.log(`🌍 Loaded ${regionMappings.length} region mappings`);
+        
+        // Debug: Check the structure of loaded mappings
+        if (allMappings.length > 0) {
+          console.log('🔍 First few specialty mappings:', allMappings.slice(0, 3).map(m => ({
+            standardizedName: m.standardizedName,
+            sourceSpecialtiesCount: m.sourceSpecialties?.length || 0
+          })));
+        }
+        
         setMappings(allMappings);
+        setRegionMappings(regionMappings);
         
         // Use the same approach as SurveyAnalytics - load all survey data at once
         const uploadedSurveys = await dataService.getAllSurveys();
@@ -60,34 +74,46 @@ export const RegionalAnalytics: React.FC = () => {
           }
         }
         
-        // Now transform the data using the same approach as SurveyAnalytics
+        // Build region mapping lookup (same as SurveyAnalytics)
+        const regionMappingLookup = new Map();
+        regionMappings.forEach((mapping: any) => {
+          mapping.sourceRegions.forEach((region: any) => {
+            if (region.surveySource) {
+              regionMappingLookup.set(region.region.toLowerCase(), mapping.standardizedName);
+            }
+          });
+        });
+        
+        console.log(`🌍 Region mapping lookup built with ${regionMappingLookup.size} mappings:`, 
+          Array.from(regionMappingLookup.entries()).slice(0, 10));
+
+        // Transform the data using the same logic as SurveyAnalytics
         Object.entries(surveyData).forEach(([surveyId, surveyRows]) => {
           if (surveyRows && surveyRows.length > 0) {
             const surveySource = surveyRows[0]._surveyType || surveyRows[0]._surveyName || surveyId;
-            // Apply the same transformation logic as SurveyAnalytics
-            const transformedRows = surveyRows.map((row: any, index: number) => {
-              if (index === 0) {
-                console.log(`🔍 FIRST ROW SAMPLE for ${surveySource}:`, {
-                  allFields: Object.keys(row),
+            
+            const transformedRows = surveyRows.map((row: any) => {
+              // Debug: Log the raw row structure for the first few rows
+              if (Math.random() < 0.05) { // Log 5% of rows
+                console.log('🔍 Regional Analytics - Raw row inspection:', {
+                  surveySource,
                   specialty: row.specialty,
-                  variable: row.variable, // This tells us what type of compensation data this row contains
+                  providerType: row.providerType,
+                  region: row.region,
+                  variable: row.variable,
                   p25: row.p25,
                   p50: row.p50,
                   p75: row.p75,
                   p90: row.p90,
-                  sampleNumericFields: Object.entries(row).filter(([k, v]) => typeof v === 'number').slice(0, 10)
+                  allFields: Object.keys(row).slice(0, 20)
                 });
               }
+              
               const transformedRow: any = {
                 ...row,
                 surveySource: surveySource,
-                specialty: row.specialty || row.normalizedSpecialty || '',
-                // Try multiple possible field names for geographic region
-                geographicRegion: row.geographic_region || row.region || row.geographicRegion || 
-                                row.Geographic_Region || row.Region || row['Geographic Region'] || '',
-                // Try multiple possible field names for provider type
-                providerType: row.providerType || row.provider_type || row.ProviderType || 
-                            row.Provider_Type || row['Provider Type'] || row.Type || '',
+                specialty: row.specialty || '',
+                providerType: row.providerType || '',
                 // Initialize compensation fields
                 tcc_p25: 0,
                 tcc_p50: 0,
@@ -101,158 +127,129 @@ export const RegionalAnalytics: React.FC = () => {
                 wrvu_p50: 0,
                 wrvu_p75: 0,
                 wrvu_p90: 0,
-                n_orgs: 0,
-                n_incumbents: 0
+                n_orgs: Number(row.n_orgs) || 0,
+                n_incumbents: Number(row.n_incumbents) || 0
               };
-
-              // Debug: Log the raw row structure for the first few rows
-              if (Math.random() < 0.1) { // Log 10% of rows
-                console.log('🔍 Regional Analytics - Raw row inspection:', {
-                  surveySource,
-                  allFields: Object.keys(row),
-                  specialtyFields: Object.keys(row).filter(k => k.toLowerCase().includes('special')),
-                  regionFields: Object.keys(row).filter(k => k.toLowerCase().includes('region') || k.toLowerCase().includes('geo')),
-                  providerFields: Object.keys(row).filter(k => k.toLowerCase().includes('provider') || k.toLowerCase().includes('type')),
-                  compensationFields: Object.keys(row).filter(k => 
-                    k.toLowerCase().includes('tcc') || 
-                    k.toLowerCase().includes('comp') || 
-                    k.toLowerCase().includes('cash') ||
-                    k.toLowerCase().includes('p25') ||
-                    k.toLowerCase().includes('p50') ||
-                    k.toLowerCase().includes('p75') ||
-                    k.toLowerCase().includes('p90')
-                  ),
-                  sampleValues: {
-                    specialty: row.specialty,
-                    region: transformedRow.geographicRegion,
-                    providerType: transformedRow.providerType
-                  }
-                });
-              }
-
-              // Apply column mappings to get compensation data
-              let mappedColumns = 0;
               
-              // Build column mapping lookup for this survey source (same as SurveyAnalytics)
-              const columnMappingLookup = new Map();
-              columnMappings.forEach(mapping => {
-                mapping.sourceColumns.forEach((column: any) => {
-                  if (column.surveySource === surveySource) {
-                    // Use 'name' field for column mapping (same as SurveyAnalytics)
-                    columnMappingLookup.set(column.name, mapping.standardizedName);
+              // Apply region mappings (same as SurveyAnalytics)
+              const originalRegion = String(row.geographicRegion || row.geographic_region || row.region || '').toLowerCase();
+              if (originalRegion) {
+                const standardizedRegion = regionMappingLookup.get(originalRegion);
+                if (standardizedRegion) {
+                  transformedRow.geographicRegion = standardizedRegion;
+                  transformedRow.originalRegion = row.geographicRegion || row.geographic_region || row.region;
+                  
+                  // Debug: Log successful region mapping
+                  if (Math.random() < 0.1) { // Log 10% of successful mappings
+                    console.log('🌍 Regional Analytics - Region mapping applied:', {
+                      originalRegion: row.geographicRegion || row.geographic_region || row.region,
+                      standardizedRegion,
+                      surveySource
+                    });
                   }
-                });
-              });
-
-              // FIRST: Handle variable-based data structure (common in uploaded surveys)
-              // Check if this row has a 'variable' field indicating compensation type
-              if (row.variable) {
+                } else {
+                  transformedRow.geographicRegion = row.geographicRegion || row.geographic_region || row.region || '';
+                  transformedRow.originalRegion = row.geographicRegion || row.geographic_region || row.region || '';
+                  
+                  // Debug: Log unmapped regions
+                  if (Math.random() < 0.05) { // Log 5% of unmapped regions
+                    console.log('⚠️ Regional Analytics - Region not mapped:', {
+                      originalRegion: row.geographicRegion || row.geographic_region || row.region,
+                      availableMappings: Array.from(regionMappingLookup.keys()).slice(0, 5),
+                      surveySource
+                    });
+                  }
+                }
+              } else {
+                transformedRow.geographicRegion = '';
+                transformedRow.originalRegion = '';
+              }
+              
+              // Handle variable-based data structure (same as SurveyAnalytics)
+              if (row.variable && (row.p25 !== undefined || row.p50 !== undefined || row.p75 !== undefined || row.p90 !== undefined)) {
                 const variable = String(row.variable).toLowerCase();
                 const p25 = Number(row.p25) || 0;
                 const p50 = Number(row.p50) || 0;
                 const p75 = Number(row.p75) || 0;
                 const p90 = Number(row.p90) || 0;
                 
-                // Debug: Log variable mapping for cardiac rows
-                if (transformedRow.specialty && transformedRow.specialty.toLowerCase().includes('cardiac')) {
-                  console.log('🔍 VARIABLE MAPPING for cardiac:', {
+                // Debug: Log variable mapping
+                if (Math.random() < 0.1) { // Log 10% of variable mappings
+                  console.log('🔍 Regional Analytics - Variable mapping:', {
                     variable: row.variable,
                     variableLower: variable,
                     p25, p50, p75, p90
                   });
                 }
                 
-                if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
-                  transformedRow.tcc_p25 = p25;
-                  transformedRow.tcc_p50 = p50;
-                  transformedRow.tcc_p75 = p75;
-                  transformedRow.tcc_p90 = p90;
-                  mappedColumns += 4;
-                } else if (variable.includes('cf') || variable.includes('conversion')) {
+                // Map based on variable type (using same logic as SurveyAnalytics)
+                // Check CF patterns FIRST (more specific patterns should come first)
+                if (variable.includes('conversion') || 
+                    variable.includes('cf') || 
+                    variable.includes('factor') || 
+                    variable.includes('conversion factor') ||
+                    variable.includes('tcc per rvu') || 
+                    variable.includes('tcc per work rvu') || 
+                    variable.includes('compensation per rvu') || 
+                    variable.includes('dollars per rvu') || 
+                    variable.includes('per work rvu') || 
+                    variable.includes('per rvu') || 
+                    variable.includes('tcc/rvu') ||
+                    variable.includes('compensation/rvu') || 
+                    variable.includes('comp per rvu') || 
+                    variable.includes('cash per rvu') ||
+                    (variable.includes('tcc') && variable.includes('rvu'))) {
                   transformedRow.cf_p25 = p25;
                   transformedRow.cf_p50 = p50;
                   transformedRow.cf_p75 = p75;
                   transformedRow.cf_p90 = p90;
-                  mappedColumns += 4;
-                } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+                  
+                  // Debug: Log CF mapping
+                  if (Math.random() < 0.2) { // Log 20% of CF mappings
+                    console.log('💰 Regional Analytics - CF mapping applied:', {
+                      variable: row.variable,
+                      variableLower: variable,
+                      cf_p50: p50
+                    });
+                  }
+                } 
+                // Check TCC patterns
+                else if (variable.includes('compensation') || 
+                         variable.includes('salary') || 
+                         variable.includes('total cash') || 
+                         variable.includes('tcc') || 
+                         variable.includes('total compensation')) {
+                  transformedRow.tcc_p25 = p25;
+                  transformedRow.tcc_p50 = p50;
+                  transformedRow.tcc_p75 = p75;
+                  transformedRow.tcc_p90 = p90;
+                } 
+                // Check wRVU patterns
+                else if (variable.includes('rvu') || 
+                         variable.includes('relative value') || 
+                         variable.includes('work rvu') || 
+                         variable.includes('wrvu') || 
+                         variable.includes('work relative value')) {
                   transformedRow.wrvu_p25 = p25;
                   transformedRow.wrvu_p50 = p50;
                   transformedRow.wrvu_p75 = p75;
                   transformedRow.wrvu_p90 = p90;
-                  mappedColumns += 4;
                 }
               }
-
-              // SECOND: Apply column mappings (fallback)
-              for (const [originalColumn, value] of Object.entries(row)) {
-                const mappedName = columnMappingLookup.get(originalColumn);
-                if (mappedName && value !== undefined && value !== null) {
-                  const numericValue = Number(value) || 0;
-                  if (numericValue > 0) {
-                    transformedRow[mappedName] = numericValue;
-                    mappedColumns++;
-                  }
-                }
-              }
-
-              // Fallback: Intelligent mapping if no column mappings found
-              if (mappedColumns === 0) {
-                const intelligentMappings = [
-                  // TCC patterns
-                  { pattern: /tcc.*p25|p25.*tcc|total.*cash.*25/i, target: 'tcc_p25' },
-                  { pattern: /tcc.*p50|p50.*tcc|total.*cash.*50|median.*tcc/i, target: 'tcc_p50' },
-                  { pattern: /tcc.*p75|p75.*tcc|total.*cash.*75/i, target: 'tcc_p75' },
-                  { pattern: /tcc.*p90|p90.*tcc|total.*cash.*90/i, target: 'tcc_p90' },
-                  // wRVU patterns
-                  { pattern: /wrvu.*p25|p25.*wrvu|work.*rvu.*25/i, target: 'wrvu_p25' },
-                  { pattern: /wrvu.*p50|p50.*wrvu|work.*rvu.*50|median.*wrvu/i, target: 'wrvu_p50' },
-                  { pattern: /wrvu.*p75|p75.*wrvu|work.*rvu.*75/i, target: 'wrvu_p75' },
-                  { pattern: /wrvu.*p90|p90.*wrvu|work.*rvu.*90/i, target: 'wrvu_p90' },
-                  // CF patterns
-                  { pattern: /cf.*p25|p25.*cf|conversion.*factor.*25/i, target: 'cf_p25' },
-                  { pattern: /cf.*p50|p50.*cf|conversion.*factor.*50|median.*cf/i, target: 'cf_p50' },
-                  { pattern: /cf.*p75|p75.*cf|conversion.*factor.*75/i, target: 'cf_p75' },
-                  { pattern: /cf.*p90|p90.*cf|conversion.*factor.*90/i, target: 'cf_p90' },
-                  // Org/incumbent patterns
-                  { pattern: /n_orgs|num.*org|organizations|orgs/i, target: 'n_orgs' },
-                  { pattern: /n_incumbents|num.*inc|incumbents/i, target: 'n_incumbents' }
-                ];
-
-                for (const [originalColumn, value] of Object.entries(row)) {
-                  const mapping = intelligentMappings.find(m => m.pattern.test(originalColumn));
-                  if (mapping && value !== undefined && value !== null) {
-                    const numericValue = Number(value) || 0;
-                    if (numericValue > 0) {
-                      transformedRow[mapping.target] = numericValue;
-                      mappedColumns++;
-                    }
-                  }
-                }
-              }
-
-              // Debug: Log column mapping results for filtered specialty rows
-              if (transformedRow.specialty && transformedRow.specialty.toLowerCase().includes('cardiac')) {
-                console.log('🔍 CARDIAC ROW - Column mapping details:', {
-                  surveySource,
-                  specialty: transformedRow.specialty,
-                  region: transformedRow.geographicRegion,
-                  providerType: transformedRow.providerType,
-                  mappedColumns,
-                  columnMappingLookupSize: columnMappingLookup.size,
-                  sampleMappings: Array.from(columnMappingLookup.entries()).slice(0, 10),
-                  originalFieldsWithNumbers: Object.entries(row).filter(([k, v]) => typeof v === 'number' && v > 0).slice(0, 10),
-                  compensationData: {
-                    tcc_p25: transformedRow.tcc_p25,
-                    tcc_p50: transformedRow.tcc_p50,
-                    tcc_p75: transformedRow.tcc_p75,
-                    tcc_p90: transformedRow.tcc_p90,
-                    cf_p25: transformedRow.cf_p25,
-                    cf_p50: transformedRow.cf_p50,
-                    wrvu_p25: transformedRow.wrvu_p25,
-                    wrvu_p50: transformedRow.wrvu_p50
-                  }
-                });
-              }
+              
+              // Handle direct column-based data (fallback)
+              if (row.tcc_p25 !== undefined) transformedRow.tcc_p25 = Number(row.tcc_p25) || 0;
+              if (row.tcc_p50 !== undefined) transformedRow.tcc_p50 = Number(row.tcc_p50) || 0;
+              if (row.tcc_p75 !== undefined) transformedRow.tcc_p75 = Number(row.tcc_p75) || 0;
+              if (row.tcc_p90 !== undefined) transformedRow.tcc_p90 = Number(row.tcc_p90) || 0;
+              if (row.cf_p25 !== undefined) transformedRow.cf_p25 = Number(row.cf_p25) || 0;
+              if (row.cf_p50 !== undefined) transformedRow.cf_p50 = Number(row.cf_p50) || 0;
+              if (row.cf_p75 !== undefined) transformedRow.cf_p75 = Number(row.cf_p75) || 0;
+              if (row.cf_p90 !== undefined) transformedRow.cf_p90 = Number(row.cf_p90) || 0;
+              if (row.wrvu_p25 !== undefined) transformedRow.wrvu_p25 = Number(row.wrvu_p25) || 0;
+              if (row.wrvu_p50 !== undefined) transformedRow.wrvu_p50 = Number(row.wrvu_p50) || 0;
+              if (row.wrvu_p75 !== undefined) transformedRow.wrvu_p75 = Number(row.wrvu_p75) || 0;
+              if (row.wrvu_p90 !== undefined) transformedRow.wrvu_p90 = Number(row.wrvu_p90) || 0;
               
               return transformedRow;
             });
@@ -267,8 +264,7 @@ export const RegionalAnalytics: React.FC = () => {
                   tcc_p50: transformedRows[0].tcc_p50,
                   cf_p50: transformedRows[0].cf_p50,
                   wrvu_p50: transformedRows[0].wrvu_p50
-                },
-                originalColumns: Object.keys(surveyRows[0]).slice(0, 10)
+                }
               });
             }
             
@@ -281,8 +277,16 @@ export const RegionalAnalytics: React.FC = () => {
         console.log(`📋 All unique specialties loaded:`, Array.from(new Set(allRows.map(r => r.specialty))));
         
         // Debug: Check if we have any compensation data
+        const rowsWithTCC = allRows.filter(r => Number(r.tcc_p50) > 0);
+        const rowsWithCF = allRows.filter(r => Number(r.cf_p50) > 0);
+        const rowsWithWRVU = allRows.filter(r => Number(r.wrvu_p50) > 0);
         const rowsWithCompensation = allRows.filter(r => Number(r.tcc_p50) > 0 || Number(r.cf_p50) > 0 || Number(r.wrvu_p50) > 0);
-        console.log(`💰 Rows with compensation data: ${rowsWithCompensation.length} out of ${allRows.length}`);
+        
+        console.log(`💰 Compensation data summary:`);
+        console.log(`  - Rows with TCC data: ${rowsWithTCC.length} out of ${allRows.length}`);
+        console.log(`  - Rows with CF data: ${rowsWithCF.length} out of ${allRows.length}`);
+        console.log(`  - Rows with wRVU data: ${rowsWithWRVU.length} out of ${allRows.length}`);
+        console.log(`  - Rows with any compensation data: ${rowsWithCompensation.length} out of ${allRows.length}`);
         
         // Debug: Check unique provider types and regions found
         const uniqueProviderTypes = Array.from(new Set(allRows.map(r => r.providerType).filter(Boolean)));
@@ -291,7 +295,9 @@ export const RegionalAnalytics: React.FC = () => {
         
         console.log('🔍 Regional Analytics Debug Summary:', {
           totalRows: allRows.length,
-          rowsWithCompensation: rowsWithCompensation.length,
+          rowsWithTCC: rowsWithTCC.length,
+          rowsWithCF: rowsWithCF.length,
+          rowsWithWRVU: rowsWithWRVU.length,
           uniqueProviderTypes,
           uniqueRegions,
           uniqueSurveySources,
@@ -301,9 +307,32 @@ export const RegionalAnalytics: React.FC = () => {
             region: r.geographicRegion,
             surveySource: r.surveySource,
             tcc_p50: r.tcc_p50,
-            cf_p50: r.cf_p50
+            cf_p50: r.cf_p50,
+            wrvu_p50: r.wrvu_p50
           }))
         });
+        
+        // Debug: Check for variable-based data specifically
+        const variableRows = allRows.filter(r => r.variable);
+        console.log(`📊 Rows with variable field: ${variableRows.length} out of ${allRows.length}`);
+        
+        if (variableRows.length > 0) {
+          const cfVariables = variableRows.filter(r => {
+            const variable = String(r.variable).toLowerCase();
+            return variable.includes('cf') || 
+                   variable.includes('conversion') || 
+                   variable.includes('tcc') && variable.includes('rvu');
+          });
+          console.log(`💰 Rows with CF-related variables: ${cfVariables.length}`);
+          
+          if (cfVariables.length > 0) {
+            console.log('🔍 CF variable examples:', cfVariables.slice(0, 3).map(r => ({
+              variable: r.variable,
+              cf_p50: r.cf_p50,
+              specialty: r.specialty
+            })));
+          }
+        }
         
         setNormalizedRows(allRows);
       } catch (error) {
@@ -316,7 +345,16 @@ export const RegionalAnalytics: React.FC = () => {
   }, []);
 
   // Use standardizedName for dropdown
-  const specialties = useMemo(() => mappings.map(m => m.standardizedName).sort(), [mappings]);
+  const specialties = useMemo(() => {
+    const specialtyList = mappings.map(m => m.standardizedName).sort();
+    console.log('🔍 Regional Analytics - Specialties for dropdown:', {
+      mappingsCount: mappings.length,
+      specialtiesCount: specialtyList.length,
+      firstFewSpecialties: specialtyList.slice(0, 5),
+      allSpecialties: specialtyList
+    });
+    return specialtyList;
+  }, [mappings]);
 
   // Extract unique provider types and survey sources from loaded data
   const providerTypes = useMemo(() => {
@@ -425,6 +463,13 @@ export const RegionalAnalytics: React.FC = () => {
     const uniqueRegions = Array.from(new Set(filtered.map(r => r.geographicRegion)));
     console.log(`🔍 Unique regions in filtered data:`, uniqueRegions);
     
+    // Get standardized region names from mappings
+    const standardizedRegions = regionMappings.length > 0 
+      ? regionMappings.map(m => m.standardizedName).sort()
+      : DEFAULT_REGION_NAMES;
+    
+    console.log(`🌍 Using standardized regions:`, standardizedRegions);
+    
     // Filter out any rows with invalid data - more lenient check
     const validRows = filtered.filter(r => {
       const hasValidTCC = Number(r.tcc_p50) > 0 || Number(r.tcc_p25) > 0 || Number(r.tcc_p75) > 0 || Number(r.tcc_p90) > 0;
@@ -435,9 +480,9 @@ export const RegionalAnalytics: React.FC = () => {
     
     console.log(`✅ Valid rows with data: ${validRows.length} out of ${filtered.length}`);
     
-    const result = REGION_NAMES.map(regionName => {
-      // For 'National', use all valid filtered rows
-      const regionRows = regionName === 'National'
+    const result = standardizedRegions.map(regionName => {
+      // For 'national' (lowercase), use all valid filtered rows
+      const regionRows = regionName.toLowerCase() === 'national'
         ? validRows
         : validRows.filter(r => r.geographicRegion === regionName);
       
@@ -481,7 +526,7 @@ export const RegionalAnalytics: React.FC = () => {
     
     console.log(`✅ Regional comparison data calculated:`, result);
     return result;
-  }, [filtered]);
+  }, [filtered, regionMappings]);
 
   if (loading) {
     return (
@@ -508,17 +553,6 @@ export const RegionalAnalytics: React.FC = () => {
             <div>
               <h3 className="text-xl font-semibold text-gray-900">Data Filters</h3>
               <p className="text-gray-600 text-sm">Choose filters to analyze regional compensation patterns</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {specialties.length} Specialties
-              </span>
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {providerTypes.length} Provider Types
-              </span>
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {surveySources.length} Survey Sources
-              </span>
             </div>
           </div>
           

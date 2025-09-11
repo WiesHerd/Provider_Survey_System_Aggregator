@@ -24,26 +24,35 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
   onSearchChange,
   onRemoveMapping
 }) => {
-  // Convert learned mappings to the format expected by MappedSpecialtyItem
-  const learnedMappingsList = Object.entries(learnedMappings)
+  // Group learned mappings by standardized name (like Mapped Specialties screen)
+  const groupedMappings = Object.entries(learnedMappings)
     .filter(([original, corrected]) => 
       !searchTerm || 
       original.toLowerCase().includes(searchTerm.toLowerCase()) ||
       corrected.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    .map(([original, corrected]) => ({
-      id: original,
-      standardizedName: corrected,
-      sourceSpecialties: [{
-        id: crypto.randomUUID(),
-        specialty: original,
-        originalName: original,
-        surveySource: 'Custom' as const,
-        mappingId: original
-      }],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }));
+    .reduce((groups, [original, corrected]) => {
+      if (!groups[corrected]) {
+        groups[corrected] = [];
+      }
+      groups[corrected].push(original);
+      return groups;
+    }, {} as Record<string, string[]>);
+
+  // Convert grouped mappings to the format expected by MappedSpecialtyItem
+  const learnedMappingsList = Object.entries(groupedMappings).map(([standardizedName, originalNames]) => ({
+    id: standardizedName,
+    standardizedName,
+    sourceSpecialties: originalNames.map(original => ({
+      id: crypto.randomUUID(),
+      specialty: original,
+      originalName: original,
+      surveySource: 'Custom' as const,
+      mappingId: standardizedName
+    })),
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }));
 
   return (
     <div className="space-y-4">
@@ -71,13 +80,18 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
         />
       </div>
 
-      {/* Learned Mappings List */}
+      {/* Learned Mappings List - Now Grouped! */}
       <div className="space-y-4">
         {learnedMappingsList.map((mapping) => (
           <MappedSpecialtyItem
             key={mapping.id}
             mapping={mapping}
-            onDelete={() => onRemoveMapping(mapping.id)}
+            onDelete={() => {
+              // Remove all learned mappings for this standardized name
+              mapping.sourceSpecialties.forEach(source => {
+                onRemoveMapping(source.originalName);
+              });
+            }}
           />
         ))}
 

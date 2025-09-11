@@ -181,10 +181,20 @@ export const generateMappingSuggestionsFallback = (
       }
     }
 
-    // Check learned mappings
+    // Check learned mappings (highest priority - user-verified)
     if (learnedMappings[normalizedName]) {
       standardizedName = learnedMappings[normalizedName];
-      confidence = Math.max(confidence, 0.85);
+      confidence = 1.0; // User-verified mappings get 100% confidence
+    } else {
+      // Check for partial learned mappings (e.g., "hospice" -> "Hospice and Palliative Medicine")
+      for (const [learnedOriginal, learnedCorrected] of Object.entries(learnedMappings)) {
+        if (normalizedName.includes(learnedOriginal.toLowerCase()) || 
+            learnedOriginal.toLowerCase().includes(normalizedName)) {
+          standardizedName = learnedCorrected;
+          confidence = 0.95; // High confidence for partial matches
+          break;
+        }
+      }
     }
 
     // Apply fuzzy matching if enabled
@@ -217,7 +227,8 @@ export const generateMappingSuggestionsFallback = (
     }
 
     // Only add suggestion if confidence meets threshold
-    if (confidence >= config.confidenceThreshold) {
+    // Remove confidence threshold - map all suggestions
+    if (true) {
       suggestions.push({
         standardizedName,
         confidence,
@@ -243,8 +254,8 @@ export const calculateAutoMappingResults = (
   config: IAutoMappingConfig
 ): AutoMappingResults => {
   const total = suggestions.length;
-  const mapped = suggestions.filter(s => s.confidence >= config.confidenceThreshold).length;
-  const skipped = total - mapped;
+  const mapped = total; // All suggestions are now mapped (no confidence threshold)
+  const skipped = 0; // No suggestions are skipped
 
   return {
     total,
@@ -295,6 +306,29 @@ export const formatMappingDate = (date: Date): string => {
  * Get survey source color
  */
 export const getSurveySourceColor = (source: string): string => {
+  // Handle variations in survey source names
+  const normalizedSource = source.toLowerCase();
+  
+  if (normalizedSource.includes('sullivancotter')) {
+    return SURVEY_SOURCE_COLORS['SullivanCotter'];
+  }
+  if (normalizedSource.includes('gallagher')) {
+    return SURVEY_SOURCE_COLORS['Gallagher'];
+  }
+  if (normalizedSource.includes('mgma')) {
+    return SURVEY_SOURCE_COLORS['MGMA'];
+  }
+  if (normalizedSource.includes('ecg')) {
+    return SURVEY_SOURCE_COLORS['ECG'];
+  }
+  if (normalizedSource.includes('amga')) {
+    return SURVEY_SOURCE_COLORS['AMGA'];
+  }
+  if (normalizedSource.includes('learned')) {
+    return SURVEY_SOURCE_COLORS['Learned'];
+  }
+  
+  // Fallback to exact match
   return SURVEY_SOURCE_COLORS[source] || '#9CA3AF';
 };
 

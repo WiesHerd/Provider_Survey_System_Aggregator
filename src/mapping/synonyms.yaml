@@ -531,6 +531,16 @@ subspecialtyTokens:
     - "pediatric intensive care"
     - "pediatric critical care"
     - "pediatric intensivist"
+  
+  "hospice-palliative":
+    - "hospice"
+    - "palliative"
+    - "hospice and palliative"
+    - "hospice/palliative"
+    - "palliative care"
+    - "hospice care"
+    - "end of life"
+    - "end-of-life"
 
 negativeTokens:
   "Cardiology":

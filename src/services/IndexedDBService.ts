@@ -1,7 +1,8 @@
 import { ISurveyRow } from '../types/survey';
-import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
+import { ISpecialtyMapping, IUnmappedSpecialty } from '../features/mapping/types/mapping';
 import { IColumnMapping } from '../types/column';
 import { IUnmappedVariable } from '../features/mapping/types/mapping';
+import { SurveySource } from '../shared/types';
 import { parseCSVLine } from '../shared/utils/csvParser';
 
 interface Survey {
@@ -29,6 +30,21 @@ interface SurveyData {
   cf?: number;
   wrvu?: number;
   count?: number;
+  // Percentile-specific compensation data
+  tcc_p25?: number;
+  tcc_p50?: number;
+  tcc_p75?: number;
+  tcc_p90?: number;
+  cf_p25?: number;
+  cf_p50?: number;
+  cf_p75?: number;
+  cf_p90?: number;
+  wrvu_p25?: number;
+  wrvu_p50?: number;
+  wrvu_p75?: number;
+  wrvu_p90?: number;
+  n_orgs?: number;
+  n_incumbents?: number;
 }
 
 /**
@@ -38,7 +54,7 @@ interface SurveyData {
 export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
-  private readonly DB_VERSION = 4;
+  private readonly DB_VERSION = 5;
 
   async initialize(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -52,6 +68,7 @@ export class IndexedDBService {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        const oldVersion = event.oldVersion;
 
         // Create surveys store
         if (!db.objectStoreNames.contains('surveys')) {
@@ -109,8 +126,17 @@ export class IndexedDBService {
 
         // Create learned mappings stores
         if (!db.objectStoreNames.contains('learnedSpecialtyMappings')) {
-          const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'original' });
+          const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
+          learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
           learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
+        } else if (oldVersion < 5) {
+          // Migration: Recreate learned mappings store with new structure
+          console.log('🔄 Migrating learned mappings store to new structure...');
+          db.deleteObjectStore('learnedSpecialtyMappings');
+          const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
+          learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
+          learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
+          console.log('✅ Learned mappings store migrated successfully');
         }
 
         if (!db.objectStoreNames.contains('learnedColumnMappings')) {
@@ -480,11 +506,26 @@ export class IndexedDBService {
           surveyId,
           data: row,
           specialty: row.specialty || row.Specialty || row['Provider Type'],
-          providerType: row.providerType || row['Provider Type'],
-          region: row.region || row.Region,
+          providerType: row.providerType || row['Provider Type'] || row.provider_type,
+          region: row.region || row.Region || row.geographic_region,
           tcc: row.tcc || row.TCC,
           cf: row.cf || row.CF,
-          wrvu: row.wrvu || row.wRVU
+          wrvu: row.wrvu || row.wRVU,
+          // Store percentile-specific compensation data
+          tcc_p25: row.tcc_p25,
+          tcc_p50: row.tcc_p50,
+          tcc_p75: row.tcc_p75,
+          tcc_p90: row.tcc_p90,
+          cf_p25: row.cf_p25,
+          cf_p50: row.cf_p50,
+          cf_p75: row.cf_p75,
+          cf_p90: row.cf_p90,
+          wrvu_p25: row.wrvu_p25,
+          wrvu_p50: row.wrvu_p50,
+          wrvu_p75: row.wrvu_p75,
+          wrvu_p90: row.wrvu_p90,
+          n_orgs: row.n_orgs,
+          n_incumbents: row.n_incumbents
         };
         store.add(surveyData);
       });
@@ -845,7 +886,7 @@ export class IndexedDBService {
           id: crypto.randomUUID(),
           name: key,
           frequency: value.count,
-          surveySource: surveySource
+          surveySource: surveySource as SurveySource
         });
       });
     });
@@ -1439,10 +1480,15 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onsuccess = () => {
+        console.log(`📖 Retrieved ${request.result.length} learned mappings from IndexedDB:`, request.result);
         const mappings: Record<string, string> = {};
         request.result.forEach((item: any) => {
-          mappings[item.original] = item.corrected;
+          // Keep the most recent mapping for each original name
+          if (!mappings[item.original]) {
+            mappings[item.original] = item.corrected;
+          }
         });
+        console.log(`📋 Processed learned mappings:`, mappings);
         resolve(mappings);
       };
 
@@ -1457,6 +1503,8 @@ export class IndexedDBService {
     const db = await this.ensureDB();
     const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
     
+    console.log(`💾 Saving learned mapping: "${original}" → "${corrected}"`);
+    
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
@@ -1467,7 +1515,10 @@ export class IndexedDBService {
         updatedAt: new Date()
       });
 
-      request.onsuccess = () => resolve();
+      request.onsuccess = () => {
+        console.log(`✅ Learned mapping saved successfully`);
+        resolve();
+      };
       request.onerror = () => reject(request.error);
     });
   }

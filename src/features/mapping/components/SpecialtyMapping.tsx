@@ -10,11 +10,12 @@ import {
 } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import { SpecialtyMappingProps } from '../types/mapping';
-import { useMappingData } from '../hooks/useMappingData';
+import { useMappingData } from '../hooks';
 import { UnmappedSpecialties } from './UnmappedSpecialties';
 import { MappedSpecialties } from './MappedSpecialties';
 import { LearnedMappings } from './LearnedMappings';
 import { AutoMapping } from './AutoMapping';
+import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 
 /**
@@ -124,7 +125,23 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
     onUnmappedChange?.(unmappedSpecialties);
   }, [unmappedSpecialties, onUnmappedChange]);
 
-  if (loading) {
+  // Emergency fallback: if loading takes too long, show error
+  const [emergencyTimeout, setEmergencyTimeout] = useState(false);
+  
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        console.log('🚨 Emergency timeout triggered - loading taking too long');
+        setEmergencyTimeout(true);
+      }, 20000); // 20 second emergency timeout
+      
+      return () => clearTimeout(timeout);
+    } else {
+      setEmergencyTimeout(false);
+    }
+  }, [loading]);
+  
+  if (loading && !emergencyTimeout) {
     return (
       <LoadingSpinner 
         message="Loading specialty mappings..." 
@@ -133,13 +150,42 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
       />
     );
   }
+  
+  if (emergencyTimeout) {
+    return (
+      <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="text-center py-12">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+            <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Timeout</h3>
+          <p className="text-gray-600 mb-4">The specialty mapping data is taking too long to load. This might be due to a data service issue.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <AdvancedErrorBoundary 
+      componentName="SpecialtyMapping"
+      enableAutoRecovery={true}
+      maxRetries={3}
+      circuitBreakerThreshold={5}
+      circuitBreakerTimeout={30000}
+    >
       <div className="w-full min-h-screen">
         <div className="w-full flex flex-col gap-4">
-
-
 
           {/* Main Mapping Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -255,6 +301,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
                   searchTerm={searchTerm}
                   onSearchChange={setSearchTerm}
                   onSpecialtySelect={selectSpecialty}
+                  onClearSelection={clearSelectedSpecialties}
                   onRefresh={loadData}
                 />
               )}
@@ -275,23 +322,22 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
                 />
               )}
             </div>
-          </div>
 
-                               {/* Auto-Mapping Dialog */}
-          <AutoMapping
-            isOpen={isAutoMapOpen}
-            onClose={() => setIsAutoMapOpen(false)}
-            onAutoMap={handleAutoMap}
-            loading={isAutoMapping}
-            title="Auto-Map Specialties"
-            description="Automatically map similar specialty names across your surveys"
-            iconColor="indigo"
-            iconColorClass="text-indigo-600"
-            bgColorClass="bg-indigo-100"
-          />
+            {/* Auto-Mapping Dialog */}
+            <AutoMapping
+              isOpen={isAutoMapOpen}
+              onClose={() => setIsAutoMapOpen(false)}
+              onAutoMap={handleAutoMap}
+              loading={isAutoMapping}
+              title="Auto-Map Specialties"
+              description="Automatically map similar specialty names across your surveys"
+              iconColor="indigo"
+              iconColorClass="text-indigo-600"
+              bgColorClass="bg-indigo-100"
+            />
 
-           {/* Help Modal */}
-           {showHelp && (
+            {/* Help Modal */}
+            {showHelp && (
              <div className="fixed inset-0 z-50 overflow-y-auto">
                {/* Backdrop */}
                <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => setShowHelp(false)} />
@@ -378,8 +424,9 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
                </div>
              </div>
            )}
-         </div>
-       </div>
-     </>
+          </div>
+        </div>
+      </div>
+    </AdvancedErrorBoundary>
    );
  };

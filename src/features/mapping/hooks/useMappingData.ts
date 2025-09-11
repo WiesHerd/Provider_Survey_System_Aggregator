@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  ISpecialtyMapping as NewISpecialtyMapping, 
-  IUnmappedSpecialty as NewIUnmappedSpecialty, 
+  ISpecialtyMapping, 
+  IUnmappedSpecialty, 
   IAutoMappingConfig, 
   IMappingSuggestion,
   MappingState,
   MappingFilters
 } from '../types/mapping';
-import { 
-  ISpecialtyMapping, 
-  IUnmappedSpecialty 
-} from '../../../types/specialty';
 import { getDataService } from '../../../services/DataService';
 import { 
   filterUnmappedSpecialties,
@@ -24,9 +20,9 @@ import {
 
 interface UseMappingDataReturn {
   // State
-  mappings: NewISpecialtyMapping[];
-  unmappedSpecialties: NewIUnmappedSpecialty[];
-  selectedSpecialties: NewIUnmappedSpecialty[];
+  mappings: ISpecialtyMapping[];
+  unmappedSpecialties: IUnmappedSpecialty[];
+  selectedSpecialties: IUnmappedSpecialty[];
   learnedMappings: Record<string, string>;
   loading: boolean;
   error: string | null;
@@ -37,9 +33,9 @@ interface UseMappingDataReturn {
   mappedSearchTerm: string;
   
   // Computed values
-  filteredUnmapped: NewIUnmappedSpecialty[];
-  specialtiesBySurvey: Map<string, NewIUnmappedSpecialty[]>;
-  filteredMappings: NewISpecialtyMapping[];
+  filteredUnmapped: IUnmappedSpecialty[];
+  specialtiesBySurvey: Map<string, IUnmappedSpecialty[]>;
+  filteredMappings: ISpecialtyMapping[];
   filteredLearned: Record<string, string>;
   
   // Actions
@@ -103,45 +99,32 @@ export const useMappingData = (): UseMappingDataReturn => {
     loadData();
   }, []);
 
-  // Smart tab selection based on data availability
+  // Smart tab selection based on data availability (only on initial load)
   useEffect(() => {
     if (!loading) {
-      // If there are mappings, default to mapped tab
-      if (mappings.length > 0) {
-        setActiveTab('mapped');
+      // Only set initial tab if no tab is currently selected
+      if (activeTab === 'unmapped' && mappings.length === 0 && unmappedSpecialties.length === 0 && Object.keys(learnedMappings).length === 0) {
+        // Default to unmapped tab for new users
+        setActiveTab('unmapped');
       }
       // If there are unmapped specialties and no mappings, default to unmapped tab
-      else if (unmappedSpecialties.length > 0) {
+      else if (unmappedSpecialties.length > 0 && mappings.length === 0) {
         setActiveTab('unmapped');
       }
       // If there are learned mappings and no other data, default to learned tab
-      else if (Object.keys(learnedMappings).length > 0) {
+      else if (Object.keys(learnedMappings).length > 0 && mappings.length === 0 && unmappedSpecialties.length === 0) {
         setActiveTab('learned');
       }
-      // Otherwise, keep current tab or default to unmapped
+      // Otherwise, keep current tab - don't force switch to mapped tab
     }
-  }, [loading, mappings.length, unmappedSpecialties.length, learnedMappings]);
+  }, [loading, mappings.length, unmappedSpecialties.length, learnedMappings, activeTab]);
 
-  // Type conversion functions
-  const convertMapping = (mapping: ISpecialtyMapping): NewISpecialtyMapping => ({
-    ...mapping,
-    sourceSpecialties: mapping.sourceSpecialties.map(s => ({
-      ...s,
-      id: s.id || crypto.randomUUID(),
-      surveySource: s.surveySource as any
-    }))
-  });
-
-  const convertUnmappedSpecialty = (specialty: IUnmappedSpecialty): NewIUnmappedSpecialty => ({
-    ...specialty,
-    surveySource: specialty.surveySource as any
-  });
+  // No type conversion needed - using unified types
 
   // Computed values
   const filteredUnmapped = useMemo(() => {
     const filters: MappingFilters = { searchTerm };
-    const convertedUnmapped = unmappedSpecialties.map(convertUnmappedSpecialty);
-    return filterUnmappedSpecialties(convertedUnmapped, filters);
+    return filterUnmappedSpecialties(unmappedSpecialties, filters);
   }, [unmappedSpecialties, searchTerm]);
 
   const specialtiesBySurvey = useMemo(() => {
@@ -149,13 +132,29 @@ export const useMappingData = (): UseMappingDataReturn => {
   }, [filteredUnmapped]);
 
   const filteredMappings = useMemo(() => {
-    const convertedMappings = mappings.map(convertMapping);
-    return filterMappedSpecialties(convertedMappings, mappedSearchTerm);
+    return filterMappedSpecialties(mappings, mappedSearchTerm);
   }, [mappings, mappedSearchTerm]);
 
   const filteredLearned = useMemo(() => {
     return filterLearnedMappings(learnedMappings, mappedSearchTerm);
   }, [learnedMappings, mappedSearchTerm]);
+
+  // Clean up selected specialties that are no longer in the filtered view
+  useEffect(() => {
+    if (selectedSpecialties.length > 0) {
+      const filteredIds = new Set(filteredUnmapped.map(s => s.id));
+      const validSelected = selectedSpecialties.filter(s => filteredIds.has(s.id));
+      
+      if (validSelected.length !== selectedSpecialties.length) {
+        console.log('Cleaning up selected specialties:', {
+          original: selectedSpecialties.length,
+          valid: validSelected.length,
+          removed: selectedSpecialties.length - validSelected.length
+        });
+        setSelectedSpecialties(validSelected);
+      }
+    }
+  }, [filteredUnmapped, selectedSpecialties]);
 
   // Data loading
   const loadData = useCallback(async () => {
@@ -179,6 +178,9 @@ export const useMappingData = (): UseMappingDataReturn => {
       setMappings(mappingsData);
       setUnmappedSpecialties(unmappedData);
       setLearnedMappings(learnedData || {});
+      
+      // Clear selected specialties when data loads to ensure clean state
+      setSelectedSpecialties([]);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load specialty data');
@@ -234,6 +236,9 @@ export const useMappingData = (): UseMappingDataReturn => {
           updatedAt: new Date()
         });
         
+        // Create learned mapping for future automap runs
+        await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name);
+        
         newMappings.push(mapping);
       }
       
@@ -243,7 +248,11 @@ export const useMappingData = (): UseMappingDataReturn => {
         prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
       );
       setSelectedSpecialties([]);
-      setActiveTab('mapped'); // Switch to mapped view after creating
+      
+      // Refresh learned mappings to show the new ones
+      const learnedData = await dataService.getLearnedMappings('specialty');
+      setLearnedMappings(learnedData);
+      // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
       setError('Failed to create mappings');
       console.error('Error creating mappings:', err);
@@ -276,13 +285,22 @@ export const useMappingData = (): UseMappingDataReturn => {
         updatedAt: new Date()
       });
       
+      // Create learned mappings for all specialties in the group
+      for (const specialty of selectedSpecialties) {
+        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName);
+      }
+      
       // Update state
       setMappings(prev => [...prev, mapping]);
       setUnmappedSpecialties(prev => 
         prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
       );
       setSelectedSpecialties([]);
-      setActiveTab('mapped'); // Switch to mapped view after creating
+      
+      // Refresh learned mappings to show the new ones
+      const learnedData = await dataService.getLearnedMappings('specialty');
+      setLearnedMappings(learnedData);
+      // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
       setError('Failed to create grouped mapping');
       console.error('Error creating grouped mapping:', err);
@@ -351,35 +369,29 @@ export const useMappingData = (): UseMappingDataReturn => {
         throw new Error(validation.errors.join(', '));
       }
 
-      // Convert data to new types before calling utility functions
-      const convertedUnmapped = unmappedSpecialties.map(convertUnmappedSpecialty);
-      const convertedMappings = mappings.map(convertMapping);
-
-      // Generate suggestions
+      // Generate suggestions using unified types
       const suggestions = await generateMappingSuggestions(
-        convertedUnmapped,
-        convertedMappings,
+        unmappedSpecialties,
+        mappings,
         learnedMappings,
         config
       );
 
-      // Create mappings from suggestions
+      // Create mappings from ALL suggestions (no confidence threshold)
       for (const suggestion of suggestions) {
-        if (suggestion.confidence >= config.confidenceThreshold) {
-          await dataService.createSpecialtyMapping({
+        await dataService.createSpecialtyMapping({
+          id: crypto.randomUUID(),
+          standardizedName: suggestion.standardizedName,
+          sourceSpecialties: suggestion.specialties.map((s: any) => ({
             id: crypto.randomUUID(),
-            standardizedName: suggestion.standardizedName,
-            sourceSpecialties: suggestion.specialties.map((s: any) => ({
-              id: crypto.randomUUID(),
-              specialty: s.name,
-              originalName: s.name,
-              surveySource: s.surveySource,
-              mappingId: ''
-            })),
-            createdAt: new Date(),
-            updatedAt: new Date()
-          });
-        }
+            specialty: s.name,
+            originalName: s.name,
+            surveySource: s.surveySource,
+            mappingId: ''
+          })),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
       }
 
       // Calculate results
@@ -425,9 +437,9 @@ export const useMappingData = (): UseMappingDataReturn => {
   
   return {
     // State
-    mappings: mappings.map(convertMapping),
-    unmappedSpecialties: unmappedSpecialties.map(convertUnmappedSpecialty),
-    selectedSpecialties: selectedSpecialties.map(convertUnmappedSpecialty),
+    mappings,
+    unmappedSpecialties,
+    selectedSpecialties,
     learnedMappings,
     loading,
     error,

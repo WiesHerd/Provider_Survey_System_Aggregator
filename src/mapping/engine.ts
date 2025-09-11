@@ -116,9 +116,9 @@ export class SpecialtyMappingEngine {
     return rawName
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, ' ') // Collapse whitespace
-      .replace(/[,:;]/g, ' ') // Replace separators with spaces
+      .replace(/[,:;]/g, ' ') // Replace separators with spaces first
       .replace(/[-_]/g, ' ') // Replace dashes and underscores with spaces
+      .replace(/\s+/g, ' ') // Collapse all whitespace to single spaces
       .trim();
   }
 

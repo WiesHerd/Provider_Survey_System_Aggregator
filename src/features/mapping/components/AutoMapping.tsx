@@ -26,13 +26,12 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
   onAutoMap, 
   loading = false,
   title = "Auto-Map",
-  description = "Configure automatic mapping",
+  description = "Intelligent mapping with learning",
   iconColor = "indigo",
   iconColorClass = "text-indigo-600",
   bgColorClass = "bg-indigo-100"
 }) => {
-  // Configuration state
-  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.8);
+  // Configuration state (simplified - no confidence thresholds)
   const [useExistingMappings, setUseExistingMappings] = useState<boolean>(true);
   const [useFuzzyMatching, setUseFuzzyMatching] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +41,7 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
       setError(null);
       
       const config: IAutoMappingConfig = {
-        confidenceThreshold,
+        confidenceThreshold: 0, // No threshold - map everything
         useExistingMappings,
         useFuzzyMatching
       };
@@ -94,39 +93,28 @@ export const AutoMapping: React.FC<AutoMappingProps> = ({
           <div className="p-6 space-y-6 overflow-y-auto flex-1">
             {/* Configuration Section */}
             <div className="space-y-4">
-              {/* Confidence Threshold */}
+              {/* Learning System Information */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <AdjustmentsHorizontalIcon className="h-5 w-5 text-gray-500" />
-                  <h3 className="text-lg font-medium text-gray-900">Similarity Threshold</h3>
+                  <BoltIcon className="h-5 w-5 text-green-500" />
+                  <h3 className="text-lg font-medium text-gray-900">Intelligent Learning System</h3>
                 </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  Higher values create fewer, more precise mappings. Lower values create more mappings with potentially less accuracy.
-                </p>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">50%</span>
-                    <span className="text-sm text-gray-500">70%</span>
-                    <span className="text-sm text-gray-500">90%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="1.0"
-                    step="0.05"
-                    value={confidenceThreshold}
-                    onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                    style={{
-                      background: `linear-gradient(to right, ${iconColor === 'indigo' ? '#6366f1' : iconColor === 'blue' ? '#3b82f6' : '#8b5cf6'} 0%, ${iconColor === 'indigo' ? '#6366f1' : iconColor === 'blue' ? '#3b82f6' : '#8b5cf6'} ${(confidenceThreshold - 0.5) * 200}%, #e5e7eb ${(confidenceThreshold - 0.5) * 200}%, #e5e7eb 100%)`
-                    }}
-                  />
-                  <div className="flex justify-center">
-                    <span className="text-lg font-semibold text-gray-900">
-                      {Math.round(confidenceThreshold * 100)}%
-                    </span>
-                  </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-green-800 mb-2">
+                    <strong>How it works:</strong>
+                  </p>
+                  <ul className="text-sm text-green-700 space-y-1">
+                    <li>• Maps all specialties automatically (no thresholds)</li>
+                    <li>• Learns from your corrections and manual mappings</li>
+                    <li>• Gets smarter with each automap run</li>
+                    <li>• Uses your expertise to improve accuracy</li>
+                  </ul>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>💡 Tip:</strong> After automap, review and correct any wrong mappings. 
+                    The system will learn from your corrections and be more accurate next time!
+                  </p>
                 </div>
               </div>
 

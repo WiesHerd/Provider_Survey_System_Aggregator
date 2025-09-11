@@ -79,7 +79,7 @@ export const UnmappedRegions: React.FC<UnmappedRegionsProps> = ({
         </div>
       )}
 
-      {/* Regions Grid - EXACT same layout as Specialty Mapping */}
+      {/* Regions Grid - Consistent Fixed Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.from(regionsBySurvey.entries()).map(([source, regions]) => {
           const color = getSurveySourceColor(source);

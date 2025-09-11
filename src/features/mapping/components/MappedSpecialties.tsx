@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo, useCallback, useState, useEffect } from 'react';
 import {
   TextField,
   Typography,
@@ -19,13 +19,30 @@ import { MappedSpecialtyItem } from './MappedSpecialtyItem';
  * @param onDeleteMapping - Callback when a mapping is deleted
  * @param onEditMapping - Optional callback when a mapping is edited
  */
-export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = ({
+export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
   mappings,
   searchTerm,
   onSearchChange,
   onDeleteMapping,
   onEditMapping
 }) => {
+  // Simple search handler
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onSearchChange(e.target.value);
+  }, [onSearchChange]);
+
+  // Memoize the delete handler to prevent unnecessary re-renders
+  const handleDeleteMapping = useCallback((mappingId: string) => {
+    onDeleteMapping(mappingId);
+  }, [onDeleteMapping]);
+
+  // Memoize the edit handler to prevent unnecessary re-renders
+  const handleEditMapping = useCallback((mapping: any) => {
+    if (onEditMapping) {
+      onEditMapping(mapping);
+    }
+  }, [onEditMapping]);
+
   return (
     <div className="space-y-4">
       {/* Search Bar */}
@@ -34,7 +51,7 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = ({
           fullWidth
           placeholder="Search mapped specialties..."
           value={searchTerm}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
+          onChange={handleSearchChange}
           size="small"
           sx={{ 
             '& .MuiOutlinedInput-root': {
@@ -58,8 +75,8 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = ({
           <MappedSpecialtyItem
             key={mapping.id}
             mapping={mapping}
-            onDelete={() => onDeleteMapping(mapping.id)}
-            onEdit={onEditMapping ? () => onEditMapping(mapping) : undefined}
+            onDelete={() => handleDeleteMapping(mapping.id)}
+            onEdit={onEditMapping ? () => handleEditMapping(mapping) : undefined}
           />
         ))}
       </div>
@@ -77,4 +94,6 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = ({
       )}
     </div>
   );
-};
+});
+
+MappedSpecialties.displayName = 'MappedSpecialties';

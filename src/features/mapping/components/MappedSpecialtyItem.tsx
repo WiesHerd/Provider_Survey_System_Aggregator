@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { Paper, Typography, IconButton, Tooltip } from '@mui/material';
 import { 
   PencilIcon as EditIcon, 
@@ -20,11 +20,14 @@ interface MappedSpecialtyItemProps {
  * @param onEdit - Optional callback when the mapping is edited
  * @param onDelete - Optional callback when the mapping is deleted
  */
-export const MappedSpecialtyItem: React.FC<MappedSpecialtyItemProps> = ({ 
+export const MappedSpecialtyItem: React.FC<MappedSpecialtyItemProps> = memo(({ 
   mapping, 
   onEdit, 
   onDelete 
 }) => {
+  // Memoize the formatted date to prevent unnecessary recalculations
+  const formattedDate = useMemo(() => formatMappingDate(mapping.updatedAt), [mapping.updatedAt]);
+  
   return (
     <Paper className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
       {/* Header with standardized name and actions */}
@@ -34,7 +37,7 @@ export const MappedSpecialtyItem: React.FC<MappedSpecialtyItemProps> = ({
             {mapping.standardizedName}
           </Typography>
           <Typography variant="caption" className="text-gray-500 text-xs">
-            Last updated: {formatMappingDate(mapping.updatedAt)}
+            Last updated: {formattedDate}
           </Typography>
         </div>
         <div className="flex space-x-1">
@@ -93,4 +96,6 @@ export const MappedSpecialtyItem: React.FC<MappedSpecialtyItemProps> = ({
       </div>
     </Paper>
   );
-};
+});
+
+MappedSpecialtyItem.displayName = 'MappedSpecialtyItem';

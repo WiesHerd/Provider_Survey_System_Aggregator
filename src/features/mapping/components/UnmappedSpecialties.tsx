@@ -32,6 +32,7 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
   searchTerm,
   onSearchChange,
   onSpecialtySelect,
+  onClearSelection,
   onRefresh
 }) => {
   // Group specialties by survey source
@@ -69,14 +70,31 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
 
                {/* Selection Counter */}
         {selectedSpecialties.length > 0 && (
-          <div className="mb-4 flex items-center justify-end">
+          <div className="mb-4 flex items-center justify-between">
             <div className="text-sm text-gray-600 font-medium">
               {selectedSpecialties.length} selected
+              {searchTerm && (
+                <span className="text-gray-400 ml-2">
+                  (may include hidden items)
+                </span>
+              )}
             </div>
+            {onClearSelection && (
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.confirm('Clear all selections?')) {
+                    onClearSelection();
+                  }
+                }}
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                Clear Selection
+              </button>
+            )}
           </div>
         )}
 
-      {/* Specialties Grid */}
+      {/* Specialties Grid - Consistent Fixed Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
           const color = getSurveySourceColor(source);
@@ -90,7 +108,7 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
                 </Typography>
               </Typography>
               <div className="space-y-1.5">
-                {specialties.map((specialty) => (
+                {specialties.map((specialty: any) => (
                   <SpecialtyCard
                     key={specialty.id}
                     specialty={specialty}

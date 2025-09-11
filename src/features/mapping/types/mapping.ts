@@ -129,6 +129,7 @@ export interface UnmappedSpecialtiesProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onSpecialtySelect: (specialty: IUnmappedSpecialty) => void;
+  onClearSelection?: () => void;
   onRefresh: () => void;
 }
 

@@ -522,6 +522,12 @@ specialties:
     domain: "ADULT"
     tags: ["family", "medicine", "general", "adult"]
 
+  - id: "FM-OB"
+    parent: "Family Medicine"
+    name: "Family Medicine with Obstetrics"
+    domain: "ADULT"
+    tags: ["family", "medicine", "obstetrics", "obgyn", "ob", "adult"]
+
   - id: "IM-GENERAL"
     parent: "Internal Medicine"
     name: "General Internal Medicine"
@@ -539,3 +545,9 @@ specialties:
     name: "Internal Medicine Nocturnist"
     domain: "ADULT"
     tags: ["internal", "medicine", "nocturnist", "night", "adult"]
+
+  - id: "HOSPICE-PALLIATIVE"
+    parent: "Internal Medicine"
+    name: "Hospice and Palliative Medicine"
+    domain: "ADULT"
+    tags: ["hospice", "palliative", "medicine", "care", "end-of-life", "adult"]

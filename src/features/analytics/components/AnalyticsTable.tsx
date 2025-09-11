@@ -21,6 +21,7 @@ import {
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
 import { groupBySpecialty, calculateSummaryRows } from '../utils/analyticsCalculations';
+import { formatCurrency } from '../../../shared/utils/formatters';
 
 /**
  * Format number without dollar sign, with proper comma separators and decimals
@@ -111,7 +112,31 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         </Button>
       </div>
 
-      <TableContainer component={Paper} sx={{ maxHeight: 600, overflow: 'auto' }}>
+      {/* Properly contained scrollable area with visible scrollbars */}
+      <div className="rounded-lg border border-gray-200 overflow-auto">
+        <TableContainer component={Paper} sx={{ 
+          maxHeight: 600, 
+          overflow: 'auto',
+          '&::-webkit-scrollbar': {
+            height: '12px',
+            width: '12px'
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: '#f1f5f9',
+            borderRadius: '6px'
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: '#94a3b8',
+            borderRadius: '6px',
+            border: '2px solid #f1f5f9',
+            '&:hover': {
+              backgroundColor: '#64748b'
+            }
+          },
+          '&::-webkit-scrollbar-corner': {
+            backgroundColor: '#f1f5f9'
+          }
+        }}>
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
@@ -196,10 +221,10 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     {/* TCC Section */}
                     <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{row.tcc_n_orgs.toLocaleString()}</TableCell>
                     <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{row.tcc_n_incumbents.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatNumber(row.tcc_p25, 0)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatNumber(row.tcc_p50, 0)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatNumber(row.tcc_p75, 0)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">{formatNumber(row.tcc_p90, 0)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(row.tcc_p25, 2)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(row.tcc_p50, 2)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(row.tcc_p75, 2)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">{formatCurrency(row.tcc_p90, 2)}</TableCell>
                     
                     {/* wRVU Section */}
                     <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_n_orgs.toLocaleString()}</TableCell>
@@ -212,10 +237,10 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     {/* CF Section */}
                     <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{row.cf_n_orgs.toLocaleString()}</TableCell>
                     <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{row.cf_n_incumbents.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p25, 1)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p50, 1)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p75, 1)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatNumber(row.cf_p90, 1)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
+                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
                   </TableRow>
                 ))}
 
@@ -235,16 +260,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                           {simple.tcc_n_incumbents.toLocaleString()}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatNumber(simple.tcc_p25, 0)}
+                          {formatCurrency(simple.tcc_p25, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatNumber(simple.tcc_p50, 0)}
+                          {formatCurrency(simple.tcc_p50, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatNumber(simple.tcc_p75, 0)}
+                          {formatCurrency(simple.tcc_p75, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
-                          {formatNumber(simple.tcc_p90, 0)}
+                          {formatCurrency(simple.tcc_p90, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {simple.wrvu_n_orgs.toLocaleString()}
@@ -271,16 +296,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                           {simple.cf_n_incumbents.toLocaleString()}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(simple.cf_p25, 1)}
+                          {formatCurrency(simple.cf_p25, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(simple.cf_p50, 1)}
+                          {formatCurrency(simple.cf_p50, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(simple.cf_p75, 1)}
+                          {formatCurrency(simple.cf_p75, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(simple.cf_p90, 1)}
+                          {formatCurrency(simple.cf_p90, 2)}
                         </TableCell>
                       </TableRow>
                       <TableRow sx={{ backgroundColor: 'primary.50' }}>
@@ -294,16 +319,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                           {weighted.tcc_n_incumbents.toLocaleString()}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatNumber(weighted.tcc_p25, 0)}
+                          {formatCurrency(weighted.tcc_p25, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatNumber(weighted.tcc_p50, 0)}
+                          {formatCurrency(weighted.tcc_p50, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatNumber(weighted.tcc_p75, 0)}
+                          {formatCurrency(weighted.tcc_p75, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
-                          {formatNumber(weighted.tcc_p90, 0)}
+                          {formatCurrency(weighted.tcc_p90, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {weighted.wrvu_n_orgs.toLocaleString()}
@@ -330,16 +355,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                           {weighted.cf_n_incumbents.toLocaleString()}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(weighted.cf_p25, 1)}
+                          {formatCurrency(weighted.cf_p25, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(weighted.cf_p50, 1)}
+                          {formatCurrency(weighted.cf_p50, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(weighted.cf_p75, 1)}
+                          {formatCurrency(weighted.cf_p75, 2)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatNumber(weighted.cf_p90, 1)}
+                          {formatCurrency(weighted.cf_p90, 2)}
                         </TableCell>
               </TableRow>
                     </>
@@ -350,6 +375,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           </TableBody>
         </Table>
       </TableContainer>
+      </div>
 
       {Object.entries(groupedData).length > 25 && (
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">

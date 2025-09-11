@@ -8,17 +8,17 @@ hardMaps:
     confidence: 0.95
   
   - id: "EXACT_CARD_INTERVENTIONAL"
-    pattern: "^(interventional|invasive).*cardiology$"
+    pattern: ".*cardiology.*interventional.*|.*cardiac.*interventional.*|.*cardiology.*invasive.*|.*cardiac.*invasive.*"
     canonicalId: "CARD-INTERVENTIONAL"
     confidence: 0.95
   
   - id: "EXACT_CARD_EP"
-    pattern: "^(electrophysiology|ep).*cardiology$"
+    pattern: ".*cardiology.*electrophysiology.*|.*cardiac.*electrophysiology.*|.*cardiology.*ep.*|.*cardiac.*ep.*"
     canonicalId: "CARD-EP"
     confidence: 0.95
   
   - id: "EXACT_CARD_IMAGING"
-    pattern: "^(cardiac imaging|echo|echocardiography).*cardiology$"
+    pattern: ".*cardiology.*cardiac imaging.*|.*cardiology.*imaging.*|.*cardiac imaging.*|.*echo.*cardiology.*|.*echocardiography.*cardiology.*|.*cardiology.*-.*cardiac imaging.*\\(.*echo.*ct.*mri.*nuclear.*\\)"
     canonicalId: "CARD-IMAGING"
     confidence: 0.95
   
@@ -342,6 +342,11 @@ hardMaps:
     canonicalId: "FM-GENERAL"
     confidence: 0.95
   
+  - id: "EXACT_FM_OB"
+    pattern: ".*(family medicine|family practice).*(obstetrics|obgyn|ob).*|.*(family medicine|family practice).*with.*(obstetrics|obgyn|ob).*"
+    canonicalId: "FM-OB"
+    confidence: 0.95
+  
   - id: "EXACT_IM_GENERAL"
     pattern: "^(internal medicine|internal med|internist)$"
     canonicalId: "IM-GENERAL"
@@ -356,6 +361,11 @@ hardMaps:
     pattern: "^(nocturnist|night).*internal$"
     canonicalId: "IM-NOCTURNIST"
     confidence: 0.95
+  
+  - id: "EXACT_HOSPICE_PALLIATIVE"
+    pattern: ".*(hospice|palliative).*(medicine|care).*|.*(hospice|palliative).*"
+    canonicalId: "HOSPICE-PALLIATIVE"
+    confidence: 0.95
 
 blocks:
   - id: "BLOCK_CROSS_DOMAIN"
@@ -369,6 +379,10 @@ blocks:
   - id: "BLOCK_RADIATION_ONCOLOGY"
     condition: "radiation_oncology_conflict"
     reason: "Radiation oncology is distinct from diagnostic radiology"
+  
+  - id: "BLOCK_IMAGING_MODALITIES"
+    condition: "imaging_modality_standalone"
+    reason: "Individual imaging modalities (Echo, CT, MRI, Nuclear) should not be standalone specialties"
 
 bucketingHints:
   - id: "HINT_CARDIOVASCULAR"
