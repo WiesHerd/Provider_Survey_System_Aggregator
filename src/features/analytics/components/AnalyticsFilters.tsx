@@ -18,6 +18,7 @@ import {
   Typography
 } from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
+import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 /**
  * AnalyticsFilters component for filtering analytics data
@@ -83,7 +84,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
         )}
       </div>
 
-      {/* Cascading Filters - Responsive Layout */}
+      {/* Cascading Filters - Responsive Layout with Natural Width */}
       <Box sx={{ 
         display: 'grid', 
         gridTemplateColumns: { 
@@ -93,7 +94,8 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
           lg: '1fr 1fr 1fr 1fr 1fr' 
         }, 
         gap: 2, 
-        width: '100%' 
+        width: '100%',
+        maxWidth: '100%' // Use full available width but don't stretch with table
       }}>
         {/* Year Filter - First (leftmost) */}
         <Box>
@@ -139,6 +141,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
             value={filters.specialty}
             onChange={(_: any, newValue: string | null) => handleFilterChange('specialty', newValue || '')}
             options={availableSpecialties}
+            getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
             renderInput={(params: any) => (
               <TextField
                 {...params}

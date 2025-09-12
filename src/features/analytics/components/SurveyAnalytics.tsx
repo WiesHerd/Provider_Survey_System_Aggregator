@@ -39,43 +39,21 @@ const SurveyAnalytics: React.FC = memo(() => {
     year: ''
   });
 
-  // Normalize specialty name for deduplication (same logic as AnalyticsDataService)
-  const normalizeSpecialtyName = (specialty: string): string => {
-    if (!specialty) return '';
-    
-    return specialty
-      .toLowerCase()
-      .replace(/\s+and\s+/g, ' ')  // Replace "and" with space
-      .replace(/\s+/g, ' ')        // Normalize multiple spaces
-      .trim();
-  };
 
   // Extract unique values for filter options from ALL data (not filtered data)
   const filterOptions = useMemo(() => {
     console.log('🔍 SurveyAnalytics: Generating filter options from', allData.length, 'all data records');
     
     // Get all unique values from the full dataset
-    // Use standardizedName for specialties (parent/standardized names from mappings)
-    const rawSpecialties = allData.map(row => row.standardizedName).filter((item): item is string => Boolean(item));
-    
-    // Normalize and deduplicate specialties to avoid showing multiple variations
-    const normalizedSpecialtyMap = new Map<string, string>();
-    rawSpecialties.forEach(specialty => {
-      const normalized = normalizeSpecialtyName(specialty);
-      if (!normalizedSpecialtyMap.has(normalized)) {
-        // Use the first occurrence as the canonical name
-        normalizedSpecialtyMap.set(normalized, specialty);
-      }
-    });
-    
-    const allSpecialties = Array.from(normalizedSpecialtyMap.values()).sort();
+    // Use standardizedName for specialties (these are already the normalized names from mappings)
+    const allSpecialties = [...new Set(allData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
     const allSources = [...new Set(allData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
     const allRegions = [...new Set(allData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
     const allProviderTypes = [...new Set(allData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
     const allYears = [...new Set(allData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
 
     console.log('🔍 SurveyAnalytics: All filter options - specialties:', allSpecialties.length, 'sources:', allSources.length, 'regions:', allRegions.length, 'providerTypes:', allProviderTypes.length, 'years:', allYears.length);
-    console.log('🔍 SurveyAnalytics: Deduplicated specialties:', allSpecialties.filter(s => s.toLowerCase().includes('allergy')));
+    console.log('🔍 SurveyAnalytics: Normalized specialties:', allSpecialties.filter(s => s.toLowerCase().includes('allergy')));
 
     return {
       specialties: allSpecialties,
@@ -87,25 +65,29 @@ const SurveyAnalytics: React.FC = memo(() => {
   }, [allData, currentYear]);
 
   return (
-    <div className="space-y-6">
-      {/* Filters Section */}
-      <AnalyticsFilters
-        filters={filters}
-        onFiltersChange={setFilters}
-        availableSpecialties={filterOptions.specialties}
-        availableSources={filterOptions.sources}
-        availableRegions={filterOptions.regions}
-        availableProviderTypes={filterOptions.providerTypes}
-        availableYears={filterOptions.years}
-      />
+    <div className="flex flex-col space-y-6">
+      {/* Fixed Filters Section - Left-aligned, reasonable width */}
+      <div className="w-full">
+        <AnalyticsFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          availableSpecialties={filterOptions.specialties}
+          availableSources={filterOptions.sources}
+          availableRegions={filterOptions.regions}
+          availableProviderTypes={filterOptions.providerTypes}
+          availableYears={filterOptions.years}
+        />
+      </div>
 
-      {/* Data Table Section */}
-      <AnalyticsTable
-        data={data}
-        loading={loading}
-        error={error}
-        onExport={exportToExcel}
-      />
+      {/* Data Table Section - Contained with horizontal scroll */}
+      <div className="w-full">
+        <AnalyticsTable
+          data={data}
+          loading={loading}
+          error={error}
+          onExport={exportToExcel}
+        />
+      </div>
     </div>
   );
 });
