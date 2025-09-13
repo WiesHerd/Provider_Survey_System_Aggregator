@@ -882,13 +882,18 @@ export class AnalyticsDataService {
       const wrvuRow = rows.find(r => r.wrvu_p50 > 0);
       const cfRow = rows.find(r => r.cf_p50 > 0);
       
-      // Use organizational data from representative row
-      aggregatedRecord.tcc_n_orgs = representativeRow.n_orgs || 0;
-      aggregatedRecord.tcc_n_incumbents = representativeRow.n_incumbents || 0;
-      aggregatedRecord.wrvu_n_orgs = representativeRow.n_orgs || 0;
-      aggregatedRecord.wrvu_n_incumbents = representativeRow.n_incumbents || 0;
-      aggregatedRecord.cf_n_orgs = representativeRow.n_orgs || 0;
-      aggregatedRecord.cf_n_incumbents = representativeRow.n_incumbents || 0;
+      // Use organizational data from the specific row that contains each metric type
+      // TCC organizational data from TCC row
+      aggregatedRecord.tcc_n_orgs = tccRow ? tccRow.n_orgs || 0 : 0;
+      aggregatedRecord.tcc_n_incumbents = tccRow ? tccRow.n_incumbents || 0 : 0;
+      
+      // wRVU organizational data from wRVU row
+      aggregatedRecord.wrvu_n_orgs = wrvuRow ? wrvuRow.n_orgs || 0 : 0;
+      aggregatedRecord.wrvu_n_incumbents = wrvuRow ? wrvuRow.n_incumbents || 0 : 0;
+      
+      // CF organizational data from CF row
+      aggregatedRecord.cf_n_orgs = cfRow ? cfRow.n_orgs || 0 : 0;
+      aggregatedRecord.cf_n_incumbents = cfRow ? cfRow.n_incumbents || 0 : 0;
       
       // Use TCC data from TCC row if available
       if (tccRow) {
@@ -993,13 +998,18 @@ export class AnalyticsDataService {
         providerType: representativeRow.providerType as any,
         surveyYear: representativeRow.surveyYear,
         
-        // Use organizational data from representative row
-        tcc_n_orgs: representativeRow.n_orgs || 0,
-        tcc_n_incumbents: representativeRow.n_incumbents || 0,
-        wrvu_n_orgs: representativeRow.n_orgs || 0,
-        wrvu_n_incumbents: representativeRow.n_incumbents || 0,
-        cf_n_orgs: representativeRow.n_orgs || 0,
-        cf_n_incumbents: representativeRow.n_incumbents || 0,
+        // Use organizational data from the specific row that contains each metric type
+        // TCC organizational data from TCC row
+        tcc_n_orgs: tccRow ? tccRow.n_orgs || 0 : 0,
+        tcc_n_incumbents: tccRow ? tccRow.n_incumbents || 0 : 0,
+        
+        // wRVU organizational data from wRVU row
+        wrvu_n_orgs: wrvuRow ? wrvuRow.n_orgs || 0 : 0,
+        wrvu_n_incumbents: wrvuRow ? wrvuRow.n_incumbents || 0 : 0,
+        
+        // CF organizational data from CF row
+        cf_n_orgs: cfRow ? cfRow.n_orgs || 0 : 0,
+        cf_n_incumbents: cfRow ? cfRow.n_incumbents || 0 : 0,
         
         // Use TCC data from TCC row if available
         tcc_p25: tccRow ? tccRow.tcc_p25 || 0 : 0,
