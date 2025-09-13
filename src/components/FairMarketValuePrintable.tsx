@@ -10,11 +10,12 @@ interface Props {
   value: number;
   marketPercentile: number;
   marketData: { p25: number; p50: number; p75: number; p90: number };
+  providerName?: string;
 }
 
 const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
   compareType, specialty, providerType, region, year,
-  value, marketPercentile, marketData
+  value, marketPercentile, marketData, providerName
 }, ref) => {
   // Label and formatting based on compareType
   let valueLabel = 'Total Compensation';
@@ -44,6 +45,7 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
         maxWidth: 650,
         margin: '0 auto',
         p: 4,
+        paddingBottom: '80px',
         boxSizing: 'border-box',
         '@media print': {
           color: 'black',
@@ -62,7 +64,7 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
         @media print {
           body { background: white !important; }
           * { box-sizing: border-box; }
-          .fmv-print-title { font-size: 32px !important; font-weight: 800 !important; letter-spacing: 0.5px; }
+          .fmv-print-title { font-size: 24px !important; font-weight: 700 !important; letter-spacing: 0.3px; }
           .fmv-print-section { font-size: 18px !important; font-weight: 700 !important; margin-bottom: 8px; }
           .fmv-print-table, .fmv-print-table th, .fmv-print-table td {
             border: 2px solid #222 !important;
@@ -76,22 +78,17 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
           .fmv-print-market-value { font-size: 20px !important; font-weight: 800 !important; }
         }
       `}</style>
-      {/* Header with real logo */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <img src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} alt="BenchPoint Logo" style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 16 }} />
-                <Typography sx={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, fontFamily: 'inherit' }}>BenchPoint</Typography>
-        </Box>
-        <Box textAlign="right">
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'black', mb: 0.5 }}>Fair Market Value Report</Typography>
-          <Typography sx={{ fontSize: 13, color: 'black' }}>Generated: {new Date().toLocaleDateString()}</Typography>
-        </Box>
+      {/* Header with title and provider name */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography className="fmv-print-title" sx={{ color: 'black', fontSize: 24, fontWeight: 700 }}>
+          FMV Summary
+        </Typography>
+        {providerName && (
+          <Typography sx={{ fontSize: 18, fontWeight: 600, color: 'black' }}>
+            {providerName}
+          </Typography>
+        )}
       </Box>
-      <Box sx={{ borderBottom: '2px solid #222', mb: 2 }} />
-      {/* Title */}
-      <Typography className="fmv-print-title" sx={{ mb: 2, mt: 1, color: 'black', textAlign: 'left' }}>
-        Fair Market Value Summary
-      </Typography>
       <Box sx={{ borderBottom: '2px solid #222', mb: 2 }} />
       {/* Position Details */}
       <Typography className="fmv-print-section" sx={{ color: 'black', mb: 0 }}>Position Details</Typography>
@@ -109,21 +106,22 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
       </Table>
       {/* Compensation/Productivity/CF Analysis */}
       <Typography className="fmv-print-section" sx={{ color: 'black', mb: 0 }}>{valueLabel} Analysis</Typography>
-      <Box sx={{ border: '2px solid #222', borderRadius: 1, mb: 3 }}>
-        <Grid container>
-          <Grid item xs={7} sx={{ p: 1.5, borderRight: '1.5px solid #222', fontSize: 16, fontWeight: 500 }}>{valueLabel}</Grid>
-          <Grid item xs={5} sx={{ p: 1.5, textAlign: 'right', fontWeight: 700, fontSize: 20 }}>
-            {valuePrefix}{formatValue(value)}{valueSuffix}
-          </Grid>
-        </Grid>
-        <Box sx={{ borderTop: '1.5px solid #222' }} />
-        <Grid container>
-          <Grid item xs={7} sx={{ p: 1.5, borderRight: '1.5px solid #222', fontSize: 16, fontWeight: 500 }}>Market Percentile</Grid>
-          <Grid item xs={5} sx={{ p: 1.5, textAlign: 'right', fontWeight: 500, fontSize: 16 }}>
-            {marketPercentile.toFixed(1)}th
-          </Grid>
-        </Grid>
-      </Box>
+      <Table size="small" className="fmv-print-table" sx={{ mb: 3, minWidth: 400, border: '2px solid #222', borderRadius: 1 }}>
+        <TableBody>
+          <TableRow>
+            <TableCell sx={{ width: '60%', fontSize: 16, fontWeight: 500, borderRight: '1.5px solid #222' }}>{valueLabel}</TableCell>
+            <TableCell sx={{ width: '40%', textAlign: 'right', fontWeight: 700, fontSize: 20 }}>
+              {valuePrefix}{formatValue(value)}{valueSuffix}
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell sx={{ fontSize: 16, fontWeight: 500, borderRight: '1.5px solid #222' }}>Market Percentile</TableCell>
+            <TableCell sx={{ textAlign: 'right', fontWeight: 500, fontSize: 16 }}>
+              {marketPercentile.toFixed(1)}th
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
       {/* Market Data */}
       <Typography className="fmv-print-section" sx={{ color: 'black', mb: 0 }}>Market Data</Typography>
       <Box sx={{ border: '2px solid #222', borderRadius: 1, mb: 3, p: 0 }}>
@@ -169,6 +167,29 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
         <Typography textAlign="center" fontSize={16} fontWeight={700} mt={1} mb={1}>
           In {marketPercentile.toFixed(1)}th percentile
         </Typography>
+      </Box>
+      
+      {/* Footer - positioned at bottom of page */}
+      <Box sx={{ 
+        position: 'fixed', 
+        bottom: 0, 
+        left: 0, 
+        right: 0, 
+        mt: 6, 
+        pt: 3, 
+        borderTop: '1px solid #ccc',
+        backgroundColor: 'white',
+        padding: '12px 24px'
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <img src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} alt="BenchPoint Logo" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+            <Typography sx={{ fontWeight: 700, fontSize: 16, letterSpacing: 1, fontFamily: 'inherit', color: '#666' }}>BenchPoint</Typography>
+          </Box>
+          <Typography sx={{ fontSize: 12, color: '#666' }}>
+            Generated: {new Date().toLocaleDateString()}
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );

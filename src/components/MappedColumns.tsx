@@ -2,6 +2,7 @@ import React from 'react';
 import { Paper, Typography, IconButton, Tooltip } from '@mui/material';
 import { PencilIcon as EditIcon, TrashIcon as DeleteIcon } from '@heroicons/react/24/outline';
 import { IColumnMapping } from '../types/column';
+import { getSurveySourceColor } from '../features/mapping/utils/mappingCalculations';
 
 interface MappedColumnsProps {
   mapping: IColumnMapping;
@@ -11,19 +12,6 @@ interface MappedColumnsProps {
 }
 
 const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete, selected = false }) => {
-  // Color mapping for different survey sources
-  const getSourceColor = (source: string) => {
-    switch (source) {
-      case 'SullivanCotter':
-        return '#818CF8';
-      case 'Gallagher':
-        return '#F472B6';
-      case 'MGMA':
-        return '#34D399';
-      default:
-        return '#9CA3AF';
-    }
-  };
 
   // Format date to be more readable
   const formatDate = (date: Date) => {
@@ -89,7 +77,7 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
                              {/* Column card */}
                <div 
                  className="p-3 rounded-xl border border-gray-200 min-w-0 bg-white hover:bg-gray-50 transition-colors duration-150 shadow-sm hover:shadow-md"
-                 style={{ borderLeftColor: getSourceColor(column.surveySource), borderLeftWidth: '4px' }}
+                 style={{ borderLeftColor: getSurveySourceColor(column.surveySource), borderLeftWidth: '4px' }}
                >
                 <div className="flex justify-between items-center gap-2">
                   <div className="min-w-0">
@@ -100,7 +88,7 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
                       Type: {column.dataType}
                     </Typography>
                   </div>
-                  <Typography variant="caption" style={{ color: getSourceColor(column.surveySource) }} className="text-sm font-semibold whitespace-nowrap">
+                  <Typography variant="caption" style={{ color: getSurveySourceColor(column.surveySource) }} className="text-sm font-semibold whitespace-nowrap">
                     {column.surveySource}
                   </Typography>
                 </div>

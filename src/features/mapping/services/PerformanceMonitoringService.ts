@@ -446,3 +446,5 @@ export const performanceMonitoringService = new PerformanceMonitoringService();
 
 // Export for testing
 export { PerformanceMonitoringService };
+
+

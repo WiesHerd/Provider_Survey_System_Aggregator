@@ -257,8 +257,8 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       }
     }
     
-    // Survey source filter
-    if (filters.surveySource && filters.surveySource !== '' && row.surveySource !== filters.surveySource) {
+    // Survey source filter (exclude "All Sources")
+    if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources' && row.surveySource !== filters.surveySource) {
       return false;
     }
     
@@ -267,13 +267,13 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       return false;
     }
     
-    // Provider type filter
-    if (filters.providerType && filters.providerType !== '' && row.providerType !== filters.providerType) {
+    // Provider type filter (exclude "All Types")
+    if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types' && row.providerType !== filters.providerType) {
       return false;
     }
     
-    // Year filter
-    if (filters.year && filters.year !== '' && row.surveyYear !== filters.year) {
+    // Year filter (exclude "All Years")
+    if (filters.year && filters.year !== '' && filters.year !== 'All Years' && row.surveyYear !== filters.year) {
       return false;
     }
     

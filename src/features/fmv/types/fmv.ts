@@ -13,6 +13,25 @@ export interface FMVFilters {
 }
 
 /**
+ * Saved FMV calculation for a specific provider
+ */
+export interface SavedFMVCalculation extends BaseEntity {
+  providerName: string;
+  filters: FMVFilters;
+  compComponents: CompensationComponent[];
+  wrvus: string;
+  cf: string;
+  compareType: CompareType;
+  marketData: MarketData;
+  percentiles: UserPercentiles;
+  calculatedValue: number;
+  marketPercentile: number;
+  notes?: string;
+  created: Date;
+  lastModified: Date;
+}
+
+/**
  * Compensation component for TCC calculation
  */
 export interface CompensationComponent {

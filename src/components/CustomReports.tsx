@@ -583,7 +583,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log('📊 Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
-  }, [surveyData, currentConfig, specialtyMappings]);
+  }, [surveyData, currentConfig.dimension, currentConfig.metric, currentConfig.chartType, currentConfig.filters, specialtyMappings]);
 
   // Handle configuration changes
   const handleConfigChange = (key: keyof typeof currentConfig, value: any) => {
@@ -1111,7 +1111,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                       '& .MuiOutlinedInput-root': {
                         backgroundColor: 'white',
                         borderRadius: '8px',
-                        height: '40px',
+                        minHeight: '40px',
                         border: '1px solid #d1d5db',
                         '&:hover': {
                           borderColor: '#9ca3af',
@@ -1190,7 +1190,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         backgroundColor: 'white',
                         borderRadius: '8px',
                         fontSize: '0.875rem',
-                        height: '40px',
+                        minHeight: '40px',
                         border: '1px solid #d1d5db',
                         '&:hover': {
                           borderColor: '#9ca3af',
@@ -1273,7 +1273,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         backgroundColor: 'white',
                         borderRadius: '8px',
                         fontSize: '0.875rem',
-                        height: '40px',
+                        minHeight: '40px',
                         border: '1px solid #d1d5db',
                         '&:hover': {
                           borderColor: '#9ca3af',
@@ -1376,6 +1376,65 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           </div>
 
           {renderChart()}
+          
+          {/* Data Table */}
+          {chartData.length > 0 && (
+            <div className="mt-8">
+              <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
+                Data Table
+              </Typography>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                        {currentConfig.dimension === 'specialty' ? 'Specialty' : 
+                         currentConfig.dimension === 'region' ? 'Region' : 
+                         currentConfig.dimension === 'providerType' ? 'Provider Type' : 
+                         currentConfig.dimension}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                        {currentConfig.metric === 'tcc_p25' ? 'TCC 25th Percentile' :
+                         currentConfig.metric === 'tcc_p50' ? 'TCC 50th Percentile' :
+                         currentConfig.metric === 'tcc_p75' ? 'TCC 75th Percentile' :
+                         currentConfig.metric === 'tcc_p90' ? 'TCC 90th Percentile' :
+                         currentConfig.metric === 'wrvu_p25' ? 'wRVU 25th Percentile' :
+                         currentConfig.metric === 'wrvu_p50' ? 'wRVU 50th Percentile' :
+                         currentConfig.metric === 'wrvu_p75' ? 'wRVU 75th Percentile' :
+                         currentConfig.metric === 'wrvu_p90' ? 'wRVU 90th Percentile' :
+                         currentConfig.metric === 'cf_p25' ? 'CF 25th Percentile' :
+                         currentConfig.metric === 'cf_p50' ? 'CF 50th Percentile' :
+                         currentConfig.metric === 'cf_p75' ? 'CF 75th Percentile' :
+                         currentConfig.metric === 'cf_p90' ? 'CF 90th Percentile' :
+                         currentConfig.metric.replace('_', ' ').toUpperCase()}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Count
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {chartData.map((item, index) => (
+                      <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
+                          {item.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                          {currentConfig.metric.includes('wrvu') ? 
+                            item.value.toLocaleString() : 
+                            `$${item.value.toLocaleString()}`
+                          }
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {item.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

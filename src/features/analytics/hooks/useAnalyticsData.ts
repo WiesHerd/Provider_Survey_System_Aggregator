@@ -46,9 +46,12 @@ export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
 
       console.log('🔍 useAnalyticsData: Starting data fetch...');
       
-      // Use the AnalyticsDataService to get ALL data (no filters applied)
+      // Use singleton AnalyticsDataService instance (Google-style)
       const analyticsDataService = new AnalyticsDataService();
-      console.log('🔍 useAnalyticsData: Created AnalyticsDataService instance');
+      console.log('🔍 useAnalyticsData: Using AnalyticsDataService instance');
+      
+      // Clear cache to force recalculation with fixed percentile logic and provider type normalization
+      analyticsDataService.clearCache();
       
       const allData = await analyticsDataService.getAnalyticsData({
         specialty: '',

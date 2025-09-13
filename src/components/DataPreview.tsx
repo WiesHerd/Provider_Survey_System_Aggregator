@@ -450,7 +450,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }}>
           {/* Header with Clear Filter Button */}
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Survey Preview</h3>
+            <h3 className="text-lg font-normal text-gray-600">Survey Preview</h3>
             <button
               disabled
               className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 cursor-not-allowed"
@@ -500,7 +500,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       }}>
         {/* Header with Clear Filter Button */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Survey Preview</h3>
+          <h3 className="text-lg font-normal text-gray-600">Survey Preview</h3>
           <button
               onClick={() => {
                 onFilterChange('specialty', '');
@@ -548,8 +548,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 },
               }}
             >
-              <MenuItem value="">
-                <em>All Specialties</em>
+              <MenuItem value="" sx={{ color: '#6b7280' }}>
+                All Specialties
               </MenuItem>
               {cascadingFilterOptions.specialties.map((specialty) => (
                 <MenuItem key={specialty} value={specialty}>
@@ -578,8 +578,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 },
               }}
             >
-              <MenuItem value="">
-                <em>All Provider Types</em>
+              <MenuItem value="" sx={{ color: '#6b7280' }}>
+                All Provider Types
               </MenuItem>
               {cascadingFilterOptions.providerTypes.map((providerType) => (
                 <MenuItem key={providerType} value={providerType}>
@@ -608,8 +608,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 },
               }}
             >
-              <MenuItem value="">
-                <em>All Regions</em>
+              <MenuItem value="" sx={{ color: '#6b7280' }}>
+                All Regions
               </MenuItem>
               {cascadingFilterOptions.regions.map((region) => (
                 <MenuItem key={region} value={region}>
@@ -638,8 +638,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 },
               }}
             >
-              <MenuItem value="">
-                <em>All Variables</em>
+              <MenuItem value="" sx={{ color: '#6b7280' }}>
+                All Variables
               </MenuItem>
               {cascadingFilterOptions.variables.map((variable) => (
                 <MenuItem key={variable} value={variable}>

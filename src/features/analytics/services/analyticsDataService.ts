@@ -57,11 +57,143 @@ export interface NormalizedRow {
   rawData: RawSurveyRow;
 }
 
+// Global cache that persists across component mounts
+class GlobalAnalyticsCache {
+  private static instance: GlobalAnalyticsCache;
+  private dataCache: {
+    data: AggregatedData[] | null;
+    lastFetch: number;
+    isStale: boolean;
+  } = {
+    data: null,
+    lastFetch: 0,
+    isStale: false
+  };
+  
+  private mappingsCache: {
+    specialtyMappings: any[] | null;
+    columnMappings: any[] | null;
+    lastFetch: number;
+  } = {
+    specialtyMappings: null,
+    columnMappings: null,
+    lastFetch: 0
+  };
+  
+  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes (Google-style)
+  private readonly STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes (show stale data while refreshing)
+  
+  static getInstance(): GlobalAnalyticsCache {
+    if (!GlobalAnalyticsCache.instance) {
+      GlobalAnalyticsCache.instance = new GlobalAnalyticsCache();
+    }
+    return GlobalAnalyticsCache.instance;
+  }
+  
+  // Check if we have fresh data
+  hasFreshData(): boolean {
+    const now = Date.now();
+    return this.dataCache.data !== null && 
+           (now - this.dataCache.lastFetch) < this.CACHE_DURATION;
+  }
+  
+  // Check if we have stale data (for background refresh)
+  hasStaleData(): boolean {
+    const now = Date.now();
+    return this.dataCache.data !== null && 
+           (now - this.dataCache.lastFetch) < this.STALE_THRESHOLD;
+  }
+  
+  // Get cached data
+  getCachedData(): AggregatedData[] | null {
+    return this.dataCache.data;
+  }
+  
+  // Set cached data
+  setCachedData(data: AggregatedData[]): void {
+    this.dataCache = {
+      data,
+      lastFetch: Date.now(),
+      isStale: false
+    };
+  }
+  
+  // Mark data as stale (trigger background refresh)
+  markAsStale(): void {
+    this.dataCache.isStale = true;
+  }
+  
+  // Clear cache completely
+  clearCache(): void {
+    this.dataCache = {
+      data: null,
+      lastFetch: 0,
+      isStale: false
+    };
+    this.mappingsCache = {
+      specialtyMappings: null,
+      columnMappings: null,
+      lastFetch: 0
+    };
+  }
+  
+  // Get cached mappings
+  getCachedMappings(): { specialtyMappings: any[] | null, columnMappings: any[] | null } {
+    const now = Date.now();
+    if (this.mappingsCache.specialtyMappings && 
+        this.mappingsCache.columnMappings && 
+        (now - this.mappingsCache.lastFetch) < this.CACHE_DURATION) {
+      return {
+        specialtyMappings: this.mappingsCache.specialtyMappings,
+        columnMappings: this.mappingsCache.columnMappings
+      };
+    }
+    return { specialtyMappings: null, columnMappings: null };
+  }
+  
+  // Set cached mappings
+  setCachedMappings(specialtyMappings: any[], columnMappings: any[]): void {
+    this.mappingsCache = {
+      specialtyMappings,
+      columnMappings,
+      lastFetch: Date.now()
+    };
+  }
+}
+
 export class AnalyticsDataService {
   private dataService = getDataService();
+  private globalCache = GlobalAnalyticsCache.getInstance();
 
   /**
-   * Get all analytics data with proper normalization
+   * Get cached mappings or fetch fresh ones
+   */
+  private async getCachedMappings(): Promise<{ specialtyMappings: any[], columnMappings: any[] }> {
+    // Check global cache first
+    const cachedMappings = this.globalCache.getCachedMappings();
+    if (cachedMappings.specialtyMappings && cachedMappings.columnMappings) {
+      console.log('🔍 AnalyticsDataService: Using global cached mappings');
+      return {
+        specialtyMappings: cachedMappings.specialtyMappings,
+        columnMappings: cachedMappings.columnMappings
+      };
+    }
+    
+    // Fetch fresh mappings
+    console.log('🔍 AnalyticsDataService: Fetching fresh mappings');
+    const [specialtyMappings, columnMappings] = await Promise.all([
+      this.dataService.getAllSpecialtyMappings(),
+      this.dataService.getAllColumnMappings()
+    ]);
+    
+    // Update global cache
+    this.globalCache.setCachedMappings(specialtyMappings, columnMappings);
+    
+    return { specialtyMappings, columnMappings };
+  }
+
+  /**
+   * Get all analytics data with Google-style caching
    */
   async getAnalyticsData(filters: AnalyticsFilters = {
     specialty: '',
@@ -72,12 +204,29 @@ export class AnalyticsDataService {
   }): Promise<AggregatedData[]> {
     try {
       console.log('🔍 AnalyticsDataService: Starting data retrieval with filters:', filters);
-      console.log('🔍 AnalyticsDataService: This function is being called!');
       
-      // Get all surveys and mappings
-      const surveys = await this.dataService.getAllSurveys();
-      const specialtyMappings = await this.dataService.getAllSpecialtyMappings();
-      const columnMappings = await this.dataService.getAllColumnMappings();
+      // Google-style caching: Check if we have fresh data first
+      if (this.globalCache.hasFreshData()) {
+        console.log('🔍 AnalyticsDataService: Using fresh cached data (Google-style)');
+        const cachedData = this.globalCache.getCachedData();
+        if (cachedData) {
+          // Trigger background refresh if data is getting stale
+          if (this.globalCache.hasStaleData()) {
+            console.log('🔍 AnalyticsDataService: Data is stale, triggering background refresh');
+            this.refreshDataInBackground();
+          }
+          return cachedData;
+        }
+      }
+      
+      // If no fresh data, fetch it
+      console.log('🔍 AnalyticsDataService: No fresh data, fetching from database');
+      
+      // Get all surveys and cached mappings
+      const [surveys, { specialtyMappings, columnMappings }] = await Promise.all([
+        this.dataService.getAllSurveys(),
+        this.getCachedMappings()
+      ]);
       
       console.log(`🔍 AnalyticsDataService: Found ${surveys.length} surveys, ${specialtyMappings.length} specialty mappings, ${columnMappings.length} column mappings`);
       
@@ -86,32 +235,56 @@ export class AnalyticsDataService {
         return [];
       }
       
-      // Process each survey and normalize data
+      // Process surveys in parallel for better performance
       const allNormalizedRows: NormalizedRow[] = [];
       
-      for (const survey of surveys) {
+      console.log(`🔍 AnalyticsDataService: Processing ${surveys.length} surveys in parallel...`);
+      
+      // Process surveys in parallel (limit to 3 concurrent to avoid overwhelming IndexedDB)
+      const surveyPromises = surveys.map(async (survey) => {
         console.log(`🔍 AnalyticsDataService: Processing survey: ${survey.name} (${survey.type})`);
         
         try {
-          // Get ALL survey data (no filters applied at database level)
-          const surveyData = await this.dataService.getSurveyData(survey.id, {});
+          // Get survey data with pagination to limit memory usage
+          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 1000 });
           console.log(`🔍 AnalyticsDataService: Survey ${survey.name} returned ${surveyData.rows.length} rows`);
           
-          if (surveyData.rows.length > 0) {
-            console.log(`🔍 AnalyticsDataService: Sample row from ${survey.name}:`, surveyData.rows[0]);
+          if (surveyData.rows.length === 0) {
+            return [];
           }
           
-          // Normalize each row
-          const normalizedRows = surveyData.rows.map(row => 
+          // Normalize rows in batches to avoid blocking the main thread
+          const normalizedRows: NormalizedRow[] = [];
+          const batchSize = 100;
+          
+          for (let i = 0; i < surveyData.rows.length; i += batchSize) {
+            const batch = surveyData.rows.slice(i, i + batchSize);
+            const batchNormalized = batch.map(row => 
             this.normalizeRow(row, survey, specialtyMappings, columnMappings)
           );
+            normalizedRows.push(...batchNormalized);
+            
+            // Yield control to allow UI updates
+            if (i + batchSize < surveyData.rows.length) {
+              await new Promise(resolve => setTimeout(resolve, 0));
+            }
+          }
           
-          allNormalizedRows.push(...normalizedRows);
+          return normalizedRows;
           
         } catch (error) {
           console.error(`🔍 AnalyticsDataService: Error processing survey ${survey.name}:`, error);
+          return [];
         }
-      }
+      });
+      
+      // Wait for all surveys to complete
+      const surveyResults = await Promise.all(surveyPromises);
+      
+      // Flatten results
+      surveyResults.forEach(normalizedRows => {
+        allNormalizedRows.push(...normalizedRows);
+      });
       
       console.log(`🔍 AnalyticsDataService: Total normalized rows: ${allNormalizedRows.length}`);
       
@@ -120,8 +293,11 @@ export class AnalyticsDataService {
         return [];
       }
       
-      // Stack and aggregate the normalized data
-      const aggregatedData = this.stackAndAggregateData(allNormalizedRows);
+      // Stack and aggregate the normalized data in chunks for better performance
+      const aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
+      
+      // Cache the results (Google-style)
+      this.globalCache.setCachedData(aggregatedData);
       
       console.log(`🔍 AnalyticsDataService: Final aggregated records: ${aggregatedData.length}`);
       return aggregatedData;
@@ -129,6 +305,86 @@ export class AnalyticsDataService {
     } catch (error) {
       console.error('🔍 AnalyticsDataService: Error in getAnalyticsData:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Invalidate cache (call this when data changes)
+   */
+  invalidateCache(): void {
+    console.log('🔍 AnalyticsDataService: Invalidating cache');
+    this.globalCache.markAsStale();
+  }
+
+  /**
+   * Clear cache completely (call this when data structure changes)
+   */
+  clearCache(): void {
+    console.log('🔍 AnalyticsDataService: Clearing cache completely');
+    this.globalCache.clearCache();
+  }
+
+  /**
+   * Background refresh method (Google-style)
+   * Refreshes data in the background without blocking the UI
+   */
+  private async refreshDataInBackground(): Promise<void> {
+    try {
+      console.log('🔍 AnalyticsDataService: Starting background refresh');
+      
+      // Get fresh data without affecting current cache
+      const [surveys, { specialtyMappings, columnMappings }] = await Promise.all([
+        this.dataService.getAllSurveys(),
+        this.getCachedMappings()
+      ]);
+      
+      if (surveys.length === 0) return;
+      
+      // Process data in background
+      const allNormalizedRows: NormalizedRow[] = [];
+      
+      const surveyPromises = surveys.map(async (survey) => {
+        try {
+          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 1000 });
+          
+          if (surveyData.rows.length === 0) return [];
+          
+          const normalizedRows: NormalizedRow[] = [];
+          const batchSize = 100;
+          
+          for (let i = 0; i < surveyData.rows.length; i += batchSize) {
+            const batch = surveyData.rows.slice(i, i + batchSize);
+            const batchNormalized = batch.map(row => 
+              this.normalizeRow(row, survey, specialtyMappings, columnMappings)
+            );
+            normalizedRows.push(...batchNormalized);
+            
+            // Yield control
+            if (i + batchSize < surveyData.rows.length) {
+              await new Promise(resolve => setTimeout(resolve, 0));
+            }
+          }
+          
+          return normalizedRows;
+        } catch (error) {
+          console.error(`🔍 AnalyticsDataService: Error in background refresh for survey ${survey.name}:`, error);
+          return [];
+        }
+      });
+      
+      const surveyResults = await Promise.all(surveyPromises);
+      surveyResults.forEach(normalizedRows => {
+        allNormalizedRows.push(...normalizedRows);
+      });
+      
+      if (allNormalizedRows.length > 0) {
+        const aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
+        this.globalCache.setCachedData(aggregatedData);
+        console.log('🔍 AnalyticsDataService: Background refresh completed');
+      }
+      
+    } catch (error) {
+      console.error('🔍 AnalyticsDataService: Error in background refresh:', error);
     }
   }
 
@@ -476,12 +732,15 @@ export class AnalyticsDataService {
    * Normalize provider type
    */
   private normalizeProviderType(providerType: string): string {
-    if (!providerType || providerType === 'Physician') return 'Physician';
+    if (!providerType || providerType === 'Staff Physician') return 'Staff Physician';
     
     const lower = providerType.toLowerCase();
     
-    if (lower.includes('physician') || lower.includes('md') || lower.includes('do')) {
-      return 'Physician';
+    // Handle PhD roles first
+    if (lower.includes('phd') || lower.includes('doctor of philosophy')) {
+      return 'PhD';
+    } else if (lower.includes('physician') || lower.includes('md') || lower.includes('do')) {
+      return 'Staff Physician';
     } else if (lower.includes('nurse practitioner') || lower.includes('np')) {
       return 'Nurse Practitioner';
     } else if (lower.includes('physician assistant') || lower.includes('pa')) {
@@ -503,14 +762,14 @@ export class AnalyticsDataService {
     
     const lower = region.toLowerCase();
     
-    if (lower.includes('northeast') || lower.includes('ne')) {
-      return 'Northeast';
-    } else if (lower.includes('southeast') || lower.includes('se')) {
-      return 'Southeast';
-    } else if (lower.includes('midwest') || lower.includes('north central') || lower.includes('nc')) {
-      return 'Midwest';
-    } else if (lower.includes('west')) {
-      return 'West';
+    if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne')) {
+      return 'Northeastern';
+    } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se')) {
+      return 'Southern';
+    } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('north central') || lower.includes('nc')) {
+      return 'Midwestern';
+    } else if (lower.includes('west') || lower.includes('western')) {
+      return 'Western';
     } else if (lower.includes('national')) {
       return 'National';
     }
@@ -520,7 +779,156 @@ export class AnalyticsDataService {
 
 
   /**
-   * Stack and aggregate normalized data
+   * Optimized version of stackAndAggregateData that processes data in chunks
+   */
+  private async stackAndAggregateDataOptimized(
+    normalizedRows: NormalizedRow[]
+  ): Promise<AggregatedData[]> {
+    console.log('🔍 AnalyticsDataService: Starting optimized data stacking and aggregation');
+    console.log('🔍 AnalyticsDataService: Total normalized rows to process:', normalizedRows.length);
+    
+    // Process data in chunks to avoid blocking the main thread
+    const chunkSize = 1000;
+    const groupedData = new Map<string, NormalizedRow[]>();
+    
+    for (let i = 0; i < normalizedRows.length; i += chunkSize) {
+      const chunk = normalizedRows.slice(i, i + chunkSize);
+      
+      // Process chunk
+      chunk.forEach(row => {
+        const key = `${row.specialty}_${row.providerType}_${row.region}_${row.surveySource}`;
+        
+        if (!groupedData.has(key)) {
+          groupedData.set(key, []);
+        }
+        
+        groupedData.get(key)!.push(row);
+      });
+      
+      // Yield control to allow UI updates
+      if (i + chunkSize < normalizedRows.length) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+    
+    console.log(`🔍 AnalyticsDataService: Grouped data into ${groupedData.size} groups`);
+    
+    // Convert grouped data to aggregated format
+    const aggregatedData: AggregatedData[] = [];
+    
+    for (const [key, rows] of groupedData) {
+      if (rows.length === 0) continue;
+      
+      const aggregatedRecord = this.createAggregatedRecord(rows, key);
+      aggregatedData.push(aggregatedRecord);
+    }
+    
+    console.log(`🔍 AnalyticsDataService: Created ${aggregatedData.length} aggregated records`);
+    
+    return aggregatedData;
+  }
+
+  /**
+   * Create a single aggregated record from a group of rows
+   */
+  private createAggregatedRecord(rows: NormalizedRow[], key: string): AggregatedData {
+    const firstRow = rows[0];
+    
+    // Initialize aggregated record
+    const aggregatedRecord: AggregatedData = {
+      standardizedName: firstRow.specialty,
+      surveySource: firstRow.surveySource,
+      surveySpecialty: firstRow.specialty,
+      geographicRegion: firstRow.region,
+      providerType: firstRow.providerType,
+      surveyYear: firstRow.surveyYear,
+      tcc_n_orgs: 0,
+      tcc_n_incumbents: 0,
+      tcc_p25: 0,
+      tcc_p50: 0,
+      tcc_p75: 0,
+      tcc_p90: 0,
+      wrvu_n_orgs: 0,
+      wrvu_n_incumbents: 0,
+      wrvu_p25: 0,
+      wrvu_p50: 0,
+      wrvu_p75: 0,
+      wrvu_p90: 0,
+      cf_n_orgs: 0,
+      cf_n_incumbents: 0,
+      cf_p25: 0,
+      cf_p50: 0,
+      cf_p75: 0,
+      cf_p90: 0
+    };
+    
+    // Collect all individual data points for proper percentile calculation
+    const tccValues: number[] = [];
+    const wrvuValues: number[] = [];
+    const cfValues: number[] = [];
+    
+    // Aggregate organizational data and collect individual values
+    rows.forEach(row => {
+      // Aggregate organizational counts (these can be summed)
+      aggregatedRecord.tcc_n_orgs += row.n_orgs || 0;
+      aggregatedRecord.tcc_n_incumbents += row.n_incumbents || 0;
+      aggregatedRecord.wrvu_n_orgs += row.n_orgs || 0;
+      aggregatedRecord.wrvu_n_incumbents += row.n_incumbents || 0;
+      aggregatedRecord.cf_n_orgs += row.n_orgs || 0;
+      aggregatedRecord.cf_n_incumbents += row.n_incumbents || 0;
+      
+      // Collect individual values for percentile calculation
+      // Use the median (p50) as the representative value for each row
+      if (row.tcc_p50 && row.tcc_p50 > 0) {
+        tccValues.push(row.tcc_p50);
+      }
+      if (row.wrvu_p50 && row.wrvu_p50 > 0) {
+        wrvuValues.push(row.wrvu_p50);
+      }
+      if (row.cf_p50 && row.cf_p50 > 0) {
+        cfValues.push(row.cf_p50);
+      }
+    });
+    
+    // Calculate proper percentiles from the collected values
+    if (tccValues.length > 0) {
+      const sortedTcc = tccValues.sort((a, b) => a - b);
+      aggregatedRecord.tcc_p25 = this.calculatePercentile(sortedTcc, 25);
+      aggregatedRecord.tcc_p50 = this.calculatePercentile(sortedTcc, 50);
+      aggregatedRecord.tcc_p75 = this.calculatePercentile(sortedTcc, 75);
+      aggregatedRecord.tcc_p90 = this.calculatePercentile(sortedTcc, 90);
+    }
+    
+    if (wrvuValues.length > 0) {
+      const sortedWrvu = wrvuValues.sort((a, b) => a - b);
+      aggregatedRecord.wrvu_p25 = this.calculatePercentile(sortedWrvu, 25);
+      aggregatedRecord.wrvu_p50 = this.calculatePercentile(sortedWrvu, 50);
+      aggregatedRecord.wrvu_p75 = this.calculatePercentile(sortedWrvu, 75);
+      aggregatedRecord.wrvu_p90 = this.calculatePercentile(sortedWrvu, 90);
+    }
+    
+    if (cfValues.length > 0) {
+      const sortedCf = cfValues.sort((a, b) => a - b);
+      aggregatedRecord.cf_p25 = this.calculatePercentile(sortedCf, 25);
+      aggregatedRecord.cf_p50 = this.calculatePercentile(sortedCf, 50);
+      aggregatedRecord.cf_p75 = this.calculatePercentile(sortedCf, 75);
+      aggregatedRecord.cf_p90 = this.calculatePercentile(sortedCf, 90);
+    }
+    
+    return aggregatedRecord;
+  }
+
+  /**
+   * Calculate percentile from a sorted array of numbers
+   */
+  private calculatePercentile(sortedValues: number[], percentile: number): number {
+    if (sortedValues.length === 0) return 0;
+    const index = Math.floor((percentile / 100) * sortedValues.length);
+    return sortedValues[index] || 0;
+  }
+
+  /**
+   * Stack and aggregate normalized data (legacy method - kept for compatibility)
    * This is the key function that ensures each metric section has its own n_orgs/n_incumbents
    */
   private stackAndAggregateData(

@@ -116,15 +116,18 @@ export const applyFMVFilters = (
  * @returns Market data with percentiles
  */
 export const calculateMarketData = (filteredRows: NormalizedSurveyRow[]): MarketData => {
-  const tccs = filteredRows.flatMap(row => 
-    [row.tcc_p25, row.tcc_p50, row.tcc_p75, row.tcc_p90].filter(Boolean)
-  );
-  const wrvus = filteredRows.flatMap(row => 
-    [row.wrvu_p25, row.wrvu_p50, row.wrvu_p75, row.wrvu_p90].filter(Boolean)
-  );
-  const cfs = filteredRows.flatMap(row => 
-    [row.cf_p25, row.cf_p50, row.cf_p75, row.cf_p90].filter(Boolean)
-  );
+  // Use median (p50) values from each row to create a proper distribution
+  const tccs = filteredRows
+    .map(row => row.tcc_p50)
+    .filter(value => value !== null && value !== undefined && !isNaN(value));
+  
+  const wrvus = filteredRows
+    .map(row => row.wrvu_p50)
+    .filter(value => value !== null && value !== undefined && !isNaN(value));
+  
+  const cfs = filteredRows
+    .map(row => row.cf_p50)
+    .filter(value => value !== null && value !== undefined && !isNaN(value));
 
   return {
     tcc: {

@@ -8,6 +8,7 @@ export { TCCItemization } from './components/TCCItemization';
 export { WRVUsInput } from './components/WRVUsInput';
 export { CFInput } from './components/CFInput';
 export { ResultsPanel } from './components/ResultsPanel';
+export { SavedFMVManager } from './components/SavedFMVManager';
 
 // Hooks
 export { useFMVData } from './hooks/useFMVData';
@@ -15,6 +16,7 @@ export { useFMVData } from './hooks/useFMVData';
 // Types
 export type {
   FMVFilters as FMVFiltersType,
+  SavedFMVCalculation,
   CompensationComponent,
   MarketPercentiles,
   MarketData,

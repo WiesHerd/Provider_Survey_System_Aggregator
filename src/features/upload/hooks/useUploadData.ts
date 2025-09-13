@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDataService } from '../../../services/DataService';
+import { AnalyticsDataService } from '../../analytics/services/analyticsDataService';
 import { 
   FileWithPreview,
   UploadedSurvey,
@@ -344,6 +345,11 @@ export const useUploadData = (
       setUploadedSurveys(prev => [...prev, ...uploadedSurveys]);
       clearFiles();
       
+      // Invalidate analytics cache since new data was added (Google-style)
+      const analyticsService = new AnalyticsDataService();
+      analyticsService.invalidateCache();
+      console.log('🔍 Upload: Invalidated analytics cache due to new survey data');
+      
       // Call callback
       onUploadComplete?.(uploadedSurveys);
       
@@ -383,6 +389,11 @@ export const useUploadData = (
         setSelectedSurvey(null);
         onSurveySelect?.(null);
       }
+      
+      // Invalidate analytics cache since data was removed (Google-style)
+      const analyticsService = new AnalyticsDataService();
+      analyticsService.invalidateCache();
+      console.log('🔍 Upload: Invalidated analytics cache due to survey deletion');
       
       onSurveyDelete?.(surveyId);
       

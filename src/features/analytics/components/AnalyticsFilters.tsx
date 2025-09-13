@@ -41,10 +41,10 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
   availableYears
 }) => {
   const handleFilterChange = (field: keyof typeof filters, value: string) => {
-    onFiltersChange({
-      ...filters,
-      [field]: value
-    });
+    // Simply update the specific filter that changed
+    // Allow multiple filters to work together
+    const newFilters = { ...filters, [field]: value };
+    onFiltersChange(newFilters);
   };
 
   return (
@@ -105,10 +105,25 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               value={filters.year}
               label="Year"
               onChange={(e: any) => handleFilterChange('year', e.target.value)}
+              disableRipple
+              sx={{
+                '& .MuiSelect-select': {
+                  transition: 'none !important',
+                },
+                '& .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                }
+              }}
             >
-              <MenuItem value="">All Years</MenuItem>
+              <MenuItem value="All Years" disableRipple>All Years</MenuItem>
               {availableYears.map((year) => (
-                <MenuItem key={year} value={year}>
+                <MenuItem key={year} value={year} disableRipple>
                   {year}
                 </MenuItem>
               ))}
@@ -124,10 +139,25 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               value={filters.surveySource}
               label="Survey Source"
               onChange={(e: any) => handleFilterChange('surveySource', e.target.value)}
+              disableRipple
+              sx={{
+                '& .MuiSelect-select': {
+                  transition: 'none !important',
+                },
+                '& .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                }
+              }}
             >
-              <MenuItem value="">All Sources</MenuItem>
+              <MenuItem value="All Sources" disableRipple>All Sources</MenuItem>
               {availableSources.map((source) => (
-                <MenuItem key={source} value={source}>
+                <MenuItem key={source} value={source} disableRipple>
                   {source}
                 </MenuItem>
               ))}
@@ -188,10 +218,25 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
               value={filters.providerType}
               label="Provider Type"
               onChange={(e: any) => handleFilterChange('providerType', e.target.value)}
+              disableRipple
+              sx={{
+                '& .MuiSelect-select': {
+                  transition: 'none !important',
+                },
+                '& .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  transition: 'none !important',
+                }
+              }}
             >
-              <MenuItem value="">All Types</MenuItem>
+              <MenuItem value="All Types" disableRipple>All Types</MenuItem>
               {availableProviderTypes.map((type) => (
-                <MenuItem key={type} value={type}>
+                <MenuItem key={type} value={type} disableRipple>
                   {type}
                 </MenuItem>
               ))}

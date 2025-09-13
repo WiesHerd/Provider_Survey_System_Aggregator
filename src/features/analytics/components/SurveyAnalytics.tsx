@@ -40,29 +40,33 @@ const SurveyAnalytics: React.FC = memo(() => {
   });
 
 
-  // Extract unique values for filter options from ALL data (not filtered data)
+  // Generate cascading filter options based on current filter state
   const filterOptions = useMemo(() => {
-    console.log('🔍 SurveyAnalytics: Generating filter options from', allData.length, 'all data records');
+    console.log('🔍 SurveyAnalytics: Generating cascading filter options from', allData.length, 'all data records');
+    console.log('🔍 SurveyAnalytics: Current filters:', filters);
     
-    // Get all unique values from the full dataset
-    // Use standardizedName for specialties (these are already the normalized names from mappings)
-    const allSpecialties = [...new Set(allData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
-    const allSources = [...new Set(allData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
-    const allRegions = [...new Set(allData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
-    const allProviderTypes = [...new Set(allData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
-    const allYears = [...new Set(allData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
+    // Enterprise-grade UX: Always show ALL available options
+    // This allows users to easily change any filter at any time without being locked into cascading behavior
+    console.log('🔍 SurveyAnalytics: Generating all available options for enterprise-grade UX');
+    
+    // Generate options from the FULL dataset (not filtered)
+    // This allows users to change any filter at any time
+    const availableSpecialties = [...new Set(allData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
+    const availableSources = [...new Set(allData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
+    const availableRegions = [...new Set(allData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
+    const availableProviderTypes = [...new Set(allData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
+    const availableYears = [...new Set(allData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
 
-    console.log('🔍 SurveyAnalytics: All filter options - specialties:', allSpecialties.length, 'sources:', allSources.length, 'regions:', allRegions.length, 'providerTypes:', allProviderTypes.length, 'years:', allYears.length);
-    console.log('🔍 SurveyAnalytics: Normalized specialties:', allSpecialties.filter(s => s.toLowerCase().includes('allergy')));
+    console.log('🔍 SurveyAnalytics: Cascading filter options - specialties:', availableSpecialties.length, 'sources:', availableSources.length, 'regions:', availableRegions.length, 'providerTypes:', availableProviderTypes.length, 'years:', availableYears.length);
 
     return {
-      specialties: allSpecialties,
-      sources: allSources,
-      regions: allRegions,
-      providerTypes: allProviderTypes,
-      years: allYears
+      specialties: availableSpecialties,
+      sources: availableSources,
+      regions: availableRegions,
+      providerTypes: availableProviderTypes,
+      years: availableYears
     };
-  }, [allData, currentYear]);
+  }, [allData, filters, currentYear]);
 
   return (
     <div className="flex flex-col space-y-6">

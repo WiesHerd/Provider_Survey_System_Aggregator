@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { useFMVData } from '../hooks/useFMVData';
 import { FMVFilters } from './FMVFilters';
@@ -7,8 +7,9 @@ import { TCCItemization } from './TCCItemization';
 import { WRVUsInput } from './WRVUsInput';
 import { CFInput } from './CFInput';
 import { ResultsPanel } from './ResultsPanel';
+import { SavedFMVManager } from './SavedFMVManager';
 import FairMarketValuePrintable from '../../../components/FairMarketValuePrintable';
-import { FMVCalculatorProps } from '../types/fmv';
+import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
 
 /**
  * Main FMV Calculator component that orchestrates all sub-components
@@ -26,8 +27,6 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     marketData,
     percentiles,
     uniqueValues,
-    loading,
-    error,
     
     // Calculated values
     tcc,
@@ -43,6 +42,9 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     resetFilters,
   } = useFMVData();
 
+  // Track current provider name for printing
+  const [currentProviderName, setCurrentProviderName] = useState<string>('');
+
   // Print functionality
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
@@ -55,6 +57,61 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   const handlePrintClick = () => {
     handlePrint();
     onPrint?.();
+  };
+
+  // Handle saving a calculation
+  const handleSaveCalculation = (calculation: Omit<SavedFMVCalculation, 'id' | 'created' | 'lastModified'>) => {
+    // This will be handled by the SavedFMVManager component
+    console.log('Saving FMV calculation:', calculation);
+  };
+
+  // Handle loading a saved calculation
+  const handleLoadCalculation = (calculation: SavedFMVCalculation) => {
+    // Update filters
+    updateFilters(calculation.filters);
+    
+    // Update compensation components
+    setCompComponents(calculation.compComponents);
+    
+    // Update other values
+    setWRVUs(calculation.wrvus);
+    setCF(calculation.cf);
+    setCompareType(calculation.compareType);
+    
+    // Set provider name for printing
+    setCurrentProviderName(calculation.providerName);
+    
+    console.log('Loaded FMV calculation:', calculation);
+  };
+
+  // Handle deleting a saved calculation
+  const handleDeleteCalculation = (id: string) => {
+    console.log('Deleting FMV calculation:', id);
+  };
+
+  // Get current calculation data for saving
+  const getCurrentCalculationData = () => {
+    if (!marketData) return undefined;
+
+    const calculatedValue = compareType === 'TCC' ? tccFTEAdjusted : 
+                           compareType === 'wRVUs' ? wrvusFTEAdjusted : 
+                           Number(cf);
+
+    const marketPercentile = compareType === 'TCC' ? (percentiles.tcc ?? 0) :
+                            compareType === 'wRVUs' ? (percentiles.wrvu ?? 0) :
+                            (percentiles.cf ?? 0);
+
+    return {
+      filters,
+      compComponents,
+      wrvus,
+      cf,
+      compareType,
+      marketData,
+      percentiles,
+      calculatedValue,
+      marketPercentile
+    };
   };
 
   return (
@@ -182,6 +239,14 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
           />
         </div>
 
+        {/* Saved Calculations Manager */}
+        <SavedFMVManager
+          onLoadCalculation={handleLoadCalculation}
+          onSaveCalculation={handleSaveCalculation}
+          onDeleteCalculation={handleDeleteCalculation}
+          currentCalculation={getCurrentCalculationData()}
+        />
+
         {/* Hidden printable component for react-to-print */}
         <div style={{ position: 'absolute', left: '-9999px', top: 0, visibility: 'hidden' }}>
           <FairMarketValuePrintable
@@ -206,6 +271,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               compareType === 'wRVUs' ? (marketData?.wrvu ?? { p25: 0, p50: 0, p75: 0, p90: 0 }) :
               (marketData?.cf ?? { p25: 0, p50: 0, p75: 0, p90: 0 })
             }
+            providerName={currentProviderName}
           />
         </div>
       </div>

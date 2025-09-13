@@ -16,6 +16,7 @@ import {
 	CpuChipIcon,
 	UserIcon,
 	CurrencyDollarIcon,
+	CircleStackIcon,
 } from '@heroicons/react/24/outline';
 
 // Medical cross icon to represent medical specialties
@@ -77,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 		{
 			name: 'Analytics & Reports',
 			items: [
-				{ name: 'Normalized Data', icon: TableCellsIcon, path: '/normalized-data' },
+				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data' },
 				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
 				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
@@ -178,7 +179,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				${isOpen ? 'w-64' : 'w-20'} flex flex-col border-r border-gray-100`}
 		>
 			{/* Branding */}
-			<div className="flex items-center h-16 px-4">
+			<div className="flex items-center justify-between h-16 px-4">
 				<div className="flex items-center">
 					<div className="w-12 h-12 flex items-center justify-center">
 								 <img 
@@ -228,6 +229,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 						</span>
 					)}
 				</div>
+				
+				{/* Toggle Button - Google-style positioning */}
+				<button
+					onClick={() => setIsOpen(!isOpen)}
+					className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+					aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+				>
+					{isOpen ? (
+						<ChevronLeftIcon className="w-4 h-4 text-gray-600 hover:text-indigo-600" />
+					) : (
+						<ChevronRightIcon className="w-4 h-4 text-gray-600 hover:text-indigo-600" />
+					)}
+				</button>
 			</div>
 
 			{/* Main Menu */}
@@ -237,25 +251,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</div>
 			</nav>
 
-			{/* Bottom Section */}
-			<div className="absolute left-4 bottom-4">
-				<div className="group relative">
-					<button
-						onClick={() => setIsOpen(!isOpen)}
-						className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 bg-white shadow-md hover:bg-gray-100 transition-all duration-200 focus:outline-none"
-						aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-					>
-						{isOpen ? (
-							<ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
-						) : (
-							<ChevronRightIcon className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
-						)}
-					</button>
-					<span className="absolute left-14 top-1/2 -translate-y-1/2 px-3 py-1 rounded bg-gray-900 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
-						{isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-					</span>
-				</div>
-			</div>
 		</div>
 	);
 };

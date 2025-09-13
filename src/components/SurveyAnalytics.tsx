@@ -1745,7 +1745,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 renderValue={(selected: unknown) => {
                   if (!selected || selected === '') {
                     return (
-                      <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                      <span style={{ color: '#6b7280' }}>
                         📊 All Sources ({uniqueValues.surveySources.length} sources)
                       </span>
                     );
@@ -1791,7 +1791,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                 renderValue={(selected: unknown) => {
                   if (!selected || selected === '') {
                     return (
-                      <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                      <span style={{ color: '#6b7280' }}>
                         👥 All Types ({uniqueValues.providerTypes.length} types)
                       </span>
                     );
@@ -1822,7 +1822,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
                   const v = (value as string) || '';
                   if (!v) {
                     return (
-                      <span style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                      <span style={{ color: '#6b7280' }}>
                         🌍 All Regions ({uniqueValues.regions.length} regions)
                       </span>
                     );

@@ -177,8 +177,8 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
                       }
                     }}
                   >
-                    <MenuItem value="">
-                      <em>All Provider Types</em>
+                    <MenuItem value="" sx={{ color: '#6b7280' }}>
+                      All Provider Types
                     </MenuItem>
                     {providerTypeOptions.map((providerType) => (
                       <MenuItem key={providerType} value={providerType}>
@@ -202,8 +202,8 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
                       }
                     }}
                   >
-                    <MenuItem value="">
-                      <em>All Regions</em>
+                    <MenuItem value="" sx={{ color: '#6b7280' }}>
+                      All Regions
                     </MenuItem>
                     {regionOptions.map((region) => (
                       <MenuItem key={region} value={region}>

@@ -4,6 +4,7 @@ import { getDataService } from '../../../services/DataService';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 import { FunnelIcon, LightBulbIcon } from '@heroicons/react/24/outline';
 import { ModernPagination } from '../../../shared/components/ModernPagination';
+import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 // Lazy load AG Grid to reduce initial bundle size
 const AgGridWrapper = lazy(() => import('../../../components/AgGridWrapper'));
@@ -90,11 +91,11 @@ export const NormalizedDataScreen: React.FC = () => {
 
   const dataService = getDataService();
 
-  // Cascading filter options - matching upload screen exactly
+  // Cascading filter options - using normalized data for consistency with analytics screen
   const cascadingFilterOptions = useMemo(() => {
-    const specialties = [...new Set(data.map(row => row.originalSpecialty))].sort();
-    const providerTypes = [...new Set(data.map(row => row.originalProviderType))].sort();
-    const regions = [...new Set(data.map(row => row.originalRegion))].sort();
+    const specialties = [...new Set(data.map(row => row.normalizedSpecialty))].sort();
+    const providerTypes = [...new Set(data.map(row => row.normalizedProviderType))].sort();
+    const regions = [...new Set(data.map(row => row.normalizedRegion))].sort();
     const variables = [...new Set(data.map(row => {
       // Extract variable from raw data if available
       return row.rawData?.variable || row.rawData?.Variable || 'Unknown';
@@ -108,15 +109,15 @@ export const NormalizedDataScreen: React.FC = () => {
     };
   }, [data]);
 
-  // Filtered data - matching upload screen logic
+  // Filtered data - using normalized fields for consistency with analytics screen
   const filteredData = useMemo(() => {
     return data.filter(row => {
       const specialtyMatch = !globalFilters.specialty || 
-        row.originalSpecialty.toLowerCase().includes(globalFilters.specialty.toLowerCase());
+        row.normalizedSpecialty.toLowerCase().includes(globalFilters.specialty.toLowerCase());
       const providerTypeMatch = !globalFilters.providerType || 
-        row.originalProviderType.toLowerCase().includes(globalFilters.providerType.toLowerCase());
+        row.normalizedProviderType.toLowerCase().includes(globalFilters.providerType.toLowerCase());
       const regionMatch = !globalFilters.region || 
-        row.originalRegion.toLowerCase().includes(globalFilters.region.toLowerCase());
+        row.normalizedRegion.toLowerCase().includes(globalFilters.region.toLowerCase());
       const variableMatch = !globalFilters.variable || 
         (row.rawData?.variable || row.rawData?.Variable || '').toLowerCase().includes(globalFilters.variable.toLowerCase());
 
@@ -170,21 +171,16 @@ export const NormalizedDataScreen: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        console.log('🔍 Loading normalized data...');
+        console.log('🔍 Loading normalized data with updated region formatting...');
         
         // Get all surveys and their data
         const surveys = await dataService.getAllSurveys();
-        console.log(`🔍 Found ${surveys.length} surveys`);
-        
         const allNormalizedRows: NormalizedRow[] = [];
         
         for (const survey of surveys) {
           try {
-            console.log(`🔍 Processing survey: ${survey.name} (${survey.type})`);
-            
             // Get survey data
             const surveyData = await dataService.getSurveyData(survey.id);
-            console.log(`🔍 Survey ${survey.name} returned ${surveyData.rows.length} rows`);
             
             // Get mappings for this survey
             const specialtyMappings = await dataService.getAllSpecialtyMappings();
@@ -285,7 +281,6 @@ export const NormalizedDataScreen: React.FC = () => {
           }
         }
         
-        console.log(`🔍 Total normalized rows: ${allNormalizedRows.length}`);
         setData(allNormalizedRows);
         
       } catch (error) {
@@ -339,12 +334,15 @@ export const NormalizedDataScreen: React.FC = () => {
   };
 
   const normalizeProviderType = (providerType: string): string => {
-    if (!providerType || providerType === 'Physician') return 'Physician';
+    if (!providerType || providerType === 'Staff Physician') return 'Staff Physician';
     
     const lower = providerType.toLowerCase();
     
-    if (lower.includes('physician') || lower.includes('md') || lower.includes('do')) {
-      return 'Physician';
+    // Handle PhD roles first
+    if (lower.includes('phd') || lower.includes('doctor of philosophy')) {
+      return 'PhD';
+    } else if (lower.includes('physician') || lower.includes('md') || lower.includes('do')) {
+      return 'Staff Physician';
     } else if (lower.includes('nurse practitioner') || lower.includes('np')) {
       return 'Nurse Practitioner';
     } else if (lower.includes('physician assistant') || lower.includes('pa')) {
@@ -365,25 +363,33 @@ export const NormalizedDataScreen: React.FC = () => {
       );
       
       if (hasSourceRegion) {
-        // Return the standardized region name from the mapping
-        return mapping.standardizedName;
+        // Return the standardized region name from the mapping, but convert to Proper case
+        const properCaseRegion = mapping.standardizedName.charAt(0).toUpperCase() + mapping.standardizedName.slice(1).toLowerCase();
+        return properCaseRegion;
       }
     }
     
-    // If no mapping found, use fallback logic
+    // If no mapping found, use fallback logic with Proper case
     const lower = region.toLowerCase();
+    let normalizedRegion = region;
     
     if (lower.includes('west') || lower.includes('western')) {
-      return 'West';
-    } else if (lower.includes('east') || lower.includes('eastern')) {
-      return 'East';
-    } else if (lower.includes('midwest') || lower.includes('central')) {
-      return 'Midwest';
+      normalizedRegion = 'Western';
+    } else if (lower.includes('northeast') || lower.includes('northeastern')) {
+      normalizedRegion = 'Northeastern';
+    } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('central')) {
+      normalizedRegion = 'Midwestern';
     } else if (lower.includes('south') || lower.includes('southern')) {
-      return 'South';
+      normalizedRegion = 'Southern';
+    } else if (lower.includes('national')) {
+      normalizedRegion = 'National';
+    } else {
+      // Apply Proper case to any remaining regions
+      normalizedRegion = capitalizeSpecialty(region);
     }
     
-    return region;
+    console.log(`🔍 Normalized region: "${region}" -> "${normalizedRegion}"`);
+    return normalizedRegion;
   };
 
   // AG Grid column definitions - matching upload screen exactly
@@ -770,7 +776,7 @@ export const NormalizedDataScreen: React.FC = () => {
              >
                <LightBulbIcon className="h-5 w-5 text-indigo-600" />
              </button>
-             <Typography variant="h6" className="text-gray-900 font-semibold">
+             <Typography variant="h6" className="text-gray-600 font-normal">
                Survey Preview
              </Typography>
            </div>
@@ -825,6 +831,7 @@ export const NormalizedDataScreen: React.FC = () => {
                 const syntheticEvent = { target: { name: 'specialty', value: newValue || '' } };
                 handleFilterChange(syntheticEvent);
               }}
+              getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
               renderInput={(params: any) => (
                 <TextField
                   {...params}
@@ -1030,7 +1037,7 @@ export const NormalizedDataScreen: React.FC = () => {
                      {/* AG Grid with percentile columns grouped by metric type */}
                                          <AgGridWrapper
                         onGridReady={onGridReady}
-                        rowData={paginatedData}
+                        rowData={filteredData}
                         columnDefs={createColumnDefs()}
                         pagination={true}
                         paginationPageSize={pageSize}
@@ -1073,6 +1080,7 @@ export const NormalizedDataScreen: React.FC = () => {
               <button
                 onClick={() => setShowHelp(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                title="Close help"
               >
                 <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

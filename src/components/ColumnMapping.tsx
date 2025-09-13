@@ -522,39 +522,43 @@ const ColumnMapping: React.FC = () => {
 
             {/* Action Buttons */}
             <div className="flex items-center space-x-3 mb-4">
-              <button
-                onClick={() => setIsAutoMapOpen(true)}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                title="Auto Map Columns"
-              >
-                <BoltIcon className="h-4 w-4 mr-2" />
-                Auto Map
-              </button>
+              {activeTab === 'unmapped' && (
+                <>
+                  <button
+                    onClick={() => setIsAutoMapOpen(true)}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
+                    title="Auto Map Columns"
+                  >
+                    <BoltIcon className="h-4 w-4 mr-2" />
+                    Auto Map
+                  </button>
 
-              {/* Google/Microsoft-style master checkbox with indeterminate state */}
-              <button
-                onClick={handleToggleSelectAll}
-                disabled={allUnmappedCount === 0}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                  isBulkSelected
-                    ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {isBulkSelected && <CheckIcon className="w-4 h-4" />}
-                {isBulkSelected ? `Selected (${allUnmappedCount})` : `Select (${allUnmappedCount})`}
-              </button>
+                  {/* Google/Microsoft-style master checkbox with indeterminate state */}
+                  <button
+                    onClick={handleToggleSelectAll}
+                    disabled={allUnmappedCount === 0}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                      isBulkSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {isBulkSelected && <CheckIcon className="w-4 h-4" />}
+                    {isBulkSelected ? `Selected (${allUnmappedCount})` : `Select (${allUnmappedCount})`}
+                  </button>
 
-              {/* Create Mapping button when columns are selected */}
-              {selectedColumns.length > 0 && (
-                <button
-                  onClick={handleCreateMapping}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
-                  title="Create Manual Mapping"
-                >
-                  <AddIcon className="h-4 w-4 mr-2" />
-                  Create Mapping ({selectedColumns.length})
-                </button>
+                  {/* Create Mapping button when columns are selected */}
+                  {selectedColumns.length > 0 && (
+                    <button
+                      onClick={handleCreateMapping}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                      title="Create Manual Mapping"
+                    >
+                      <AddIcon className="h-4 w-4 mr-2" />
+                      Create Mapping ({selectedColumns.length})
+                    </button>
+                  )}
+                </>
               )}
 
               {/* Clear All shown on Mapped tab */}

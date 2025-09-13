@@ -112,29 +112,12 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         </Button>
       </div>
 
-      {/* Properly contained scrollable area with visible scrollbars */}
-      <div className="rounded-lg border border-gray-200 overflow-auto">
+      {/* Table without internal scrolling - uses window scrollbar */}
+      <div className="rounded-lg border border-gray-200">
         <TableContainer component={Paper} sx={{ 
-          maxHeight: 600, 
-          overflow: 'auto',
-          '&::-webkit-scrollbar': {
-            height: '12px',
-            width: '12px'
-          },
-          '&::-webkit-scrollbar-track': {
-            backgroundColor: '#f1f5f9',
-            borderRadius: '6px'
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: '#94a3b8',
-            borderRadius: '6px',
-            border: '2px solid #f1f5f9',
-            '&:hover': {
-              backgroundColor: '#64748b'
-            }
-          },
-          '&::-webkit-scrollbar-corner': {
-            backgroundColor: '#f1f5f9'
+          // Remove maxHeight and overflow to use window scrollbar
+          '& .MuiTable-root': {
+            width: '100%'
           }
         }}>
         <Table stickyHeader size="small">
