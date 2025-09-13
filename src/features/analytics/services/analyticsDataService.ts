@@ -317,6 +317,14 @@ export class AnalyticsDataService {
   }
 
   /**
+   * Force refresh cache (call this when data structure changes)
+   */
+  forceRefreshCache(): void {
+    console.log('🔍 AnalyticsDataService: Force refreshing cache due to data structure changes');
+    this.globalCache.clearCache();
+  }
+
+  /**
    * Clear cache completely (call this when data structure changes)
    */
   clearCache(): void {
@@ -830,6 +838,7 @@ export class AnalyticsDataService {
 
   /**
    * Create a single aggregated record from a group of rows
+   * FIXED: Now shows raw data instead of incorrectly recalculating percentiles
    */
   private createAggregatedRecord(rows: NormalizedRow[], key: string): AggregatedData {
     const firstRow = rows[0];
@@ -862,58 +871,59 @@ export class AnalyticsDataService {
       cf_p90: 0
     };
     
-    // Collect all individual data points for proper percentile calculation
-    const tccValues: number[] = [];
-    const wrvuValues: number[] = [];
-    const cfValues: number[] = [];
-    
-    // Aggregate organizational data and collect individual values
-    rows.forEach(row => {
-      // Aggregate organizational counts (these can be summed)
-      aggregatedRecord.tcc_n_orgs += row.n_orgs || 0;
-      aggregatedRecord.tcc_n_incumbents += row.n_incumbents || 0;
-      aggregatedRecord.wrvu_n_orgs += row.n_orgs || 0;
-      aggregatedRecord.wrvu_n_incumbents += row.n_incumbents || 0;
-      aggregatedRecord.cf_n_orgs += row.n_orgs || 0;
-      aggregatedRecord.cf_n_incumbents += row.n_incumbents || 0;
+    // FIXED: Find the best row for each metric type to ensure we get the right data
+    // This ensures analytics matches the raw data shown in upload screen
+    if (rows.length > 0) {
+      // Find the best representative row for organizational data
+      const representativeRow = rows.find(r => r.n_orgs > 0 && r.n_incumbents > 0) || rows[0];
       
-      // Collect individual values for percentile calculation
-      // Use the median (p50) as the representative value for each row
-      if (row.tcc_p50 && row.tcc_p50 > 0) {
-        tccValues.push(row.tcc_p50);
+      // Find rows with each metric type
+      const tccRow = rows.find(r => r.tcc_p50 > 0);
+      const wrvuRow = rows.find(r => r.wrvu_p50 > 0);
+      const cfRow = rows.find(r => r.cf_p50 > 0);
+      
+      // Use organizational data from representative row
+      aggregatedRecord.tcc_n_orgs = representativeRow.n_orgs || 0;
+      aggregatedRecord.tcc_n_incumbents = representativeRow.n_incumbents || 0;
+      aggregatedRecord.wrvu_n_orgs = representativeRow.n_orgs || 0;
+      aggregatedRecord.wrvu_n_incumbents = representativeRow.n_incumbents || 0;
+      aggregatedRecord.cf_n_orgs = representativeRow.n_orgs || 0;
+      aggregatedRecord.cf_n_incumbents = representativeRow.n_incumbents || 0;
+      
+      // Use TCC data from TCC row if available
+      if (tccRow) {
+        aggregatedRecord.tcc_p25 = tccRow.tcc_p25 || 0;
+        aggregatedRecord.tcc_p50 = tccRow.tcc_p50 || 0;
+        aggregatedRecord.tcc_p75 = tccRow.tcc_p75 || 0;
+        aggregatedRecord.tcc_p90 = tccRow.tcc_p90 || 0;
       }
-      if (row.wrvu_p50 && row.wrvu_p50 > 0) {
-        wrvuValues.push(row.wrvu_p50);
+      
+      // Use wRVU data from wRVU row if available
+      if (wrvuRow) {
+        aggregatedRecord.wrvu_p25 = wrvuRow.wrvu_p25 || 0;
+        aggregatedRecord.wrvu_p50 = wrvuRow.wrvu_p50 || 0;
+        aggregatedRecord.wrvu_p75 = wrvuRow.wrvu_p75 || 0;
+        aggregatedRecord.wrvu_p90 = wrvuRow.wrvu_p90 || 0;
       }
-      if (row.cf_p50 && row.cf_p50 > 0) {
-        cfValues.push(row.cf_p50);
+      
+      // Use CF data from CF row if available
+      if (cfRow) {
+        aggregatedRecord.cf_p25 = cfRow.cf_p25 || 0;
+        aggregatedRecord.cf_p50 = cfRow.cf_p50 || 0;
+        aggregatedRecord.cf_p75 = cfRow.cf_p75 || 0;
+        aggregatedRecord.cf_p90 = cfRow.cf_p90 || 0;
       }
+    }
+    
+    console.log('🔍 AnalyticsDataService: Created aggregated record from raw data:', {
+      specialty: aggregatedRecord.standardizedName,
+      surveySource: aggregatedRecord.surveySource,
+      tcc_p50: aggregatedRecord.tcc_p50,
+      wrvu_p50: aggregatedRecord.wrvu_p50,
+      cf_p50: aggregatedRecord.cf_p50,
+      n_orgs: aggregatedRecord.tcc_n_orgs,
+      n_incumbents: aggregatedRecord.tcc_n_incumbents
     });
-    
-    // Calculate proper percentiles from the collected values
-    if (tccValues.length > 0) {
-      const sortedTcc = tccValues.sort((a, b) => a - b);
-      aggregatedRecord.tcc_p25 = this.calculatePercentile(sortedTcc, 25);
-      aggregatedRecord.tcc_p50 = this.calculatePercentile(sortedTcc, 50);
-      aggregatedRecord.tcc_p75 = this.calculatePercentile(sortedTcc, 75);
-      aggregatedRecord.tcc_p90 = this.calculatePercentile(sortedTcc, 90);
-    }
-    
-    if (wrvuValues.length > 0) {
-      const sortedWrvu = wrvuValues.sort((a, b) => a - b);
-      aggregatedRecord.wrvu_p25 = this.calculatePercentile(sortedWrvu, 25);
-      aggregatedRecord.wrvu_p50 = this.calculatePercentile(sortedWrvu, 50);
-      aggregatedRecord.wrvu_p75 = this.calculatePercentile(sortedWrvu, 75);
-      aggregatedRecord.wrvu_p90 = this.calculatePercentile(sortedWrvu, 90);
-    }
-    
-    if (cfValues.length > 0) {
-      const sortedCf = cfValues.sort((a, b) => a - b);
-      aggregatedRecord.cf_p25 = this.calculatePercentile(sortedCf, 25);
-      aggregatedRecord.cf_p50 = this.calculatePercentile(sortedCf, 50);
-      aggregatedRecord.cf_p75 = this.calculatePercentile(sortedCf, 75);
-      aggregatedRecord.cf_p90 = this.calculatePercentile(sortedCf, 90);
-    }
     
     return aggregatedRecord;
   }
@@ -964,7 +974,8 @@ export class AnalyticsDataService {
       // For long format data, we need to combine multiple rows (one for each variable type)
       // For wide format data, each row contains all metrics
       
-      // Find the best representative row for organizational data
+      // FIXED: Find the best row for each metric type to ensure we get the right data
+      // This ensures analytics matches the raw data shown in upload screen
       const representativeRow = rows.find(r => r.n_orgs > 0 && r.n_incumbents > 0) || rows[0];
       
       // Find rows with each metric type
@@ -982,29 +993,31 @@ export class AnalyticsDataService {
         providerType: representativeRow.providerType as any,
         surveyYear: representativeRow.surveyYear,
         
-        // TCC metrics - use TCC row if available, otherwise 0
-        tcc_n_orgs: tccRow ? tccRow.n_orgs : 0,
-        tcc_n_incumbents: tccRow ? tccRow.n_incumbents : 0,
-        tcc_p25: tccRow ? tccRow.tcc_p25 : 0,
-        tcc_p50: tccRow ? tccRow.tcc_p50 : 0,
-        tcc_p75: tccRow ? tccRow.tcc_p75 : 0,
-        tcc_p90: tccRow ? tccRow.tcc_p90 : 0,
+        // Use organizational data from representative row
+        tcc_n_orgs: representativeRow.n_orgs || 0,
+        tcc_n_incumbents: representativeRow.n_incumbents || 0,
+        wrvu_n_orgs: representativeRow.n_orgs || 0,
+        wrvu_n_incumbents: representativeRow.n_incumbents || 0,
+        cf_n_orgs: representativeRow.n_orgs || 0,
+        cf_n_incumbents: representativeRow.n_incumbents || 0,
         
-        // wRVU metrics - use wRVU row if available, otherwise 0
-        wrvu_n_orgs: wrvuRow ? wrvuRow.n_orgs : 0,
-        wrvu_n_incumbents: wrvuRow ? wrvuRow.n_incumbents : 0,
-        wrvu_p25: wrvuRow ? wrvuRow.wrvu_p25 : 0,
-        wrvu_p50: wrvuRow ? wrvuRow.wrvu_p50 : 0,
-        wrvu_p75: wrvuRow ? wrvuRow.wrvu_p75 : 0,
-        wrvu_p90: wrvuRow ? wrvuRow.wrvu_p90 : 0,
+        // Use TCC data from TCC row if available
+        tcc_p25: tccRow ? tccRow.tcc_p25 || 0 : 0,
+        tcc_p50: tccRow ? tccRow.tcc_p50 || 0 : 0,
+        tcc_p75: tccRow ? tccRow.tcc_p75 || 0 : 0,
+        tcc_p90: tccRow ? tccRow.tcc_p90 || 0 : 0,
         
-        // CF metrics - use CF row if available, otherwise 0
-        cf_n_orgs: cfRow ? cfRow.n_orgs : 0,
-        cf_n_incumbents: cfRow ? cfRow.n_incumbents : 0,
-        cf_p25: cfRow ? cfRow.cf_p25 : 0,
-        cf_p50: cfRow ? cfRow.cf_p50 : 0,
-        cf_p75: cfRow ? cfRow.cf_p75 : 0,
-        cf_p90: cfRow ? cfRow.cf_p90 : 0
+        // Use wRVU data from wRVU row if available
+        wrvu_p25: wrvuRow ? wrvuRow.wrvu_p25 || 0 : 0,
+        wrvu_p50: wrvuRow ? wrvuRow.wrvu_p50 || 0 : 0,
+        wrvu_p75: wrvuRow ? wrvuRow.wrvu_p75 || 0 : 0,
+        wrvu_p90: wrvuRow ? wrvuRow.wrvu_p90 || 0 : 0,
+        
+        // Use CF data from CF row if available
+        cf_p25: cfRow ? cfRow.cf_p25 || 0 : 0,
+        cf_p50: cfRow ? cfRow.cf_p50 || 0 : 0,
+        cf_p75: cfRow ? cfRow.cf_p75 || 0 : 0,
+        cf_p90: cfRow ? cfRow.cf_p90 || 0 : 0
       };
       
       console.log('🔍 AnalyticsDataService: Final aggregated record:', {
