@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { 
-  MedicalCrossIcon, 
+  HeartIcon, 
   UserIcon, 
   ChartBarIcon 
 } from '@heroicons/react/24/outline';
@@ -74,7 +74,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
           onClick={() => onChange('PHYSICIAN')}
           aria-label="Select Physician Data"
         >
-          <MedicalCrossIcon className="w-4 h-4" />
+          <HeartIcon className="w-4 h-4" />
           <span>Physician</span>
         </button>
 
@@ -126,7 +126,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
           onClick={() => onChange('PHYSICIAN')}
           title="Physician Data"
         >
-          <MedicalCrossIcon className="w-3 h-3" />
+          <HeartIcon className="w-3 h-3" />
         </button>
         
         <button
@@ -184,7 +184,7 @@ export const ProviderTypeBadge: React.FC<{
     switch (providerType) {
       case 'PHYSICIAN':
         return {
-          icon: MedicalCrossIcon,
+          icon: HeartIcon,
           label: 'Physician',
           bgColor: 'bg-blue-100',
           textColor: 'text-blue-800',

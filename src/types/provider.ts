@@ -124,24 +124,36 @@ export interface DataQualityMetrics {
 }
 
 // Enhanced survey interface with provider type
+// Extends the existing Survey interface from IndexedDBService
 export interface Survey {
   id: string;
   name: string;
-  source: string;
-  providerType: ProviderType;
-  data: PhysicianSurveyRow[] | APPSurveyRow[];
-  createdAt: Date;
-  updatedAt: Date;
-  metadata: SurveyMetadata;
+  year: string;
+  type: string;
+  uploadDate: Date;
+  rowCount: number;
+  specialtyCount: number;
+  dataPoints: number;
+  colorAccent: string;
+  metadata: any;
+  // New provider-specific fields
+  providerType?: ProviderType;
+  source?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  data?: PhysicianSurveyRow[] | APPSurveyRow[];
 }
 
 // Provider-specific mapping interfaces
+// Extends the existing ISpecialtyMapping interface
 export interface BaseSpecialtyMapping {
   id: string;
   standardizedName: string;
-  providerType: ProviderType;
+  sourceSpecialties: any[]; // Compatible with ISourceSpecialty[]
   createdAt: Date;
   updatedAt: Date;
+  // New provider-specific field
+  providerType?: ProviderType;
 }
 
 export interface PhysicianSpecialtyMapping extends BaseSpecialtyMapping {
