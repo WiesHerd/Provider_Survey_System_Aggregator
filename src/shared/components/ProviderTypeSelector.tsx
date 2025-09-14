@@ -9,8 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ChevronDownIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { ProviderTypeSelectorProps } from '../../types/provider';
 import { useProviderTypeDetection } from '../../hooks/useProviderTypeDetection';
@@ -219,12 +218,9 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       >
         <div className="flex items-center gap-2">
           <span className="text-gray-900">{currentDisplay.text}</span>
-          {currentDisplay.hasData && (
-            <div className="flex items-center gap-1">
-              <CheckCircleIcon className="w-3 h-3 text-green-500" />
-              <span className="text-xs text-green-600">
-                {currentDisplay.surveyCount} survey{currentDisplay.surveyCount !== 1 ? 's' : ''}
-              </span>
+          {currentDisplay.hasData && currentDisplay.surveyCount && currentDisplay.surveyCount > 0 && (
+            <div className="flex items-center justify-center w-5 h-5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+              {currentDisplay.surveyCount}
             </div>
           )}
         </div>
@@ -267,8 +263,10 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{option.text}</span>
-                        {option.hasData && (
-                          <CheckCircleIcon className="w-3 h-3 text-green-500" />
+                        {option.hasData && option.surveyCount && option.surveyCount > 0 && (
+                          <div className="flex items-center justify-center w-4 h-4 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                            {option.surveyCount}
+                          </div>
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
@@ -438,8 +436,10 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                 >
                   <div className="flex items-center gap-1">
                     <span className="font-medium">{option.text}</span>
-                    {option.hasData && (
-                      <CheckCircleIcon className="w-2 h-2 text-green-500" />
+                    {option.hasData && option.surveyCount && option.surveyCount > 0 && (
+                      <div className="flex items-center justify-center w-3 h-3 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                        {option.surveyCount}
+                      </div>
                     )}
                   </div>
                   {isSelected && (
@@ -516,10 +516,9 @@ export const ProviderTypeBadge: React.FC<{
     <div className={`inline-flex items-center gap-1 ${getSizeClasses()} ${config.bgColor} ${config.textColor} ${config.borderColor} border rounded-md font-medium ${className}`}>
       <span>{config.label}</span>
       {showDataIndicator && surveyCount > 0 && (
-        <>
-          <CheckCircleIcon className="w-3 h-3" />
-          <span className="text-xs opacity-75">{surveyCount}</span>
-        </>
+        <div className="flex items-center justify-center w-4 h-4 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+          {surveyCount}
+        </div>
       )}
     </div>
   );
