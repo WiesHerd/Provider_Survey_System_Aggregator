@@ -134,7 +134,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       });
     });
 
-    // Add Combined option if multiple provider types exist
+    // Add Combined option only if multiple provider types exist AND showBothOption is true
     if (showBothOption && availableTypes.length > 1) {
       const totalSurveys = availableTypes.reduce((sum, t) => sum + t.surveyCount, 0);
       options.push({
@@ -211,7 +211,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       {/* Dropdown Button - Google Style with Data Indicator */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-white border border-gray-300 rounded-md hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+        className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-white border border-gray-300 rounded-xl hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -239,7 +239,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
           />
           
           {/* Menu - Google Style with Data Indicators */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 overflow-hidden">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
             {options.length === 0 ? (
               <div className="px-3 py-2.5 text-sm text-gray-500 text-center">
                 No provider data available
@@ -394,7 +394,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
       {/* Compact Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+        className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded-xl hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -415,7 +415,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
           />
           
           {/* Menu */}
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 overflow-hidden min-w-[100px]">
+          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden min-w-[100px]">
             {options.map((option) => {
               const isSelected = value === option.value;
               
