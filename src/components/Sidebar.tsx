@@ -1,5 +1,7 @@
 import React, { useRef } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
+import { useProviderContext } from '../contexts/ProviderContext';
+import { ProviderTypeSelector } from '../shared/components';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -56,6 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const location = useLocation();
 	const currentPath = location.pathname;
 	const listRef = useRef<HTMLDivElement>(null);
+	const { selectedProviderType, setProviderType } = useProviderContext();
 	
 	const menuGroups: MenuGroup[] = [
 		{
@@ -91,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
 	// Keyboard navigation: Arrow/Home/End over visible items
 	const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
-		const items = Array.from((listRef.current?.querySelectorAll('[role="menuitem"]') || []) as NodeListOf<HTMLElement>);
+		const items = Array.from((listRef.current?.querySelectorAll('a[href]') || []) as NodeListOf<HTMLElement>);
 		const currentIndex = items.findIndex((el) => el === document.activeElement);
 		if (items.length === 0) return;
 		let nextIndex = currentIndex;
@@ -120,7 +123,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			<NavLink
 				key={item.name}
 				to={item.path}
-				role="menuitem"
 				aria-current={isActive ? 'page' : undefined}
 				className={({ isActive }) => `
 					w-full flex items-center px-3 py-2 rounded-md transition-all duration-200 group
@@ -244,9 +246,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</button>
 			</div>
 
+			{/* Provider Type Selector */}
+			{isOpen && (
+				<div className="px-3 py-4 border-b border-gray-100">
+					<div className="mb-2">
+						<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+							Data View
+						</h3>
+					</div>
+					<ProviderTypeSelector
+						value={selectedProviderType}
+						onChange={(providerType) => setProviderType(providerType, 'sidebar')}
+						showBothOption={true}
+						context="navigation"
+						className="w-full"
+					/>
+				</div>
+			)}
+
 			{/* Main Menu */}
 			<nav aria-label="Primary" className="flex-1 px-3 py-6 overflow-y-auto">
-				<div role="menu" ref={listRef} onKeyDown={handleKeyDown}>
+				<div ref={listRef} onKeyDown={handleKeyDown}>
 					{menuGroups.map((group, index) => renderMenuGroup(group, index))}
 				</div>
 			</nav>

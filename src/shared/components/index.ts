@@ -11,3 +11,10 @@ export {
 } from './LoadingSpinner';
 
 export { SpecialtyAutocomplete } from './SpecialtyAutocomplete';
+
+// Provider Type Components
+export {
+  default as ProviderTypeSelector,
+  CompactProviderTypeSelector,
+  ProviderTypeBadge
+} from './ProviderTypeSelector';

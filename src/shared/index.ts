@@ -11,7 +11,7 @@ export * from './utils';
 
 // Components
 export {
-  ProviderTypeSelector,
+  default as ProviderTypeSelector,
   CompactProviderTypeSelector,
   ProviderTypeBadge
 } from './components/ProviderTypeSelector';
