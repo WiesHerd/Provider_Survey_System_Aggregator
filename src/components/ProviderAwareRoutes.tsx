@@ -8,7 +8,8 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useProviderContext } from '../contexts/ProviderContext';
-import { SuspenseSpinner } from '../shared/components';
+import { useProviderData } from '../hooks/useProviderData';
+import { SuspenseSpinner, ProviderEmptyState } from '../shared/components';
 
 // Lazy load route components
 const SurveyUpload = lazy(() => import('./SurveyUpload'));
@@ -44,12 +45,52 @@ interface ProviderAwareRoutesProps {
  */
 export const ProviderAwareRoutes: React.FC<ProviderAwareRoutesProps> = () => {
   const { selectedProviderType, isPhysicianSelected, isAPPSelected, isBothSelected } = useProviderContext();
+  
+  // Load provider data for current selection
+  const physicianData = useProviderData('PHYSICIAN', isPhysicianSelected || isBothSelected);
+  const appData = useProviderData('APP', isAPPSelected || isBothSelected);
 
   // Render provider-specific analytics
   const renderAnalyticsRoute = () => {
     if (isPhysicianSelected) {
+      if (physicianData.isEmpty) {
+        return (
+          <ProviderEmptyState
+            providerType="PHYSICIAN"
+            message={physicianData.emptyStateMessage || undefined}
+            actions={physicianData.emptyStateActions || undefined}
+            onAction={(action) => {
+              if (action === 'upload') {
+                // Navigate to upload page
+                window.location.href = '/upload';
+              } else if (action === 'switch_to_app') {
+                // Switch to APP data
+                // This would be handled by the context
+              }
+            }}
+          />
+        );
+      }
       return <PhysicianAnalytics />;
     } else if (isAPPSelected) {
+      if (appData.isEmpty) {
+        return (
+          <ProviderEmptyState
+            providerType="APP"
+            message={appData.emptyStateMessage || undefined}
+            actions={appData.emptyStateActions || undefined}
+            onAction={(action) => {
+              if (action === 'upload') {
+                // Navigate to upload page
+                window.location.href = '/upload';
+              } else if (action === 'switch_to_physician') {
+                // Switch to Physician data
+                // This would be handled by the context
+              }
+            }}
+          />
+        );
+      }
       return <APPAnalytics />;
     } else {
       return <SurveyAnalytics />; // Combined view
