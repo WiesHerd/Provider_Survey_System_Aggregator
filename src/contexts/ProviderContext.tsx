@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import { ProviderType } from '../types/provider';
 import { providerDataService } from '../services/ProviderDataService';
+import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 
 // Provider Context State
 interface ProviderContextState {
@@ -183,6 +184,9 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
     if (providerType !== 'BOTH') {
       providerDataService.clearCache(providerType as ProviderType);
     }
+    
+    // Refresh provider type detection to update available types
+    providerTypeDetectionService.clearCache();
   }, []);
 
   const setAvailableProviderTypes = useCallback((providerTypes: ProviderType[]) => {

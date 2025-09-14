@@ -1,18 +1,23 @@
 /**
- * Provider Type Selector Component
+ * Dynamic Provider Type Selector Component
  * 
- * A reusable component for selecting between Physician, APP, and Combined views
- * across different contexts in the application.
+ * A smart, dynamic component that only shows provider types that have data available.
+ * Automatically detects available provider types from IndexedDB and provides
+ * real-time feedback about data availability.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  ChevronDownIcon
+  ChevronDownIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { ProviderTypeSelectorProps } from '../../types/provider';
+import { useProviderTypeDetection } from '../../hooks/useProviderTypeDetection';
+import { ProviderTypeInfo } from '../../services/ProviderTypeDetectionService';
 
 /**
- * Provider Type Selector component - DROPDOWN VERSION
+ * Dynamic Provider Type Selector component
  * 
  * @param value - Current selected provider type
  * @param onChange - Callback when provider type changes
@@ -28,55 +33,118 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   className = ''
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Use dynamic provider type detection
+  const {
+    availableTypes,
+    hasAnyData,
+    isLoading,
+    error,
+    refresh
+  } = useProviderTypeDetection(true, 30000); // Auto-refresh every 30 seconds
 
   // Get the display text for the current value
   const getCurrentDisplay = () => {
+    if (isLoading) {
+      return { text: 'Loading...', hasData: false };
+    }
+
+    if (error) {
+      return { text: 'Error loading data', hasData: false };
+    }
+
+    if (!hasAnyData) {
+      return { text: 'No data available', hasData: false };
+    }
+
     switch (value) {
       case 'PHYSICIAN':
+        const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
         return {
-          text: 'Physician'
+          text: 'Physician',
+          hasData: !!physicianInfo,
+          surveyCount: physicianInfo?.surveyCount || 0
         };
       case 'APP':
+        const appInfo = availableTypes.find(t => t.type === 'APP');
         return {
-          text: 'APP'
+          text: 'Advanced Practice Provider',
+          hasData: !!appInfo,
+          surveyCount: appInfo?.surveyCount || 0
         };
       case 'BOTH':
         return {
-          text: 'Combined'
+          text: 'Combined View',
+          hasData: hasAnyData,
+          surveyCount: availableTypes.reduce((sum, t) => sum + t.surveyCount, 0)
         };
       default:
-        return {
-          text: 'Select Provider Type'
-        };
+        return { text: 'Select Provider Type', hasData: false };
     }
   };
 
   const currentDisplay = getCurrentDisplay();
 
-  // Get dropdown options
+  // Get dropdown options based on available data
   const getOptions = () => {
     const options: Array<{
       value: 'PHYSICIAN' | 'APP' | 'BOTH';
       text: string;
       description: string;
-    }> = [
-      {
+      hasData: boolean;
+      surveyCount: number;
+      isAvailable: boolean;
+    }> = [];
+
+    // Add Physician option if data exists
+    const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
+    if (physicianInfo) {
+      options.push({
         value: 'PHYSICIAN',
         text: 'Physician',
-        description: 'Physician compensation data'
-      },
-      {
-        value: 'APP',
-        text: 'APP',
-        description: 'Advanced Practice Provider data'
-      }
-    ];
+        description: `${physicianInfo.surveyCount} survey${physicianInfo.surveyCount !== 1 ? 's' : ''} available`,
+        hasData: true,
+        surveyCount: physicianInfo.surveyCount,
+        isAvailable: true
+      });
+    }
 
-    if (showBothOption) {
+    // Add APP option if data exists
+    const appInfo = availableTypes.find(t => t.type === 'APP');
+    if (appInfo) {
+      options.push({
+        value: 'APP',
+        text: 'Advanced Practice Provider',
+        description: `${appInfo.surveyCount} survey${appInfo.surveyCount !== 1 ? 's' : ''} available`,
+        hasData: true,
+        surveyCount: appInfo.surveyCount,
+        isAvailable: true
+      });
+    }
+
+    // Add custom provider types
+    const customTypes = availableTypes.filter(t => t.type === 'OTHER');
+    customTypes.forEach(customType => {
+      options.push({
+        value: 'OTHER' as any, // We'll handle this differently
+        text: customType.displayName,
+        description: `${customType.surveyCount} survey${customType.surveyCount !== 1 ? 's' : ''} available`,
+        hasData: true,
+        surveyCount: customType.surveyCount,
+        isAvailable: true
+      });
+    });
+
+    // Add Combined option if multiple provider types exist
+    if (showBothOption && availableTypes.length > 1) {
+      const totalSurveys = availableTypes.reduce((sum, t) => sum + t.surveyCount, 0);
       options.push({
         value: 'BOTH',
-        text: 'Combined',
-        description: 'Both provider types combined'
+        text: 'Combined View',
+        description: `${totalSurveys} total surveys from ${availableTypes.length} provider type${availableTypes.length !== 1 ? 's' : ''}`,
+        hasData: true,
+        surveyCount: totalSurveys,
+        isAvailable: true
       });
     }
 
@@ -85,9 +153,63 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
 
   const options = getOptions();
 
+  // Handle option selection
+  const handleOptionSelect = (optionValue: 'PHYSICIAN' | 'APP' | 'BOTH') => {
+    onChange(optionValue);
+    setIsOpen(false);
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-gray-50 border border-gray-300 rounded-md">
+          <span className="text-gray-500">Loading provider types...</span>
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-red-50 border border-red-300 rounded-md">
+          <span className="text-red-600">Error loading data</span>
+          <button
+            onClick={refresh}
+            className="text-red-600 hover:text-red-700"
+            title="Retry"
+          >
+            <ExclamationTriangleIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show no data state
+  if (!hasAnyData) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-yellow-50 border border-yellow-300 rounded-md">
+          <span className="text-yellow-700">No provider data available</span>
+          <button
+            onClick={refresh}
+            className="text-yellow-600 hover:text-yellow-700"
+            title="Refresh"
+          >
+            <ExclamationTriangleIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`relative ${className}`}>
-      {/* Dropdown Button - Google Style */}
+      {/* Dropdown Button - Google Style with Data Indicator */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-white border border-gray-300 rounded-md hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
@@ -95,7 +217,17 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <span className="text-gray-900">{currentDisplay.text}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-900">{currentDisplay.text}</span>
+          {currentDisplay.hasData && (
+            <div className="flex items-center gap-1">
+              <CheckCircleIcon className="w-3 h-3 text-green-500" />
+              <span className="text-xs text-green-600">
+                {currentDisplay.surveyCount} survey{currentDisplay.surveyCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+        </div>
         <ChevronDownIcon 
           className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
         />
@@ -110,36 +242,44 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
             onClick={() => setIsOpen(false)}
           />
           
-          {/* Menu - Google Style */}
+          {/* Menu - Google Style with Data Indicators */}
           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 overflow-hidden">
-            {options.map((option) => {
-              const isSelected = value === option.value;
-              
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => {
-                    onChange(option.value);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full flex items-start px-3 py-2.5 text-sm text-left transition-colors duration-150 ${
-                    isSelected 
-                      ? 'bg-blue-50 text-blue-900' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                  role="option"
-                  aria-selected={isSelected}
-                >
-                  <div className="flex-1">
-                    <div className="font-medium">{option.text}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
-                  </div>
-                  {isSelected && (
-                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5" />
-                  )}
-                </button>
-              );
-            })}
+            {options.length === 0 ? (
+              <div className="px-3 py-2.5 text-sm text-gray-500 text-center">
+                No provider data available
+              </div>
+            ) : (
+              options.map((option, index) => {
+                const isSelected = value === option.value;
+                
+                return (
+                  <button
+                    key={`${option.value}-${index}`}
+                    onClick={() => handleOptionSelect(option.value)}
+                    className={`w-full flex items-start px-3 py-2.5 text-sm text-left transition-colors duration-150 ${
+                      isSelected 
+                        ? 'bg-blue-50 text-blue-900' 
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                    role="option"
+                    aria-selected={isSelected}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{option.text}</span>
+                        {option.hasData && (
+                          <CheckCircleIcon className="w-3 h-3 text-green-500" />
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
+                    </div>
+                    {isSelected && (
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5" />
+                    )}
+                  </button>
+                );
+              })
+            )}
           </div>
         </>
       )}
@@ -148,7 +288,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
 };
 
 /**
- * Compact version of Provider Type Selector for smaller spaces - DROPDOWN VERSION
+ * Compact version of Dynamic Provider Type Selector
  */
 export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   value,
@@ -158,9 +298,21 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
   className = ''
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Use dynamic provider type detection
+  const {
+    availableTypes,
+    hasAnyData,
+    isLoading,
+    error
+  } = useProviderTypeDetection(true, 30000);
 
   // Get the display text for the current value
   const getCurrentText = () => {
+    if (isLoading) return 'Loading...';
+    if (error) return 'Error';
+    if (!hasAnyData) return 'No Data';
+
     switch (value) {
       case 'PHYSICIAN':
         return 'Physician';
@@ -178,25 +330,38 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     const options: Array<{
       value: 'PHYSICIAN' | 'APP' | 'BOTH';
       text: string;
-      title: string;
-    }> = [
-      {
+      hasData: boolean;
+      surveyCount: number;
+    }> = [];
+
+    // Add available provider types
+    const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
+    if (physicianInfo) {
+      options.push({
         value: 'PHYSICIAN',
         text: 'Physician',
-        title: 'Physician Data'
-      },
-      {
+        hasData: true,
+        surveyCount: physicianInfo.surveyCount
+      });
+    }
+
+    const appInfo = availableTypes.find(t => t.type === 'APP');
+    if (appInfo) {
+      options.push({
         value: 'APP',
         text: 'APP',
-        title: 'APP Data'
-      }
-    ];
+        hasData: true,
+        surveyCount: appInfo.surveyCount
+      });
+    }
 
-    if (showBothOption) {
+    if (showBothOption && availableTypes.length > 1) {
+      const totalSurveys = availableTypes.reduce((sum, t) => sum + t.surveyCount, 0);
       options.push({
         value: 'BOTH',
         text: 'Combined',
-        title: 'Combined View'
+        hasData: true,
+        surveyCount: totalSurveys
       });
     }
 
@@ -205,9 +370,30 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
 
   const options = getOptions();
 
+  if (isLoading) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-gray-50 border border-gray-300 rounded">
+          <span className="text-gray-500">Loading...</span>
+          <div className="w-3 h-3 border border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAnyData) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-yellow-50 border border-yellow-300 rounded">
+          <span className="text-yellow-700">No Data</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`relative ${className}`}>
-      {/* Compact Dropdown Button - Google Style */}
+      {/* Compact Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
@@ -230,7 +416,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
             onClick={() => setIsOpen(false)}
           />
           
-          {/* Menu - Google Style */}
+          {/* Menu */}
           <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 overflow-hidden min-w-[100px]">
             {options.map((option) => {
               const isSelected = value === option.value;
@@ -249,9 +435,13 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                   }`}
                   role="option"
                   aria-selected={isSelected}
-                  title={option.title}
                 >
-                  <span className="font-medium">{option.text}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">{option.text}</span>
+                    {option.hasData && (
+                      <CheckCircleIcon className="w-2 h-2 text-green-500" />
+                    )}
+                  </div>
                   {isSelected && (
                     <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0" />
                   )}
@@ -266,13 +456,21 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
 };
 
 /**
- * Provider Type Badge for displaying current selection
+ * Provider Type Badge for displaying current selection with data indicator
  */
 export const ProviderTypeBadge: React.FC<{
   providerType: 'PHYSICIAN' | 'APP' | 'BOTH';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
-}> = ({ providerType, size = 'md', className = '' }) => {
+  showDataIndicator?: boolean;
+  surveyCount?: number;
+}> = ({ 
+  providerType, 
+  size = 'md', 
+  className = '',
+  showDataIndicator = false,
+  surveyCount = 0
+}) => {
   const getSizeClasses = () => {
     switch (size) {
       case 'sm':
@@ -298,9 +496,9 @@ export const ProviderTypeBadge: React.FC<{
       case 'APP':
         return {
           label: 'APP',
-          bgColor: 'bg-gray-50',
-          textColor: 'text-gray-700',
-          borderColor: 'border-gray-200'
+          bgColor: 'bg-green-50',
+          textColor: 'text-green-700',
+          borderColor: 'border-green-200'
         };
       case 'BOTH':
         return {
@@ -315,8 +513,14 @@ export const ProviderTypeBadge: React.FC<{
   const config = getProviderTypeConfig();
 
   return (
-    <div className={`inline-flex items-center ${getSizeClasses()} ${config.bgColor} ${config.textColor} ${config.borderColor} border rounded-md font-medium ${className}`}>
+    <div className={`inline-flex items-center gap-1 ${getSizeClasses()} ${config.bgColor} ${config.textColor} ${config.borderColor} border rounded-md font-medium ${className}`}>
       <span>{config.label}</span>
+      {showDataIndicator && surveyCount > 0 && (
+        <>
+          <CheckCircleIcon className="w-3 h-3" />
+          <span className="text-xs opacity-75">{surveyCount}</span>
+        </>
+      )}
     </div>
   );
 };
