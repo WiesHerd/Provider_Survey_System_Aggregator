@@ -27,6 +27,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     marketData,
     percentiles,
     uniqueValues,
+    surveyCount,
     
     // Calculated values
     tcc,
@@ -102,6 +103,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
                             (percentiles.cf ?? 0);
 
     return {
+      providerName: currentProviderName || 'Unnamed Provider',
       filters,
       compComponents,
       wrvus,
@@ -130,7 +132,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             </div>
             <button
               onClick={handlePrintClick}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-sm"
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -143,6 +145,25 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             onFiltersChange={updateFilters}
             uniqueValues={uniqueValues}
           />
+        </div>
+
+        {/* Provider Name */}
+        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Provider Name
+            </h2>
+            <div className="w-80">
+              <input
+                id="provider-name"
+                type="text"
+                value={currentProviderName}
+                onChange={(e) => setCurrentProviderName(e.target.value)}
+                placeholder="Enter provider name (e.g., Dr. John Smith)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Comparison Type Selector */}
@@ -218,6 +239,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
           </div>
         )}
 
+
         {/* Results Panel */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <ResultsPanel 
@@ -235,7 +257,11 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               Number(cf)
             }
             fte={filters.fte}
+            aggregationMethod={filters.aggregationMethod}
+            surveyCount={surveyCount}
+            isFilteringSpecificSurvey={filters.surveySource !== 'All Sources'}
             onResetFilters={resetFilters}
+            onAggregationMethodChange={(method) => updateFilters({ aggregationMethod: method })}
           />
         </div>
 

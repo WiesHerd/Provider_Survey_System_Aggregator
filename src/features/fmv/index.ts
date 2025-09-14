@@ -9,6 +9,7 @@ export { WRVUsInput } from './components/WRVUsInput';
 export { CFInput } from './components/CFInput';
 export { ResultsPanel } from './components/ResultsPanel';
 export { SavedFMVManager } from './components/SavedFMVManager';
+export { AggregationMethodSelector } from './components/AggregationMethodSelector';
 
 // Hooks
 export { useFMVData } from './hooks/useFMVData';
@@ -22,6 +23,7 @@ export type {
   MarketData,
   UserPercentiles,
   CompareType,
+  AggregationMethod,
   UniqueFilterValues,
   FMVCalculationState,
   NormalizedSurveyRow,
@@ -32,6 +34,7 @@ export type {
   WRVUsInputProps,
   CFInputProps,
   ResultsPanelProps,
+  AggregationMethodSelectorProps,
   FMVCalculatorProps,
   FMVCalculationParams,
   FMVExportConfig,

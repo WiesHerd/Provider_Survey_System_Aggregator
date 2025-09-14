@@ -7,7 +7,8 @@ import {
   FMVCalculationResult,
   FMVCalculationParams,
   FMVValidationResult,
-  CompareType
+  CompareType,
+  AggregationMethod
 } from '../types/fmv';
 import { calculatePercentile } from '../../../shared/utils/calculations';
 
@@ -32,14 +33,23 @@ export const normalizeSurveyRow = (
     normalizedSpecialty: row.normalizedSpecialty || '',
     surveySource: surveyMeta?.surveyType || '',
     year: String(row[columnMappings.year || 'year'] || row.year || surveyMeta?.surveyYear || surveyMeta?.metadata?.surveyYear || ''),
+    // TCC metrics with organizational data
+    tcc_n_orgs: Number(row[columnMappings.tcc_n_orgs || 'tcc_n_orgs']) || 0,
+    tcc_n_incumbents: Number(row[columnMappings.tcc_n_incumbents || 'tcc_n_incumbents']) || 0,
     tcc_p25: Number(row[columnMappings.tcc_p25 || 'tcc_p25']) || 0,
     tcc_p50: Number(row[columnMappings.tcc_p50 || 'tcc_p50']) || 0,
     tcc_p75: Number(row[columnMappings.tcc_p75 || 'tcc_p75']) || 0,
     tcc_p90: Number(row[columnMappings.tcc_p90 || 'tcc_p90']) || 0,
+    // wRVU metrics with organizational data
+    wrvu_n_orgs: Number(row[columnMappings.wrvu_n_orgs || 'wrvu_n_orgs']) || 0,
+    wrvu_n_incumbents: Number(row[columnMappings.wrvu_n_incumbents || 'wrvu_n_incumbents']) || 0,
     wrvu_p25: Number(row[columnMappings.wrvu_p25 || 'wrvu_p25']) || 0,
     wrvu_p50: Number(row[columnMappings.wrvu_p50 || 'wrvu_p50']) || 0,
     wrvu_p75: Number(row[columnMappings.wrvu_p75 || 'wrvu_p75']) || 0,
     wrvu_p90: Number(row[columnMappings.wrvu_p90 || 'wrvu_p90']) || 0,
+    // CF metrics with organizational data
+    cf_n_orgs: Number(row[columnMappings.cf_n_orgs || 'cf_n_orgs']) || 0,
+    cf_n_incumbents: Number(row[columnMappings.cf_n_incumbents || 'cf_n_incumbents']) || 0,
     cf_p25: Number(row[columnMappings.cf_p25 || 'cf_p25']) || 0,
     cf_p50: Number(row[columnMappings.cf_p50 || 'cf_p50']) || 0,
     cf_p75: Number(row[columnMappings.cf_p75 || 'cf_p75']) || 0,
@@ -70,85 +80,186 @@ export const applyFMVFilters = (
   filters: FMVFilters,
   mappedSpecialties: string[] = []
 ): NormalizedSurveyRow[] => {
-  let filteredRows = rows;
-
-  if (filters.specialty) {
-    const specialtyFilters = mappedSpecialties.length > 0 
-      ? mappedSpecialties 
-      : [normalizeString(filters.specialty)];
+  console.log('🔍 applyFMVFilters: Filtering', rows.length, 'records with filters:', filters);
+  
+  const filteredRows = rows.filter(row => {
+    // Specialty filter - use fuzzy matching for specialty names (like Analytics screen)
+    if (filters.specialty && filters.specialty !== '') {
+      const specialtyFilters = mappedSpecialties.length > 0 
+        ? mappedSpecialties 
+        : [normalizeString(filters.specialty)];
+      
+      const rowSpecialty = normalizeString(row.specialty);
+      const matches = specialtyFilters.some(filterSpecialty => 
+        rowSpecialty === filterSpecialty || 
+        rowSpecialty.includes(filterSpecialty) || 
+        filterSpecialty.includes(rowSpecialty)
+      );
+      
+      if (!matches) {
+        return false;
+      }
+    }
     
-    filteredRows = filteredRows.filter(row => 
-      specialtyFilters.includes(normalizeString(row.specialty))
-    );
-  }
-
-  if (filters.providerType) {
-    filteredRows = filteredRows.filter(row => 
-      normalizeString(row.providerType) === normalizeString(filters.providerType)
-    );
-  }
-
-  if (filters.region) {
-    filteredRows = filteredRows.filter(row => 
-      normalizeString(row.geographicRegion) === normalizeString(filters.region)
-    );
-  }
-
-  if (filters.surveySource) {
-    filteredRows = filteredRows.filter(row => 
-      normalizeString(row.surveySource) === normalizeString(filters.surveySource)
-    );
-  }
-
-  if (filters.year) {
-    filteredRows = filteredRows.filter(row => 
-      String(row.year) === String(filters.year)
-    );
-  }
-
+    // Survey source filter (exclude "All Sources")
+    if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources' && normalizeString(row.surveySource) !== normalizeString(filters.surveySource)) {
+      return false;
+    }
+    
+    // Geographic region filter
+    if (filters.region && filters.region !== '' && filters.region !== 'All Regions' && normalizeString(row.geographicRegion) !== normalizeString(filters.region)) {
+      return false;
+    }
+    
+    // Provider type filter (exclude "All Types")
+    if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types' && normalizeString(row.providerType) !== normalizeString(filters.providerType)) {
+      return false;
+    }
+    
+    // Year filter (exclude "All Years")
+    if (filters.year && filters.year !== '' && filters.year !== 'All Years' && String(row.year) !== String(filters.year)) {
+      return false;
+    }
+    
+    return true;
+  });
+  
+  console.log('🔍 applyFMVFilters: Filtered to', filteredRows.length, 'records');
   return filteredRows;
 };
 
 /**
- * Calculates market data percentiles from filtered rows
+ * Calculates market data percentiles from filtered rows using specified aggregation method
  * 
- * @param filteredRows - Filtered survey rows
+ * @param filteredRows - Filtered survey rows (already aggregated data from AnalyticsDataService)
+ * @param aggregationMethod - Method for aggregating multiple surveys ('simple' or 'weighted')
  * @returns Market data with percentiles
  */
-export const calculateMarketData = (filteredRows: NormalizedSurveyRow[]): MarketData => {
-  // Use median (p50) values from each row to create a proper distribution
-  const tccs = filteredRows
-    .map(row => row.tcc_p50)
-    .filter(value => value !== null && value !== undefined && !isNaN(value));
+export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggregationMethod: AggregationMethod = 'simple'): MarketData => {
+  console.log('🔍 calculateMarketData: Processing', filteredRows.length, 'filtered rows with', aggregationMethod, 'aggregation');
+  console.log('🔍 calculateMarketData: Sample row data:', filteredRows[0]);
   
-  const wrvus = filteredRows
-    .map(row => row.wrvu_p50)
-    .filter(value => value !== null && value !== undefined && !isNaN(value));
-  
-  const cfs = filteredRows
-    .map(row => row.cf_p50)
-    .filter(value => value !== null && value !== undefined && !isNaN(value));
+  if (filteredRows.length === 0) {
+    return {
+      tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
+      wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
+      cf: { p25: 0, p50: 0, p75: 0, p90: 0 }
+    };
+  }
 
-  return {
+  // Always calculate both simple and weighted averages (like Analytics screen)
+  // Then return the one selected by the aggregation method
+  
+  // Simple average - mean of all percentile values
+  const simpleResult = {
     tcc: {
-      p25: calculatePercentile(tccs, 25),
-      p50: calculatePercentile(tccs, 50),
-      p75: calculatePercentile(tccs, 75),
-      p90: calculatePercentile(tccs, 90),
+      p25: filteredRows.reduce((sum, row) => sum + (row.tcc_p25 || 0), 0) / filteredRows.length,
+      p50: filteredRows.reduce((sum, row) => sum + (row.tcc_p50 || 0), 0) / filteredRows.length,
+      p75: filteredRows.reduce((sum, row) => sum + (row.tcc_p75 || 0), 0) / filteredRows.length,
+      p90: filteredRows.reduce((sum, row) => sum + (row.tcc_p90 || 0), 0) / filteredRows.length,
     },
     wrvu: {
-      p25: calculatePercentile(wrvus, 25),
-      p50: calculatePercentile(wrvus, 50),
-      p75: calculatePercentile(wrvus, 75),
-      p90: calculatePercentile(wrvus, 90),
+      p25: filteredRows.reduce((sum, row) => sum + (row.wrvu_p25 || 0), 0) / filteredRows.length,
+      p50: filteredRows.reduce((sum, row) => sum + (row.wrvu_p50 || 0), 0) / filteredRows.length,
+      p75: filteredRows.reduce((sum, row) => sum + (row.wrvu_p75 || 0), 0) / filteredRows.length,
+      p90: filteredRows.reduce((sum, row) => sum + (row.wrvu_p90 || 0), 0) / filteredRows.length,
     },
     cf: {
-      p25: calculatePercentile(cfs, 25),
-      p50: calculatePercentile(cfs, 50),
-      p75: calculatePercentile(cfs, 75),
-      p90: calculatePercentile(cfs, 90),
+      p25: filteredRows.reduce((sum, row) => sum + (row.cf_p25 || 0), 0) / filteredRows.length,
+      p50: filteredRows.reduce((sum, row) => sum + (row.cf_p50 || 0), 0) / filteredRows.length,
+      p75: filteredRows.reduce((sum, row) => sum + (row.cf_p75 || 0), 0) / filteredRows.length,
+      p90: filteredRows.reduce((sum, row) => sum + (row.cf_p90 || 0), 0) / filteredRows.length,
     },
   };
+
+  // Weighted average - weighted by number of incumbents for each metric type
+  const totalTccIncumbents = filteredRows.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0);
+  const totalWrvuIncumbents = filteredRows.reduce((sum, row) => sum + (row.wrvu_n_incumbents || 0), 0);
+  const totalCfIncumbents = filteredRows.reduce((sum, row) => sum + (row.cf_n_incumbents || 0), 0);
+  
+  const weightedResult = {
+    tcc: {
+      p25: totalTccIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.tcc_p25 || 0) * (row.tcc_n_incumbents || 0)), 0) / totalTccIncumbents : 0,
+      p50: totalTccIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.tcc_p50 || 0) * (row.tcc_n_incumbents || 0)), 0) / totalTccIncumbents : 0,
+      p75: totalTccIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.tcc_p75 || 0) * (row.tcc_n_incumbents || 0)), 0) / totalTccIncumbents : 0,
+      p90: totalTccIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.tcc_p90 || 0) * (row.tcc_n_incumbents || 0)), 0) / totalTccIncumbents : 0,
+    },
+    wrvu: {
+      p25: totalWrvuIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.wrvu_p25 || 0) * (row.wrvu_n_incumbents || 0)), 0) / totalWrvuIncumbents : 0,
+      p50: totalWrvuIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.wrvu_p50 || 0) * (row.wrvu_n_incumbents || 0)), 0) / totalWrvuIncumbents : 0,
+      p75: totalWrvuIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.wrvu_p75 || 0) * (row.wrvu_n_incumbents || 0)), 0) / totalWrvuIncumbents : 0,
+      p90: totalWrvuIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.wrvu_p90 || 0) * (row.wrvu_n_incumbents || 0)), 0) / totalWrvuIncumbents : 0,
+    },
+    cf: {
+      p25: totalCfIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.cf_p25 || 0) * (row.cf_n_incumbents || 0)), 0) / totalCfIncumbents : 0,
+      p50: totalCfIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.cf_p50 || 0) * (row.cf_n_incumbents || 0)), 0) / totalCfIncumbents : 0,
+      p75: totalCfIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.cf_p75 || 0) * (row.cf_n_incumbents || 0)), 0) / totalCfIncumbents : 0,
+      p90: totalCfIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.cf_p90 || 0) * (row.cf_n_incumbents || 0)), 0) / totalCfIncumbents : 0,
+    },
+  };
+
+  // Handle pure survey method - use the first survey's data only
+  let result;
+  if (aggregationMethod === 'pure') {
+    if (filteredRows.length === 1) {
+      // Single survey - use its data directly
+      const row = filteredRows[0];
+      result = {
+        tcc: {
+          p25: row.tcc_p25 || 0,
+          p50: row.tcc_p50 || 0,
+          p75: row.tcc_p75 || 0,
+          p90: row.tcc_p90 || 0,
+        },
+        wrvu: {
+          p25: row.wrvu_p25 || 0,
+          p50: row.wrvu_p50 || 0,
+          p75: row.wrvu_p75 || 0,
+          p90: row.wrvu_p90 || 0,
+        },
+        cf: {
+          p25: row.cf_p25 || 0,
+          p50: row.cf_p50 || 0,
+          p75: row.cf_p75 || 0,
+          p90: row.cf_p90 || 0,
+        },
+      };
+      console.log('🔍 calculateMarketData: Using pure survey data from:', row.surveySource, 'TCC P50:', result.tcc.p50);
+    } else {
+      // Multiple surveys - use the first one and warn user
+      console.warn('🔍 calculateMarketData: Pure survey selected but multiple surveys found. Using first survey:', filteredRows[0].surveySource);
+      const row = filteredRows[0];
+      result = {
+        tcc: {
+          p25: row.tcc_p25 || 0,
+          p50: row.tcc_p50 || 0,
+          p75: row.tcc_p75 || 0,
+          p90: row.tcc_p90 || 0,
+        },
+        wrvu: {
+          p25: row.wrvu_p25 || 0,
+          p50: row.wrvu_p50 || 0,
+          p75: row.wrvu_p75 || 0,
+          p90: row.wrvu_p90 || 0,
+        },
+        cf: {
+          p25: row.cf_p25 || 0,
+          p50: row.cf_p50 || 0,
+          p75: row.cf_p75 || 0,
+          p90: row.cf_p90 || 0,
+        },
+      };
+    }
+  } else {
+    // Return the selected aggregation method (simple or weighted)
+    result = aggregationMethod === 'simple' ? simpleResult : weightedResult;
+  }
+  
+  console.log('🔍 calculateMarketData: Calculated methods - Simple:', simpleResult.tcc.p50, 'Weighted:', weightedResult.tcc.p50);
+  console.log('🔍 calculateMarketData: Using', aggregationMethod, 'method:', result.tcc.p50);
+  console.log('🔍 calculateMarketData: Weight totals - TCC:', totalTccIncumbents, 'wRVU:', totalWrvuIncumbents, 'CF:', totalCfIncumbents);
+  
+  return result;
 };
 
 /**

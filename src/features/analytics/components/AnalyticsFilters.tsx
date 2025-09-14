@@ -13,9 +13,7 @@ import {
   MenuItem,
   Autocomplete,
   TextField,
-  Stack,
-  Box,
-  Typography
+  Box
 } from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';

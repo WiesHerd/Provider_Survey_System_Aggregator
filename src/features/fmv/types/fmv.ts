@@ -1,6 +1,11 @@
 import { BaseEntity, SurveySource, ProviderType, GeographicRegion } from '../../../shared/types';
 
 /**
+ * Aggregation method for multiple surveys
+ */
+export type AggregationMethod = 'simple' | 'weighted' | 'pure';
+
+/**
  * FMV Calculator filters for market data
  */
 export interface FMVFilters {
@@ -10,6 +15,7 @@ export interface FMVFilters {
   surveySource: string;
   year: string;
   fte: number; // Keep FTE in filters for now since it's used in calculations
+  aggregationMethod: AggregationMethod; // Method for aggregating multiple surveys
 }
 
 /**
@@ -110,14 +116,23 @@ export interface NormalizedSurveyRow extends BaseEntity {
   normalizedSpecialty: string;
   surveySource: SurveySource;
   year: string;
+  // TCC metrics with organizational data
+  tcc_n_orgs: number;
+  tcc_n_incumbents: number;
   tcc_p25: number;
   tcc_p50: number;
   tcc_p75: number;
   tcc_p90: number;
+  // wRVU metrics with organizational data
+  wrvu_n_orgs: number;
+  wrvu_n_incumbents: number;
   wrvu_p25: number;
   wrvu_p50: number;
   wrvu_p75: number;
   wrvu_p90: number;
+  // CF metrics with organizational data
+  cf_n_orgs: number;
+  cf_n_incumbents: number;
   cf_p25: number;
   cf_p50: number;
   cf_p75: number;
@@ -191,7 +206,20 @@ export interface ResultsPanelProps {
   inputValue: string | number;
   rawValue: number;
   fte: number;
+  aggregationMethod: AggregationMethod;
+  surveyCount?: number;
+  isFilteringSpecificSurvey?: boolean;
   onResetFilters?: () => void;
+  onAggregationMethodChange?: (method: AggregationMethod) => void;
+}
+
+/**
+ * Component props for aggregation method selector
+ */
+export interface AggregationMethodSelectorProps {
+  aggregationMethod: AggregationMethod;
+  onAggregationMethodChange: (method: AggregationMethod) => void;
+  disabled?: boolean;
 }
 
 /**

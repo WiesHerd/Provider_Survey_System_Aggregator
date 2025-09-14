@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDataService } from '../../../services/DataService';
+import { AnalyticsDataService } from '../../analytics/services/analyticsDataService';
 import { 
   FMVFilters, 
   CompensationComponent, 
@@ -30,11 +31,12 @@ export const useFMVData = () => {
   // Core state
   const [filters, setFilters] = useState<FMVFilters>({
     specialty: '',
-    providerType: '',
-    region: '',
-    surveySource: '',
-    year: '',
+    providerType: 'All Types',
+    region: 'All Regions',
+    surveySource: 'All Sources',
+    year: 'All Years',
     fte: 1.0,
+    aggregationMethod: 'simple',
   });
 
   const [compComponents, setCompComponents] = useState<CompensationComponent[]>([
@@ -65,6 +67,7 @@ export const useFMVData = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allSurveyRows, setAllSurveyRows] = useState<any[]>([]);
+  const [surveyCount, setSurveyCount] = useState(0);
 
   // Memoized calculations
   const tcc = useMemo(() => calculateTotalTCC(compComponents), [compComponents]);
@@ -72,224 +75,88 @@ export const useFMVData = () => {
   const wrvusFTEAdjusted = useMemo(() => applyFTEAdjustment(Number(wrvus), filters.fte), [wrvus, filters.fte]);
 
   /**
+   * Calculates filter values - Enterprise-grade UX: Always show ALL available options
+   * This allows users to easily change any filter at any time without being locked into cascading behavior
+   */
+  const calculateFilterValues = useCallback(async () => {
+    console.log('🔍 FMV: Generating all available options for enterprise-grade UX');
+    
+    try {
+      // Use the same AnalyticsDataService as the Analytics screen
+      const analyticsDataService = new AnalyticsDataService();
+      const allData = await analyticsDataService.getAnalyticsData({
+        specialty: '',
+        surveySource: '',
+        geographicRegion: '',
+        providerType: '',
+        year: ''
+      });
+
+      console.log('🔍 FMV: Fetched', allData.length, 'records for filter options');
+      
+      const specialtySet = new Set<string>();
+      const providerTypeSet = new Set<string>();
+      const regionSet = new Set<string>();
+      const surveySourceSet = new Set<string>();
+      const yearSet = new Set<string>();
+      
+      // Extract unique values from all data
+      allData.forEach(row => {
+        if (row.standardizedName) specialtySet.add(row.standardizedName);
+        if (row.providerType) providerTypeSet.add(row.providerType);
+        if (row.geographicRegion) regionSet.add(row.geographicRegion);
+        if (row.surveySource) surveySourceSet.add(row.surveySource);
+        if (row.surveyYear) yearSet.add(row.surveyYear);
+      });
+      
+      // Convert Sets to Arrays and sort
+      const result: UniqueFilterValues = {
+        specialties: Array.from(specialtySet).sort(),
+        providerTypes: Array.from(providerTypeSet).sort(),
+        regions: Array.from(regionSet).sort(),
+        surveySources: Array.from(surveySourceSet).sort(),
+        years: Array.from(yearSet).sort()
+      };
+      
+      console.log('🔍 FMV: Generated filter options:', {
+        specialties: result.specialties.length,
+        providerTypes: result.providerTypes.length,
+        regions: result.regions.length,
+        surveySources: result.surveySources.length,
+        years: result.years.length
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Error calculating filter values:', error);
+      // Return empty values on error
+      return {
+        specialties: [],
+        providerTypes: [],
+        regions: [],
+        surveySources: [],
+        years: []
+      };
+    }
+  }, []);
+
+  /**
    * Fetches unique filter values from survey data and mappings
    */
   const fetchUniqueValues = useCallback(async () => {
     try {
-      const dataService = getDataService();
-      const allMappings = await dataService.getAllSpecialtyMappings();
-      const uploadedSurveys = await dataService.getAllSurveys();
+      console.log('🔍 FMV: Fetching unique values using AnalyticsDataService');
       
-      let allRows: any[] = [];
+      // Generate filter options from the normalized data
+      const filterValues = await calculateFilterValues();
+      setUniqueValues(filterValues);
 
-      // Collect all survey data first
-      for (const survey of uploadedSurveys) {
-        const surveyType = (survey as any).type || (survey as any).name || 'Unknown';
-        console.log('FMV Debug - Processing survey:', surveyType, survey.id);
-        const data = await dataService.getSurveyData(survey.id);
-        if (data && data.rows && Array.isArray(data.rows)) {
-          console.log('FMV Debug - Survey data rows:', data.rows.length);
-          // Debug: Check what fields are available in the first row
-          if (data.rows.length > 0) {
-            console.log('FMV Debug - First row keys:', Object.keys(data.rows[0]));
-            console.log('FMV Debug - First row sample:', data.rows[0]);
-          }
-          
-          const transformedRows = data.rows.map((row: any) => {
-            // Initialize transformed row with base fields
-            const transformedRow: any = {
-              ...row,
-              id: row.id || '',
-              providerType: (row as any).providerType || (row as any).provider_type || 
-                           (row as any).ProviderType || (row as any).Provider_Type || 
-                           (row as any)['Provider Type'] || (row as any).Type || '',
-              geographicRegion: (row as any).geographicRegion || (row as any).geographic_region || 
-                               (row as any).Geographic_Region || (row as any).Region || 
-                               (row as any)['Geographic Region'] || '',
-              specialty: row.specialty || row.normalizedSpecialty || '',
-              normalizedSpecialty: row.normalizedSpecialty || '',
-              surveySource: surveyType || '',
-              year: String(row.year || row.surveyYear || (survey as any).year || ''),
-              // Initialize compensation fields
-              tcc_p25: 0,
-              tcc_p50: 0,
-              tcc_p75: 0,
-              tcc_p90: 0,
-              wrvu_p25: 0,
-              wrvu_p50: 0,
-              wrvu_p75: 0,
-              wrvu_p90: 0,
-              cf_p25: 0,
-              cf_p50: 0,
-              cf_p75: 0,
-              cf_p90: 0,
-            };
-
-            // Handle variable-based data structure (same as RegionalAnalytics)
-            if (row.variable) {
-              const variable = String(row.variable).toLowerCase();
-              const p25 = Number(row.p25) || 0;
-              const p50 = Number(row.p50) || 0;
-              const p75 = Number(row.p75) || 0;
-              const p90 = Number(row.p90) || 0;
-              
-              if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
-                transformedRow.tcc_p25 = p25;
-                transformedRow.tcc_p50 = p50;
-                transformedRow.tcc_p75 = p75;
-                transformedRow.tcc_p90 = p90;
-              } else if (variable.includes('cf') || variable.includes('conversion')) {
-                transformedRow.cf_p25 = p25;
-                transformedRow.cf_p50 = p50;
-                transformedRow.cf_p75 = p75;
-                transformedRow.cf_p90 = p90;
-              } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
-                transformedRow.wrvu_p25 = p25;
-                transformedRow.wrvu_p50 = p50;
-                transformedRow.wrvu_p75 = p75;
-                transformedRow.wrvu_p90 = p90;
-              }
-            } else {
-              // Fallback to direct field access for legacy data
-              transformedRow.tcc_p25 = Number(row.tcc_p25) || 0;
-              transformedRow.tcc_p50 = Number(row.tcc_p50) || 0;
-              transformedRow.tcc_p75 = Number(row.tcc_p75) || 0;
-              transformedRow.tcc_p90 = Number(row.tcc_p90) || 0;
-              transformedRow.wrvu_p25 = Number(row.wrvu_p25) || 0;
-              transformedRow.wrvu_p50 = Number(row.wrvu_p50) || 0;
-              transformedRow.wrvu_p75 = Number(row.wrvu_p75) || 0;
-              transformedRow.wrvu_p90 = Number(row.wrvu_p90) || 0;
-              transformedRow.cf_p25 = Number(row.cf_p25) || 0;
-              transformedRow.cf_p50 = Number(row.cf_p50) || 0;
-              transformedRow.cf_p75 = Number(row.cf_p75) || 0;
-              transformedRow.cf_p90 = Number(row.cf_p90) || 0;
-            }
-
-            return transformedRow;
-          });
-          
-          // Debug the transformation results
-          if (transformedRows.length > 0) {
-            console.log('🔍 FMV DEBUG - Transformed row sample:', {
-              original_variable: data.rows[0].variable,
-              original_p50: data.rows[0].p50,
-              transformed_tcc_p50: transformedRows[0].tcc_p50,
-              transformed_wrvu_p50: transformedRows[0].wrvu_p50,
-              transformed_cf_p50: transformedRows[0].cf_p50
-            });
-          }
-          
-          allRows = allRows.concat(transformedRows);
-        }
-      }
-
-      // Store all rows for cascading filter calculations
-      setAllSurveyRows(allRows);
-
-      // Calculate initial unique values from all data
-      const yearsSet = new Set<string>();
-      const values = {
-        specialties: new Set<string>(),
-        providerTypes: new Set<string>(),
-        regions: new Set<string>(),
-        surveySources: new Set<string>()
-      };
-
-      // Get all standardized names from actual mappings ONLY (like Survey Analytics)
-      console.log('FMV Debug - All mappings received:', allMappings.length);
-      allMappings.forEach(mapping => {
-        if (mapping.standardizedName) {
-          console.log('FMV Debug - Adding standardized name:', mapping.standardizedName);
-          values.specialties.add(mapping.standardizedName);
-        }
-      });
-
-      console.log('FMV Debug - Standardized specialties from mappings ONLY:', Array.from(values.specialties));
-
-      // Build cascading sets based on current selections (like Survey Analytics)
-      // Only populate other filters from data, NOT specialties
-      allRows.forEach(row => {
-        const surveySource = String(row.surveySource || '');
-        const providerType = String(row.providerType || '');
-        const region = String(row.geographicRegion || '');
-        const year = String(row.year || '');
-
-        // Add values to sets (excluding specialties - those come from mappings only)
-        if (providerType && providerType.trim()) {
-          values.providerTypes.add(providerType.trim());
-        }
-        if (region && region.trim()) {
-          values.regions.add(region.trim());
-        }
-        if (surveySource && surveySource.trim()) {
-          values.surveySources.add(surveySource.trim());
-        }
-        if (year && year.trim()) {
-          yearsSet.add(year.trim());
-        }
-      });
-      
-      console.log('FMV Debug - All years found:', Array.from(yearsSet));
-      console.log('FMV Debug - Total rows loaded:', allRows.length);
-      console.log('FMV Debug - Unique specialties found:', values.specialties.size);
-      console.log('FMV Debug - Unique provider types found:', values.providerTypes.size);
-      console.log('FMV Debug - Unique regions found:', values.regions.size);
-      console.log('FMV Debug - Unique survey sources found:', values.surveySources.size);
-
-      // Add default values if no data found (only if no mappings exist)
-      if (values.specialties.size === 0) {
-        console.log('FMV Debug - No specialties found in mappings, adding defaults');
-        values.specialties.add('Allergy & Immunology');
-        values.specialties.add('Anesthesiology');
-        values.specialties.add('Cardiology');
-      }
-      if (values.providerTypes.size === 0) {
-        console.log('FMV Debug - No provider types found, adding defaults');
-        values.providerTypes.add('Staff Physician');
-        values.providerTypes.add('Division Chief');
-        values.providerTypes.add('Department Chair');
-      }
-      if (values.regions.size === 0) {
-        console.log('FMV Debug - No regions found, adding defaults');
-        values.regions.add('National');
-        values.regions.add('Northeast');
-        values.regions.add('North Central');
-        values.regions.add('South');
-        values.regions.add('West');
-      }
-      if (values.surveySources.size === 0) {
-        console.log('FMV Debug - No survey sources found, adding defaults');
-        values.surveySources.add('MGMA');
-        values.surveySources.add('SullivanCotter');
-        values.surveySources.add('Gallagher');
-      }
-      if (yearsSet.size === 0) {
-        console.log('FMV Debug - No years found, adding defaults');
-        yearsSet.add('2023');
-        yearsSet.add('2022');
-      }
-
-      // Final deduplication and sorting (like Survey Analytics)
-      const finalSpecialties = [...new Set(Array.from(values.specialties))].sort();
-      console.log('FMV Debug - Final specialties after deduplication:', finalSpecialties);
-      
-      setUniqueValues({
-        specialties: finalSpecialties,
-        providerTypes: [...new Set(Array.from(values.providerTypes))].sort(),
-        regions: [...new Set(Array.from(values.regions))].sort(),
-        surveySources: [...new Set(Array.from(values.surveySources))].sort(),
-        years: [...new Set(Array.from(yearsSet))].sort((a, b) => Number(b) - Number(a))
-      });
-
-      console.log('FMV Debug - Final unique specialties set:', finalSpecialties);
-      console.log('FMV Debug - Final provider types:', [...new Set(Array.from(values.providerTypes))].sort());
-      console.log('FMV Debug - Final regions:', [...new Set(Array.from(values.regions))].sort());
-      console.log('FMV Debug - Final survey sources:', [...new Set(Array.from(values.surveySources))].sort());
+      console.log('🔍 FMV: Set unique values:', filterValues);
     } catch (err) {
       console.error('Error fetching unique values:', err);
       setError('Failed to load filter options');
     }
-  }, []);
+  }, [calculateFilterValues]);
 
   /**
    * Fetches and calculates market data based on current filters
@@ -299,30 +166,122 @@ export const useFMVData = () => {
     setError(null);
 
     try {
-      const dataService = getDataService();
-      const allMappings = await dataService.getAllSpecialtyMappings();
+      console.log('🔍 FMV: Fetching market data with filters:', filters);
       
-      // Use stored survey rows instead of fetching again
-      const allRows = allSurveyRows;
+      // Use the same approach as Analytics screen: fetch ALL data first, then filter client-side
+      const analyticsDataService = new AnalyticsDataService();
+      const allData = await analyticsDataService.getAnalyticsData({
+        specialty: '',
+        surveySource: '',
+        geographicRegion: '',
+        providerType: '',
+        year: ''
+      });
 
-      // Find mapped specialties for filtering
-      let mappedSpecialties: string[] = [];
-      if (filters.specialty) {
-        const mapping = allMappings.find(m => 
-          normalizeString(m.standardizedName) === normalizeString(filters.specialty)
-        );
-        if (mapping) {
-          mappedSpecialties = mapping.sourceSpecialties.map(s => normalizeString(s.specialty));
-        } else {
-          mappedSpecialties = [normalizeString(filters.specialty)];
-        }
+      console.log('🔍 FMV: Fetched', allData.length, 'total records from AnalyticsDataService');
+      
+      if (allData.length === 0) {
+        console.log('🔍 FMV: No data found');
+        setMarketData(null);
+        setPercentiles({ tcc: null, wrvu: null, cf: null });
+        return;
       }
 
-      // Apply filters
-      const filteredRows = applyFMVFilters(allRows, filters, mappedSpecialties);
+      // Apply client-side filtering using the same logic as Analytics screen
+      const filteredData = allData.filter(row => {
+        // CRITICAL: Exclude summary rows that are created by AnalyticsTable
+        // These rows have surveySource like "Family Medicine - Simple Average" or "Family Medicine - Weighted Average"
+        if (row.surveySource && (
+          row.surveySource.includes(' - Simple Average') || 
+          row.surveySource.includes(' - Weighted Average')
+        )) {
+          console.log('🔍 FMV: Excluding summary row:', row.surveySource);
+          return false;
+        }
+        
+        // Specialty filter - use exact matching like Analytics
+        if (filters.specialty && filters.specialty !== '') {
+          if (row.standardizedName !== filters.specialty) {
+            return false;
+          }
+        }
+        
+        // Survey source filter (exclude "All Sources")
+        if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources' && row.surveySource !== filters.surveySource) {
+          return false;
+        }
+        
+        // Geographic region filter
+        if (filters.region && filters.region !== '' && filters.region !== 'All Regions' && row.geographicRegion !== filters.region) {
+          return false;
+        }
+        
+        // Provider type filter (exclude "All Types")
+        if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types' && row.providerType !== filters.providerType) {
+          return false;
+        }
+        
+        // Year filter (exclude "All Years")
+        if (filters.year && filters.year !== '' && filters.year !== 'All Years' && row.surveyYear !== filters.year) {
+          return false;
+        }
+        
+        return true;
+      });
 
-      // Calculate market data
-      const calculatedMarketData = calculateMarketData(filteredRows);
+      console.log('🔍 FMV: All data before filtering:', allData.length, 'records');
+      console.log('🔍 FMV: Sample all data:', allData[0]);
+      console.log('🔍 FMV: Applied filters:', filters);
+
+      console.log('🔍 FMV: Filtered to', filteredData.length, 'records matching filters');
+      setSurveyCount(filteredData.length);
+
+      if (filteredData.length === 0) {
+        console.log('🔍 FMV: No data matches the current filters');
+        setMarketData(null);
+        setPercentiles({ tcc: null, wrvu: null, cf: null });
+        setSurveyCount(0);
+        return;
+      }
+
+      // Convert AnalyticsDataService format to FMV format
+      const normalizedRows: NormalizedSurveyRow[] = filteredData.map((row, index) => ({
+        id: `fmv-${index}`, // Generate a unique ID
+        providerType: row.providerType || '',
+        geographicRegion: row.geographicRegion || '',
+        specialty: row.surveySpecialty || '',
+        normalizedSpecialty: row.standardizedName || '',
+        surveySource: (row.surveySource as any) || 'Custom',
+        year: row.surveyYear || '',
+        // TCC metrics with organizational data
+        tcc_n_orgs: row.tcc_n_orgs || 0,
+        tcc_n_incumbents: row.tcc_n_incumbents || 0,
+        tcc_p25: row.tcc_p25 || 0,
+        tcc_p50: row.tcc_p50 || 0,
+        tcc_p75: row.tcc_p75 || 0,
+        tcc_p90: row.tcc_p90 || 0,
+        // wRVU metrics with organizational data
+        wrvu_n_orgs: row.wrvu_n_orgs || 0,
+        wrvu_n_incumbents: row.wrvu_n_incumbents || 0,
+        wrvu_p25: row.wrvu_p25 || 0,
+        wrvu_p50: row.wrvu_p50 || 0,
+        wrvu_p75: row.wrvu_p75 || 0,
+        wrvu_p90: row.wrvu_p90 || 0,
+        // CF metrics with organizational data
+        cf_n_orgs: row.cf_n_orgs || 0,
+        cf_n_incumbents: row.cf_n_incumbents || 0,
+        cf_p25: row.cf_p25 || 0,
+        cf_p50: row.cf_p50 || 0,
+        cf_p75: row.cf_p75 || 0,
+        cf_p90: row.cf_p90 || 0,
+      }));
+
+      console.log('🔍 FMV: Converted to', normalizedRows.length, 'normalized rows');
+      console.log('🔍 FMV: Sample normalized row:', normalizedRows[0]);
+
+      // Calculate market data using the normalized rows with the selected aggregation method
+      console.log('🔍 FMV: Using aggregation method:', filters.aggregationMethod);
+      const calculatedMarketData = calculateMarketData(normalizedRows, filters.aggregationMethod);
 
       // Calculate user percentiles
       const calculatedPercentiles = calculateUserPercentiles(
@@ -340,110 +299,7 @@ export const useFMVData = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf, allSurveyRows]);
-
-  /**
-   * Calculates cascading filter values based on current filters
-   */
-  const calculateCascadingValues = useCallback(async (currentFilters: FMVFilters, allRows: any[]) => {
-    // For specialties, always show all available specialties
-    const allSpecialties = [...new Set(allRows.map(row => row.specialty).filter(Boolean))].sort();
-    
-    // For other filters, apply cascading logic
-    let filteredRows = allRows;
-
-    // Apply filters progressively to calculate available options for OTHER dropdowns
-    if (currentFilters.specialty) {
-      // Use specialty mappings to find all source specialties that map to the selected standardized specialty
-      const dataService = getDataService();
-      const allMappings = await dataService.getAllSpecialtyMappings();
-      
-      const mapping = allMappings.find(m => 
-        normalizeString(m.standardizedName) === normalizeString(currentFilters.specialty)
-      );
-      
-      if (mapping) {
-        // Filter by all mapped source specialties
-        const mappedSpecialtyNames = mapping.sourceSpecialties.map(s => normalizeString(s.specialty));
-        console.log(`🔍 FMV Cascading - Filtering for specialty "${currentFilters.specialty}" using mapped sources:`, mappedSpecialtyNames);
-        
-        filteredRows = filteredRows.filter(row => {
-          const rowSpecialty = normalizeString(row.specialty);
-          const matches = mappedSpecialtyNames.some(mappedName => 
-            rowSpecialty.includes(mappedName) || mappedName.includes(rowSpecialty)
-          );
-          return matches;
-        });
-      } else {
-        // Fallback to direct match if no mapping found
-        console.log(`🔍 FMV Cascading - No mapping found for "${currentFilters.specialty}", using direct match`);
-        filteredRows = filteredRows.filter(row => 
-          normalizeString(row.specialty) === normalizeString(currentFilters.specialty)
-        );
-      }
-      
-      console.log(`🔍 FMV Cascading - After specialty filter: ${filteredRows.length} rows`);
-    }
-
-    if (currentFilters.providerType) {
-      filteredRows = filteredRows.filter(row => 
-        normalizeString(row.providerType) === normalizeString(currentFilters.providerType)
-      );
-    }
-
-    if (currentFilters.region) {
-      filteredRows = filteredRows.filter(row => 
-        normalizeString(row.geographicRegion) === normalizeString(currentFilters.region)
-      );
-    }
-
-    if (currentFilters.surveySource) {
-      filteredRows = filteredRows.filter(row => 
-        normalizeString(row.surveySource) === normalizeString(currentFilters.surveySource)
-      );
-    }
-
-    if (currentFilters.year) {
-      filteredRows = filteredRows.filter(row => 
-        String(row.year) === String(currentFilters.year)
-      );
-    }
-
-    // Calculate available values for each filter (except specialties)
-    const availableValues = {
-      providerTypes: new Set<string>(),
-      regions: new Set<string>(),
-      surveySources: new Set<string>(),
-      years: new Set<string>()
-    };
-
-    // If no filters are applied, show all available values from all data
-    if (!currentFilters.specialty && !currentFilters.providerType && 
-        !currentFilters.region && !currentFilters.surveySource && !currentFilters.year) {
-      allRows.forEach(row => {
-        if (row.providerType) availableValues.providerTypes.add(row.providerType);
-        if (row.geographicRegion) availableValues.regions.add(row.geographicRegion);
-        if (row.surveySource) availableValues.surveySources.add(row.surveySource);
-        if (row.year) availableValues.years.add(String(row.year));
-      });
-    } else {
-      // Apply cascading logic only when filters are active
-      filteredRows.forEach(row => {
-        if (row.providerType) availableValues.providerTypes.add(row.providerType);
-        if (row.geographicRegion) availableValues.regions.add(row.geographicRegion);
-        if (row.surveySource) availableValues.surveySources.add(row.surveySource);
-        if (row.year) availableValues.years.add(String(row.year));
-      });
-    }
-
-    return {
-      specialties: allSpecialties, // Always show all specialties
-      providerTypes: Array.from(availableValues.providerTypes).sort(),
-      regions: Array.from(availableValues.regions).sort(),
-      surveySources: Array.from(availableValues.surveySources).sort(),
-      years: Array.from(availableValues.years).sort((a, b) => Number(b) - Number(a))
-    };
-  }, []);
+  }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf]);
 
   /**
    * Updates filters and triggers market data recalculation
@@ -453,19 +309,10 @@ export const useFMVData = () => {
       const updatedFilters = { ...prev, ...newFilters };
       
       console.log('FMV Debug - Updating filters:', updatedFilters);
-      console.log('FMV Debug - All survey rows available:', allSurveyRows.length);
-      
-      // Update cascading filter values (async)
-      const updateCascadingValues = async () => {
-        const cascadingValues = await calculateCascadingValues(updatedFilters, allSurveyRows);
-        console.log('FMV Debug - Cascading values calculated:', cascadingValues);
-        setUniqueValues(cascadingValues);
-      };
-      updateCascadingValues();
       
       return updatedFilters;
     });
-  }, [calculateCascadingValues, allSurveyRows]);
+  }, []);
 
   /**
    * Adds a new compensation component
@@ -502,11 +349,12 @@ export const useFMVData = () => {
   const resetFilters = useCallback(() => {
     setFilters({
       specialty: '',
-      providerType: '',
-      region: '',
-      surveySource: '',
-      year: '',
+      providerType: 'All Types',
+      region: 'All Regions',
+      surveySource: 'All Sources',
+      year: 'All Years',
       fte: 1.0,
+      aggregationMethod: 'simple',
     });
   }, []);
 
@@ -551,6 +399,7 @@ export const useFMVData = () => {
     loading,
     error,
     allSurveyRows,
+    surveyCount,
     
     // Calculated values
     tcc,

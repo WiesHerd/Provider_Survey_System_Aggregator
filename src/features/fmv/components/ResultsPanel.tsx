@@ -1,17 +1,11 @@
 import React from 'react';
 import { 
-  Button 
+  Button,
+  Tooltip
 } from '@mui/material';
-import { keyframes } from '@mui/system';
-import { ResultsPanelProps } from '../types/fmv';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ResultsPanelProps, AggregationMethod } from '../types/fmv';
 import { formatFMVValue } from '../utils/fmvCalculations';
-
-// CSS keyframes for marker pulse animation
-const markerPulse = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-`;
 
 /**
  * Results Panel component for displaying market comparison results
@@ -24,14 +18,18 @@ const markerPulse = keyframes`
  * @param fte - FTE value
  * @param onResetFilters - Optional callback to reset filters
  */
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ 
-  compareType, 
-  marketData, 
-  percentiles, 
-  inputValue, 
-  rawValue, 
-  fte, 
-  onResetFilters 
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({
+  compareType,
+  marketData,
+  percentiles,
+  inputValue,
+  rawValue,
+  fte,
+  aggregationMethod,
+  surveyCount = 0,
+  isFilteringSpecificSurvey = false,
+  onResetFilters,
+  onAggregationMethodChange
 }) => {
   // Get the appropriate percentile data based on comparison type
   const percentileData = 
@@ -47,17 +45,87 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     null;
 
   // Check if market data is available
-  const noMarketData = !percentileData;
+  const noMarketData = !marketData || !percentileData;
+
+  // Handle aggregation method cycling
+  const handleAggregationCycle = () => {
+    if (!onAggregationMethodChange) return;
+    
+    const methods: AggregationMethod[] = ['simple', 'weighted', 'pure'];
+    const currentIndex = methods.indexOf(aggregationMethod);
+    const nextIndex = (currentIndex + 1) % methods.length;
+    onAggregationMethodChange(methods[nextIndex]);
+  };
+
+  // Get method display info
+  const getMethodInfo = () => {
+    switch (aggregationMethod) {
+      case 'simple':
+        return { label: 'Simple AVG', color: 'blue' };
+      case 'weighted':
+        return { label: 'Weighted AVG', color: 'purple' };
+      case 'pure':
+        return { label: 'Pure Survey', color: 'green' };
+      default:
+        return { label: 'Simple AVG', color: 'blue' };
+    }
+  };
+
+  const methodInfo = getMethodInfo();
+
+  // Debug logging
+  console.log('🔍 ResultsPanel Debug:', {
+    noMarketData,
+    hasOnAggregationMethodChange: !!onAggregationMethodChange,
+    isFilteringSpecificSurvey,
+    shouldShowButton: !noMarketData && onAggregationMethodChange && !isFilteringSpecificSurvey,
+    aggregationMethod
+  });
 
   return (
     <div className="space-y-6">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
-          Market Comparison
-        </h2>
-        <p className="text-sm text-gray-600">
-          Compare your values against market benchmarks
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Market Comparison
+            </h2>
+            <p className="text-sm text-gray-600">
+              Compare your values against market benchmarks
+            </p>
+          </div>
+          {!noMarketData && onAggregationMethodChange && !isFilteringSpecificSurvey && (
+            <div className="flex items-center gap-3">
+              <Tooltip 
+                title={
+                  <div className="space-y-1">
+                    <div><strong>Simple Average:</strong> Equal weight given to each survey</div>
+                    <div><strong>Weighted Average:</strong> Weighted by number of incumbents in each survey</div>
+                    <div><strong>Pure Survey:</strong> Use data from a single survey only (no aggregation)</div>
+                    <div className="text-xs text-gray-300 mt-2">Click to cycle through methods</div>
+                  </div>
+                }
+                arrow
+                placement="bottom"
+              >
+                <button
+                  onClick={handleAggregationCycle}
+                  className="group relative overflow-hidden px-4 py-2 rounded-xl border-0 transition-all duration-300 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <div className="relative flex items-center gap-2">
+                    <div className="relative">
+                      <ArrowPathIcon className="w-4 h-4 transition-transform duration-300 group-hover:rotate-180" />
+                      <div className="absolute inset-0 bg-white/20 rounded-full scale-0 group-hover:scale-150 transition-transform duration-300"></div>
+                    </div>
+                    <div className="text-sm font-semibold tracking-wide">
+                      {methodInfo.label}
+                    </div>
+                  </div>
+                </button>
+              </Tooltip>
+            </div>
+          )}
+        </div>
       </div>
       
       {noMarketData ? (
@@ -75,17 +143,18 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
           </div>
           {onResetFilters && (
             <Button 
-              variant="outlined" 
-              size="small" 
               onClick={onResetFilters}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
               sx={{
+                textTransform: 'none',
                 borderRadius: '8px',
-                borderColor: '#3b82f6',
-                color: '#3b82f6',
+                fontWeight: 600,
+                px: 4,
+                py: 2,
+                color: 'white !important',
                 '&:hover': {
-                  borderColor: '#2563eb',
-                  backgroundColor: '#eff6ff',
-                },
+                  color: 'white !important'
+                }
               }}
             >
               Reset Filters
@@ -94,6 +163,22 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
         </div>
       ) : (
         <>
+          {/* Single Survey Notice */}
+          {marketData && surveyCount === 1 && aggregationMethod !== 'pure' && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-sm text-blue-800">
+                  <strong>Single Survey Selected:</strong> Simple and weighted averages will produce identical results. 
+                  Use "Pure Survey" for unaggregated data, or select multiple surveys to see the difference between aggregation methods.
+                </div>
+              </div>
+            </div>
+          )}
+
+
           {/* Percentile Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {['25th', '50th', '75th', '90th'].map((percentile) => {
@@ -139,11 +224,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
               {/* Percentile Marker */}
               {typeof currentPercentile === 'number' && !isNaN(currentPercentile) && (
                 <div
-                  className="absolute top-1/2 transform -translate-y-1/2 w-6 h-6 bg-blue-600 border-4 border-white rounded-full shadow-lg"
+                  className="absolute top-1/2 transform -translate-y-1/2 w-6 h-6 bg-blue-600 border-4 border-white rounded-full shadow-lg animate-pulse"
                   style={{ 
                     left: `${Math.min(currentPercentile, 100)}%`,
                     transform: 'translate(-50%, -50%)',
-                    animation: `${markerPulse} 2s infinite`,
                   }}
                 />
               )}

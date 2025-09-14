@@ -32,6 +32,7 @@ interface SavedFMVManagerProps {
   onSaveCalculation: (calculation: Omit<SavedFMVCalculation, 'id' | 'created' | 'lastModified'>) => void;
   onDeleteCalculation: (id: string) => void;
   currentCalculation?: {
+    providerName: string;
     filters: FMVFilters;
     compComponents: CompensationComponent[];
     wrvus: string;
@@ -147,8 +148,14 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
 
   const handleLoadCalculation = (calculation: SavedFMVCalculation) => {
     onLoadCalculation(calculation);
-    setIsLoadDialogOpen(false);
-    setSelectedCalculation(null);
+    // No modal needed - direct load
+  };
+
+  const handleSaveClick = () => {
+    setIsSaveDialogOpen(true);
+    setProviderName(currentCalculation?.providerName || '');
+    setNotes('');
+    setError(null);
   };
 
   const handleDeleteCalculation = (id: string) => {
@@ -176,31 +183,56 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
     <div className="w-full">
       <Card className="shadow-sm border border-gray-200">
         <CardContent className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <Typography variant="h6" className="font-semibold text-gray-900">
-                Saved Calculations
-              </Typography>
-              <Typography variant="body2" className="text-gray-600">
-                Save and manage FMV calculations for specific providers
-              </Typography>
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <BookmarkIcon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <Typography variant="h5" className="font-bold text-gray-900">
+                  Saved Calculations
+                </Typography>
+                <Typography variant="body2" className="text-gray-600 mt-1">
+                  Track and manage FMV calculations for specific providers
+                </Typography>
+              </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <Button
-                variant="outlined"
                 startIcon={<EyeIcon className="w-4 h-4" />}
                 onClick={() => setIsLoadDialogOpen(true)}
                 disabled={savedCalculations.length === 0}
-                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                sx={{ 
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 3,
+                  py: 1,
+                  color: 'white !important',
+                  '&:hover': {
+                    color: 'white !important'
+                  }
+                }}
               >
-                Load ({savedCalculations.length})
+                Browse All ({savedCalculations.length})
               </Button>
               <Button
-                variant="contained"
                 startIcon={<PlusIcon className="w-4 h-4" />}
-                onClick={() => setIsSaveDialogOpen(true)}
+                onClick={handleSaveClick}
                 disabled={!currentCalculation || !currentCalculation.marketData}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                sx={{ 
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 3,
+                  py: 1,
+                  color: 'white !important',
+                  '&:hover': {
+                    color: 'white !important'
+                  }
+                }}
               >
                 Save Current
               </Button>
@@ -214,59 +246,140 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
           )}
 
           {savedCalculations.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <BookmarkIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-              <Typography variant="body2">
-                No saved calculations yet. Save your first calculation to get started.
+            <div className="text-center py-12">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl flex items-center justify-center">
+                <BookmarkIcon className="w-8 h-8 text-blue-600" />
+              </div>
+              <Typography variant="h6" className="font-semibold text-gray-900 mb-2">
+                No Saved Calculations
               </Typography>
             </div>
           ) : (
-            <div className="space-y-2">
-              {savedCalculations.slice(0, 3).map((calc) => (
-                <div
-                  key={calc.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
-                >
-                  <div className="flex-1">
-                    <Typography variant="subtitle2" className="font-medium text-gray-900">
-                      {calc.providerName}
-                    </Typography>
-                    <Typography variant="body2" className="text-gray-600">
-                      {formatFiltersSummary(calc.filters)}
-                    </Typography>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Chip
-                        label={calc.compareType}
-                        size="small"
-                        className="bg-blue-100 text-blue-800"
-                      />
-                      <Typography variant="caption" className="text-gray-500">
-                        {formatCalculationSummary(calc)}
-                      </Typography>
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {/* Table Header */}
+              <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  <div className="col-span-3">Provider</div>
+                  <div className="col-span-2">Type</div>
+                  <div className="col-span-2">Value</div>
+                  <div className="col-span-2">Percentile</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-1 text-center">Actions</div>
+                </div>
+              </div>
+
+              {/* Table Body */}
+              <div className="divide-y divide-gray-200">
+                {savedCalculations.slice(0, 10).map((calc, index) => (
+                  <div
+                    key={calc.id}
+                    className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 transition-colors duration-150"
+                  >
+                    {/* Provider */}
+                    <div className="col-span-3">
+                      <div className="font-medium text-gray-900 truncate">
+                        {calc.providerName}
+                      </div>
+                      <div className="text-sm text-gray-600 truncate">
+                        {formatFiltersSummary(calc.filters)}
+                      </div>
+                    </div>
+
+                    {/* Type */}
+                    <div className="col-span-2">
+                      <div className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${
+                        calc.compareType === 'TCC' ? 'bg-blue-100 text-blue-800' :
+                        calc.compareType === 'wRVUs' ? 'bg-green-100 text-green-800' :
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {calc.compareType}
+                      </div>
+                    </div>
+
+                    {/* Value */}
+                    <div className="col-span-2">
+                      <div className="font-semibold text-gray-900">
+                        {formatCurrency(calc.calculatedValue)}
+                      </div>
+                    </div>
+
+                    {/* Percentile */}
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                          <div 
+                            className={`h-1.5 rounded-full ${
+                              calc.marketPercentile >= 75 ? 'bg-green-500' :
+                              calc.marketPercentile >= 50 ? 'bg-blue-500' :
+                              calc.marketPercentile >= 25 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(calc.marketPercentile, 100)}%` }}
+                          ></div>
+                        </div>
+                        <span className={`text-sm font-medium ${
+                          calc.marketPercentile >= 75 ? 'text-green-600' :
+                          calc.marketPercentile >= 50 ? 'text-blue-600' :
+                          calc.marketPercentile >= 25 ? 'text-yellow-600' :
+                          'text-red-600'
+                        }`}>
+                          {Math.round(calc.marketPercentile)}th
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Date */}
+                    <div className="col-span-2">
+                      <div className="text-sm text-gray-600">
+                        {calc.created.toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-1 flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => handleLoadCalculation(calc)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-150"
+                        title="Load this calculation"
+                      >
+                        <EyeIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCalculation(calc.id)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-150"
+                        title="Delete calculation"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <IconButton
+                ))}
+              </div>
+
+              {/* Footer with count and view all */}
+              {savedCalculations.length > 10 && (
+                <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      Showing 10 of {savedCalculations.length} calculations
+                    </div>
+                    <Button
+                      variant="text"
                       size="small"
-                      onClick={() => handleLoadCalculation(calc)}
-                      className="text-blue-600 hover:bg-blue-50"
+                      onClick={() => setIsLoadDialogOpen(true)}
+                      className="text-blue-600 hover:text-blue-700"
+                      sx={{
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        px: 2,
+                        py: 1
+                      }}
                     >
-                      <EyeIcon className="w-4 h-4" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDeleteCalculation(calc.id)}
-                      className="text-red-600 hover:bg-red-50"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </IconButton>
+                      Browse All ({savedCalculations.length})
+                    </Button>
                   </div>
                 </div>
-              ))}
-              {savedCalculations.length > 3 && (
-                <Typography variant="caption" className="text-gray-500 text-center block">
-                  And {savedCalculations.length - 3} more... Click "Load" to see all
-                </Typography>
               )}
             </div>
           )}
@@ -375,14 +488,35 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
         <DialogActions sx={{ padding: '16px 24px', gap: '8px' }}>
           <Button 
             onClick={() => setIsSaveDialogOpen(false)}
-            sx={{ textTransform: 'none' }}
+            className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              px: 4,
+              py: 2,
+              color: 'white !important',
+              '&:hover': {
+                color: 'white !important'
+              }
+            }}
           >
             Cancel
           </Button>
           <Button 
             onClick={handleSaveCalculation} 
-            variant="contained"
-            sx={{ textTransform: 'none' }}
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              px: 4,
+              py: 2,
+              color: 'white !important',
+              '&:hover': {
+                color: 'white !important'
+              }
+            }}
           >
             Save Calculation
           </Button>
@@ -437,6 +571,9 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
                     <IconButton
                       onClick={() => handleDeleteCalculation(calc.id)}
                       className="text-red-600 hover:bg-red-50"
+                      sx={{
+                        borderRadius: '8px'
+                      }}
                     >
                       <TrashIcon className="w-4 h-4" />
                     </IconButton>
@@ -448,12 +585,38 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
           </List>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsLoadDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => setIsLoadDialogOpen(false)}
+            className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              px: 4,
+              py: 2,
+              color: 'white !important',
+              '&:hover': {
+                color: 'white !important'
+              }
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             onClick={() => selectedCalculation && handleLoadCalculation(selectedCalculation)}
-            variant="contained"
             disabled={!selectedCalculation}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              px: 4,
+              py: 2,
+              color: 'white !important',
+              '&:hover': {
+                color: 'white !important'
+              }
+            }}
           >
             Load Selected
           </Button>

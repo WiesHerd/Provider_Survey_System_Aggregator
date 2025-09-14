@@ -5,11 +5,11 @@ import {
   MenuItem, 
   InputAdornment,
   Autocomplete,
-  FormControl
+  FormControl,
+  Box
 } from '@mui/material';
 import { FMVFiltersProps } from '../types/fmv';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
-import { SpecialtyAutocomplete } from '../../../shared/components/SpecialtyAutocomplete';
 
 /**
  * FMV Filters component for filtering market data
@@ -23,26 +23,50 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
   onFiltersChange, 
   uniqueValues 
 }) => {
-  console.log('FMV Debug - FMVFilters render - filters:', filters);
-  console.log('FMV Debug - FMVFilters render - uniqueValues:', uniqueValues);
   const handleFilterChange = (field: keyof typeof filters, value: string | number) => {
-    console.log('FMV Debug - Filter change:', field, value);
-    console.log('FMV Debug - Current filters:', filters);
     onFiltersChange({ ...filters, [field]: value });
   };
 
   return (
     <div className="space-y-4">
       {/* All filters in one row */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div>
-          <SpecialtyAutocomplete
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 overflow-visible">
+        <Box>
+          <Autocomplete
             value={filters.specialty}
-            options={['', ...uniqueValues.specialties]}
-            label="Specialty"
-            onChange={(val) => handleFilterChange('specialty', val)}
+            onChange={(_: any, newValue: string | null) => handleFilterChange('specialty', newValue || '')}
+            options={uniqueValues.specialties}
+            getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+            renderInput={(params: any) => (
+              <TextField
+                {...params}
+                label="Specialty"
+                variant="outlined"
+                size="small"
+                placeholder="Select specialty..."
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#3b82f6',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#3b82f6',
+                  },
+                }}
+              />
+            )}
+            clearOnEscape
+            clearOnBlur
+            selectOnFocus
+            handleHomeEndKeys
           />
-        </div>
+        </Box>
 
         <div>
           <TextField
@@ -70,7 +94,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
               },
             }}
           >
-            <MenuItem value="">All Types</MenuItem>
+            <MenuItem value="All Types">All Types</MenuItem>
             {uniqueValues.providerTypes.map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
@@ -103,7 +127,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
               },
             }}
           >
-            <MenuItem value="">All Regions</MenuItem>
+            <MenuItem value="All Regions">All Regions</MenuItem>
             {uniqueValues.regions.map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
@@ -136,7 +160,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
               },
             }}
           >
-            <MenuItem value="">All Sources</MenuItem>
+            <MenuItem value="All Sources">All Sources</MenuItem>
             {uniqueValues.surveySources.map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
@@ -169,7 +193,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
               },
             }}
           >
-            <MenuItem value="">All Years</MenuItem>
+            <MenuItem value="All Years">All Years</MenuItem>
             {uniqueValues.years.map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
