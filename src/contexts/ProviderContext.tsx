@@ -34,7 +34,7 @@ type ProviderContextAction =
 
 // Initial State
 const initialState: ProviderContextState = {
-  selectedProviderType: 'BOTH',
+  selectedProviderType: 'PHYSICIAN', // Default to PHYSICIAN instead of BOTH
   availableProviderTypes: ['PHYSICIAN', 'APP'],
   isProviderDetectionEnabled: true,
   lastDetectionResult: null,
@@ -133,7 +133,7 @@ interface ProviderContextProviderProps {
 
 export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = ({
   children,
-  initialProviderType = 'BOTH',
+  initialProviderType = 'PHYSICIAN', // Default to PHYSICIAN instead of BOTH
   enablePersistence = true
 }) => {
   const [state, dispatch] = useReducer(providerContextReducer, {
@@ -141,7 +141,7 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
     selectedProviderType: initialProviderType
   });
 
-  // Persistence Logic
+  // Persistence Logic and Auto-Detection
   useEffect(() => {
     if (enablePersistence) {
       const savedState = localStorage.getItem('provider-context-state');
@@ -160,6 +160,33 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
         } catch (error) {
           console.warn('Failed to parse saved provider context state:', error);
         }
+      } else {
+        // No saved state - auto-detect available provider types
+        const autoDetectProviderType = async () => {
+          try {
+            const result = await providerTypeDetectionService.detectAvailableProviderTypes();
+            
+            if (result.availableTypes.length > 0) {
+              // Default to the first available provider type (only PHYSICIAN or APP)
+              const firstProviderType = result.availableTypes[0].type;
+              if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+                dispatch({
+                  type: 'SET_PROVIDER_TYPE',
+                  payload: { 
+                    providerType: firstProviderType,
+                    context: 'auto_detection'
+                  }
+                });
+              }
+            }
+            // If no data available, keep the default (PHYSICIAN)
+          } catch (error) {
+            console.error('Failed to auto-detect provider types:', error);
+            // Keep the default (PHYSICIAN)
+          }
+        };
+        
+        autoDetectProviderType();
       }
     }
   }, [enablePersistence]);
