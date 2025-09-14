@@ -7,9 +7,6 @@
 
 import React, { useState } from 'react';
 import { 
-  HeartIcon, 
-  UserIcon, 
-  ChartBarIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { ProviderTypeSelectorProps } from '../../types/provider';
@@ -32,64 +29,44 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Get the display text and icon for the current value
+  // Get the display text for the current value
   const getCurrentDisplay = () => {
     switch (value) {
       case 'PHYSICIAN':
         return {
-          icon: HeartIcon,
-          text: 'Physician',
-          bgColor: 'bg-blue-100',
-          textColor: 'text-blue-800',
-          borderColor: 'border-blue-200'
+          text: 'Physician'
         };
       case 'APP':
         return {
-          icon: UserIcon,
-          text: 'APP',
-          bgColor: 'bg-green-100',
-          textColor: 'text-green-800',
-          borderColor: 'border-green-200'
+          text: 'APP'
         };
       case 'BOTH':
         return {
-          icon: ChartBarIcon,
-          text: 'Combined',
-          bgColor: 'bg-purple-100',
-          textColor: 'text-purple-800',
-          borderColor: 'border-purple-200'
+          text: 'Combined'
         };
       default:
         return {
-          icon: ChartBarIcon,
-          text: 'Select Provider Type',
-          bgColor: 'bg-gray-100',
-          textColor: 'text-gray-600',
-          borderColor: 'border-gray-200'
+          text: 'Select Provider Type'
         };
     }
   };
 
   const currentDisplay = getCurrentDisplay();
-  const CurrentIcon = currentDisplay.icon;
 
   // Get dropdown options
   const getOptions = () => {
     const options: Array<{
       value: 'PHYSICIAN' | 'APP' | 'BOTH';
-      icon: typeof HeartIcon;
       text: string;
       description: string;
     }> = [
       {
         value: 'PHYSICIAN',
-        icon: HeartIcon,
         text: 'Physician',
         description: 'Physician compensation data'
       },
       {
         value: 'APP',
-        icon: UserIcon,
         text: 'APP',
         description: 'Advanced Practice Provider data'
       }
@@ -98,7 +75,6 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     if (showBothOption) {
       options.push({
         value: 'BOTH',
-        icon: ChartBarIcon,
         text: 'Combined',
         description: 'Both provider types combined'
       });
@@ -111,20 +87,17 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
 
   return (
     <div className={`relative ${className}`}>
-      {/* Dropdown Button */}
+      {/* Dropdown Button - Google Style */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${currentDisplay.bgColor} ${currentDisplay.textColor} ${currentDisplay.borderColor} hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-white border border-gray-300 rounded-md hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <div className="flex items-center gap-2">
-          <CurrentIcon className="w-4 h-4" />
-          <span>{currentDisplay.text}</span>
-        </div>
+        <span className="text-gray-900">{currentDisplay.text}</span>
         <ChevronDownIcon 
-          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
         />
       </button>
 
@@ -137,10 +110,9 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
             onClick={() => setIsOpen(false)}
           />
           
-          {/* Menu */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+          {/* Menu - Google Style */}
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 overflow-hidden">
             {options.map((option) => {
-              const OptionIcon = option.icon;
               const isSelected = value === option.value;
               
               return (
@@ -150,21 +122,20 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors duration-200 ${
+                  className={`w-full flex items-start px-3 py-2.5 text-sm text-left transition-colors duration-150 ${
                     isSelected 
-                      ? 'bg-blue-50 text-blue-800' 
+                      ? 'bg-blue-50 text-blue-900' 
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                   role="option"
                   aria-selected={isSelected}
                 >
-                  <OptionIcon className="w-4 h-4 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">{option.text}</div>
-                    <div className="text-xs text-gray-500">{option.description}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
                   </div>
                   {isSelected && (
-                    <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5" />
                   )}
                 </button>
               );
@@ -188,39 +159,34 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Get the display icon for the current value
-  const getCurrentIcon = () => {
+  // Get the display text for the current value
+  const getCurrentText = () => {
     switch (value) {
       case 'PHYSICIAN':
-        return HeartIcon;
+        return 'Physician';
       case 'APP':
-        return UserIcon;
+        return 'APP';
       case 'BOTH':
-        return ChartBarIcon;
+        return 'Combined';
       default:
-        return ChartBarIcon;
+        return 'Select';
     }
   };
-
-  const CurrentIcon = getCurrentIcon();
 
   // Get dropdown options
   const getOptions = () => {
     const options: Array<{
       value: 'PHYSICIAN' | 'APP' | 'BOTH';
-      icon: typeof HeartIcon;
       text: string;
       title: string;
     }> = [
       {
         value: 'PHYSICIAN',
-        icon: HeartIcon,
         text: 'Physician',
         title: 'Physician Data'
       },
       {
         value: 'APP',
-        icon: UserIcon,
         text: 'APP',
         title: 'APP Data'
       }
@@ -229,7 +195,6 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     if (showBothOption) {
       options.push({
         value: 'BOTH',
-        icon: ChartBarIcon,
         text: 'Combined',
         title: 'Combined View'
       });
@@ -242,17 +207,17 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
 
   return (
     <div className={`relative ${className}`}>
-      {/* Compact Dropdown Button */}
+      {/* Compact Dropdown Button - Google Style */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all duration-200 bg-blue-100 text-blue-800 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+        className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <CurrentIcon className="w-3 h-3" />
+        <span className="text-gray-900">{getCurrentText()}</span>
         <ChevronDownIcon 
-          className={`w-3 h-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+          className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
         />
       </button>
 
@@ -265,10 +230,9 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
             onClick={() => setIsOpen(false)}
           />
           
-          {/* Menu */}
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden min-w-[120px]">
+          {/* Menu - Google Style */}
+          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 overflow-hidden min-w-[100px]">
             {options.map((option) => {
-              const OptionIcon = option.icon;
               const isSelected = value === option.value;
               
               return (
@@ -278,19 +242,18 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors duration-200 ${
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors duration-150 ${
                     isSelected 
-                      ? 'bg-blue-50 text-blue-800' 
+                      ? 'bg-blue-50 text-blue-900' 
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                   role="option"
                   aria-selected={isSelected}
                   title={option.title}
                 >
-                  <OptionIcon className="w-3 h-3 flex-shrink-0" />
                   <span className="font-medium">{option.text}</span>
                   {isSelected && (
-                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 ml-auto" />
+                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0" />
                   )}
                 </button>
               );
@@ -327,37 +290,32 @@ export const ProviderTypeBadge: React.FC<{
     switch (providerType) {
       case 'PHYSICIAN':
         return {
-          icon: HeartIcon,
           label: 'Physician',
-          bgColor: 'bg-blue-100',
-          textColor: 'text-blue-800',
+          bgColor: 'bg-blue-50',
+          textColor: 'text-blue-700',
           borderColor: 'border-blue-200'
         };
       case 'APP':
         return {
-          icon: UserIcon,
           label: 'APP',
-          bgColor: 'bg-green-100',
-          textColor: 'text-green-800',
-          borderColor: 'border-green-200'
+          bgColor: 'bg-gray-50',
+          textColor: 'text-gray-700',
+          borderColor: 'border-gray-200'
         };
       case 'BOTH':
         return {
-          icon: ChartBarIcon,
           label: 'Combined',
-          bgColor: 'bg-purple-100',
-          textColor: 'text-purple-800',
+          bgColor: 'bg-purple-50',
+          textColor: 'text-purple-700',
           borderColor: 'border-purple-200'
         };
     }
   };
 
   const config = getProviderTypeConfig();
-  const Icon = config.icon;
 
   return (
-    <div className={`inline-flex items-center gap-2 ${getSizeClasses()} ${config.bgColor} ${config.textColor} ${config.borderColor} border rounded-lg font-medium ${className}`}>
-      <Icon className="w-4 h-4" />
+    <div className={`inline-flex items-center ${getSizeClasses()} ${config.bgColor} ${config.textColor} ${config.borderColor} border rounded-md font-medium ${className}`}>
       <span>{config.label}</span>
     </div>
   );
