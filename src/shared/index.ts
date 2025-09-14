@@ -9,6 +9,13 @@ export * from './types';
 // Utilities
 export * from './utils';
 
+// Components
+export {
+  ProviderTypeSelector,
+  CompactProviderTypeSelector,
+  ProviderTypeBadge
+} from './components/ProviderTypeSelector';
+
 // Re-export commonly used utilities for convenience
 export {
   calculatePercentile,
