@@ -233,7 +233,7 @@ const PageContent = () => {
               <Route path="/column-mapping" element={<ColumnMapping />} />
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
-              <Route path="/fmv" element={<PhysicianFMV />} />
+              <Route path="/fair-market-value" element={<PhysicianFMV />} />
               <Route path="/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/custom-reports" element={<CustomReports />} />
               <Route path="/system-settings" element={<SystemSettings />} />
