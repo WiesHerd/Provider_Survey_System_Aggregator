@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
+import { IndexedDBService } from '../services/IndexedDBService';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -59,6 +60,45 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	
 	// Simple provider type state for data view selection
 	const [selectedProviderType, setSelectedProviderType] = useState<'PHYSICIAN' | 'APP' | 'BOTH'>('PHYSICIAN');
+	const [availableProviderTypes, setAvailableProviderTypes] = useState<Set<string>>(new Set(['PHYSICIAN']));
+	
+	// Detect what provider types are actually loaded
+	useEffect(() => {
+		const detectLoadedProviderTypes = async () => {
+			try {
+				const indexedDB = new IndexedDBService();
+				const surveys = await indexedDB.getAllSurveys();
+				
+				const providerTypes = new Set<string>();
+				surveys.forEach(survey => {
+					const providerType = (survey as any).providerType;
+					if (providerType) {
+						providerTypes.add(providerType);
+					} else {
+						// If no provider type is set, assume it's physician data (legacy)
+						providerTypes.add('PHYSICIAN');
+					}
+				});
+				
+				// Always include PHYSICIAN as default
+				providerTypes.add('PHYSICIAN');
+				
+				setAvailableProviderTypes(providerTypes);
+				
+				// If current selection is not available, default to first available
+				if (!providerTypes.has(selectedProviderType) && providerTypes.size > 0) {
+					const firstType = Array.from(providerTypes)[0] as 'PHYSICIAN' | 'APP' | 'BOTH';
+					setSelectedProviderType(firstType);
+				}
+			} catch (error) {
+				console.error('Error detecting provider types:', error);
+				// Fallback to just PHYSICIAN
+				setAvailableProviderTypes(new Set(['PHYSICIAN']));
+			}
+		};
+		
+		detectLoadedProviderTypes();
+	}, [selectedProviderType]);
 	
 	const menuGroups: MenuGroup[] = [
 		{
@@ -257,12 +297,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					<select
 						value={selectedProviderType}
 						onChange={(e) => setSelectedProviderType(e.target.value as 'PHYSICIAN' | 'APP' | 'BOTH')}
-						className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full px-3 py-2 text-sm bg-white border-2 border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-300 transition-colors"
 						aria-label="Select data view type"
 					>
-						<option value="PHYSICIAN">Physician</option>
-						<option value="APP">Advanced Practice Provider</option>
-						<option value="BOTH">Both</option>
+						{availableProviderTypes.has('PHYSICIAN') && (
+							<option value="PHYSICIAN">Physician</option>
+						)}
+						{availableProviderTypes.has('APP') && (
+							<option value="APP">Advanced Practice Provider</option>
+						)}
+						{availableProviderTypes.has('PHYSICIAN') && availableProviderTypes.has('APP') && (
+							<option value="BOTH">Both</option>
+						)}
 					</select>
 				</div>
 			)}
@@ -279,8 +325,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				<div className="px-3 py-2 border-t border-gray-100">
 					<div className="flex items-center text-xs text-gray-500">
 						<InformationCircleIcon className="w-4 h-4 mr-2" />
-						<span>Provider: {selectedProviderType}</span>
+						<span>View: {selectedProviderType === 'PHYSICIAN' ? 'Physician' : selectedProviderType === 'APP' ? 'APP' : 'Both'}</span>
 					</div>
+					{availableProviderTypes.size > 1 && (
+						<div className="text-xs text-gray-400 mt-1">
+							{Array.from(availableProviderTypes).map(type => 
+								type === 'PHYSICIAN' ? 'Physician' : 
+								type === 'APP' ? 'APP' : type
+							).join(', ')} data loaded
+						</div>
+					)}
 				</div>
 			)}
 
