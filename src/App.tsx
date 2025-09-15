@@ -1,17 +1,29 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, useLocation } from 'react-router-dom';
-import EnhancedSidebar from './components/EnhancedSidebar';
+import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import Sidebar from './components/Sidebar';
 import PageHeader from './components/PageHeader';
-import ProviderAwareRoutes from './components/ProviderAwareRoutes';
+// import ProviderAwareRoutes from './components/ProviderAwareRoutes';
 import { StorageProvider } from './contexts/StorageContext';
 import { MappingProvider } from './contexts/MappingContext';
 import { YearProvider } from './contexts/YearContext';
-import { ProviderContextProvider } from './contexts/ProviderContext';
+// import { ProviderContextProvider } from './contexts/ProviderContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { PageSpinner, SuspenseSpinner } from './shared/components';
 
-// Lazy load dashboard component
+// Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
+const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
+const SpecialtyMapping = lazy(() => import('./features/mapping/components/SpecialtyMapping').then(module => ({ default: module.SpecialtyMapping })));
+const ProviderTypeMapping = lazy(() => import('./features/mapping/components/ProviderTypeMapping').then(module => ({ default: module.ProviderTypeMapping })));
+const RegionMapping = lazy(() => import('./features/mapping/components/RegionMapping').then(module => ({ default: module.RegionMapping })));
+const VariableMapping = lazy(() => import('./features/mapping/components/VariableMapping').then(module => ({ default: module.VariableMapping })));
+const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
+const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
+const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
+const PhysicianFMV = lazy(() => import('./features/fmv/components/PhysicianFMV'));
+const NormalizedDataScreen = lazy(() => import('./features/normalized/components/NormalizedDataScreen'));
+const CustomReports = lazy(() => import('./components/CustomReports'));
+const SystemSettings = lazy(() => import('./components/SystemSettings'));
 
 // Loading component for Suspense fallback
 const AppLoadingSpinner = () => (
@@ -198,7 +210,7 @@ const PageContent = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {!isDashboard && <EnhancedSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
+      {!isDashboard && <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
       
       <div className={`flex-1 transition-all duration-300 flex flex-col ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
         {!isDashboard && (
@@ -210,7 +222,23 @@ const PageContent = () => {
         )}
         <main className={`bg-gray-50 flex-1 overflow-auto ${isDashboard ? '' : 'px-8'}`}>
           <Suspense fallback={<SuspenseSpinner message="Loading page..." />}>
-            <ProviderAwareRoutes />
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/upload" element={<SurveyUpload />} />
+              <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
+              <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
+              <Route path="/region-mapping" element={<RegionMapping />} />
+              <Route path="/variable-mapping" element={<VariableMapping />} />
+              <Route path="/column-mapping" element={<ColumnMapping />} />
+              <Route path="/analytics" element={<SurveyAnalytics />} />
+              <Route path="/regional-analytics" element={<RegionalAnalytics />} />
+              <Route path="/fmv" element={<PhysicianFMV />} />
+              <Route path="/normalized-data" element={<NormalizedDataScreen />} />
+              <Route path="/custom-reports" element={<CustomReports />} />
+              <Route path="/system-settings" element={<SystemSettings />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
           </Suspense>
         </main>
       </div>
@@ -237,11 +265,9 @@ function App() {
     <StorageProvider>
       <MappingProvider>
         <YearProvider>
-          <ProviderContextProvider>
           <Router basename={basename}>
             <PageContent />
           </Router>
-          </ProviderContextProvider>
         </YearProvider>
       </MappingProvider>
     </StorageProvider>
