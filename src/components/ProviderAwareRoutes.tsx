@@ -33,6 +33,14 @@ const APPAnalytics = lazy(() => import('../features/analytics/components/APPAnal
 const PhysicianFMV = lazy(() => import('../features/fmv/components/PhysicianFMV'));
 const APPFMV = lazy(() => import('../features/fmv/components/APPFMV'));
 
+// APP-specific mapping components
+const APPSpecialtyMapping = lazy(() => import('../features/mapping/components/APPSpecialtyMapping').then(module => ({ default: module.APPSpecialtyMapping })));
+const APPProviderTypeMapping = lazy(() => import('../features/mapping/components/APPProviderTypeMapping').then(module => ({ default: module.APPProviderTypeMapping })));
+const APPPracticeSettingMapping = lazy(() => import('../features/mapping/components/APPPracticeSettingMapping').then(module => ({ default: module.APPPracticeSettingMapping })));
+const APPSupervisionLevelMapping = lazy(() => import('../features/mapping/components/APPSupervisionLevelMapping').then(module => ({ default: module.APPSupervisionLevelMapping })));
+const APPColumnMapping = lazy(() => import('../features/mapping/components/APPColumnMapping').then(module => ({ default: module.APPColumnMapping })));
+const APPVariableMapping = lazy(() => import('../features/mapping/components/APPVariableMapping').then(module => ({ default: module.APPVariableMapping })));
+
 interface ProviderAwareRoutesProps {
   // Additional props can be added here if needed
 }
@@ -110,7 +118,66 @@ export const ProviderAwareRoutes: React.FC<ProviderAwareRoutesProps> = () => {
 
   // Render provider-specific specialty mapping
   const renderSpecialtyMappingRoute = () => {
-    return <SpecialtyMapping />;
+    if (isAPPSelected) {
+      return <APPSpecialtyMapping />;
+    } else {
+      return <SpecialtyMapping />;
+    }
+  };
+
+  // Render provider-specific provider type mapping
+  const renderProviderTypeMappingRoute = () => {
+    if (isAPPSelected) {
+      return <APPProviderTypeMapping />;
+    } else {
+      return <ProviderTypeMapping />;
+    }
+  };
+
+  // Render provider-specific practice setting mapping (APP only)
+  const renderPracticeSettingMappingRoute = () => {
+    if (isAPPSelected) {
+      return <APPPracticeSettingMapping />;
+    } else {
+      return <ProviderEmptyState
+        providerType="PHYSICIAN"
+        message="Practice setting mapping is only available for APP data"
+        actions={[{
+          label: 'Switch to APP Data',
+          action: 'switch_to_app',
+          variant: 'primary' as const,
+          icon: 'ArrowPathIcon'
+        }]}
+        onAction={(action) => {
+          if (action === 'switch_to_app') {
+            // Switch to APP data - this would be handled by the context
+          }
+        }}
+      />;
+    }
+  };
+
+  // Render provider-specific supervision level mapping (APP only)
+  const renderSupervisionLevelMappingRoute = () => {
+    if (isAPPSelected) {
+      return <APPSupervisionLevelMapping />;
+    } else {
+      return <ProviderEmptyState
+        providerType="PHYSICIAN"
+        message="Supervision level mapping is only available for APP data"
+        actions={[{
+          label: 'Switch to APP Data',
+          action: 'switch_to_app',
+          variant: 'primary' as const,
+          icon: 'ArrowPathIcon'
+        }]}
+        onAction={(action) => {
+          if (action === 'switch_to_app') {
+            // Switch to APP data - this would be handled by the context
+          }
+        }}
+      />;
+    }
   };
 
   // Render provider-specific regional analytics
@@ -130,7 +197,9 @@ export const ProviderAwareRoutes: React.FC<ProviderAwareRoutesProps> = () => {
 
         {/* Data Mapping - provider-aware */}
         <Route path="/specialty-mapping" element={renderSpecialtyMappingRoute()} />
-        <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
+        <Route path="/provider-type-mapping" element={renderProviderTypeMappingRoute()} />
+        <Route path="/practice-setting-mapping" element={renderPracticeSettingMappingRoute()} />
+        <Route path="/supervision-level-mapping" element={renderSupervisionLevelMappingRoute()} />
         <Route path="/region-mapping" element={<RegionMapping />} />
         <Route path="/variable-mapping" element={<VariableMapping />} />
         <Route path="/column-mapping" element={<ColumnMapping />} />
