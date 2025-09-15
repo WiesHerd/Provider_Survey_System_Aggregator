@@ -12,6 +12,7 @@ import { useProviderData } from '../hooks/useProviderData';
 import { SuspenseSpinner, ProviderEmptyState } from '../shared/components';
 
 // Lazy load route components
+const Dashboard = lazy(() => import('./Dashboard'));
 const SurveyUpload = lazy(() => import('./SurveyUpload'));
 const SpecialtyMapping = lazy(() => import('../features/mapping').then(module => ({ default: module.SpecialtyMapping })));
 const ColumnMapping = lazy(() => import('./ColumnMapping'));
@@ -189,7 +190,7 @@ export const ProviderAwareRoutes: React.FC<ProviderAwareRoutesProps> = () => {
     <Suspense fallback={<SuspenseSpinner />}>
       <Routes>
         {/* Dashboard - always available */}
-        <Route path="/dashboard" element={<Navigate to="/" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
         {/* Upload - always available */}

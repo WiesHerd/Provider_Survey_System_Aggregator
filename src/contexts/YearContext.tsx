@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { YearManagementService } from '../services/YearManagementService';
 import { IYearConfig, IYearFilter } from '../types/year';
 
@@ -48,12 +48,7 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
 
   const yearService = new YearManagementService();
 
-  // Initialize year data
-  useEffect(() => {
-    initializeYears();
-  }, []);
-
-  const initializeYears = async () => {
+  const initializeYears = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -93,7 +88,12 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Initialize year data
+  useEffect(() => {
+    initializeYears();
+  }, [initializeYears]);
 
   const setCurrentYear = async (year: string) => {
     try {
