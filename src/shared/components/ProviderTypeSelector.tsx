@@ -89,10 +89,6 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     const options: Array<{
       value: 'PHYSICIAN' | 'APP' | 'BOTH';
       text: string;
-      description: string;
-      hasData: boolean;
-      surveyCount: number;
-      isAvailable: boolean;
     }> = [];
 
     // Add Physician option if data exists
@@ -100,11 +96,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     if (physicianInfo) {
       options.push({
         value: 'PHYSICIAN',
-        text: 'Physician',
-        description: `${physicianInfo.surveyCount} survey${physicianInfo.surveyCount !== 1 ? 's' : ''} available`,
-        hasData: true,
-        surveyCount: physicianInfo.surveyCount,
-        isAvailable: true
+        text: 'Physician'
       });
     }
 
@@ -113,37 +105,15 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     if (appInfo) {
       options.push({
         value: 'APP',
-        text: 'Advanced Practice Provider',
-        description: `${appInfo.surveyCount} survey${appInfo.surveyCount !== 1 ? 's' : ''} available`,
-        hasData: true,
-        surveyCount: appInfo.surveyCount,
-        isAvailable: true
+        text: 'Advanced Practice Provider'
       });
     }
 
-    // Add custom provider types
-    const customTypes = availableTypes.filter(t => t.type === 'OTHER');
-    customTypes.forEach(customType => {
-      options.push({
-        value: 'OTHER' as any, // We'll handle this differently
-        text: customType.displayName,
-        description: `${customType.surveyCount} survey${customType.surveyCount !== 1 ? 's' : ''} available`,
-        hasData: true,
-        surveyCount: customType.surveyCount,
-        isAvailable: true
-      });
-    });
-
     // Add Combined option only if multiple provider types exist AND showBothOption is true
     if (showBothOption && availableTypes.length > 1) {
-      const totalSurveys = availableTypes.reduce((sum, t) => sum + t.surveyCount, 0);
       options.push({
         value: 'BOTH',
-        text: 'Combined View',
-        description: `${totalSurveys} total surveys from ${availableTypes.length} provider type${availableTypes.length !== 1 ? 's' : ''}`,
-        hasData: true,
-        surveyCount: totalSurveys,
-        isAvailable: true
+        text: 'Combined View'
       });
     }
 
@@ -216,14 +186,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-gray-900">{currentDisplay.text}</span>
-          {currentDisplay.hasData && currentDisplay.surveyCount && currentDisplay.surveyCount > 0 && (
-            <div className="flex items-center justify-center w-5 h-5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-              {currentDisplay.surveyCount}
-            </div>
-          )}
-        </div>
+        <span className="text-gray-900">{currentDisplay.text}</span>
         <ChevronDownIcon 
           className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
         />
@@ -261,15 +224,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                     aria-selected={isSelected}
                   >
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{option.text}</span>
-                        {option.hasData && option.surveyCount && option.surveyCount > 0 && (
-                          <div className="flex items-center justify-center w-4 h-4 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                            {option.surveyCount}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
+                      <span className="font-medium">{option.text}</span>
                     </div>
                     {isSelected && (
                       <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5" />
@@ -328,8 +283,6 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     const options: Array<{
       value: 'PHYSICIAN' | 'APP' | 'BOTH';
       text: string;
-      hasData: boolean;
-      surveyCount: number;
     }> = [];
 
     // Add available provider types
@@ -337,9 +290,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     if (physicianInfo) {
       options.push({
         value: 'PHYSICIAN',
-        text: 'Physician',
-        hasData: true,
-        surveyCount: physicianInfo.surveyCount
+        text: 'Physician'
       });
     }
 
@@ -347,19 +298,14 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     if (appInfo) {
       options.push({
         value: 'APP',
-        text: 'APP',
-        hasData: true,
-        surveyCount: appInfo.surveyCount
+        text: 'APP'
       });
     }
 
     if (showBothOption && availableTypes.length > 1) {
-      const totalSurveys = availableTypes.reduce((sum, t) => sum + t.surveyCount, 0);
       options.push({
         value: 'BOTH',
-        text: 'Combined',
-        hasData: true,
-        surveyCount: totalSurveys
+        text: 'Combined'
       });
     }
 
@@ -434,14 +380,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                   role="option"
                   aria-selected={isSelected}
                 >
-                  <div className="flex items-center gap-1">
-                    <span className="font-medium">{option.text}</span>
-                    {option.hasData && option.surveyCount && option.surveyCount > 0 && (
-                      <div className="flex items-center justify-center w-3 h-3 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                        {option.surveyCount}
-                      </div>
-                    )}
-                  </div>
+                  <span className="font-medium">{option.text}</span>
                   {isSelected && (
                     <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0" />
                   )}

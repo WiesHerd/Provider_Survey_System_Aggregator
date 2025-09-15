@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, useLocation } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
+import EnhancedSidebar from './components/EnhancedSidebar';
 import PageHeader from './components/PageHeader';
 import ProviderAwareRoutes from './components/ProviderAwareRoutes';
 import { StorageProvider } from './contexts/StorageContext';
@@ -28,6 +28,93 @@ const PageContent = () => {
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   
   const getHeaderContent = () => {
+    // Provider-specific routes
+    if (location.pathname.startsWith('/physician/')) {
+      switch (location.pathname) {
+        case '/physician/specialty-mapping':
+          return {
+            title: 'Physician Specialty Mapping',
+            description: 'Map physician specialty names to standardized categories'
+          };
+        case '/physician/provider-type-mapping':
+          return {
+            title: 'Physician Provider Type Mapping',
+            description: 'Map physician provider types to standardized categories'
+          };
+        case '/physician/region-mapping':
+          return {
+            title: 'Physician Region Mapping',
+            description: 'Map geographic regions for physician data'
+          };
+        case '/physician/variable-mapping':
+          return {
+            title: 'Physician Variable Mapping',
+            description: 'Map compensation variables for physician data'
+          };
+        case '/physician/column-mapping':
+          return {
+            title: 'Physician Column Mapping',
+            description: 'Map data columns for physician surveys'
+          };
+      }
+    }
+
+    if (location.pathname.startsWith('/app/')) {
+      switch (location.pathname) {
+        case '/app/specialty-mapping':
+          return {
+            title: 'APP Specialty Mapping',
+            description: 'Map APP specialty names to standardized categories'
+          };
+        case '/app/provider-type-mapping':
+          return {
+            title: 'APP Provider Type Mapping',
+            description: 'Map APP provider types (NP, PA, CRNA, etc.) to standardized categories'
+          };
+        case '/app/practice-setting-mapping':
+          return {
+            title: 'APP Practice Setting Mapping',
+            description: 'Map APP practice settings (Hospital, Clinic, etc.) to standardized categories'
+          };
+        case '/app/supervision-level-mapping':
+          return {
+            title: 'APP Supervision Level Mapping',
+            description: 'Map APP supervision levels (Independent, Supervised, etc.) to standardized categories'
+          };
+        case '/app/variable-mapping':
+          return {
+            title: 'APP Variable Mapping',
+            description: 'Map compensation variables for APP data'
+          };
+        case '/app/column-mapping':
+          return {
+            title: 'APP Column Mapping',
+            description: 'Map data columns for APP surveys'
+          };
+      }
+    }
+
+    if (location.pathname.startsWith('/cross-provider/')) {
+      switch (location.pathname) {
+        case '/cross-provider/comparison':
+          return {
+            title: 'Provider Comparison',
+            description: 'Compare compensation data between Physician and APP providers'
+          };
+        case '/cross-provider/market-analysis':
+          return {
+            title: 'Market Analysis',
+            description: 'Cross-provider market analysis and trends'
+          };
+        case '/cross-provider/trends':
+          return {
+            title: 'Compensation Trends',
+            description: 'Analyze compensation trends across provider types'
+          };
+      }
+    }
+
+    // Legacy routes (for backward compatibility)
     switch (location.pathname) {
       case '/dashboard':
         return {
@@ -111,7 +198,7 @@ const PageContent = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {!isDashboard && <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
+      {!isDashboard && <EnhancedSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
       
       <div className={`flex-1 transition-all duration-300 flex flex-col ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
         {!isDashboard && (
