@@ -20,7 +20,7 @@ const VariableMapping = lazy(() => import('./features/mapping/components/Variabl
 const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
 const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
-const PhysicianFMV = lazy(() => import('./features/fmv/components/PhysicianFMV'));
+const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const NormalizedDataScreen = lazy(() => import('./features/normalized/components/NormalizedDataScreen'));
 const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
@@ -233,7 +233,7 @@ const PageContent = () => {
               <Route path="/column-mapping" element={<ColumnMapping />} />
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
-              <Route path="/fair-market-value" element={<PhysicianFMV />} />
+              <Route path="/fair-market-value" element={<FairMarketValue />} />
               <Route path="/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/custom-reports" element={<CustomReports />} />
               <Route path="/system-settings" element={<SystemSettings />} />
