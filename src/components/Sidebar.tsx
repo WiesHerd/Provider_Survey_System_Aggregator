@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { useProviderContext } from '../contexts/ProviderContext';
-import { ProviderTypeSelector } from '../shared/components';
+// import { useProviderContext } from '../contexts/ProviderContext';
+// import { ProviderTypeSelector } from '../shared/components';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const location = useLocation();
 	const currentPath = location.pathname;
 	const listRef = useRef<HTMLDivElement>(null);
-	const { selectedProviderType, setProviderType } = useProviderContext();
+	// const { selectedProviderType, setProviderType } = useProviderContext();
 	
 	const menuGroups: MenuGroup[] = [
 		{
@@ -247,22 +247,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			</div>
 
 			{/* Provider Type Selector */}
-			{isOpen && (
-				<div className="px-3 py-4 border-b border-gray-100">
-					<div className="mb-2">
-						<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-							Data View
-						</h3>
-					</div>
-					<ProviderTypeSelector
-						value={selectedProviderType}
-						onChange={(providerType) => setProviderType(providerType, 'sidebar')}
-						showBothOption={true}
-						context="navigation"
-						className="w-full"
-					/>
-				</div>
-			)}
+			{/* Data View section removed - no longer using provider context */}
 
 			{/* Main Menu */}
 			<nav aria-label="Primary" className="flex-1 px-3 py-6 overflow-y-auto">
