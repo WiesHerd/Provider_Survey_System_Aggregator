@@ -1,7 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
-// import { useProviderContext } from '../contexts/ProviderContext';
-// import { ProviderTypeSelector } from '../shared/components';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -58,7 +56,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const location = useLocation();
 	const currentPath = location.pathname;
 	const listRef = useRef<HTMLDivElement>(null);
-	// const { selectedProviderType, setProviderType } = useProviderContext();
+	
+	// Simple provider type state for data view selection
+	const [selectedProviderType, setSelectedProviderType] = useState<'PHYSICIAN' | 'APP' | 'BOTH'>('PHYSICIAN');
 	
 	const menuGroups: MenuGroup[] = [
 		{
@@ -246,8 +246,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</button>
 			</div>
 
-			{/* Provider Type Selector */}
-			{/* Data View section removed - no longer using provider context */}
+			{/* Data View Selector */}
+			{isOpen && (
+				<div className="px-3 py-4 border-b border-gray-100">
+					<div className="mb-2">
+						<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+							Data View
+						</h3>
+					</div>
+					<select
+						value={selectedProviderType}
+						onChange={(e) => setSelectedProviderType(e.target.value as 'PHYSICIAN' | 'APP' | 'BOTH')}
+						className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						aria-label="Select data view type"
+					>
+						<option value="PHYSICIAN">Physician</option>
+						<option value="APP">Advanced Practice Provider</option>
+						<option value="BOTH">Both</option>
+					</select>
+				</div>
+			)}
 
 			{/* Main Menu */}
 			<nav aria-label="Primary" className="flex-1 px-3 py-6 overflow-y-auto">
@@ -255,6 +273,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					{menuGroups.map((group, index) => renderMenuGroup(group, index))}
 				</div>
 			</nav>
+
+			{/* Provider Type Indicator */}
+			{isOpen && (
+				<div className="px-3 py-2 border-t border-gray-100">
+					<div className="flex items-center text-xs text-gray-500">
+						<InformationCircleIcon className="w-4 h-4 mr-2" />
+						<span>Provider: {selectedProviderType}</span>
+					</div>
+				</div>
+			)}
 
 		</div>
 	);
