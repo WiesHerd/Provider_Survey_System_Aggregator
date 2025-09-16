@@ -5,20 +5,23 @@
  * This component provides FMV calculations specifically for APP compensation.
  */
 
-import React, { memo } from 'react';
+import React from 'react';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 import FairMarketValue from '../../../components/FairMarketValue';
+import { ProviderTypeBadge } from '../../../shared/components';
 
 /**
  * APP FMV Component
  * 
- * Provider-specific Fair Market Value calculator for APP data.
- * Uses the main FairMarketValue component which will automatically
- * filter data based on the current provider type context.
+ * Wraps the main FairMarketValue component with APP-specific filtering
+ * and displays a provider type badge to indicate the current view.
  */
-export const APPFMV: React.FC = memo(() => {
+export const APPFMV: React.FC = () => {
+  const { selectedProviderType } = useProviderContext();
+
   return (
     <div className="space-y-6">
-      {/* Provider Type Header */}
+      {/* Provider Type Indicator */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">APP Fair Market Value</h1>
@@ -26,11 +29,7 @@ export const APPFMV: React.FC = memo(() => {
             Calculate and compare APP compensation against market data
           </p>
         </div>
-        <div className="flex items-center space-x-2">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            Advanced Practice Provider
-          </span>
-        </div>
+        <ProviderTypeBadge providerType="APP" size="lg" />
       </div>
 
       {/* FMV Content */}
@@ -39,6 +38,6 @@ export const APPFMV: React.FC = memo(() => {
       </div>
     </div>
   );
-});
+};
 
 export default APPFMV;
