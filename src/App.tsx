@@ -19,6 +19,7 @@ const RegionMapping = lazy(() => import('./features/mapping/components/RegionMap
 const VariableMapping = lazy(() => import('./features/mapping/components/VariableMapping').then(module => ({ default: module.VariableMapping })));
 const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
 const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
+const ProviderAwareAnalytics = lazy(() => import('./features/analytics/components/ProviderAwareAnalytics').then(module => ({ default: module.ProviderAwareAnalytics })));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const NormalizedDataScreen = lazy(() => import('./features/normalized/components/NormalizedDataScreen'));
@@ -255,7 +256,7 @@ const PageContent = () => {
               <Route path="/app/fair-market-value" element={<APPFMV />} />
               
               {/* Analytics & Reports */}
-              <Route path="/analytics" element={<SurveyAnalytics />} />
+              <Route path="/analytics" element={<ProviderAwareAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
               <Route path="/normalized-data" element={<NormalizedDataScreen />} />
