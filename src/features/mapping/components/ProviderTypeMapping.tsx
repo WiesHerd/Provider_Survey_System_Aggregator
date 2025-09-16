@@ -13,7 +13,6 @@ import { useProviderTypeMappingData } from '../hooks/useProviderTypeMappingData'
 import { UnmappedProviderTypes } from './UnmappedProviderTypes';
 import { MappedProviderTypes } from './MappedProviderTypes';
 import { LearnedProviderTypeMappings } from './LearnedProviderTypeMappings';
-import { AutoMapping } from './AutoMapping';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 
 /**
@@ -26,9 +25,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
   onMappingChange,
   onUnmappedChange
 }) => {
-  // Auto-mapping dialog state
-  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
-  const [isAutoMapping, setIsAutoMapping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   // Custom hook for data management
@@ -66,8 +62,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
     clearAllMappings,
     removeLearnedMapping,
    
-    // Auto-mapping
-    autoMap,
    
     // Search and filters
     setSearchTerm,
@@ -75,16 +69,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
     clearError
   } = useProviderTypeMappingData();
 
-  // Handle auto-mapping
-  const handleAutoMap = async (config: any) => {
-    setIsAutoMapping(true);
-    try {
-      await autoMap(config);
-      setActiveTab('mapped');
-    } finally {
-      setIsAutoMapping(false);
-    }
-  };
 
   // Handle clear all mappings
   const handleClearAllMappings = () => {
@@ -179,14 +163,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
               <div className="flex items-center space-x-3 mb-4">
                 {activeTab === 'unmapped' && (
                   <>
-                    <button
-                      onClick={() => setIsAutoMapOpen(true)}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                      title="Auto Map Columns"
-                    >
-                      <BoltIcon className="h-4 w-4 mr-2" />
-                      Auto Map
-                    </button>
                     <button
                       onClick={selectAllProviderTypes}
                       disabled={unmappedProviderTypes.length === 0}
@@ -294,18 +270,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
             </div>
           </div>
 
-          {/* Auto-Mapping Dialog */}
-          <AutoMapping
-            isOpen={isAutoMapOpen}
-            onClose={() => setIsAutoMapOpen(false)}
-            onAutoMap={handleAutoMap}
-            loading={isAutoMapping}
-            title="Auto-Map Provider Types"
-            description="Automatically map similar provider type names across your surveys"
-            iconColor="indigo"
-            iconColorClass="text-indigo-600"
-            bgColorClass="bg-indigo-100"
-          />
 
           {/* Help Modal */}
           {showHelp && (
@@ -348,7 +312,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                     <div>
                       <h3 className="text-lg font-medium text-gray-900 mb-2">How to Use</h3>
                       <ul className="list-disc list-inside space-y-2 text-gray-600">
-                        <li><strong>Auto Map:</strong> Automatically detect and map similar provider types across surveys</li>
                         <li><strong>Map as Singles:</strong> Create individual mappings for selected provider types</li>
                         <li><strong>Map Selected:</strong> Group selected provider types into a single standardized mapping</li>
                         <li><strong>Manual Mapping:</strong> Click on individual provider types to create custom mappings</li>

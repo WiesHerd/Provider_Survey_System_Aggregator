@@ -38,8 +38,6 @@ interface UseProviderTypeMappingDataReturn {
   clearAllMappings: () => Promise<void>;
   removeLearnedMapping: (original: string) => void;
   
-  // Auto-mapping
-  autoMap: (config: any) => Promise<void>;
   
   // Search and filters
   setSearchTerm: (term: string) => void;
@@ -226,35 +224,6 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     });
   }, []);
 
-  // Auto-mapping
-  const autoMap = useCallback(async (config: any) => {
-    try {
-      // simple grouping by name (normalize) and save
-      const un = await dataService.getUnmappedProviderTypes();
-      const groups = new Map<string, IUnmappedProviderType[]>();
-      un.forEach(p => {
-        const key = p.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-        const arr = groups.get(key) || [];
-        arr.push(p);
-        groups.set(key, arr);
-      });
-      for (const [, arr] of groups) {
-        if (arr.length > 1) {
-          const mapping: IProviderTypeMapping = {
-            id: `pt_auto_${Date.now()}_${Math.random()}`,
-            standardizedName: arr[0].name,
-            sourceProviderTypes: arr.map(p => ({ providerType: p.name, surveySource: p.surveySource, frequency: p.frequency })),
-            createdAt: new Date(),
-            updatedAt: new Date()
-          } as any;
-          await dataService.createProviderTypeMapping(mapping);
-        }
-      }
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to auto-map provider types');
-    }
-  }, [loadData]);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -300,8 +269,6 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     clearAllMappings,
     removeLearnedMapping,
     
-    // Auto-mapping
-    autoMap,
     
     // Search and filters
     setSearchTerm,

@@ -21,7 +21,6 @@ import { LoadingSpinner, SuspenseSpinner } from '../shared/components';
 
 // Lazy load components for better performance
 const MappedColumns = lazy(() => import('./MappedColumns').then(module => ({ default: module.default })));
-const AutoMapping = lazy(() => import('../features/mapping/components/AutoMapping').then(module => ({ default: module.AutoMapping })));
 const LearnedColumnMappings = lazy(() => import('./LearnedColumnMappings').then(module => ({ default: module.default })));
 
 interface ColumnCardProps {
@@ -208,7 +207,6 @@ const ColumnMapping: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
-  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false); // Prevent multiple simultaneous loads
 
@@ -410,48 +408,6 @@ const ColumnMapping: React.FC = () => {
     }
   };
 
-  const handleAutoMap = async (config: {
-    confidenceThreshold: number;
-    useExistingMappings: boolean;
-    useFuzzyMatching: boolean;
-  }) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Call the auto-mapping service
-      const suggestions = await dataService.autoMapColumns({
-        confidenceThreshold: config.confidenceThreshold,
-        includeDataTypeMatching: config.useFuzzyMatching
-      });
-
-      // Create mappings from suggestions
-      for (const suggestion of suggestions) {
-        await dataService.createColumnMapping({
-          id: crypto.randomUUID(),
-          standardizedName: suggestion.standardizedName,
-          sourceColumns: suggestion.columns.map(col => ({
-            id: crypto.randomUUID(),
-            column: col.name,
-            originalName: col.name,
-            surveySource: col.surveySource,
-            mappingId: ''
-          } as any)),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
-
-      // Refresh data and close dialog
-      await loadData();
-      setIsAutoMapOpen(false);
-    } catch (error) {
-      console.error('Auto-mapping error:', error);
-      setError('Failed to auto-map columns. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -524,14 +480,6 @@ const ColumnMapping: React.FC = () => {
             <div className="flex items-center space-x-3 mb-4">
               {activeTab === 'unmapped' && (
                 <>
-                  <button
-                    onClick={() => setIsAutoMapOpen(true)}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                    title="Auto Map Columns"
-                  >
-                    <BoltIcon className="h-4 w-4 mr-2" />
-                    Auto Map
-                  </button>
 
                   {/* Google/Microsoft-style master checkbox with indeterminate state */}
                   <button
@@ -657,17 +605,6 @@ const ColumnMapping: React.FC = () => {
           </div>
         </div>
 
-        {/* Auto-Mapping Dialog */}
-        <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
-          <AutoMapping
-            isOpen={isAutoMapOpen}
-            onClose={() => setIsAutoMapOpen(false)}
-            onAutoMap={handleAutoMap}
-            loading={loading}
-            title="Auto-Map Columns"
-            description="Configure automatic column mapping"
-          />
-        </Suspense>
 
 
 
@@ -694,6 +631,7 @@ const ColumnMapping: React.FC = () => {
                   <button
                     onClick={() => setShowHelp(false)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                    title="Close help"
                   >
                     <XMarkIcon className="h-5 w-5 text-gray-400" />
                   </button>
@@ -710,10 +648,6 @@ const ColumnMapping: React.FC = () => {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-indigo-600 font-medium">•</span>
-                        <span>Use auto-mapping for bulk processing with configurable confidence levels</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-indigo-600 font-medium">•</span>
                         <span>Review and edit mappings in the "Mapped Columns" tab</span>
                       </li>
                       <li className="flex items-start gap-2">
@@ -727,8 +661,8 @@ const ColumnMapping: React.FC = () => {
                     <h4 className="font-semibold text-gray-900">Key Features</h4>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h5 className="font-medium text-gray-900 mb-2">Auto-Mapping</h5>
-                        <p className="text-sm text-gray-600">Bulk process unmapped columns with smart suggestions</p>
+                        <h5 className="font-medium text-gray-900 mb-2">Manual Mapping</h5>
+                        <p className="text-sm text-gray-600">Create precise mappings with full control over column matching</p>
                       </div>
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <h5 className="font-medium text-gray-900 mb-2">Manual Mapping</h5>
@@ -748,7 +682,7 @@ const ColumnMapping: React.FC = () => {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h4 className="font-semibold text-blue-900 mb-2">Best Practices</h4>
                     <ul className="text-sm text-blue-800 space-y-1">
-                      <li>• Always review auto-mapped results for accuracy, especially for columns with similar names</li>
+                      <li>• Always review mapped results for accuracy, especially for columns with similar names</li>
                       <li>• Use consistent column naming conventions in your source data for best results</li>
                       <li>• Contact support if you encounter persistent mapping issues</li>
                     </ul>

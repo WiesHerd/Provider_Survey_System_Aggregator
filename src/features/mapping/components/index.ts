@@ -9,7 +9,6 @@ export { UnmappedSpecialties } from './UnmappedSpecialties';
 export { MappedSpecialties } from './MappedSpecialties';
 export { MappedSpecialtyItem } from './MappedSpecialtyItem';
 export { LearnedMappings } from './LearnedMappings';
-export { AutoMapping } from './AutoMapping';
 export { CacheStats } from './CacheStats';
 
 // Enterprise-grade components

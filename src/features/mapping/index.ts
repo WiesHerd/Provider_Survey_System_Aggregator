@@ -9,7 +9,6 @@ export { MappingScreen } from './components/MappingScreen';
 export { UnmappedSpecialties } from './components/UnmappedSpecialties';
 export { MappedSpecialties } from './components/MappedSpecialties';
 export { LearnedMappings } from './components/LearnedMappings';
-export { AutoMapping } from './components/AutoMapping';
 export { UnmappedVariables } from './components/UnmappedVariables';
 export { MappedVariables } from './components/MappedVariables';
 export { VariableCard } from './components/VariableCard';
@@ -25,22 +24,17 @@ export type {
   ISpecialtyMapping,
   IUnmappedSpecialty,
   ISpecialtyGroup,
-  IAutoMappingConfig,
-  IMappingSuggestion,
   ISurveyData,
   MappingFilters,
   MappingState,
-  AutoMappingResults,
   SpecialtyMappingProps,
   MappingInterfaceProps,
   UnmappedSpecialtiesProps,
   MappedSpecialtiesProps,
   LearnedMappingsProps,
-  AutoMappingProps,
   SpecialtyCardProps,
   MappingHelpProps,
   MappingApiResponse,
-  AutoMappingApiResponse,
   MappingValidationResult,
   MappingExportConfig,
   IVariableMapping,
@@ -59,9 +53,6 @@ export {
   groupSpecialtiesBySurvey,
   filterMappedSpecialties,
   filterLearnedMappings,
-  generateMappingSuggestions,
-  calculateAutoMappingResults,
-  validateMappingConfig,
   formatMappingDate,
   getSurveySourceColor,
   calculateMappingStats

@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   ISpecialtyMapping, 
   IUnmappedSpecialty, 
-  IAutoMappingConfig, 
-  IMappingSuggestion,
   MappingState,
   MappingFilters
 } from '../types/mapping';
@@ -12,10 +10,7 @@ import {
   filterUnmappedSpecialties,
   groupSpecialtiesBySurvey,
   filterMappedSpecialties,
-  filterLearnedMappings,
-  generateMappingSuggestions,
-  calculateAutoMappingResults,
-  validateMappingConfig
+  filterLearnedMappings
 } from '../utils/mappingCalculations';
 
 interface UseMappingDataReturn {
@@ -55,23 +50,12 @@ interface UseMappingDataReturn {
   clearAllMappings: () => Promise<void>;
   removeLearnedMapping: (original: string) => Promise<void>;
   
-  // Auto-mapping
-  autoMap: (config: IAutoMappingConfig) => Promise<{
-    suggestions: IMappingSuggestion[];
-    results: {
-      total: number;
-      mapped: number;
-      skipped: number;
-    };
-  }>;
   
   // Search and filters
   setSearchTerm: (term: string) => void;
   setMappedSearchTerm: (term: string) => void;
   clearError: () => void;
   
-  // Validation
-  validateConfig: (config: IAutoMappingConfig) => { isValid: boolean; errors: string[] };
 }
 
 /**
@@ -358,71 +342,12 @@ export const useMappingData = (): UseMappingDataReturn => {
     }
   }, [dataService]);
 
-  // Auto-mapping
-  const autoMap = useCallback(async (config: IAutoMappingConfig) => {
-    try {
-      setError(null);
-      
-      // Validate config
-      const validation = validateConfig(config);
-      if (!validation.isValid) {
-        throw new Error(validation.errors.join(', '));
-      }
-
-      // Generate suggestions using unified types
-      const suggestions = await generateMappingSuggestions(
-        unmappedSpecialties,
-        mappings,
-        learnedMappings,
-        config
-      );
-
-      // Create mappings from ALL suggestions (no confidence threshold)
-      for (const suggestion of suggestions) {
-        await dataService.createSpecialtyMapping({
-          id: crypto.randomUUID(),
-          standardizedName: suggestion.standardizedName,
-          sourceSpecialties: suggestion.specialties.map((s: any) => ({
-            id: crypto.randomUUID(),
-            specialty: s.name,
-            originalName: s.name,
-            surveySource: s.surveySource,
-            mappingId: ''
-          })),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
-
-      // Calculate results
-      const results = calculateAutoMappingResults(suggestions, config);
-
-      // Refresh data
-      await loadData();
-      
-      return { 
-        suggestions, 
-        results: {
-          total: results.total,
-          mapped: results.mapped,
-          skipped: results.skipped
-        }
-      };
-    } catch (err) {
-      setError('Failed to process auto-mapping');
-      console.error('Auto-mapping error:', err);
-      throw err;
-    }
-  }, [unmappedSpecialties, mappings, learnedMappings, dataService, loadData]);
 
   // Utility functions
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
-  const validateConfig = useCallback((config: IAutoMappingConfig) => {
-    return validateMappingConfig(config);
-  }, []);
 
   // Select all specialties (filtered by current search)
   const selectAllSpecialties = useCallback(() => {
@@ -472,15 +397,9 @@ export const useMappingData = (): UseMappingDataReturn => {
      clearAllMappings,
      removeLearnedMapping,
     
-    // Auto-mapping
-    autoMap,
-    
     // Search and filters
     setSearchTerm,
     setMappedSearchTerm,
-    clearError,
-    
-    // Validation
-    validateConfig
+    clearError
   };
 };

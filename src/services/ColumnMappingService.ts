@@ -1,4 +1,4 @@
-import { IColumnMapping, IColumnInfo, IAutoMappingConfig } from '../types/column';
+import { IColumnMapping, IColumnInfo } from '../types/column';
 import { getDataService } from './DataService';
 
 /**
@@ -62,18 +62,6 @@ export class ColumnMappingService {
     }
   }
 
-  async autoMapColumns(config: IAutoMappingConfig): Promise<Array<{
-    standardizedName: string;
-    columns: IColumnInfo[];
-    confidence: number;
-  }>> {
-    try {
-      return await this.dataService.autoMapColumns(config);
-    } catch (error) {
-      console.error('Error auto-mapping columns:', error);
-      return [];
-    }
-  }
 
   async getUnmappedColumns(): Promise<IColumnInfo[]> {
     try {

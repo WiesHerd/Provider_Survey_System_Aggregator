@@ -843,11 +843,18 @@ export class AnalyticsDataService {
   private createAggregatedRecord(rows: NormalizedRow[], key: string): AggregatedData {
     const firstRow = rows[0];
     
+    // Extract original specialty name from raw data
+    const originalSpecialty = firstRow.rawData?.specialty || 
+                             firstRow.rawData?.Specialty || 
+                             firstRow.rawData?.normalizedSpecialty || 
+                             firstRow.specialty || 'Unknown';
+
     // Initialize aggregated record
     const aggregatedRecord: AggregatedData = {
       standardizedName: firstRow.specialty,
       surveySource: firstRow.surveySource,
       surveySpecialty: firstRow.specialty,
+      originalSpecialty: originalSpecialty,
       geographicRegion: firstRow.region,
       providerType: firstRow.providerType,
       surveyYear: firstRow.surveyYear,
@@ -990,10 +997,17 @@ export class AnalyticsDataService {
       
       console.log('🔍 AnalyticsDataService: Found metric rows - TCC:', !!tccRow, 'wRVU:', !!wrvuRow, 'CF:', !!cfRow);
       
+      // Extract original specialty name from raw data
+      const originalSpecialty = representativeRow.rawData?.specialty || 
+                               representativeRow.rawData?.Specialty || 
+                               representativeRow.rawData?.normalizedSpecialty || 
+                               representativeRow.specialty || 'Unknown';
+
       const aggregatedRecord: AggregatedData = {
         standardizedName: representativeRow.specialty,
         surveySource: representativeRow.surveySource as any,
         surveySpecialty: representativeRow.specialty,
+        originalSpecialty: originalSpecialty,
         geographicRegion: representativeRow.region as any,
         providerType: representativeRow.providerType as any,
         surveyYear: representativeRow.surveyYear,

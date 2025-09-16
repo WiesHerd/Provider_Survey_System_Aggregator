@@ -144,76 +144,6 @@ export const useRegionMappingData = () => {
     }
   }, [dataService]);
 
-  // Auto-map regions
-  const autoMap = useCallback(async (config: any) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const unmapped = await dataService.getUnmappedRegions();
-      
-      // Group regions by similarity
-      const regionGroups = new Map<string, IUnmappedRegion[]>();
-      
-      unmapped.forEach(region => {
-        const normalizedName = region.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-        const words = normalizedName.split(/\s+/).filter((w: string) => w.length > 2);
-        
-        // Find similar regions
-        let grouped = false;
-        for (const [groupKey, groupRegions] of regionGroups.entries()) {
-          const groupWords = groupKey.split(/\s+/);
-          const commonWords = words.filter((w: string) => groupWords.includes(w));
-          
-          if (commonWords.length > 0 && commonWords.length / Math.max(words.length, groupWords.length) >= 0.5) {
-            groupRegions.push(region);
-            grouped = true;
-            break;
-          }
-        }
-        
-        if (!grouped) {
-          regionGroups.set(words.join(' '), [region]);
-        }
-      });
-
-      // Create mappings for each group
-      const newMappings: IRegionMapping[] = [];
-      
-      for (const [groupKey, regions] of regionGroups.entries()) {
-        if (regions.length > 1) {
-          const standardizedName = regions[0].name; // Use the first region as the standard
-          const mapping: IRegionMapping = {
-            id: `region_${Date.now()}_${Math.random()}`,
-            standardizedName,
-            sourceRegions: regions.map(region => ({
-              region: region.name,
-              surveySource: region.surveySource,
-              frequency: region.frequency
-            })),
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          
-          newMappings.push(mapping);
-        }
-      }
-
-      // Save new mappings
-      for (const mapping of newMappings) {
-        await dataService.createRegionMapping(mapping);
-      }
-
-      // Reload data
-      await loadData();
-      
-    } catch (err) {
-      console.error('Auto-mapping failed:', err);
-      setError('Auto-mapping failed');
-    } finally {
-      setLoading(false);
-    }
-  }, [detectUnmappedRegions, dataService, loadData]);
 
   // Create region mapping
   const createMapping = useCallback(async (mapping: Partial<IRegionMapping>) => {
@@ -385,8 +315,6 @@ export const useRegionMappingData = () => {
     clearAllMappings,
     removeLearnedMapping,
     
-    // Auto-mapping
-    autoMap,
     
     // Search and filters
     setSearchTerm,

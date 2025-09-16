@@ -2,9 +2,7 @@ import { useEffect } from 'react';
 import { useMappingState } from './useMappingState';
 import { useMappingSearch } from './useMappingSearch';
 import { useMappingOperations } from './useMappingOperations';
-import { useAutoMapping } from './useAutoMapping';
 import { useMappingSelection } from './useMappingSelection';
-import { IAutoMappingConfig, IMappingSuggestion } from '../types/mapping';
 
 /**
  * Unified hook that combines all focused mapping hooks
@@ -70,14 +68,6 @@ export const useMappingDataUnified = () => {
     setErrorState
   );
 
-  // Auto-mapping
-  const { autoMap, validateConfig } = useAutoMapping(
-    unmappedSpecialties,
-    mappings,
-    learnedMappings,
-    loadData,
-    setErrorState
-  );
 
   // Selection management
   const {
@@ -167,9 +157,6 @@ export const useMappingDataUnified = () => {
     clearAllMappings,
     removeLearnedMapping,
     
-    // Auto-mapping
-    autoMap,
-    validateConfig,
     
     // Search and filters
     setSearchTerm: handleSearchChange,

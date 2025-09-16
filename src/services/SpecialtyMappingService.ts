@@ -1,4 +1,4 @@
-import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, IAutoMappingConfig, ISurveyData, ISpecialtyGroup, IMappingSuggestion } from '../types/specialty';
+import { ISpecialtyMapping, ISourceSpecialty, IUnmappedSpecialty, ISurveyData, ISpecialtyGroup } from '../types/specialty';
 import { stringSimilarity } from 'string-similarity-js';
 import { LocalStorageService } from './StorageService';
 import { getDataService } from './DataService';
@@ -119,23 +119,6 @@ export class SpecialtyMappingService {
     }
   }
 
-  async autoMapSpecialties(config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {
-    try {
-      return await this.dataService.autoMapSpecialties(config);
-    } catch (error) {
-      console.error('Error auto-mapping specialties:', error);
-      return [];
-    }
-  }
-
-  async suggestMappings(specialty: IUnmappedSpecialty, config: IAutoMappingConfig): Promise<ISpecialtyMapping[]> {
-    try {
-      return await this.dataService.suggestSpecialtyMappings(specialty, config);
-    } catch (error) {
-      console.error('Error suggesting mappings:', error);
-      return [];
-    }
-  }
 
   async updateMapping(mappingId: string, updates: Partial<ISpecialtyMapping>): Promise<ISpecialtyMapping> {
     try {

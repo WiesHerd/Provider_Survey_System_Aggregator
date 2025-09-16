@@ -14,8 +14,3 @@ export interface IColumnMapping {
   createdAt: Date;
   updatedAt: Date;
 }
-
-export interface IAutoMappingConfig {
-  confidenceThreshold: number;
-  includeDataTypeMatching: boolean;
-} 

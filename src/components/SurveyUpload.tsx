@@ -7,6 +7,7 @@ import { getDataService } from '../services/DataService';
 import { ISurveyRow, ISurveyMetadata } from '../types/survey';
 import LoadingSpinner from './ui/loading-spinner';
 import { useYear } from '../contexts/YearContext';
+import { useProviderContext } from '../contexts/ProviderContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
@@ -93,6 +94,7 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 const SurveyUpload: React.FC = () => {
   const dataService = getDataService();
   const { currentYear } = useYear();
+  const { selectedProviderType } = useProviderContext();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [providerType, setProviderType] = useState<ProviderType>('PHYSICIAN');
@@ -192,7 +194,7 @@ const SurveyUpload: React.FC = () => {
         const surveys = await dataService.getAllSurveys();
         console.log('Loaded surveys:', surveys);
         
-        // Filter surveys by current year
+        // Filter surveys by current year and provider type
         const surveysAny = surveys as any[];
         const yearFilteredSurveys = surveysAny.filter((survey: any) => {
           const surveyYear = survey.year || survey.surveyYear || '';
@@ -201,7 +203,24 @@ const SurveyUpload: React.FC = () => {
         
         console.log(`Filtered surveys for year ${currentYear}:`, yearFilteredSurveys);
         
-        const allSurveys = yearFilteredSurveys;
+        // Filter by provider type based on Data View selection
+        let providerFilteredSurveys = yearFilteredSurveys;
+        if (selectedProviderType !== 'BOTH') {
+          providerFilteredSurveys = yearFilteredSurveys.filter((survey: any) => {
+            const surveyProviderType = survey.providerType || 'PHYSICIAN'; // Default to PHYSICIAN for legacy surveys
+            console.log('🔍 Survey provider type check:', {
+              surveyName: survey.name,
+              surveyProviderType,
+              selectedProviderType,
+              matches: surveyProviderType === selectedProviderType
+            });
+            return surveyProviderType === selectedProviderType;
+          });
+        }
+        
+        console.log(`Filtered surveys for provider type ${selectedProviderType}:`, providerFilteredSurveys);
+        
+        const allSurveys = providerFilteredSurveys;
         
         // Build lightweight survey list; fetch detailed rows only when a survey is selected
         // Remove duplicates by using a Map with a unique key
@@ -234,9 +253,15 @@ const SurveyUpload: React.FC = () => {
 
         console.log('Processed surveys:', processedSurveys);
         setUploadedSurveys(processedSurveys);
-        // Auto-select first survey if none selected
-        if (!selectedSurvey && processedSurveys.length > 0) {
-          setSelectedSurvey(processedSurveys[0].id);
+        // Auto-select first survey if none selected, or if current selection is no longer available
+        if (processedSurveys.length > 0) {
+          const currentSelectionExists = processedSurveys.some(s => s.id === selectedSurvey);
+          if (!selectedSurvey || !currentSelectionExists) {
+            setSelectedSurvey(processedSurveys[0].id);
+          }
+        } else {
+          // No surveys available, clear selection
+          setSelectedSurvey('');
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
@@ -247,7 +272,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [dataService, currentYear, justUploaded, isUploading]);
+  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -921,18 +946,21 @@ const SurveyUpload: React.FC = () => {
           </div>
 
         {/* Data Preview */}
-        {selectedSurvey && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="w-full overflow-x-auto">
-              <DataPreview
-                file={uploadedSurveys.find(s => s.id === selectedSurvey)!}
-                onError={handleError}
-                globalFilters={globalFilters}
-                onFilterChange={handleFilterChange}
-              />
+        {selectedSurvey && (() => {
+          const selectedSurveyData = uploadedSurveys.find(s => s.id === selectedSurvey);
+          return selectedSurveyData ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="w-full overflow-x-auto">
+                <DataPreview
+                  file={selectedSurveyData}
+                  onError={handleError}
+                  globalFilters={globalFilters}
+                  onFilterChange={handleFilterChange}
+                />
+              </div>
             </div>
-          </div>
-        )}
+          ) : null;
+        })()}
       </div>
     </div>
       {/* Upload Progress Modal */}

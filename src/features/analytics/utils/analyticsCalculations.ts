@@ -183,6 +183,7 @@ export const transformSurveyData = (
       standardizedName: survey.name || survey.filename || survey.id,
       surveySource: survey.name || survey.filename || survey.id,
       surveySpecialty: 'General Medicine', // Will be dynamic based on actual data
+      originalSpecialty: 'General Medicine', // Will be dynamic based on actual data
       geographicRegion: 'National', // Will be dynamic based on actual data
       providerType: 'PHYSICIAN', // Will be dynamic based on actual data
       surveyYear: survey.year?.toString() || '2025',

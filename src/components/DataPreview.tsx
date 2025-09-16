@@ -488,6 +488,15 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     );
   }
 
+  // Early return if file is undefined or null
+  if (!file || !file.id) {
+    return (
+      <div className="p-4 text-center text-gray-500">
+        No survey selected or survey data not available.
+      </div>
+    );
+  }
+
   return (
     <div className="w-full bg-white shadow-sm">
       {/* Filter Controls */}

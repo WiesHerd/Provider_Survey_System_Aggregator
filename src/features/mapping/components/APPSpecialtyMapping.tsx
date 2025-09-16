@@ -33,9 +33,6 @@ export const APPSpecialtyMapping: React.FC<APPSpecialtyMappingProps> = ({
   onMappingChange,
   onUnmappedChange
 }) => {
-  // Auto-mapping dialog state
-  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
-  const [isAutoMapping, setIsAutoMapping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [isBulkSelected, setIsBulkSelected] = useState(false);
 
@@ -179,24 +176,6 @@ export const APPSpecialtyMapping: React.FC<APPSpecialtyMappingProps> = ({
     }
   };
 
-  const handleAutoMapping = async () => {
-    try {
-      setIsAutoMapping(true);
-      const suggestions = mappingService.autoMapSpecialties(surveyData);
-      
-      // Process suggestions (this would typically show a confirmation dialog)
-      for (const suggestion of suggestions) {
-        if (suggestion.confidence > 0.8) { // High confidence auto-mapping
-          await handleCreateMapping(suggestion.suggestedMapping, [suggestion.sourceSpecialty]);
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Auto-mapping failed');
-    } finally {
-      setIsAutoMapping(false);
-      setIsAutoMapOpen(false);
-    }
-  };
 
   const handleBulkSelection = (specialties: string[], selected: boolean) => {
     if (selected) {
@@ -279,14 +258,6 @@ export const APPSpecialtyMapping: React.FC<APPSpecialtyMappingProps> = ({
               <LightBulbIcon className="h-4 w-4 mr-2" />
               Help
             </button>
-            <button
-              onClick={() => setIsAutoMapOpen(true)}
-              disabled={isAutoMapping}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-            >
-              <BoltIcon className="h-4 w-4 mr-2" />
-              {isAutoMapping ? 'Auto-Mapping...' : 'Auto-Map'}
-            </button>
           </div>
         </div>
 
@@ -302,7 +273,6 @@ export const APPSpecialtyMapping: React.FC<APPSpecialtyMappingProps> = ({
                 <div className="mt-2 text-sm text-blue-700">
                   <ul className="list-disc list-inside space-y-1">
                     <li>Map APP specialty names from different survey sources to standardized categories</li>
-                    <li>Use the Auto-Map feature to automatically suggest mappings based on similarity</li>
                     <li>Each mapping can include multiple source specialties from different surveys</li>
                     <li>APP-specific fields include certification type and practice setting</li>
                     <li>Mappings are used to normalize data across different survey sources</li>
@@ -517,34 +487,6 @@ export const APPSpecialtyMapping: React.FC<APPSpecialtyMappingProps> = ({
           </div>
         )}
 
-        {/* Auto-Mapping Dialog */}
-        {isAutoMapOpen && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Auto-Map Specialties</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Automatically map unmapped specialties to existing standardized names based on similarity.
-                </p>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => setIsAutoMapOpen(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAutoMapping}
-                    disabled={isAutoMapping}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    {isAutoMapping ? 'Mapping...' : 'Auto-Map'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </AdvancedErrorBoundary>
   );

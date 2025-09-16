@@ -1,7 +1,8 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { ProviderTypeSelector } from '../shared/components';
+import { UIProviderType } from '../types/provider';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -9,20 +10,13 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	TableCellsIcon,
-	ClipboardDocumentListIcon,
 	PresentationChartLineIcon,
 	MapIcon,
 	CalculatorIcon,
-	InformationCircleIcon,
 	DocumentChartBarIcon,
-	CpuChipIcon,
 	UserIcon,
 	CurrencyDollarIcon,
 	CircleStackIcon,
-	UserGroupIcon,
-	BuildingOfficeIcon,
-	ShieldCheckIcon,
-	ChartPieIcon,
 } from '@heroicons/react/24/outline';
 
 // Medical cross icon to represent medical specialties
@@ -49,14 +43,12 @@ interface MenuItem {
 	name: string;
 	icon: React.ComponentType<any>;
 	path: string;
-	providerTypes?: ('PHYSICIAN' | 'APP' | 'BOTH')[];
 	children?: MenuItem[];
 }
 
 interface MenuGroup {
 	name: string;
 	items: MenuItem[];
-	providerTypes?: ('PHYSICIAN' | 'APP' | 'BOTH')[];
 }
 
 const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
@@ -66,78 +58,39 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const listRef = useRef<HTMLDivElement>(null);
 	const { selectedProviderType, setProviderType } = useProviderContext();
 	
-	// Define all menu groups with provider type support
+	// Define all menu groups - same items regardless of provider type
 	const allMenuGroups: MenuGroup[] = [
 		{
 			name: 'Getting Started',
 			items: [
-				{ name: 'Home', icon: HomeIcon, path: '/dashboard', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-				{ name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-			],
-			providerTypes: ['PHYSICIAN', 'APP', 'BOTH']
+				{ name: 'Home', icon: HomeIcon, path: '/dashboard' },
+				{ name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
+			]
 		},
 		{
-			name: 'Physician Data Mapping',
+			name: 'Data Mapping',
 			items: [
-				{ name: 'Physician Specialties', icon: MedicalCrossIcon, path: '/physician/specialty-mapping', providerTypes: ['PHYSICIAN'] },
-				{ name: 'Physician Provider Types', icon: UserIcon, path: '/physician/provider-type-mapping', providerTypes: ['PHYSICIAN'] },
-				{ name: 'Physician Regions', icon: MapIcon, path: '/physician/region-mapping', providerTypes: ['PHYSICIAN'] },
-				{ name: 'Physician Comp Metrics', icon: CurrencyDollarIcon, path: '/physician/variable-mapping', providerTypes: ['PHYSICIAN'] },
-				{ name: 'Physician Other Mappings', icon: TableCellsIcon, path: '/physician/column-mapping', providerTypes: ['PHYSICIAN'] },
-			],
-			providerTypes: ['PHYSICIAN']
-		},
-		{
-			name: 'APP Data Mapping',
-			items: [
-				{ name: 'APP Specialties', icon: MedicalCrossIcon, path: '/app/specialty-mapping', providerTypes: ['APP'] },
-				{ name: 'APP Provider Types', icon: UserGroupIcon, path: '/app/provider-type-mapping', providerTypes: ['APP'] },
-				{ name: 'APP Practice Settings', icon: BuildingOfficeIcon, path: '/app/practice-setting-mapping', providerTypes: ['APP'] },
-				{ name: 'APP Supervision Levels', icon: ShieldCheckIcon, path: '/app/supervision-level-mapping', providerTypes: ['APP'] },
-				{ name: 'APP Comp Metrics', icon: CurrencyDollarIcon, path: '/app/variable-mapping', providerTypes: ['APP'] },
-				{ name: 'APP Other Mappings', icon: TableCellsIcon, path: '/app/column-mapping', providerTypes: ['APP'] },
-			],
-			providerTypes: ['APP']
+				{ name: 'Specialties', icon: MedicalCrossIcon, path: '/specialty-mapping' },
+				{ name: 'Provider Types', icon: UserIcon, path: '/provider-type-mapping' },
+				{ name: 'Regions', icon: MapIcon, path: '/region-mapping' },
+				{ name: 'Comp Metrics', icon: CurrencyDollarIcon, path: '/variable-mapping' },
+				{ name: 'Other Column Mappings', icon: TableCellsIcon, path: '/column-mapping' },
+			]
 		},
 		{
 			name: 'Analytics & Reports',
 			items: [
-				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value', providerTypes: ['PHYSICIAN', 'APP', 'BOTH'] },
-			],
-			providerTypes: ['PHYSICIAN', 'APP', 'BOTH']
-		},
-		{
-			name: 'Cross-Provider Analytics',
-			items: [
-				{ name: 'Provider Comparison', icon: ChartPieIcon, path: '/cross-provider/comparison', providerTypes: ['BOTH'] },
-				{ name: 'Market Analysis', icon: PresentationChartLineIcon, path: '/cross-provider/market-analysis', providerTypes: ['BOTH'] },
-				{ name: 'Compensation Trends', icon: ChartBarIcon, path: '/cross-provider/trends', providerTypes: ['BOTH'] },
-			],
-			providerTypes: ['BOTH']
+				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data' },
+				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
+				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
+				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
+				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
+			]
 		}
 	];
 
-	// Filter menu groups based on selected provider type
-	const menuGroups = useMemo(() => {
-		return allMenuGroups.filter(group => {
-			// Show group if it supports the current provider type
-			return group.providerTypes?.includes(selectedProviderType) || 
-				   group.providerTypes?.includes('BOTH') ||
-				   !group.providerTypes; // Show if no provider type restriction
-		}).map(group => ({
-			...group,
-			items: group.items.filter(item => {
-				// Show item if it supports the current provider type
-				return item.providerTypes?.includes(selectedProviderType) || 
-					   item.providerTypes?.includes('BOTH') ||
-					   !item.providerTypes; // Show if no provider type restriction
-			})
-		}));
-	}, [selectedProviderType]);
+	// Use all menu groups - no filtering needed since we show the same items regardless of provider type
+	const menuGroups = allMenuGroups;
 
 	const handleNavigation = (path: string) => navigate(path);
 
@@ -224,15 +177,94 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			<div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
 				{isOpen && (
 					<div className="flex items-center">
-						<div className="flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg">
-							<CpuChipIcon className="w-5 h-5 text-white" />
+						<div className="w-12 h-12 flex items-center justify-center">
+							<img 
+								src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
+								alt="BenchPoint - Survey Aggregator" 
+								className="w-12 h-12 object-contain" 
+								onError={(e) => {
+									const target = e.target as HTMLImageElement;
+									console.log('Image failed to load:', target.src);
+									// Show fallback icon if image fails
+									target.style.display = 'none';
+									const parent = target.parentElement;
+									if (parent) {
+										parent.innerHTML = `
+											<svg class="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
+												<defs>
+													<linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+														<stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+														<stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+													</linearGradient>
+												</defs>
+												<circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
+												<circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+												<circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+												<circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+												<circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+												<circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+												<circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+												<line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
+												<line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
+												<line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
+												<line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+												<line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+												<line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+												<circle cx="32" cy="32" r="4" fill="white"/>
+												<circle cx="32" cy="32" r="2" fill="#4F46E5"/>
+											</svg>
+										`;
+									}
+								}} 
+							/>
 						</div>
-						<span className="ml-3 text-lg font-semibold text-gray-900">BenchPoint</span>
+						<span className="ml-3 text-lg font-semibold flex items-center">
+							<span className="text-indigo-600">Bench</span>
+							<span className="text-purple-600">Point</span>
+						</span>
 					</div>
 				)}
 				{!isOpen && (
-					<div className="flex items-center justify-center w-8 h-8 bg-indigo-600 rounded-lg mx-auto">
-						<CpuChipIcon className="w-5 h-5 text-white" />
+					<div className="w-12 h-12 flex items-center justify-center mx-auto">
+						<img 
+							src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
+							alt="BenchPoint - Survey Aggregator" 
+							className="w-12 h-12 object-contain" 
+							onError={(e) => {
+								const target = e.target as HTMLImageElement;
+								console.log('Image failed to load:', target.src);
+								// Show fallback icon if image fails
+								target.style.display = 'none';
+								const parent = target.parentElement;
+								if (parent) {
+									parent.innerHTML = `
+										<svg class="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
+											<defs>
+												<linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+													<stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+													<stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+												</linearGradient>
+											</defs>
+											<circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
+											<circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+											<circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+											<circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+											<circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+											<circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+											<circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+											<line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
+											<line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
+											<line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
+											<line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+											<line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+											<line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+											<circle cx="32" cy="32" r="4" fill="white"/>
+											<circle cx="32" cy="32" r="2" fill="#4F46E5"/>
+										</svg>
+									`;
+								}
+							}} 
+						/>
 					</div>
 				)}
 				<button
@@ -259,7 +291,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					<ProviderTypeSelector
 						value={selectedProviderType}
 						onChange={(providerType) => setProviderType(providerType, 'sidebar')}
-						showBothOption={true}
+						showBothOption={false}
 						context="navigation"
 						className="w-full"
 					/>
@@ -273,19 +305,6 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</div>
 			</nav>
 
-			{/* Footer */}
-			<div className="px-3 py-4 border-t border-gray-200">
-				{isOpen ? (
-					<div className="flex items-center text-sm text-gray-500">
-						<InformationCircleIcon className="w-4 h-4 mr-2" />
-						<span>Provider: {selectedProviderType}</span>
-					</div>
-				) : (
-					<div className="flex justify-center">
-						<InformationCircleIcon className="w-4 h-4 text-gray-400" />
-					</div>
-				)}
-			</div>
 		</div>
 	);
 };

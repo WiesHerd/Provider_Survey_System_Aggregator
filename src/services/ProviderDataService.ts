@@ -160,9 +160,8 @@ export class ProviderDataService {
     
     return allSurveys.filter(survey => {
       // Check if survey has provider type metadata
-      const surveyProviderType = (survey as any).providerType;
-      return surveyProviderType === providerType;
-    });
+      return survey.providerType === providerType;
+    }) as Survey[];
   }
 
   /**
@@ -367,7 +366,8 @@ export class ProviderDataService {
   getCacheStatus(): Record<ProviderType, boolean> {
     return {
       PHYSICIAN: this.cache.has('PHYSICIAN'),
-      APP: this.cache.has('APP')
+      APP: this.cache.has('APP'),
+      CUSTOM: this.cache.has('CUSTOM')
     };
   }
 }

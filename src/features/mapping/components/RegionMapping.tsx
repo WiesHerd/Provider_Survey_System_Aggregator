@@ -13,7 +13,6 @@ import { useRegionMappingData } from '../hooks/useRegionMappingData';
 import { UnmappedRegions } from './UnmappedRegions';
 import { MappedRegions } from './MappedRegions';
 import { LearnedRegionMappings } from './LearnedRegionMappings';
-import { AutoMapping } from './AutoMapping';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 
 /**
@@ -26,9 +25,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
   onMappingChange,
   onUnmappedChange
 }) => {
-  // Auto-mapping dialog state
-  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
-  const [isAutoMapping, setIsAutoMapping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   // Custom hook for data management
@@ -66,8 +62,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     clearAllMappings,
     removeLearnedMapping,
     
-    // Auto-mapping
-    autoMap,
     
     // Search and filters
     setSearchTerm,
@@ -75,16 +69,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     clearError
   } = useRegionMappingData();
 
-  // Handle auto-mapping
-  const handleAutoMap = async (config: any) => {
-    setIsAutoMapping(true);
-    try {
-      await autoMap(config);
-      setActiveTab('mapped');
-    } finally {
-      setIsAutoMapping(false);
-    }
-  };
 
   // Handle clear all mappings
   const handleClearAllMappings = () => {
@@ -183,14 +167,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                 {activeTab === 'unmapped' && (
                   <>
                     <button
-                      onClick={() => setIsAutoMapOpen(true)}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                      title="Auto Map Regions"
-                    >
-                      <BoltIcon className="h-4 w-4 mr-2" />
-                      Auto Map
-                    </button>
-                    <button
                       onClick={selectAllRegions}
                       disabled={unmappedRegions.length === 0}
                       className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -279,18 +255,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
             </div>
           </div>
 
-          {/* Auto-Mapping Dialog */}
-          <AutoMapping
-            isOpen={isAutoMapOpen}
-            onClose={() => setIsAutoMapOpen(false)}
-            onAutoMap={handleAutoMap}
-            loading={isAutoMapping}
-            title="Auto-Map Regions"
-            description="Automatically map similar region names across your surveys"
-            iconColor="indigo"
-            iconColorClass="text-indigo-600"
-            bgColorClass="bg-indigo-100"
-          />
 
 
 
@@ -333,7 +297,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="text-indigo-600 font-medium">•</span>
-                          <span>Use auto-mapping for bulk processing with configurable confidence levels</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="text-indigo-600 font-medium">•</span>
@@ -350,8 +313,8 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                       <h4 className="font-semibold text-gray-900">Key Features</h4>
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                          <h5 className="font-medium text-gray-900 mb-2">Auto-Mapping</h5>
-                          <p className="text-sm text-gray-600">Bulk process unmapped regions with AI-powered suggestions</p>
+                          <h5 className="font-medium text-gray-900 mb-2">Manual Mapping</h5>
+                          <p className="text-sm text-gray-600">Create precise mappings with full control over region matching</p>
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                           <h5 className="font-medium text-gray-900 mb-2">Manual Mapping</h5>

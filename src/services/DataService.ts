@@ -96,17 +96,6 @@ export class DataService {
     return updatedMapping;
   }
 
-  async autoMapSpecialties(config: any): Promise<ISpecialtyMapping[]> {
-    // Fallback implementation - return empty array for now
-    console.warn('autoMapSpecialties not implemented in IndexedDBService');
-    return [];
-  }
-
-  async suggestSpecialtyMappings(specialty: IUnmappedSpecialty, config: any): Promise<ISpecialtyMapping[]> {
-    // Fallback implementation - return empty array for now
-    console.warn('suggestSpecialtyMappings not implemented in IndexedDBService');
-    return [];
-  }
 
   // Column Mapping Methods
   async getAllColumnMappings(): Promise<IColumnMapping[]> {
@@ -129,13 +118,6 @@ export class DataService {
     return await this.indexedDB.getUnmappedColumns();
   }
 
-  async autoMapColumns(config: any): Promise<Array<{
-    standardizedName: string;
-    columns: any[];
-    confidence: number;
-  }>> {
-    return await this.indexedDB.autoMapColumns(config);
-  }
 
   async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
     return await this.indexedDB.getUnmappedSpecialties();

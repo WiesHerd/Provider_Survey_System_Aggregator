@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate, useLocation, NavLink } from 'react-router-dom';
+import { useLocation, NavLink } from 'react-router-dom';
 import { IndexedDBService } from '../services/IndexedDBService';
 import {
 	HomeIcon,
@@ -8,13 +8,11 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	TableCellsIcon,
-	ClipboardDocumentListIcon,
 	PresentationChartLineIcon,
 	MapIcon,
 	CalculatorIcon,
 	InformationCircleIcon,
 	DocumentChartBarIcon,
-	CpuChipIcon,
 	UserIcon,
 	CurrencyDollarIcon,
 	CircleStackIcon,
@@ -53,13 +51,12 @@ interface MenuGroup {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
-	const navigate = useNavigate();
 	const location = useLocation();
 	const currentPath = location.pathname;
 	const listRef = useRef<HTMLDivElement>(null);
 	
 	// Simple provider type state for data view selection
-	const [selectedProviderType, setSelectedProviderType] = useState<'PHYSICIAN' | 'APP' | 'BOTH'>('PHYSICIAN');
+	const [selectedProviderType, setSelectedProviderType] = useState<'PHYSICIAN' | 'APP'>('PHYSICIAN');
 	const [availableProviderTypes, setAvailableProviderTypes] = useState<Set<string>>(new Set(['PHYSICIAN']));
 	
 	// Detect what provider types are actually loaded
@@ -87,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				
 				// If current selection is not available, default to first available
 				if (!providerTypes.has(selectedProviderType) && providerTypes.size > 0) {
-					const firstType = Array.from(providerTypes)[0] as 'PHYSICIAN' | 'APP' | 'BOTH';
+					const firstType = Array.from(providerTypes)[0] as 'PHYSICIAN' | 'APP';
 					setSelectedProviderType(firstType);
 				}
 			} catch (error) {
@@ -130,7 +127,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 		}
 	];
 
-	const handleNavigation = (path: string) => navigate(path);
 
 	// Keyboard navigation: Arrow/Home/End over visible items
 	const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
@@ -225,7 +221,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				<div className="flex items-center">
 					<div className="w-12 h-12 flex items-center justify-center">
 								 <img 
-										   src={process.env.PUBLIC_URL + '/favicon-32x32.svg?v=6'} 
+										   src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
 								   alt="BenchPoint - Survey Aggregator" 
 								   className="w-12 h-12 object-contain" 
 								  onError={(e) => {
@@ -266,8 +262,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					</div>
 					{isOpen && (
 						<span className="ml-3 font-bold text-xl flex items-center" style={{ letterSpacing: 0.5 }}>
-							<span className="text-gray-900">Bench</span>
-							<span className="text-indigo-600">Point</span>
+							<span className="text-indigo-600">Bench</span>
+							<span className="text-purple-600">Point</span>
 						</span>
 					)}
 				</div>
@@ -296,18 +292,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					</div>
 					<select
 						value={selectedProviderType}
-						onChange={(e) => setSelectedProviderType(e.target.value as 'PHYSICIAN' | 'APP' | 'BOTH')}
+						onChange={(e) => setSelectedProviderType(e.target.value as 'PHYSICIAN' | 'APP')}
 						className="w-full px-3 py-2 text-sm bg-white border-2 border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-300 transition-colors"
 						aria-label="Select data view type"
 					>
 						{availableProviderTypes.has('PHYSICIAN') && (
-							<option value="PHYSICIAN">Physician</option>
+							<option value="PHYSICIAN">Physicians</option>
 						)}
 						{availableProviderTypes.has('APP') && (
-							<option value="APP">Advanced Practice Provider</option>
-						)}
-						{availableProviderTypes.has('PHYSICIAN') && availableProviderTypes.has('APP') && (
-							<option value="BOTH">Both</option>
+							<option value="APP">APP's</option>
 						)}
 					</select>
 				</div>
@@ -325,13 +318,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				<div className="px-3 py-2 border-t border-gray-100">
 					<div className="flex items-center text-xs text-gray-500">
 						<InformationCircleIcon className="w-4 h-4 mr-2" />
-						<span>View: {selectedProviderType === 'PHYSICIAN' ? 'Physician' : selectedProviderType === 'APP' ? 'APP' : 'Both'}</span>
+						<span>View: {selectedProviderType === 'PHYSICIAN' ? 'Physicians' : 'APP\'s'}</span>
 					</div>
 					{availableProviderTypes.size > 1 && (
 						<div className="text-xs text-gray-400 mt-1">
 							{Array.from(availableProviderTypes).map(type => 
-								type === 'PHYSICIAN' ? 'Physician' : 
-								type === 'APP' ? 'APP' : type
+								type === 'PHYSICIAN' ? 'Physicians' : 
+								type === 'APP' ? 'APP\'s' : type
 							).join(', ')} data loaded
 						</div>
 					)}

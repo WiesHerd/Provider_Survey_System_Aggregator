@@ -6,7 +6,10 @@
  */
 
 // Base provider types
-export type ProviderType = 'PHYSICIAN' | 'APP';
+export type ProviderType = 'PHYSICIAN' | 'APP' | 'CUSTOM';
+
+// UI provider selection types (for navigation and UI components)
+export type UIProviderType = 'PHYSICIAN' | 'APP' | 'BOTH';
 export type PhysicianType = 'MD' | 'DO' | 'Resident' | 'Fellow';
 export type APPType = 'NP' | 'PA' | 'CRNA' | 'CNS' | 'CNM' | 'Other APP';
 
@@ -137,7 +140,7 @@ export interface Survey {
   colorAccent: string;
   metadata: any;
   // New provider-specific fields
-  providerType?: ProviderType;
+  providerType?: ProviderType | string;
   source?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -253,15 +256,15 @@ export interface APPFMVFilters extends BaseFMVFilters {
 
 // Navigation and UI interfaces
 export interface ProviderTypeSelectorProps {
-  value: 'PHYSICIAN' | 'APP' | 'BOTH';
-  onChange: (type: 'PHYSICIAN' | 'APP' | 'BOTH') => void;
+  value: UIProviderType;
+  onChange: (type: UIProviderType) => void;
   showBothOption: boolean;
   context: 'navigation' | 'analytics' | 'fmv';
   className?: string;
 }
 
 export interface NavigationState {
-  currentProviderType: 'PHYSICIAN' | 'APP' | 'BOTH';
+  currentProviderType: UIProviderType;
   lastAccessedProvider: 'PHYSICIAN' | 'APP';
   providerSpecificRoutes: {
     PHYSICIAN: string[];
@@ -274,7 +277,7 @@ export interface NavigationState {
 export interface BreadcrumbItem {
   label: string;
   path: string;
-  providerType: 'PHYSICIAN' | 'APP' | 'BOTH';
+  providerType: UIProviderType;
 }
 
 // Menu visibility logic

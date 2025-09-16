@@ -1,12 +1,12 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
+import EnhancedSidebar from './components/EnhancedSidebar';
 import PageHeader from './components/PageHeader';
 // import ProviderAwareRoutes from './components/ProviderAwareRoutes';
 import { StorageProvider } from './contexts/StorageContext';
 import { MappingProvider } from './contexts/MappingContext';
 import { YearProvider } from './contexts/YearContext';
-// import { ProviderContextProvider } from './contexts/ProviderContext';
+import { ProviderContextProvider } from './contexts/ProviderContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { PageSpinner, SuspenseSpinner } from './shared/components';
 
@@ -210,7 +210,7 @@ const PageContent = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {!isDashboard && <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
+      {!isDashboard && <EnhancedSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
       
       <div className={`flex-1 transition-all duration-300 flex flex-col ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
         {!isDashboard && (
@@ -226,6 +226,8 @@ const PageContent = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/upload" element={<SurveyUpload />} />
+              
+              {/* Legacy routes (for backward compatibility) */}
               <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
               <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
               <Route path="/region-mapping" element={<RegionMapping />} />
@@ -237,6 +239,36 @@ const PageContent = () => {
               <Route path="/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/custom-reports" element={<CustomReports />} />
               <Route path="/system-settings" element={<SystemSettings />} />
+              
+              {/* Provider-specific routes */}
+              <Route path="/physician/specialty-mapping" element={<SpecialtyMapping />} />
+              <Route path="/physician/provider-type-mapping" element={<ProviderTypeMapping />} />
+              <Route path="/physician/region-mapping" element={<RegionMapping />} />
+              <Route path="/physician/variable-mapping" element={<VariableMapping />} />
+              <Route path="/physician/column-mapping" element={<ColumnMapping />} />
+              <Route path="/physician/analytics" element={<SurveyAnalytics />} />
+              <Route path="/physician/regional-analytics" element={<RegionalAnalytics />} />
+              <Route path="/physician/fair-market-value" element={<FairMarketValue />} />
+              <Route path="/physician/normalized-data" element={<NormalizedDataScreen />} />
+              <Route path="/physician/custom-reports" element={<CustomReports />} />
+              
+              <Route path="/app/specialty-mapping" element={<SpecialtyMapping />} />
+              <Route path="/app/provider-type-mapping" element={<ProviderTypeMapping />} />
+              <Route path="/app/practice-setting-mapping" element={<ProviderTypeMapping />} />
+              <Route path="/app/supervision-level-mapping" element={<ProviderTypeMapping />} />
+              <Route path="/app/variable-mapping" element={<VariableMapping />} />
+              <Route path="/app/column-mapping" element={<ColumnMapping />} />
+              <Route path="/app/analytics" element={<SurveyAnalytics />} />
+              <Route path="/app/regional-analytics" element={<RegionalAnalytics />} />
+              <Route path="/app/fair-market-value" element={<FairMarketValue />} />
+              <Route path="/app/normalized-data" element={<NormalizedDataScreen />} />
+              <Route path="/app/custom-reports" element={<CustomReports />} />
+              
+              {/* Cross-provider routes */}
+              <Route path="/cross-provider/comparison" element={<CustomReports />} />
+              <Route path="/cross-provider/market-analysis" element={<SurveyAnalytics />} />
+              <Route path="/cross-provider/trends" element={<RegionalAnalytics />} />
+              
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Suspense>
@@ -265,9 +297,11 @@ function App() {
     <StorageProvider>
       <MappingProvider>
         <YearProvider>
-          <Router basename={basename}>
-            <PageContent />
-          </Router>
+          <ProviderContextProvider>
+            <Router basename={basename}>
+              <PageContent />
+            </Router>
+          </ProviderContextProvider>
         </YearProvider>
       </MappingProvider>
     </StorageProvider>

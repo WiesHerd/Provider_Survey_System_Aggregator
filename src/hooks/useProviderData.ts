@@ -205,10 +205,12 @@ export const useMultipleProviderData = (
 ): Record<ProviderType, UseProviderDataReturn> => {
   const physicianData = useProviderData('PHYSICIAN', providerTypes.includes('PHYSICIAN'));
   const appData = useProviderData('APP', providerTypes.includes('APP'));
+  const customData = useProviderData('CUSTOM', providerTypes.includes('CUSTOM'));
 
   return {
     PHYSICIAN: physicianData,
-    APP: appData
+    APP: appData,
+    CUSTOM: customData
   };
 };
 

@@ -170,7 +170,7 @@ const Dashboard: React.FC = () => {
               {/* Logo */}
               <div className="relative">
                 <img 
-                  src={process.env.PUBLIC_URL + '/favicon-32x32.svg?v=6'} 
+                  src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
                   alt="BenchPoint Logo" 
                   className="w-16 h-16 object-contain transition-transform duration-300 hover:scale-110 hover:rotate-12 cursor-pointer"
                   onError={(e) => {
@@ -211,8 +211,8 @@ const Dashboard: React.FC = () => {
               </div>
               {/* Brand Name */}
               <div className="text-3xl font-bold">
-                <span className="text-gray-800">Bench</span>
-                <span className="text-indigo-600">Point</span>
+                <span className="text-indigo-600">Bench</span>
+                <span className="text-purple-600">Point</span>
               </div>
             </div>
           </div>

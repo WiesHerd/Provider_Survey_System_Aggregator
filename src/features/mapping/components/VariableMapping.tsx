@@ -14,7 +14,6 @@ import { VariableMappingProps, IVariableMapping, IUnmappedVariable } from '../ty
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
-import { AutoMapping } from './AutoMapping';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 
 /**
@@ -31,8 +30,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   // State for editing mappings (keep for future use)
   const [editingMapping, setEditingMapping] = useState<IVariableMapping | null>(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
-  const [isAutoMapping, setIsAutoMapping] = useState(false);
   const [variableCategory, setVariableCategory] = useState<'compensation' | 'categorical'>('compensation');
 
   // Custom hook for data management
@@ -67,8 +64,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     deleteVariableMapping,
     clearAllVariableMappings,
     
-    // Auto-detection
-    autoDetectVariables,
     
     // Search and filters
     setSearchTerm,
@@ -76,23 +71,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     clearError
   } = useVariableMappingData();
 
-  // Handle auto-detection
-  const handleAutoDetect = async () => {
-    setIsAutoMapOpen(true);
-  };
-
-  // Handle auto-mapping
-  const handleAutoMap = async (config: any) => {
-    setIsAutoMapping(true);
-    try {
-      await autoDetectVariables();
-      setActiveTab('mapped');
-    } catch (error) {
-      console.error('Auto-detection failed:', error);
-    } finally {
-      setIsAutoMapping(false);
-    }
-  };
 
   // Handle clear all mappings
   const handleClearAllMappings = () => {
@@ -196,14 +174,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                 {activeTab === 'unmapped' && (
                   <>
                     <button
-                      onClick={handleAutoDetect}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                      title="Auto Map Columns"
-                    >
-                      <BoltIcon className="h-4 w-4 mr-2" />
-                      Auto Map
-                    </button>
-                    <button
                       onClick={selectAllVariables}
                       disabled={unmappedVariables.length === 0}
                       className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -301,7 +271,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
               )}
               {activeTab === 'learned' && (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">Learned mappings will appear here after auto-mapping operations.</p>
+                  <p className="text-gray-500">Learned mappings will appear here after manual mapping operations.</p>
                 </div>
               )}
             </div>
@@ -309,18 +279,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
 
 
 
-          {/* Auto-Mapping Dialog */}
-          <AutoMapping
-            isOpen={isAutoMapOpen}
-            onClose={() => setIsAutoMapOpen(false)}
-            onAutoMap={handleAutoMap}
-            loading={isAutoMapping}
-            title="Auto-Map Survey Fields"
-            description="Automatically map similar field names across your surveys"
-            iconColor="indigo"
-            iconColorClass="text-indigo-600"
-            bgColorClass="bg-indigo-100"
-          />
 
           {/* Help Modal */}
           {showHelp && (
@@ -345,6 +303,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                     <button
                       onClick={() => setShowHelp(false)}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                      title="Close help"
                     >
                       <XMarkIcon className="h-6 w-6 text-gray-400" />
                     </button>
@@ -366,7 +325,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                       <div className="space-y-2 text-gray-600">
                         <p><strong>Example:</strong> "Total Cash Compensation" from MGMA maps to "TCC" from SullivanCotter, 
                         both creating the standardized field "tcc".</p>
-                        <p><strong>Auto-Mapping:</strong> Automatically identifies similar field names and creates initial mappings.</p>
+                        <p><strong>Manual Mapping:</strong> Create precise mappings with full control over field matching.</p>
                         <p><strong>Manual Override:</strong> You can edit any mapping to change how fields are joined.</p>
                       </div>
                     </div>

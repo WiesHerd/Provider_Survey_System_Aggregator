@@ -8,7 +8,6 @@ export { useMappingDataUnified as useMappingData } from './useMappingDataUnified
 export { useMappingState } from './useMappingState';
 export { useMappingSearch } from './useMappingSearch';
 export { useMappingOperations } from './useMappingOperations';
-export { useAutoMapping } from './useAutoMapping';
 export { useMappingSelection } from './useMappingSelection';
 export { useMappingCache } from './useMappingCache';
 export { usePerformanceMonitor } from './usePerformanceMonitor';

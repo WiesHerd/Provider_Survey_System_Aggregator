@@ -40,26 +40,6 @@ export interface ISpecialtyGroup extends BaseEntity {
   updatedAt: Date;
 }
 
-/**
- * Auto-mapping configuration
- */
-export interface IAutoMappingConfig {
-  confidenceThreshold: number;
-  useExistingMappings: boolean;
-  useFuzzyMatching: boolean;
-}
-
-/**
- * Mapping suggestion from auto-mapping
- */
-export interface IMappingSuggestion {
-  standardizedName: string;
-  confidence: number;
-  specialties: Array<{
-    name: string;
-    surveySource: SurveySource;
-  }>;
-}
 
 /**
  * Survey data for mapping
@@ -99,7 +79,6 @@ export interface AutoMappingResults {
   total: number;
   mapped: number;
   skipped: number;
-  suggestions: IMappingSuggestion[];
 }
 
 /**
@@ -148,17 +127,6 @@ export interface LearnedMappingsProps {
   onRemoveMapping: (original: string) => void;
 }
 
-export interface AutoMappingProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onAutoMap: (config: IAutoMappingConfig) => Promise<void>;
-  loading?: boolean;
-  title?: string;
-  description?: string;
-  iconColor?: string;
-  iconColorClass?: string;
-  bgColorClass?: string;
-}
 
 export interface SpecialtyCardProps {
   specialty: IUnmappedSpecialty;
@@ -181,7 +149,6 @@ export interface MappingApiResponse {
 }
 
 export interface AutoMappingApiResponse {
-  suggestions: IMappingSuggestion[];
   results: AutoMappingResults;
 }
 

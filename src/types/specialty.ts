@@ -45,26 +45,6 @@ export interface ISpecialtyGroup extends BaseEntity {
   updatedAt: Date;
 }
 
-/**
- * @deprecated Use IAutoMappingConfig from src/features/mapping/types/mapping.ts
- */
-export interface IAutoMappingConfig {
-  confidenceThreshold: number;
-  useExistingMappings: boolean;
-  useFuzzyMatching: boolean;
-}
-
-/**
- * @deprecated Use IMappingSuggestion from src/features/mapping/types/mapping.ts
- */
-export interface IMappingSuggestion {
-  standardizedName: string;
-  confidence: number;
-  specialties: Array<{
-    name: string;
-    surveySource: SurveySource;
-  }>;
-}
 
 /**
  * @deprecated Use ISurveyData from src/features/mapping/types/mapping.ts

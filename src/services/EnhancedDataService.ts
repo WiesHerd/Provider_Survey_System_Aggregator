@@ -77,7 +77,7 @@ export class EnhancedDataService {
     const surveys = await this.indexedDB.getAllSurveys();
     
     if (providerType) {
-      return surveys.filter(survey => (survey as any).providerType === providerType);
+      return surveys.filter(survey => survey.providerType === providerType) as Survey[];
     }
     
     return surveys as Survey[];

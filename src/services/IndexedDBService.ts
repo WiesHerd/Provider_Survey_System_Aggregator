@@ -4,6 +4,7 @@ import { IColumnMapping } from '../types/column';
 import { IUnmappedVariable } from '../features/mapping/types/mapping';
 import { SurveySource } from '../shared/types';
 import { parseCSVLine } from '../shared/utils/csvParser';
+import { ProviderType } from '../types/provider';
 
 interface Survey {
   id: string;
@@ -16,6 +17,7 @@ interface Survey {
   dataPoints: number;
   colorAccent: string;
   metadata: any;
+  providerType?: ProviderType | string; // Provider type: PHYSICIAN, APP, or CUSTOM
 }
 
 interface SurveyData {
@@ -953,60 +955,6 @@ export class IndexedDBService {
     }
   }
 
-  async autoMapColumns(config: any): Promise<Array<{
-    standardizedName: string;
-    columns: any[];
-    confidence: number;
-  }>> {
-    try {
-      const unmappedColumns = await this.getUnmappedColumns();
-      console.log('Auto-mapping columns:', unmappedColumns.map(c => c.name));
-      
-      const suggestions: Array<{
-        standardizedName: string;
-        columns: any[];
-        confidence: number;
-      }> = [];
-
-      // Group columns by similarity
-      const processedColumns = new Set<string>();
-      
-      for (const column of unmappedColumns) {
-        if (processedColumns.has(column.id)) continue;
-
-        const matches = unmappedColumns
-          .filter((c: any) => !processedColumns.has(c.id))
-          .map((c: any) => ({
-            column: c,
-            similarity: this.calculateSimilarity(column.name, c.name, c.dataType, column.dataType, config)
-          }))
-          .filter(match => {
-            console.log(`Similarity between "${column.name}" and "${match.column.name}": ${match.similarity}`);
-            return match.similarity >= config.confidenceThreshold;
-          })
-          .sort((a, b) => b.similarity - a.similarity);
-
-        if (matches.length > 0) {
-          const matchedColumns = matches.map(m => m.column);
-          matchedColumns.forEach(c => processedColumns.add(c.id));
-
-          console.log(`Creating mapping for "${column.name}" with ${matchedColumns.length} columns:`, 
-            matchedColumns.map(c => c.name));
-
-          suggestions.push({
-            standardizedName: this.generateStandardizedName(matchedColumns),
-            columns: matchedColumns,
-            confidence: matches[0].similarity
-          });
-        }
-      }
-
-      return suggestions;
-    } catch (error) {
-      console.error('Error in auto-mapping columns:', error);
-      return [];
-    }
-  }
 
   private calculateSimilarity(name1: string, name2: string, type1: string, type2: string, config: any): number {
     // Normalize names

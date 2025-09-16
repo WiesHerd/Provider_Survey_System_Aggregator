@@ -30,6 +30,7 @@ export interface AggregatedData {
   standardizedName: string;
   surveySource: string;
   surveySpecialty: string;
+  originalSpecialty: string; // Original specialty name from the survey source
   geographicRegion: string;
   providerType?: string;
   surveyYear?: string;

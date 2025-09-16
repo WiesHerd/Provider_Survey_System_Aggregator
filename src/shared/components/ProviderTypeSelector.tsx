@@ -60,14 +60,14 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       case 'PHYSICIAN':
         const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
         return {
-          text: 'Physician',
+          text: 'Physicians',
           hasData: !!physicianInfo,
           surveyCount: physicianInfo?.surveyCount || 0
         };
       case 'APP':
         const appInfo = availableTypes.find(t => t.type === 'APP');
         return {
-          text: 'Advanced Practice Provider',
+          text: 'APP\'s',
           hasData: !!appInfo,
           surveyCount: appInfo?.surveyCount || 0
         };
@@ -96,7 +96,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     if (physicianInfo) {
       options.push({
         value: 'PHYSICIAN',
-        text: 'Physician'
+        text: 'Physicians'
       });
     }
 
@@ -105,7 +105,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     if (appInfo) {
       options.push({
         value: 'APP',
-        text: 'Advanced Practice Provider'
+        text: 'APP\'s'
       });
     }
 
@@ -268,9 +268,9 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
 
     switch (value) {
       case 'PHYSICIAN':
-        return 'Physician';
+        return 'Physicians';
       case 'APP':
-        return 'APP';
+        return 'APP\'s';
       case 'BOTH':
         return 'Combined';
       default:
@@ -290,7 +290,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     if (physicianInfo) {
       options.push({
         value: 'PHYSICIAN',
-        text: 'Physician'
+        text: 'Physicians'
       });
     }
 
@@ -298,7 +298,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     if (appInfo) {
       options.push({
         value: 'APP',
-        text: 'APP'
+        text: 'APP\'s'
       });
     }
 

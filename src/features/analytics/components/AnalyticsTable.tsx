@@ -97,11 +97,9 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   const groupedData = groupBySpecialty(data);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-xl font-semibold text-gray-900">Survey Analytics Data</h3>
-        </div>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+      {/* Export button positioned at top right */}
+      <div className="flex justify-end mb-2">
         <Button
           variant="outlined"
           startIcon={<DocumentTextIcon className="w-4 h-4" />}
@@ -243,7 +241,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                       backgroundColor: 'white',
                       borderRight: '1px solid #e0e0e0',
                       zIndex: 1
-                    }}>{formatSpecialtyForDisplay(row.surveySpecialty)}</TableCell>
+                    }}>{formatSpecialtyForDisplay(row.originalSpecialty)}</TableCell>
                     <TableCell sx={{ 
                       position: 'sticky',
                       left: '320px',

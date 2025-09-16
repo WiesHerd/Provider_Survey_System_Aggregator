@@ -6,18 +6,18 @@
  */
 
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import { ProviderType } from '../types/provider';
+import { ProviderType, UIProviderType } from '../types/provider';
 import { providerDataService } from '../services/ProviderDataService';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 
 // Provider Context State
 interface ProviderContextState {
-  selectedProviderType: ProviderType | 'BOTH';
+  selectedProviderType: UIProviderType;
   availableProviderTypes: ProviderType[];
   isProviderDetectionEnabled: boolean;
   lastDetectionResult: any;
   providerTypeHistory: Array<{
-    providerType: ProviderType | 'BOTH';
+    providerType: UIProviderType;
     timestamp: Date;
     context: string;
   }>;
@@ -25,7 +25,7 @@ interface ProviderContextState {
 
 // Provider Context Actions
 type ProviderContextAction =
-  | { type: 'SET_PROVIDER_TYPE'; payload: { providerType: ProviderType | 'BOTH'; context?: string } }
+  | { type: 'SET_PROVIDER_TYPE'; payload: { providerType: UIProviderType; context?: string } }
   | { type: 'SET_AVAILABLE_PROVIDER_TYPES'; payload: ProviderType[] }
   | { type: 'TOGGLE_PROVIDER_DETECTION'; payload: boolean }
   | { type: 'SET_DETECTION_RESULT'; payload: any }
@@ -96,18 +96,18 @@ const providerContextReducer = (
 // Provider Context Interface
 interface ProviderContextType {
   // State
-  selectedProviderType: ProviderType | 'BOTH';
+  selectedProviderType: UIProviderType;
   availableProviderTypes: ProviderType[];
   isProviderDetectionEnabled: boolean;
   lastDetectionResult: any;
   providerTypeHistory: Array<{
-    providerType: ProviderType | 'BOTH';
+    providerType: UIProviderType;
     timestamp: Date;
     context: string;
   }>;
 
   // Actions
-  setProviderType: (providerType: ProviderType | 'BOTH', context?: string) => void;
+  setProviderType: (providerType: UIProviderType, context?: string) => void;
   setAvailableProviderTypes: (providerTypes: ProviderType[]) => void;
   toggleProviderDetection: (enabled: boolean) => void;
   setDetectionResult: (result: any) => void;
@@ -127,7 +127,7 @@ const ProviderContext = createContext<ProviderContextType | undefined>(undefined
 // Provider Context Provider Component
 interface ProviderContextProviderProps {
   children: React.ReactNode;
-  initialProviderType?: ProviderType | 'BOTH';
+  initialProviderType?: UIProviderType;
   enablePersistence?: boolean;
 }
 
@@ -201,7 +201,7 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
   }, [state.selectedProviderType, state.isProviderDetectionEnabled, enablePersistence]);
 
   // Action Handlers
-  const setProviderType = useCallback((providerType: ProviderType | 'BOTH', context?: string) => {
+  const setProviderType = useCallback((providerType: UIProviderType, context?: string) => {
     dispatch({
       type: 'SET_PROVIDER_TYPE',
       payload: { providerType, context }
@@ -341,7 +341,7 @@ export const useProviderDetection = () => {
       context.setDetectionResult(result);
       
       if (result.providerType !== 'UNKNOWN' && result.confidence >= 0.6) {
-        context.setProviderType(result.providerType as ProviderType, 'auto-detection');
+        context.setProviderType(result.providerType as UIProviderType, 'auto-detection');
         return result;
       }
       
