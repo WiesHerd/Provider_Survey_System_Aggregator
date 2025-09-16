@@ -25,12 +25,22 @@ const NormalizedDataScreen = lazy(() => import('./features/normalized/components
 const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 
+// APP-specific components
+const APPSpecialtyMapping = lazy(() => import('./features/mapping/components/APPSpecialtyMapping').then(module => ({ default: module.APPSpecialtyMapping })));
+const APPProviderTypeMapping = lazy(() => import('./features/mapping/components/APPProviderTypeMapping').then(module => ({ default: module.APPProviderTypeMapping })));
+const APPPracticeSettingMapping = lazy(() => import('./features/mapping/components/APPPracticeSettingMapping').then(module => ({ default: module.APPPracticeSettingMapping })));
+const APPSupervisionLevelMapping = lazy(() => import('./features/mapping/components/APPSupervisionLevelMapping').then(module => ({ default: module.APPSupervisionLevelMapping })));
+const APPColumnMapping = lazy(() => import('./features/mapping/components/APPColumnMapping').then(module => ({ default: module.APPColumnMapping })));
+const APPVariableMapping = lazy(() => import('./features/mapping/components/APPVariableMapping').then(module => ({ default: module.APPVariableMapping })));
+const APPAnalytics = lazy(() => import('./features/analytics/components/APPAnalytics').then(module => ({ default: module.APPAnalytics })));
+const APPFMV = lazy(() => import('./features/fmv/components/APPFMV').then(module => ({ default: module.APPFMV })));
+
 // Loading component for Suspense fallback
-const AppLoadingSpinner = () => (
-  <div className="flex items-center justify-center h-64">
-    <PageSpinner message="Initializing application..." />
-  </div>
-);
+// const AppLoadingSpinner = () => (
+//   <div className="flex items-center justify-center h-64">
+//     <PageSpinner message="Initializing application..." />
+//   </div>
+// );
 
 const PageContent = () => {
   const location = useLocation();
@@ -226,11 +236,25 @@ const PageContent = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/upload" element={<SurveyUpload />} />
+              
+              {/* Legacy Physician Routes */}
               <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
               <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
               <Route path="/region-mapping" element={<RegionMapping />} />
               <Route path="/variable-mapping" element={<VariableMapping />} />
               <Route path="/column-mapping" element={<ColumnMapping />} />
+              
+              {/* APP-Specific Routes */}
+              <Route path="/app/specialty-mapping" element={<APPSpecialtyMapping />} />
+              <Route path="/app/provider-type-mapping" element={<APPProviderTypeMapping />} />
+              <Route path="/app/practice-setting-mapping" element={<APPPracticeSettingMapping />} />
+              <Route path="/app/supervision-level-mapping" element={<APPSupervisionLevelMapping />} />
+              <Route path="/app/variable-mapping" element={<APPVariableMapping />} />
+              <Route path="/app/column-mapping" element={<APPColumnMapping />} />
+              <Route path="/app/analytics" element={<APPAnalytics />} />
+              <Route path="/app/fair-market-value" element={<APPFMV />} />
+              
+              {/* Analytics & Reports */}
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />

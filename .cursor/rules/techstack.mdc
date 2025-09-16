@@ -1,5 +1,183 @@
 ---
-description:
-globs:
+description: Survey Aggregator - Enterprise Analytics Platform Rules
+globs: ["**/*"]
 alwaysApply: true
 ---
+
+# Survey Aggregator - Enterprise Analytics Platform
+
+## 🔍 Project Purpose
+This is a world-class, enterprise-grade survey data aggregation system used by physician compensation administrators to analyze and compare compensation data across multiple survey sources (MGMA, SullivanCotter, Gallagher, etc.). The system provides advanced analytics, filtering, and reporting capabilities for healthcare compensation benchmarking.
+
+The system must handle:
+- Multi-source survey data upload and processing (CSV files)
+- Advanced specialty and column mapping with machine learning
+- Real-time analytics with filtering and aggregation
+- Export capabilities for compensation reports
+- IndexedDB-based client-side storage for Vercel deployment
+
+---
+
+## �� Tech Stack & Tools
+- React 18+ with TypeScript
+- IndexedDB for client-side data storage (no backend required)
+- **UI Libraries**: Material-UI (MUI) + Custom shadcn/ui components + Heroicons
+- AG Grid for advanced data tables
+- Tailwind CSS for styling
+- Vercel for deployment
+- CSV parsing and processing
+- Advanced analytics and statistical calculations
+
+---
+
+## 🎨 UI Library Standards - CRITICAL CONSISTENCY RULES
+
+### **Primary UI Libraries (Use in this order of preference):**
+1. **Material-UI (MUI)** - Primary component library
+   - Use for: Forms, Tables, Selects, Autocomplete, Typography, Layout
+   - Import pattern: `import { Button, TextField, Select } from '@mui/material';`
+
+2. **Custom shadcn/ui Components** - Secondary for specific needs
+   - Use for: Cards, Tabs, Custom buttons, Toast notifications
+   - Import pattern: `import { Card, CardContent } from "./ui/card";`
+   - Located in: `src/components/ui/`
+
+3. **Heroicons** - Icons only
+   - Use for: All icons throughout the application
+   - Import pattern: `import { DocumentTextIcon } from '@heroicons/react/24/outline';`
+   - Always use outline version unless solid is specifically needed
+
+4. **AG Grid** - Data tables only
+   - Use for: Complex data tables with sorting, filtering, pagination
+   - Import pattern: `import { AgGridReact } from 'ag-grid-react';`
+   - Always wrap in `AgGridWrapper` component
+
+### **UI Library Usage Rules:**
+- **NEVER mix UI libraries for the same component type** (e.g., don't use both MUI Button and shadcn Button)
+- **ALWAYS use MUI for form controls** (Select, TextField, Autocomplete, FormControl)
+- **ALWAYS use shadcn/ui for layout components** (Card, Tabs, Toast)
+- **ALWAYS use Heroicons for icons** (no other icon libraries)
+- **ALWAYS use AG Grid for data tables** (no other table libraries)
+
+---
+
+## 🧹 Clean Code Principles - ENTERPRISE STANDARDS
+
+### **SOLID Principles:**
+- **Single Responsibility**: Each component/function has one clear purpose
+- **Open/Closed**: Components open for extension, closed for modification
+- **Liskov Substitution**: Components can be replaced with their subtypes
+- **Interface Segregation**: Small, focused interfaces
+- **Dependency Inversion**: Depend on abstractions, not concretions
+
+### **Clean Code Rules:**
+- **Meaningful Names**: Variables, functions, and components must be self-documenting
+- **Small Functions**: Functions should do one thing and do it well (< 20 lines)
+- **Small Components**: Components should be focused and cohesive (< 300 lines)
+- **No Duplication**: DRY principle - Don't Repeat Yourself
+- **Error Handling**: Every function must handle errors gracefully
+- **Comments**: Code should be self-documenting, comments only for "why" not "what"
+
+### **TypeScript Standards:**
+- **Strict Mode**: Always use TypeScript strict mode
+- **No `any` Types**: Use proper interfaces and types
+- **Interface Naming**: Use descriptive names (e.g., `AnalyticsTableProps`, `SurveyDataRow`)
+- **Type Safety**: All props, state, and function parameters must be typed
+- **Generic Types**: Use generics for reusable components
+
+---
+
+## 📁 Folder Structure
+All features must be structured modularly under `/src/features`:
+
+src/
+├── components/       # Shared UI components
+│   ├── ui/          # Custom shadcn/ui components
+│   └── shared/      # Reusable business components
+├── features/
+│   ├── analytics/    # Survey analytics, filtering, data visualization
+│   ├── upload/       # Survey upload, CSV processing, validation
+│   ├── mapping/      # Specialty/column mapping, auto-mapping
+│   ├── reports/      # Custom reports, export functionality
+│   ├── dashboard/    # Main dashboard, data overview
+├── services/         # Data services (IndexedDB, DataService)
+├── types/            # TypeScript interfaces and types
+├── utils/            # Utility functions, calculations
+├── contexts/         # React contexts (Year, Storage, etc.)
+├── shared/           # Shared utilities and components
+
+Do not place feature-specific code directly in `src/` root.
+
+---
+
+## 🚨 Critical Enterprise Rules - NEVER VIOLATE
+- **NEVER break data consistency** - All data operations must maintain integrity
+- **NEVER ignore user workflow impact** - Changes must improve, not disrupt UX
+- **NEVER implement without error handling** - Graceful degradation is mandatory
+- **NEVER create components > 300 lines** - Break them down immediately
+- **NEVER mix business logic with UI components** - Separate concerns
+- **NEVER mix UI libraries for same component type** - Maintain consistency
+- **ALWAYS follow the established directory structure**
+- **ALWAYS create barrel exports (index.ts)** for clean imports
+
+---
+
+## 📊 Data Architecture Rules
+- **IndexedDB is the single source of truth** - All data stored client-side
+- **Data flows**: Upload → Processing → Mapping → Analytics → Export
+- **Survey data structure**: Surveys → SurveyData → Mappings → AggregatedData
+- **Real-time filtering** - All analytics must support dynamic filtering
+- **Data validation** - All inputs must be validated before processing
+
+---
+
+## 🎨 UI/UX Standards
+- **Minimal and professional** - Google-style UI designs, avoid rainbow colors
+- **Consistent button styling** - Rounded edges, uniform spacing, purple accent color
+- **AG Grid consistency** - Use same styling as upload screens
+- **Number formatting** - No dollar signs, proper comma separators, decimals only when needed
+- **Loading states** - Always show loading indicators for data operations
+- **Error boundaries** - Every feature needs proper error handling
+
+---
+
+## 🔧 Code Quality Standards
+- **TypeScript strict mode** - No `any` types, proper interfaces
+- **Component size limits** - < 300 lines, break down if exceeded
+- **Function size limits** - < 20 lines, break down if exceeded
+- **Custom hooks** - Extract complex state logic into reusable hooks
+- **Memoization** - Use React.memo() for expensive components
+- **Error handling** - Try-catch blocks, user-friendly error messages
+- **Logging** - Console logging for debugging (prefixed with 🔍)
+
+---
+
+## 🗂 File Naming Conventions
+- **Components**: PascalCase (e.g., `AnalyticsTable.tsx`)
+- **Hooks**: camelCase with `use` prefix (e.g., `useAnalyticsData.ts`)
+- **Utilities**: camelCase (e.g., `analyticsCalculations.ts`)
+- **Types**: camelCase (e.g., `analytics.ts`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `API_ENDPOINTS.ts`)
+- **UI Components**: kebab-case (e.g., `loading-spinner.tsx`)
+
+---
+
+## 📋 Code Review Checklist
+Before committing any code:
+- [ ] **Systems Impact Analyzed** - Full application ecosystem considered
+- [ ] **Data Flow Validated** - All data operations maintain consistency
+- [ ] **User Experience Verified** - Changes improve, not disrupt workflow
+- [ ] **Error Handling Implemented** - Graceful degradation throughout
+- [ ] **Performance Assessed** - No regression in loading or memory usage
+- [ ] **UI Library Consistency** - Correct library used for each component type
+- [ ] **Component size < 300 lines**
+- [ ] **Function size < 20 lines**
+- [ ] **TypeScript strict mode passes**
+- [ ] **Real data integration** (no mock data)
+- [ ] **Proper logging** for debugging
+
+---
+
+**Remember**: This is a **world-class, enterprise-grade application used by professionals for critical business decisions**. Every change must be made with the precision and care of a 30-year veteran developer who understands that reliability, maintainability, and user experience are paramount.
+
+**CRITICAL**: Never compromise on systems thinking, clean code principles, or UI library consistency. Every change must consider the full application ecosystem, maintain data integrity, improve user experience, and follow enterprise-grade patterns.

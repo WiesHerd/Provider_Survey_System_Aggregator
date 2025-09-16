@@ -18,6 +18,8 @@ import {
 	UserIcon,
 	CurrencyDollarIcon,
 	CircleStackIcon,
+	BuildingOfficeIcon,
+	ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 // Medical cross icon to represent medical specialties
@@ -109,7 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			]
 		},
 		{
-			name: 'Data Mapping',
+			name: 'Physician Data Mapping',
 			items: [
 				{ name: 'Specialties', icon: MedicalCrossIcon, path: '/specialty-mapping' },
 				{ name: 'Provider Types', icon: UserIcon, path: '/provider-type-mapping' },
@@ -119,13 +121,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			]
 		},
 		{
+			name: 'APP Data Mapping',
+			items: [
+				{ name: 'APP Specialties', icon: MedicalCrossIcon, path: '/app/specialty-mapping' },
+				{ name: 'APP Provider Types', icon: UserIcon, path: '/app/provider-type-mapping' },
+				{ name: 'Practice Settings', icon: BuildingOfficeIcon, path: '/app/practice-setting-mapping' },
+				{ name: 'Supervision Levels', icon: ShieldCheckIcon, path: '/app/supervision-level-mapping' },
+				{ name: 'APP Comp Metrics', icon: CurrencyDollarIcon, path: '/app/variable-mapping' },
+				{ name: 'APP Column Mappings', icon: TableCellsIcon, path: '/app/column-mapping' },
+			]
+		},
+		{
 			name: 'Analytics & Reports',
 			items: [
 				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data' },
 				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
+				{ name: 'APP Analytics', icon: PresentationChartLineIcon, path: '/app/analytics' },
 				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
 				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
+				{ name: 'APP Fair Market Value', icon: CalculatorIcon, path: '/app/fair-market-value' },
 			]
 		}
 	];
@@ -265,7 +280,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 							/>
 					</div>
 					{isOpen && (
-						<span className="ml-3 font-bold text-xl flex items-center" style={{ letterSpacing: 0.5 }}>
+						<span className="ml-3 font-bold text-xl flex items-center tracking-wide">
 							<span className="text-gray-900">Bench</span>
 							<span className="text-indigo-600">Point</span>
 						</span>
