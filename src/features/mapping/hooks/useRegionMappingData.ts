@@ -5,11 +5,15 @@ import {
   RegionMappingState 
 } from '../types/mapping';
 import { DataService } from '../../../services/DataService';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 /**
  * Custom hook for managing region mapping data
  */
 export const useRegionMappingData = () => {
+  // Provider context
+  const { selectedProviderType } = useProviderContext();
+  
   // State
   const [mappings, setMappings] = useState<IRegionMapping[]>([]);
   const [unmappedRegions, setUnmappedRegions] = useState<IUnmappedRegion[]>([]);
@@ -64,12 +68,20 @@ export const useRegionMappingData = () => {
     setError(null);
     
     try {
-      // Load region mappings (persisted)
-      const regionMappings = await dataService.getRegionMappings();
+      // Convert UI provider type to data service provider type
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
+      console.log('🔍 useRegionMappingData: Loading data with provider type:', { 
+        selectedProviderType, 
+        dataProviderType 
+      });
+      
+      // Load region mappings (persisted) with provider type filtering
+      const regionMappings = await dataService.getRegionMappings(dataProviderType);
       setMappings(regionMappings || []);
 
-      // Load unmapped regions with persistence awareness (excludes already mapped)
-      const unmapped = await dataService.getUnmappedRegions();
+      // Load unmapped regions with provider type filtering
+      const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
     } catch (err) {
@@ -78,7 +90,7 @@ export const useRegionMappingData = () => {
     } finally {
       setLoading(false);
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   // Detect unmapped regions from survey data
   const detectUnmappedRegions = useCallback(async (): Promise<IUnmappedRegion[]> => {

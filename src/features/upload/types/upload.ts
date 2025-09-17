@@ -48,6 +48,7 @@ export interface UploadFormState {
   surveyType: string;
   customSurveyType: string;
   surveyYear: string;
+  providerType: string;
   isCustom: boolean;
 }
 

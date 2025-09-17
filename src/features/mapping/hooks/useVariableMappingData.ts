@@ -5,11 +5,15 @@ import {
   VariableMappingState 
 } from '../types/mapping';
 import { DataService } from '../../../services/DataService';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 /**
  * Custom hook for managing variable mapping data
  */
 export const useVariableMappingData = () => {
+  // Provider context
+  const { selectedProviderType } = useProviderContext();
+  
   // State
   const [variableMappings, setVariableMappings] = useState<IVariableMapping[]>([]);
   const [unmappedVariables, setUnmappedVariables] = useState<IUnmappedVariable[]>([]);
@@ -53,10 +57,17 @@ export const useVariableMappingData = () => {
       setLoading(true);
       setError(null);
       
-      console.log('Loading variable mapping data...');
+      // Convert UI provider type to data service provider type
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
+      console.log('🔍 useVariableMappingData: Loading data with provider type:', { 
+        selectedProviderType, 
+        dataProviderType 
+      });
+      
       const [mappingsData, unmappedData] = await Promise.all([
-        dataService.getVariableMappings(),
-        dataService.getUnmappedVariables()
+        dataService.getVariableMappings(dataProviderType),
+        dataService.getUnmappedVariables(dataProviderType)
       ]);
       
       console.log('Loaded data:', { 
@@ -72,7 +83,7 @@ export const useVariableMappingData = () => {
     } finally {
       setLoading(false);
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   // Detect unmapped variables from survey data
   const detectUnmappedVariables = useCallback(async (): Promise<IUnmappedVariable[]> => {

@@ -56,6 +56,20 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       return { text: 'No data available', hasData: false };
     }
 
+    // Check if current selection has data, if not, show first available type
+    const currentTypeInfo = availableTypes.find(t => t.type === value);
+    if (!currentTypeInfo && availableTypes.length > 0) {
+      // Current selection has no data, show first available type
+      const firstAvailable = availableTypes[0];
+      return {
+        text: firstAvailable.type === 'PHYSICIAN' ? 'Physicians' : 
+              firstAvailable.type === 'APP' ? 'APP\'s' : 
+              firstAvailable.displayName,
+        hasData: true,
+        surveyCount: firstAvailable.surveyCount
+      };
+    }
+
     switch (value) {
       case 'PHYSICIAN':
         const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
@@ -83,6 +97,20 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   };
 
   const currentDisplay = getCurrentDisplay();
+
+  // Auto-switch to available provider type if current selection has no data
+  useEffect(() => {
+    if (!isLoading && !error && hasAnyData && availableTypes.length > 0) {
+      const currentTypeInfo = availableTypes.find(t => t.type === value);
+      if (!currentTypeInfo) {
+        // Current selection has no data, switch to first available type
+        const firstAvailable = availableTypes[0];
+        if (firstAvailable.type !== value && (firstAvailable.type === 'PHYSICIAN' || firstAvailable.type === 'APP')) {
+          onChange(firstAvailable.type as 'PHYSICIAN' | 'APP');
+        }
+      }
+    }
+  }, [availableTypes, value, hasAnyData, isLoading, error, onChange]);
 
   // Get dropdown options based on available data
   const getOptions = () => {

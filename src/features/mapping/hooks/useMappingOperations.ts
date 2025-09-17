@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';
 import { useMappingCache } from './useMappingCache';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 /**
  * Hook for managing CRUD operations
@@ -20,6 +21,9 @@ export const useMappingOperations = (
   setLoadingState: (loading: boolean) => void,
   setErrorState: (error: string | null) => void
 ) => {
+  // Provider context
+  const { selectedProviderType } = useProviderContext();
+  
   // Service instance
   const dataService = useMemo(() => getDataService(), []);
   
@@ -49,9 +53,17 @@ export const useMappingOperations = (
         return result;
       };
       
+      // Convert UI provider type to data service provider type
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
+      console.log('🔍 useMappingOperations: Loading data with provider type:', { 
+        selectedProviderType, 
+        dataProviderType 
+      });
+      
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
-        testService('mappings', () => dataService.getAllSpecialtyMappings()),
-        testService('unmapped', () => dataService.getUnmappedSpecialties()),
+        testService('mappings', () => dataService.getAllSpecialtyMappings(dataProviderType)),
+        testService('unmapped', () => dataService.getUnmappedSpecialties(dataProviderType)),
         testService('learned', () => dataService.getLearnedMappings('specialty'))
       ]);
       
@@ -79,7 +91,7 @@ export const useMappingOperations = (
       console.log('🏁 Setting loading to false');
       setLoadingState(false);
     }
-  }, [updateMappings, updateUnmappedSpecialties, updateLearnedMappings, setLoadingState, setErrorState, dataService]);
+  }, [updateMappings, updateUnmappedSpecialties, updateLearnedMappings, setLoadingState, setErrorState, dataService, selectedProviderType]);
 
   // Create single mapping
   const createMapping = useCallback(async () => {

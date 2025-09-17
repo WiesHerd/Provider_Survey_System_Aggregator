@@ -32,9 +32,9 @@ type ProviderContextAction =
   | { type: 'CLEAR_HISTORY' }
   | { type: 'RESET_TO_DEFAULT' };
 
-// Initial State
+// Initial State - will be updated by auto-detection
 const initialState: ProviderContextState = {
-  selectedProviderType: 'PHYSICIAN', // Default to PHYSICIAN instead of BOTH
+  selectedProviderType: 'PHYSICIAN', // Default fallback, will be overridden by auto-detection
   availableProviderTypes: ['PHYSICIAN', 'APP'],
   isProviderDetectionEnabled: true,
   lastDetectionResult: null,
@@ -113,6 +113,7 @@ interface ProviderContextType {
   setDetectionResult: (result: any) => void;
   clearHistory: () => void;
   resetToDefault: () => void;
+  refreshProviderTypeDetection: () => Promise<void>;
 
   // Computed Properties
   isPhysicianSelected: boolean;
@@ -167,9 +168,21 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
             const result = await providerTypeDetectionService.detectAvailableProviderTypes();
             
             if (result.availableTypes.length > 0) {
-              // Default to the first available provider type (only PHYSICIAN or APP)
-              const firstProviderType = result.availableTypes[0].type;
+              // Sort by most recent data first, then by survey count
+              const sortedTypes = result.availableTypes.sort((a, b) => {
+                // First sort by most recent data
+                if (a.lastUpdated && b.lastUpdated) {
+                  const dateDiff = b.lastUpdated.getTime() - a.lastUpdated.getTime();
+                  if (dateDiff !== 0) return dateDiff;
+                }
+                // Then by survey count
+                return b.surveyCount - a.surveyCount;
+              });
+              
+              // Default to the provider type with most recent data
+              const firstProviderType = sortedTypes[0].type;
               if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+                console.log(`🔍 Auto-detected provider type: ${firstProviderType} (${sortedTypes[0].surveyCount} surveys, last updated: ${sortedTypes[0].lastUpdated})`);
                 dispatch({
                   type: 'SET_PROVIDER_TYPE',
                   payload: { 
@@ -178,11 +191,14 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
                   }
                 });
               }
+            } else {
+              // No data available - set to a neutral state that shows "No data available"
+              console.log('🔍 No survey data found - Data View will show empty state');
+              // Don't change the provider type - let the UI show "No data available"
             }
-            // If no data available, keep the default (PHYSICIAN)
           } catch (error) {
             console.error('Failed to auto-detect provider types:', error);
-            // Keep the default (PHYSICIAN)
+            // Keep the default but don't force it
           }
         };
         
@@ -245,6 +261,41 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
     dispatch({ type: 'RESET_TO_DEFAULT' });
   }, []);
 
+  const refreshProviderTypeDetection = useCallback(async () => {
+    try {
+      console.log('🔄 Refreshing provider type detection...');
+      const result = await providerTypeDetectionService.detectAvailableProviderTypes();
+      
+      if (result.availableTypes.length > 0) {
+        // Sort by most recent data first, then by survey count
+        const sortedTypes = result.availableTypes.sort((a, b) => {
+          // First sort by most recent data
+          if (a.lastUpdated && b.lastUpdated) {
+            const dateDiff = b.lastUpdated.getTime() - a.lastUpdated.getTime();
+            if (dateDiff !== 0) return dateDiff;
+          }
+          // Then by survey count
+          return b.surveyCount - a.surveyCount;
+        });
+        
+        // Switch to the provider type with most recent data
+        const firstProviderType = sortedTypes[0].type;
+        if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+          console.log(`🔄 Auto-switching to provider type: ${firstProviderType} (${sortedTypes[0].surveyCount} surveys, last updated: ${sortedTypes[0].lastUpdated})`);
+          dispatch({
+            type: 'SET_PROVIDER_TYPE',
+            payload: { 
+              providerType: firstProviderType,
+              context: 'auto_refresh'
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh provider type detection:', error);
+    }
+  }, []);
+
   // Computed Properties
   const isPhysicianSelected = state.selectedProviderType === 'PHYSICIAN';
   const isAPPSelected = state.selectedProviderType === 'APP';
@@ -270,6 +321,7 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
     setDetectionResult,
     clearHistory,
     resetToDefault,
+    refreshProviderTypeDetection,
 
     // Computed Properties
     isPhysicianSelected,
@@ -277,6 +329,15 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
     isBothSelected,
     canSwitchToProviderType
   };
+
+  // Debug logging
+  console.log('🔍 ProviderContext: Current state', {
+    selectedProviderType: state.selectedProviderType,
+    availableProviderTypes: state.availableProviderTypes,
+    isPhysicianSelected,
+    isAPPSelected,
+    isBothSelected
+  });
 
   return (
     <ProviderContext.Provider value={contextValue}>

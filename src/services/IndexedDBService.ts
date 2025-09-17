@@ -244,6 +244,7 @@ export class IndexedDBService {
     surveyName: string,
     surveyYear: number,
     surveyType: string,
+    providerType: string,
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
     try {
@@ -260,6 +261,7 @@ export class IndexedDBService {
           name: surveyName,
           year: surveyYear.toString(),
           type: surveyType,
+          providerType: providerType, // ENTERPRISE FIX: Add provider type to survey
           uploadDate: new Date(),
           rowCount: rows.length,
           specialtyCount: 0, // Will be calculated
@@ -538,7 +540,7 @@ export class IndexedDBService {
   }
 
   // Specialty Mapping Methods
-  async getAllSpecialtyMappings(): Promise<ISpecialtyMapping[]> {
+  async getAllSpecialtyMappings(providerType?: string): Promise<ISpecialtyMapping[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['specialtyMappings', 'specialtyMappingSources'], 'readonly');
@@ -566,7 +568,36 @@ export class IndexedDBService {
           };
         });
 
-        Promise.all(mappingPromises).then(resolve).catch(reject);
+        Promise.all(mappingPromises).then((results) => {
+          console.log(`🔍 getAllSpecialtyMappings: Processing ${results.length} mappings for provider type: ${providerType}`);
+          
+          // Filter by provider type if specified
+          if (providerType) {
+            // Get all surveys to determine which survey sources belong to the specified provider type
+            this.getAllSurveys().then(async (surveys) => {
+              const surveysByProviderType = surveys.filter(survey => survey.providerType === providerType);
+              const validSurveySources = new Set(surveysByProviderType.map(s => s.type || s.name));
+              
+              console.log(`🔍 getAllSpecialtyMappings: Found ${surveysByProviderType.length} surveys for ${providerType}:`, 
+                surveysByProviderType.map(s => s.type || s.name));
+              console.log(`🔍 Valid survey sources for ${providerType}:`, Array.from(validSurveySources));
+              
+              // Filter mappings based on which survey sources they belong to
+              const filtered = results.filter((mapping: any) => {
+                // Check if any source specialty comes from a survey source with the correct provider type
+                return mapping.sourceSpecialties.some((source: any) => {
+                  return validSurveySources.has(source.surveySource);
+                });
+              });
+              
+            console.log(`🔍 getAllSpecialtyMappings: Filtered to ${filtered.length} mappings for ${providerType}`);
+            resolve(filtered);
+            }).catch(reject);
+          } else {
+            console.log(`🔍 getAllSpecialtyMappings: No filtering applied, returning all ${results.length} mappings`);
+            resolve(results);
+          }
+        }).catch(reject);
       };
     });
   }
@@ -637,7 +668,7 @@ export class IndexedDBService {
   }
 
   // Column Mapping Methods
-  async getAllColumnMappings(): Promise<IColumnMapping[]> {
+  async getAllColumnMappings(providerType?: string): Promise<IColumnMapping[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['columnMappings'], 'readonly');
@@ -645,7 +676,49 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        let mappings = request.result || [];
+        
+        // Filter by provider type if specified
+        if (providerType) {
+          console.log('🔍 getAllColumnMappings: Filtering mappings for provider type:', providerType);
+          
+          // Get all surveys to determine which survey sources belong to this provider type
+          this.getAllSurveys().then(surveys => {
+            const validSurveySources = new Set<string>();
+            surveys.forEach(survey => {
+              if (survey.providerType === providerType) {
+                validSurveySources.add(survey.name);
+                validSurveySources.add(survey.type);
+              }
+            });
+            
+            console.log('🔍 getAllColumnMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
+            
+            // Filter mappings to only include those with source columns from valid survey sources
+            const filteredMappings = mappings.filter(mapping => {
+              const hasValidSource = mapping.sourceColumns.some((source: any) => 
+                validSurveySources.has(source.surveySource)
+              );
+              
+              if (!hasValidSource) {
+                console.log('🔍 getAllColumnMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
+              }
+              
+              return hasValidSource;
+            });
+            
+            console.log('🔍 getAllColumnMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
+            resolve(filteredMappings);
+          }).catch(err => {
+            console.error('Error filtering column mappings:', err);
+            resolve(mappings); // Fallback to all mappings
+          });
+        } else {
+          console.log('🔍 getAllColumnMappings: No provider type filter, returning all', mappings.length, 'mappings');
+          resolve(mappings);
+        }
+      };
     });
   }
 
@@ -685,9 +758,11 @@ export class IndexedDBService {
     });
   }
 
-  async getUnmappedColumns(): Promise<any[]> {
+  async getUnmappedColumns(providerType?: string): Promise<any[]> {
     const surveys = await this.getAllSurveys();
-    const mappings = await this.getAllColumnMappings();
+    const mappings = await this.getAllColumnMappings(providerType);
+    
+    console.log('🔍 getUnmappedColumns: Getting unmapped columns for provider type:', providerType);
     
     const mappedNames = new Set<string>();
     mappings.forEach(mapping => {
@@ -701,6 +776,14 @@ export class IndexedDBService {
     const columnCounts = new Map<string, { count: number; sources: Set<string>; dataType: string }>();
 
     for (const survey of surveys) {
+      // Filter surveys by provider type if specified
+      if (providerType && survey.providerType !== providerType) {
+        console.log(`🔍 getUnmappedColumns: Skipping survey ${survey.id} (${survey.name}) - providerType mismatch (${survey.providerType} !== ${providerType})`);
+        continue;
+      }
+      
+      console.log(`🔍 getUnmappedColumns: Processing survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType}`);
+      
       const { rows } = await this.getSurveyData(survey.id);
       
       if (rows.length > 0) {
@@ -847,9 +930,13 @@ export class IndexedDBService {
   }
 
   // Utility Methods
-  async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
+  async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
+    console.log(`🔍 getUnmappedSpecialties: Getting unmapped specialties for provider type: ${providerType}`);
     const surveys = await this.getAllSurveys();
-    const mappings = await this.getAllSpecialtyMappings();
+    console.log(`🔍 getUnmappedSpecialties: All surveys:`, surveys.map(s => ({ id: s.id, name: s.name, providerType: s.providerType })));
+    
+    const mappings = await this.getAllSpecialtyMappings(providerType);
+    console.log(`🔍 getUnmappedSpecialties: Found ${surveys.length} surveys and ${mappings.length} mappings`);
     
     const mappedNames = new Set<string>();
     mappings.forEach(mapping => {
@@ -863,12 +950,26 @@ export class IndexedDBService {
     const specialtyCounts = new Map<string, { count: number; sources: Set<string> }>();
 
     for (const survey of surveys) {
+      // Filter surveys by provider type if specified
+      console.log(`🔍 getUnmappedSpecialties: Checking survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType} against filter: ${providerType}`);
+      
+      if (providerType && survey.providerType && survey.providerType !== providerType) {
+        console.log(`🔍 getUnmappedSpecialties: Skipping survey ${survey.id} - providerType mismatch (${survey.providerType} !== ${providerType})`);
+        continue;
+      }
+      
+      console.log(`🔍 getUnmappedSpecialties: Processing survey ${survey.id} (${survey.name})`);
+      
       const { rows } = await this.getSurveyData(survey.id);
       
       // Get survey source with proper fallbacks
       const surveySource = survey.type || survey.name || 'Unknown';
       
       rows.forEach(row => {
+        // ENTERPRISE STANDARD: No row-level filtering needed
+        // Survey-level filtering (lines 919-921) already ensures data separation
+        // If a survey was uploaded as PHYSICIAN/APP, ALL rows belong to that provider type
+        
         const specialty = row.specialty || row.Specialty || row['Provider Type'];
         if (specialty && typeof specialty === 'string' && !mappedNames.has(specialty.toLowerCase())) {
           const key = specialty.toLowerCase();
@@ -893,13 +994,16 @@ export class IndexedDBService {
       });
     });
 
+    console.log(`🔍 getUnmappedSpecialties: Returning ${unmapped.length} unmapped specialties for ${providerType}`);
     return unmapped;
   }
 
-  async getUnmappedVariables(): Promise<IUnmappedVariable[]> {
+  async getUnmappedVariables(providerType?: string): Promise<IUnmappedVariable[]> {
     try {
       const surveys = await this.getAllSurveys();
-      const mappings = await this.getVariableMappings();
+      const mappings = await this.getVariableMappings(providerType);
+      
+      console.log('🔍 getUnmappedVariables: Getting unmapped variables for provider type:', providerType);
     
     const mappedNames = new Set<string>();
     mappings.forEach(mapping => {
@@ -913,6 +1017,14 @@ export class IndexedDBService {
     const variableCounts = new Map<string, { count: number; sources: Set<string> }>();
 
     for (const survey of surveys) {
+      // Filter surveys by provider type if specified
+      if (providerType && survey.providerType !== providerType) {
+        console.log(`🔍 getUnmappedVariables: Skipping survey ${survey.id} (${survey.name}) - providerType mismatch (${survey.providerType} !== ${providerType})`);
+        continue;
+      }
+      
+      console.log(`🔍 getUnmappedVariables: Processing survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType}`);
+      
       const { rows } = await this.getSurveyData(survey.id);
       
       // Get survey source with proper fallbacks
@@ -1050,7 +1162,7 @@ export class IndexedDBService {
 
 
   // Variable Mapping Methods
-  async getVariableMappings(): Promise<any[]> {
+  async getVariableMappings(providerType?: string): Promise<any[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['variableMappings'], 'readonly');
@@ -1058,7 +1170,49 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        let mappings = request.result || [];
+        
+        // Filter by provider type if specified
+        if (providerType) {
+          console.log('🔍 getVariableMappings: Filtering mappings for provider type:', providerType);
+          
+          // Get all surveys to determine which survey sources belong to this provider type
+          this.getAllSurveys().then(surveys => {
+            const validSurveySources = new Set<string>();
+            surveys.forEach(survey => {
+              if (survey.providerType === providerType) {
+                validSurveySources.add(survey.name);
+                validSurveySources.add(survey.type);
+              }
+            });
+            
+            console.log('🔍 getVariableMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
+            
+            // Filter mappings to only include those with source variables from valid survey sources
+            const filteredMappings = mappings.filter(mapping => {
+              const hasValidSource = mapping.sourceVariables.some((source: any) => 
+                validSurveySources.has(source.surveySource)
+              );
+              
+              if (!hasValidSource) {
+                console.log('🔍 getVariableMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
+              }
+              
+              return hasValidSource;
+            });
+            
+            console.log('🔍 getVariableMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
+            resolve(filteredMappings);
+          }).catch(err => {
+            console.error('Error filtering variable mappings:', err);
+            resolve(mappings); // Fallback to all mappings
+          });
+        } else {
+          console.log('🔍 getVariableMappings: No provider type filter, returning all', mappings.length, 'mappings');
+          resolve(mappings);
+        }
+      };
     });
   }
 
@@ -1110,10 +1264,12 @@ export class IndexedDBService {
     });
   }
 
-  async getUnmappedProviderTypes(): Promise<any[]> {
+  async getUnmappedProviderTypes(providerType?: string): Promise<any[]> {
     try {
       const surveys = await this.getAllSurveys();
-      const mappings = await this.getProviderTypeMappings();
+      const mappings = await this.getProviderTypeMappings(providerType);
+      
+      console.log('🔍 getUnmappedProviderTypes: Getting unmapped provider types for provider type:', providerType);
     
       const mappedNames = new Set<string>();
       mappings.forEach(mapping => {
@@ -1127,6 +1283,11 @@ export class IndexedDBService {
       const providerTypeCounts = new Map<string, { count: number; sources: Set<string> }>();
 
       for (const survey of surveys) {
+        // Filter surveys by provider type if specified
+        if (providerType && survey.providerType && survey.providerType !== providerType) {
+          continue;
+        }
+        
         const { rows } = await this.getSurveyData(survey.id);
         
         // Get survey source with proper fallbacks
@@ -1164,10 +1325,12 @@ export class IndexedDBService {
     }
   }
 
-  async getUnmappedRegions(): Promise<any[]> {
+  async getUnmappedRegions(providerType?: string): Promise<any[]> {
     try {
       const surveys = await this.getAllSurveys();
-      const mappings = await this.getRegionMappings();
+      const mappings = await this.getRegionMappings(providerType);
+      
+      console.log('🔍 getUnmappedRegions: Getting unmapped regions for provider type:', providerType);
     
       const mappedNames = new Set<string>();
       mappings.forEach(mapping => {
@@ -1181,6 +1344,14 @@ export class IndexedDBService {
       const regionCounts = new Map<string, { count: number; sources: Set<string> }>();
 
       for (const survey of surveys) {
+        // Filter surveys by provider type if specified
+        if (providerType && survey.providerType !== providerType) {
+          console.log(`🔍 getUnmappedRegions: Skipping survey ${survey.id} (${survey.name}) - providerType mismatch (${survey.providerType} !== ${providerType})`);
+          continue;
+        }
+        
+        console.log(`🔍 getUnmappedRegions: Processing survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType}`);
+        
         const { rows } = await this.getSurveyData(survey.id);
         
         // Get survey source with proper fallbacks
@@ -1219,7 +1390,7 @@ export class IndexedDBService {
   }
 
   // Provider Type Mapping Methods
-  async getProviderTypeMappings(): Promise<any[]> {
+  async getProviderTypeMappings(providerType?: string): Promise<any[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['providerTypeMappings'], 'readonly');
@@ -1227,7 +1398,49 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        let mappings = request.result || [];
+        
+        // Filter by provider type if specified
+        if (providerType) {
+          console.log('🔍 getProviderTypeMappings: Filtering mappings for provider type:', providerType);
+          
+          // Get all surveys to determine which survey sources belong to this provider type
+          this.getAllSurveys().then(surveys => {
+            const validSurveySources = new Set<string>();
+            surveys.forEach(survey => {
+              if (survey.providerType === providerType) {
+                validSurveySources.add(survey.name);
+                validSurveySources.add(survey.type);
+              }
+            });
+            
+            console.log('🔍 getProviderTypeMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
+            
+            // Filter mappings to only include those with source provider types from valid survey sources
+            const filteredMappings = mappings.filter(mapping => {
+              const hasValidSource = mapping.sourceProviderTypes.some((source: any) => 
+                validSurveySources.has(source.surveySource)
+              );
+              
+              if (!hasValidSource) {
+                console.log('🔍 getProviderTypeMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
+              }
+              
+              return hasValidSource;
+            });
+            
+            console.log('🔍 getProviderTypeMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
+            resolve(filteredMappings);
+          }).catch(err => {
+            console.error('Error filtering provider type mappings:', err);
+            resolve(mappings); // Fallback to all mappings
+          });
+        } else {
+          console.log('🔍 getProviderTypeMappings: No provider type filter, returning all', mappings.length, 'mappings');
+          resolve(mappings);
+        }
+      };
     });
   }
 
@@ -1280,7 +1493,7 @@ export class IndexedDBService {
   }
 
   // Region Mapping Methods
-  async getRegionMappings(): Promise<any[]> {
+  async getRegionMappings(providerType?: string): Promise<any[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['regionMappings'], 'readonly');
@@ -1288,7 +1501,49 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        let mappings = request.result || [];
+        
+        // Filter by provider type if specified
+        if (providerType) {
+          console.log('🔍 getRegionMappings: Filtering mappings for provider type:', providerType);
+          
+          // Get all surveys to determine which survey sources belong to this provider type
+          this.getAllSurveys().then(surveys => {
+            const validSurveySources = new Set<string>();
+            surveys.forEach(survey => {
+              if (survey.providerType === providerType) {
+                validSurveySources.add(survey.name);
+                validSurveySources.add(survey.type);
+              }
+            });
+            
+            console.log('🔍 getRegionMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
+            
+            // Filter mappings to only include those with source regions from valid survey sources
+            const filteredMappings = mappings.filter(mapping => {
+              const hasValidSource = mapping.sourceRegions.some((source: any) => 
+                validSurveySources.has(source.surveySource)
+              );
+              
+              if (!hasValidSource) {
+                console.log('🔍 getRegionMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
+              }
+              
+              return hasValidSource;
+            });
+            
+            console.log('🔍 getRegionMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
+            resolve(filteredMappings);
+          }).catch(err => {
+            console.error('Error filtering region mappings:', err);
+            resolve(mappings); // Fallback to all mappings
+          });
+        } else {
+          console.log('🔍 getRegionMappings: No provider type filter, returning all', mappings.length, 'mappings');
+          resolve(mappings);
+        }
+      };
     });
   }
 

@@ -17,6 +17,7 @@ export interface ISourceSpecialty extends BaseEntity {
 export interface ISpecialtyMapping extends BaseEntity {
   standardizedName: string;
   sourceSpecialties: ISourceSpecialty[];
+  providerType?: 'PHYSICIAN' | 'APP'; // Provider type for filtering
   createdAt: Date;
   updatedAt: Date;
 }

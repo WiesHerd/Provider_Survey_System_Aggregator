@@ -6,6 +6,7 @@ import {
   MappingFilters
 } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 import { 
   filterUnmappedSpecialties,
   groupSpecialtiesBySurvey,
@@ -62,6 +63,9 @@ interface UseMappingDataReturn {
  * Custom hook for managing specialty mapping data
  */
 export const useMappingData = (): UseMappingDataReturn => {
+  // Provider context
+  const { selectedProviderType } = useProviderContext();
+  
   // Core state (using old types internally)
   const [mappings, setMappings] = useState<ISpecialtyMapping[]>([]);
   const [unmappedSpecialties, setUnmappedSpecialties] = useState<IUnmappedSpecialty[]>([]);
@@ -146,10 +150,17 @@ export const useMappingData = (): UseMappingDataReturn => {
       setLoading(true);
       setError(null);
       
-      console.log('Loading specialty mapping data...');
+      // Convert UI provider type to data service provider type
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
+      console.log('🔍 useMappingData: Loading specialty mapping data...', { 
+        selectedProviderType, 
+        dataProviderType,
+        contextWorking: !!selectedProviderType
+      });
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
-        dataService.getAllSpecialtyMappings(),
-        dataService.getUnmappedSpecialties(),
+        dataService.getAllSpecialtyMappings(dataProviderType),
+        dataService.getUnmappedSpecialties(dataProviderType),
         dataService.getLearnedMappings('specialty')
       ]);
       
@@ -171,7 +182,7 @@ export const useMappingData = (): UseMappingDataReturn => {
     } finally {
       setLoading(false);
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {

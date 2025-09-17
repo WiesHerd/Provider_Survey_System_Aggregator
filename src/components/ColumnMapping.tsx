@@ -18,6 +18,7 @@ import { CheckIcon } from '@heroicons/react/24/solid';
 import { getDataService } from '../services/DataService';
 import { IColumnMapping, IColumnInfo } from '../types/column';
 import { LoadingSpinner, SuspenseSpinner } from '../shared/components';
+import { useProviderContext } from '../contexts/ProviderContext';
 
 // Lazy load components for better performance
 const MappedColumns = lazy(() => import('./MappedColumns').then(module => ({ default: module.default })));
@@ -195,6 +196,9 @@ TabContent.displayName = 'TabContent';
 
 
 const ColumnMapping: React.FC = () => {
+  // Provider context
+  const { selectedProviderType } = useProviderContext();
+  
   // State for data
   const [mappings, setMappings] = useState<IColumnMapping[]>([]);
   const [unmappedColumns, setUnmappedColumns] = useState<IColumnInfo[]>([]);
@@ -224,10 +228,17 @@ const ColumnMapping: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      console.log('Starting data load...');
+      // Convert UI provider type to data service provider type
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
+      console.log('🔍 ColumnMapping: Loading data with provider type:', { 
+        selectedProviderType, 
+        dataProviderType 
+      });
+      
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
-        dataService.getAllColumnMappings(),
-        dataService.getUnmappedColumns(),
+        dataService.getAllColumnMappings(dataProviderType),
+        dataService.getUnmappedColumns(dataProviderType),
         dataService.getLearnedMappings('column')
       ]);
       
@@ -248,7 +259,7 @@ const ColumnMapping: React.FC = () => {
       setLoading(false);
       setIsLoadingData(false);
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   useEffect(() => {
     loadData();

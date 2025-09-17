@@ -49,6 +49,10 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
     onFormChange('surveyYear', e.target.value);
   };
 
+  const handleProviderTypeChange = (e: SelectChangeEvent<string>) => {
+    onFormChange('providerType', e.target.value);
+  };
+
   const handleCustomToggle = () => {
     onCustomToggle();
   };
@@ -200,6 +204,26 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
             }}
           />
         </Grid>
+
+        {/* Provider Type Selection */}
+        <Grid item xs={12} md={6}>
+          <FormControl fullWidth size="small" disabled={disabled}>
+            <InputLabel>Provider Type</InputLabel>
+            <Select
+              value={formState.providerType}
+              label="Provider Type"
+              onChange={handleProviderTypeChange}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
+            >
+              <MenuItem value="PHYSICIAN">Physicians</MenuItem>
+              <MenuItem value="APP">APPs</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
       </Grid>
 
       {/* Form Validation Warnings */}
@@ -218,6 +242,12 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
       {!formState.surveyYear && (
         <Alert severity="warning" sx={{ mt: 2 }}>
           Please select a survey year
+        </Alert>
+      )}
+
+      {!formState.providerType && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          Please select a provider type
         </Alert>
       )}
     </Box>

@@ -1,5 +1,7 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 import EnhancedSidebar from './components/EnhancedSidebar';
 import PageHeader from './components/PageHeader';
 // import ProviderAwareRoutes from './components/ProviderAwareRoutes';
@@ -9,6 +11,58 @@ import { YearProvider } from './contexts/YearContext';
 import { ProviderContextProvider } from './contexts/ProviderContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { PageSpinner, SuspenseSpinner } from './shared/components';
+import { SurveyMigrationService } from './services/SurveyMigrationService';
+
+// Create Material-UI theme
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#6366f1', // Indigo color matching the app's design
+    },
+    secondary: {
+      main: '#8b5cf6', // Purple color
+    },
+    background: {
+      default: '#ffffff',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: [
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'Roboto',
+      '"Helvetica Neue"',
+      'Arial',
+      'sans-serif',
+    ].join(','),
+  },
+  components: {
+    MuiSelect: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          },
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          '&.Mui-selected': {
+            backgroundColor: '#f3f4f6',
+            '&:hover': {
+              backgroundColor: '#e5e7eb',
+            },
+          },
+        },
+      },
+    },
+  },
+});
 
 // Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -279,6 +333,28 @@ const PageContent = () => {
 };
 
 function App() {
+  // Run migration on app startup
+  useEffect(() => {
+    const runMigration = async () => {
+      try {
+        const migrationService = SurveyMigrationService.getInstance();
+        const needsMigration = await migrationService.checkMigrationNeeded();
+        
+        if (needsMigration) {
+          console.log('🔧 Running survey migration to fix provider type tags...');
+          await migrationService.migrateSurveys();
+          console.log('✅ Survey migration completed successfully');
+        } else {
+          console.log('✅ No survey migration needed');
+        }
+      } catch (error) {
+        console.error('❌ Survey migration failed:', error);
+      }
+    };
+
+    runMigration();
+  }, []);
+
   // Derive basename from PUBLIC_URL only when available (e.g., GitHub Pages build)
   const getBasename = (): string | undefined => {
     const publicUrl = process.env.PUBLIC_URL;
@@ -294,17 +370,20 @@ function App() {
   const basename = getBasename();
 
   return (
-    <StorageProvider>
-      <MappingProvider>
-        <YearProvider>
-          <ProviderContextProvider>
-            <Router basename={basename}>
-              <PageContent />
-            </Router>
-          </ProviderContextProvider>
-        </YearProvider>
-      </MappingProvider>
-    </StorageProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <StorageProvider>
+        <MappingProvider>
+          <YearProvider>
+            <ProviderContextProvider>
+              <Router basename={basename}>
+                <PageContent />
+              </Router>
+            </ProviderContextProvider>
+          </YearProvider>
+        </MappingProvider>
+      </StorageProvider>
+    </ThemeProvider>
   );
 }
 

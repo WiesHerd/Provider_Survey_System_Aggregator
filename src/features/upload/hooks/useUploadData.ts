@@ -118,6 +118,7 @@ export const useUploadData = (
     surveyType: '',
     customSurveyType: '',
     surveyYear: '',
+    providerType: '',
     isCustom: false
   });
   
@@ -170,6 +171,7 @@ export const useUploadData = (
       formState.surveyType,
       formState.customSurveyType,
       formState.surveyYear,
+      formState.providerType,
       formState.isCustom
     );
   }, [formState]);
@@ -318,12 +320,14 @@ export const useUploadData = (
         // Upload to backend
         const surveyType = formState.isCustom ? formState.customSurveyType : formState.surveyType;
         const surveyYear = parseInt(formState.surveyYear);
+        const providerType = formState.providerType;
         
         const uploadedSurvey = await dataService.uploadSurvey(
           file,
           file.name,
           surveyYear,
-          surveyType
+          surveyType,
+          providerType
         );
         
         const processedSurvey: UploadedSurvey = {
@@ -349,6 +353,15 @@ export const useUploadData = (
       const analyticsService = new AnalyticsDataService();
       analyticsService.invalidateCache();
       console.log('🔍 Upload: Invalidated analytics cache due to new survey data');
+      
+      // Refresh provider type detection to auto-switch to the uploaded data type
+      try {
+        const { useProviderContext } = await import('../../../contexts/ProviderContext');
+        // Note: This will be handled by the component that uses this hook
+        console.log('🔄 Upload: Provider type detection refresh will be triggered by component');
+      } catch (error) {
+        console.warn('Could not trigger provider type refresh:', error);
+      }
       
       // Call callback
       onUploadComplete?.(uploadedSurveys);

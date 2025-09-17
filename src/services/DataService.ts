@@ -50,9 +50,10 @@ export class DataService {
     surveyName: string,
     surveyYear: number,
     surveyType: string,
+    providerType: string,
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
-    return await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, onProgress);
+    return await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, providerType, onProgress);
   }
 
   // Survey Data Methods
@@ -67,8 +68,8 @@ export class DataService {
 
 
   // Specialty Mapping Methods
-  async getAllSpecialtyMappings(): Promise<ISpecialtyMapping[]> {
-    return await this.indexedDB.getAllSpecialtyMappings();
+  async getAllSpecialtyMappings(providerType?: string): Promise<ISpecialtyMapping[]> {
+    return await this.indexedDB.getAllSpecialtyMappings(providerType);
   }
 
   async createSpecialtyMapping(mapping: ISpecialtyMapping): Promise<ISpecialtyMapping> {
@@ -98,8 +99,8 @@ export class DataService {
 
 
   // Column Mapping Methods
-  async getAllColumnMappings(): Promise<IColumnMapping[]> {
-    return await this.indexedDB.getAllColumnMappings();
+  async getAllColumnMappings(providerType?: string): Promise<IColumnMapping[]> {
+    return await this.indexedDB.getAllColumnMappings(providerType);
   }
 
   async createColumnMapping(mapping: IColumnMapping): Promise<IColumnMapping> {
@@ -114,13 +115,13 @@ export class DataService {
     return await this.indexedDB.clearAllColumnMappings();
   }
 
-  async getUnmappedColumns(): Promise<any[]> {
-    return await this.indexedDB.getUnmappedColumns();
+  async getUnmappedColumns(providerType?: string): Promise<any[]> {
+    return await this.indexedDB.getUnmappedColumns(providerType);
   }
 
 
-  async getUnmappedSpecialties(): Promise<IUnmappedSpecialty[]> {
-    return await this.indexedDB.getUnmappedSpecialties();
+  async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
+    return await this.indexedDB.getUnmappedSpecialties(providerType);
   }
 
   async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<Record<string, string>> {
@@ -144,12 +145,12 @@ export class DataService {
   }
 
   // Variable Mapping Methods
-  async getVariableMappings() {
-    return await this.indexedDB.getVariableMappings();
+  async getVariableMappings(providerType?: string) {
+    return await this.indexedDB.getVariableMappings(providerType);
   }
 
-  async getUnmappedVariables() {
-    return await this.indexedDB.getUnmappedVariables();
+  async getUnmappedVariables(providerType?: string) {
+    return await this.indexedDB.getUnmappedVariables(providerType);
   }
 
   async createVariableMapping(mapping: any) {
@@ -169,12 +170,12 @@ export class DataService {
   }
 
   // Provider Type Mapping Methods
-  async getProviderTypeMappings() {
-    return await this.indexedDB.getProviderTypeMappings();
+  async getProviderTypeMappings(providerType?: string) {
+    return await this.indexedDB.getProviderTypeMappings(providerType);
   }
 
-  async getUnmappedProviderTypes() {
-    return await this.indexedDB.getUnmappedProviderTypes();
+  async getUnmappedProviderTypes(providerType?: string) {
+    return await this.indexedDB.getUnmappedProviderTypes(providerType);
   }
 
   async createProviderTypeMapping(mapping: any) {
@@ -194,12 +195,12 @@ export class DataService {
   }
 
   // Region Mapping Methods
-  async getRegionMappings() {
-    return await this.indexedDB.getRegionMappings();
+  async getRegionMappings(providerType?: string) {
+    return await this.indexedDB.getRegionMappings(providerType);
   }
 
-  async getUnmappedRegions() {
-    return await this.indexedDB.getUnmappedRegions();
+  async getUnmappedRegions(providerType?: string) {
+    return await this.indexedDB.getUnmappedRegions(providerType);
   }
 
   async createRegionMapping(mapping: any) {

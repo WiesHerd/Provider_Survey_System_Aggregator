@@ -446,9 +446,9 @@ export class EnhancedDataService {
    * Legacy method for backward compatibility
    */
   async uploadSurvey(file: File, surveyName: string, surveySource: string) {
-    // Note: uploadSurvey signature expects surveyYear as number and surveyType as string
+    // Note: uploadSurvey signature expects surveyYear as number, surveyType as string, and providerType as string
     const currentYear = new Date().getFullYear();
-    return await this.indexedDB.uploadSurvey(file, surveyName, currentYear, 'compensation');
+    return await this.indexedDB.uploadSurvey(file, surveyName, currentYear, 'compensation', 'PHYSICIAN');
   }
 
   /**

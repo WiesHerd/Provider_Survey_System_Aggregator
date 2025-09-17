@@ -94,7 +94,7 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 const SurveyUpload: React.FC = () => {
   const dataService = getDataService();
   const { currentYear } = useYear();
-  const { selectedProviderType } = useProviderContext();
+  const { selectedProviderType, refreshProviderTypeDetection } = useProviderContext();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [providerType, setProviderType] = useState<ProviderType>('PHYSICIAN');
@@ -474,7 +474,13 @@ const SurveyUpload: React.FC = () => {
         rowCount: parsedRows.length
       });
 
-      
+      // Refresh provider type detection to auto-switch to the uploaded data type
+      try {
+        await refreshProviderTypeDetection();
+        console.log('🔄 Provider type detection refreshed after upload');
+      } catch (error) {
+        console.warn('Could not refresh provider type detection:', error);
+      }
 
       // State already updated above, just set the flag to prevent useEffect override
       setJustUploaded(true);

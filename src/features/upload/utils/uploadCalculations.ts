@@ -401,6 +401,7 @@ export const validateSurveyForm = (
   surveyType: string,
   customSurveyType: string,
   surveyYear: string,
+  providerType: string,
   isCustom: boolean
 ): UploadValidationResult => {
   const errors: string[] = [];
@@ -431,6 +432,13 @@ export const validateSurveyForm = (
     } else if (year < 2000 || year > currentYear + 1) {
       warnings.push(`Survey year should be between 2000 and ${currentYear + 1}`);
     }
+  }
+
+  // Validate provider type
+  if (!providerType) {
+    errors.push('Provider type is required');
+  } else if (!['PHYSICIAN', 'APP'].includes(providerType)) {
+    errors.push('Provider type must be either PHYSICIAN or APP');
   }
 
   return {

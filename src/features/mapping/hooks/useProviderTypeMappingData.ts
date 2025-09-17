@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { IProviderTypeMapping, IUnmappedProviderType } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 const dataService = getDataService();
 
@@ -50,6 +51,9 @@ interface UseProviderTypeMappingDataReturn {
  * Follows the exact same pattern as useMappingData
  */
 export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn => {
+  // Provider context
+  const { selectedProviderType } = useProviderContext();
+  
   // State
   const [mappings, setMappings] = useState<IProviderTypeMapping[]>([]);
   const [unmappedProviderTypes, setUnmappedProviderTypes] = useState<IUnmappedProviderType[]>([]);
@@ -102,10 +106,10 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       setLoading(true);
       setError(null);
       
-      // Load actual data from services
+      // Load actual data from services with provider type filtering
       const [mappingsData, unmappedData] = await Promise.all([
-        dataService.getProviderTypeMappings(),
-        dataService.getUnmappedProviderTypes()
+        dataService.getProviderTypeMappings(selectedProviderType),
+        dataService.getUnmappedProviderTypes(selectedProviderType)
       ]);
       
       setMappings(mappingsData);
@@ -118,7 +122,7 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedProviderType]);
 
   // Selection management
   const selectProviderType = useCallback((providerType: IUnmappedProviderType) => {
@@ -230,7 +234,7 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     setError(null);
   }, []);
 
-  // Load data on mount
+  // Load data on mount and when provider type changes
   useEffect(() => {
     loadData();
   }, [loadData]);
