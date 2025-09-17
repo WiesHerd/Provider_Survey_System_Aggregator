@@ -6,17 +6,10 @@
  */
 
 import React, { memo } from 'react';
-import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Autocomplete,
-  TextField,
-  Box
-} from '@mui/material';
+import { Box } from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { StandardDropdown } from '../../../shared/components';
 
 /**
  * AnalyticsFilters component for filtering analytics data
@@ -95,152 +88,61 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
         width: '100%',
         maxWidth: '100%' // Use full available width but don't stretch with table
       }}>
-        {/* Year Filter - First (leftmost) */}
-        <Box>
-          <FormControl fullWidth size="small">
-            <InputLabel>Year</InputLabel>
-            <Select
-              value={filters.year}
-              label="Year"
-              onChange={(e: any) => handleFilterChange('year', e.target.value)}
-              disableRipple
-              sx={{
-                '& .MuiSelect-select': {
-                  transition: 'none !important',
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                }
-              }}
-            >
-              <MenuItem value="All Years" disableRipple>All Years</MenuItem>
-              {availableYears.map((year) => (
-                <MenuItem key={year} value={year} disableRipple>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        {/* Year Filter */}
+        <StandardDropdown
+          value={filters.year}
+          onChange={(value) => handleFilterChange('year', value)}
+          options={availableYears}
+          label="Year"
+          placeholder="Select year..."
+          variant="select"
+          size="small"
+        />
 
         {/* Survey Source Filter */}
-        <Box>
-          <FormControl fullWidth size="small">
-            <InputLabel>Survey Source</InputLabel>
-            <Select
-              value={filters.surveySource}
-              label="Survey Source"
-              onChange={(e: any) => handleFilterChange('surveySource', e.target.value)}
-              disableRipple
-              sx={{
-                '& .MuiSelect-select': {
-                  transition: 'none !important',
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                }
-              }}
-            >
-              <MenuItem value="All Sources" disableRipple>All Sources</MenuItem>
-              {availableSources.map((source) => (
-                <MenuItem key={source} value={source} disableRipple>
-                  {source}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        <StandardDropdown
+          value={filters.surveySource}
+          onChange={(value) => handleFilterChange('surveySource', value)}
+          options={availableSources}
+          label="Survey Source"
+          placeholder="Select source..."
+          variant="select"
+          size="small"
+        />
 
         {/* Specialty Filter */}
-        <Box>
-          <Autocomplete
-            value={filters.specialty}
-            onChange={(_: any, newValue: string | null) => handleFilterChange('specialty', newValue || '')}
-            options={availableSpecialties}
-            getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
-            renderInput={(params: any) => (
-              <TextField
-                {...params}
-                label="Specialty"
-                variant="outlined"
-                size="small"
-                placeholder="Select specialty..."
-              />
-            )}
-            clearOnEscape
-            clearOnBlur
-            selectOnFocus
-            handleHomeEndKeys
-          />
-        </Box>
+        <StandardDropdown
+          value={filters.specialty}
+          onChange={(value) => handleFilterChange('specialty', value)}
+          options={availableSpecialties}
+          label="Specialty"
+          placeholder="Search specialties..."
+          getOptionLabel={formatSpecialtyForDisplay}
+          variant="autocomplete"
+          size="small"
+        />
 
         {/* Geographic Region Filter */}
-        <Box>
-          <Autocomplete
-            value={filters.geographicRegion}
-            onChange={(_: any, newValue: string | null) => handleFilterChange('geographicRegion', newValue || '')}
-            options={availableRegions}
-            renderInput={(params: any) => (
-              <TextField
-                {...params}
-                label="Geographic Region"
-                variant="outlined"
-                size="small"
-                placeholder="Select region..."
-              />
-            )}
-            clearOnEscape
-            clearOnBlur
-            selectOnFocus
-            handleHomeEndKeys
-          />
-        </Box>
+        <StandardDropdown
+          value={filters.geographicRegion}
+          onChange={(value) => handleFilterChange('geographicRegion', value)}
+          options={availableRegions}
+          label="Geographic Region"
+          placeholder="Search regions..."
+          variant="autocomplete"
+          size="small"
+        />
 
         {/* Provider Type Filter */}
-        <Box>
-          <FormControl fullWidth size="small">
-            <InputLabel>Provider Type</InputLabel>
-            <Select
-              value={filters.providerType}
-              label="Provider Type"
-              onChange={(e: any) => handleFilterChange('providerType', e.target.value)}
-              disableRipple
-              sx={{
-                '& .MuiSelect-select': {
-                  transition: 'none !important',
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  transition: 'none !important',
-                }
-              }}
-            >
-              <MenuItem value="All Types" disableRipple>All Types</MenuItem>
-              {availableProviderTypes.map((type) => (
-                <MenuItem key={type} value={type} disableRipple>
-                  {type}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        <StandardDropdown
+          value={filters.providerType}
+          onChange={(value) => handleFilterChange('providerType', value)}
+          options={availableProviderTypes}
+          label="Provider Type"
+          placeholder="Select type..."
+          variant="select"
+          size="small"
+        />
       </Box>
 
     </div>

@@ -32,9 +32,9 @@ export const APPAnalytics: React.FC = () => {
         <ProviderTypeBadge providerType="APP" size="lg" />
       </div>
 
-      {/* Analytics Content */}
+      {/* Analytics Content - Pass provider type filter */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <SurveyAnalytics />
+        <SurveyAnalytics providerTypeFilter="APP" />
       </div>
     </div>
   );

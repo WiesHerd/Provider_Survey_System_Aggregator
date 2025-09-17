@@ -8,6 +8,8 @@
 // Components
 export { AnalyticsTable } from './components/AnalyticsTable';
 export { AnalyticsFilters } from './components/AnalyticsFilters';
+export { APPAnalytics } from './components/APPAnalytics';
+export { PhysicianAnalytics } from './components/PhysicianAnalytics';
 
 // Hooks
 export { useAnalyticsData } from './hooks/useAnalyticsData';

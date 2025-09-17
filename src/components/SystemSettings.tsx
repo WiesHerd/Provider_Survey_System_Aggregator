@@ -14,6 +14,7 @@ import {
 import { InlineSpinner, ButtonSpinner } from '../shared/components';
 import { getDataService } from '../services/DataService';
 import { IndexedDBInspector } from '../utils/indexedDBInspector';
+import LearnedMappingsTrigger from './LearnedMappingsTrigger';
 
 interface StorageStats {
   usedSpace: number;
@@ -338,6 +339,25 @@ const SystemSettings: React.FC = () => {
                 >
                   Save Settings
                 </button>
+              </div>
+            </div>
+
+            {/* Learned Mappings Management */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="px-8 py-6 border-b border-gray-100">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center mr-4">
+                    <Cog6ToothIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-semibold text-gray-900">Learned Mappings</h2>
+                    <p className="text-gray-600">Apply your learned mappings to existing survey data</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8">
+                <LearnedMappingsTrigger />
               </div>
             </div>
 

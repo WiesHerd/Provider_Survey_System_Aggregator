@@ -1671,9 +1671,9 @@ export class IndexedDBService {
   // ==================== LEARNED MAPPINGS METHODS ====================
 
   /**
-   * Get learned mappings for a specific type
+   * Get learned mappings for a specific type and provider type
    */
-  async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<Record<string, string>> {
+  async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Record<string, string>> {
     const db = await this.ensureDB();
     const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
     
@@ -1686,12 +1686,17 @@ export class IndexedDBService {
         console.log(`📖 Retrieved ${request.result.length} learned mappings from IndexedDB:`, request.result);
         const mappings: Record<string, string> = {};
         request.result.forEach((item: any) => {
+          // Filter by provider type if specified
+          if (providerType && item.providerType && item.providerType !== providerType && item.providerType !== 'ALL') {
+            return; // Skip this mapping if it doesn't match the provider type
+          }
+          
           // Keep the most recent mapping for each original name
           if (!mappings[item.original]) {
             mappings[item.original] = item.corrected;
           }
         });
-        console.log(`📋 Processed learned mappings:`, mappings);
+        console.log(`📋 Processed learned mappings for provider type ${providerType || 'ALL'}:`, mappings);
         resolve(mappings);
       };
 
@@ -1700,9 +1705,9 @@ export class IndexedDBService {
   }
 
   /**
-   * Save a learned mapping
+   * Save a learned mapping with provider type
    */
-  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string): Promise<void> {
+  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string): Promise<void> {
     const db = await this.ensureDB();
     const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
     
@@ -1714,6 +1719,7 @@ export class IndexedDBService {
       const request = store.put({
         original: original.toLowerCase(),
         corrected,
+        providerType: providerType || 'ALL', // Store provider type or 'ALL' for global mappings
         createdAt: new Date(),
         updatedAt: new Date()
       });

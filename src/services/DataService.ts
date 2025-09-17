@@ -124,12 +124,12 @@ export class DataService {
     return await this.indexedDB.getUnmappedSpecialties(providerType);
   }
 
-  async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<Record<string, string>> {
-    return await this.indexedDB.getLearnedMappings(type);
+  async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Record<string, string>> {
+    return await this.indexedDB.getLearnedMappings(type, providerType);
   }
 
-  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string): Promise<void> {
-    return await this.indexedDB.saveLearnedMapping(type, original, corrected);
+  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string): Promise<void> {
+    return await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType);
   }
 
   async removeLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string): Promise<void> {

@@ -64,6 +64,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
      deleteMapping,
      clearAllMappings,
      removeLearnedMapping,
+     applyAllLearnedMappings,
     
     
     // Search and filters
@@ -295,6 +296,7 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = ({
                   searchTerm={mappedSearchTerm}
                   onSearchChange={setMappedSearchTerm}
                   onRemoveMapping={handleRemoveLearnedMapping}
+                  onApplyAllMappings={applyAllLearnedMappings}
                 />
               )}
             </div>

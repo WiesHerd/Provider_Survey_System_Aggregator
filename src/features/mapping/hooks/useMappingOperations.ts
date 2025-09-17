@@ -120,7 +120,7 @@ export const useMappingOperations = (
       await dataService.createSpecialtyMapping(newMapping);
       
       // Save as learned mapping
-      await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName);
+      await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType);
       
       // Invalidate relevant cache entries
       cache.invalidateCache('mappings');
@@ -163,7 +163,7 @@ export const useMappingOperations = (
       
       // Save each specialty as learned mapping
       for (const specialty of selectedSpecialties) {
-        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName);
+        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType);
       }
       
       // Invalidate relevant cache entries
@@ -178,7 +178,7 @@ export const useMappingOperations = (
       setErrorState('Failed to create grouped mapping');
       console.error('Error creating grouped mapping:', err);
     }
-  }, [selectedSpecialties, dataService, cache, loadData, updateSelectedSpecialties, updateLearnedMappings, setErrorState]);
+  }, [selectedSpecialties, dataService, cache, loadData, updateSelectedSpecialties, setErrorState]);
 
   // Delete mapping
   const deleteMapping = useCallback(async (mappingId: string) => {
@@ -222,8 +222,8 @@ export const useMappingOperations = (
       // Invalidate learned mappings cache
       cache.invalidateCache('learnedMappings');
       
-      // Refresh learned mappings
-      const learnedData = await dataService.getLearnedMappings('specialty');
+      // Refresh learned mappings (provider-type specific)
+      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
       updateLearnedMappings(learnedData || {});
     } catch (err) {
       setErrorState('Failed to remove learned mapping');
@@ -231,12 +231,70 @@ export const useMappingOperations = (
     }
   }, [dataService, cache, updateLearnedMappings, setErrorState]);
 
+  // Apply all learned mappings to create actual mappings (provider-type specific)
+  const applyAllLearnedMappings = useCallback(async () => {
+    try {
+      setLoadingState(true);
+      setErrorState(null);
+      
+      console.log('🚀 Applying learned mappings for provider type:', selectedProviderType);
+      
+      const learnedEntries = Object.entries(learnedMappings);
+      console.log(`Found ${learnedEntries.length} learned mappings to apply for ${selectedProviderType}`);
+      
+      let appliedCount = 0;
+      
+      for (const [originalSpecialty, standardizedSpecialty] of learnedEntries) {
+        try {
+          // Create a new mapping for this learned mapping
+          const newMapping = {
+            id: crypto.randomUUID(),
+            standardizedName: standardizedSpecialty,
+            sourceSpecialties: [{
+              id: crypto.randomUUID(),
+              specialty: originalSpecialty,
+              originalName: originalSpecialty,
+              surveySource: 'Custom' as const,
+              mappingId: standardizedSpecialty
+            }],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          // Save the mapping to the database
+          await dataService.createSpecialtyMapping(newMapping);
+          appliedCount++;
+          
+          console.log(`✅ Applied learned mapping for ${selectedProviderType}: ${originalSpecialty} -> ${standardizedSpecialty}`);
+          
+        } catch (mappingError) {
+          console.error(`❌ Failed to apply learned mapping ${originalSpecialty}:`, mappingError);
+        }
+      }
+      
+      // DO NOT clear learned mappings - they should remain for future use
+      // await dataService.clearLearnedMappings('specialty'); // REMOVED THIS LINE
+      
+      // Refresh all data
+      await loadData();
+      
+      console.log(`🎉 Successfully applied ${appliedCount} learned mappings for ${selectedProviderType}! Learned mappings remain available for future use.`);
+      
+    } catch (error) {
+      console.error('Error applying learned mappings:', error);
+      setErrorState(error instanceof Error ? error.message : 'Failed to apply learned mappings');
+    } finally {
+      setLoadingState(false);
+    }
+  }, [learnedMappings, dataService, loadData, setLoadingState, setErrorState, selectedProviderType]);
+
   return {
     loadData,
     createMapping,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
-    removeLearnedMapping
+    removeLearnedMapping,
+    applyAllLearnedMappings
   };
 };

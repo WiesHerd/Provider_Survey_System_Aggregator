@@ -2,10 +2,12 @@ import React from 'react';
 import {
   TextField,
   Typography,
-  InputAdornment
+  InputAdornment,
+  Button
 } from '@mui/material';
 import { 
-  MagnifyingGlassIcon as SearchIcon
+  MagnifyingGlassIcon as SearchIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { LearnedMappingsProps } from '../types/mapping';
 import { MappedSpecialtyItem } from './MappedSpecialtyItem';
@@ -22,7 +24,8 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
   learnedMappings,
   searchTerm,
   onSearchChange,
-  onRemoveMapping
+  onRemoveMapping,
+  onApplyAllMappings
 }) => {
   // Group learned mappings by standardized name (like Mapped Specialties screen)
   const groupedMappings = Object.entries(learnedMappings)
@@ -56,28 +59,53 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
-      <div className="mb-4">
-        <TextField
-          fullWidth
-          placeholder="Search learned mappings..."
-          value={searchTerm}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-          size="small"
-          sx={{ 
-            '& .MuiOutlinedInput-root': {
+      {/* Header with Apply All Button */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex-1 mr-4">
+          <TextField
+            fullWidth
+            placeholder="Search learned mappings..."
+            value={searchTerm}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
+            size="small"
+            sx={{ 
+              '& .MuiOutlinedInput-root': {
+                fontSize: '0.875rem',
+                height: '40px'
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon className="h-4 w-4 text-gray-400" />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </div>
+        
+        {/* Apply All Button */}
+        {Object.keys(learnedMappings).length > 0 && onApplyAllMappings && (
+          <Button
+            variant="contained"
+            startIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
+            onClick={onApplyAllMappings}
+            sx={{
+              backgroundColor: '#7c3aed',
+              '&:hover': {
+                backgroundColor: '#6d28d9',
+              },
               fontSize: '0.875rem',
-              height: '40px'
-            }
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon className="h-4 w-4 text-gray-400" />
-              </InputAdornment>
-            ),
-          }}
-        />
+              fontWeight: 500,
+              px: 3,
+              py: 1,
+              height: '40px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Apply All ({Object.keys(learnedMappings).length})
+          </Button>
+        )}
       </div>
 
       {/* Learned Mappings List - Now Grouped! */}

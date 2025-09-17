@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy, useCallback } from 'react';
 import {
-  FormControl,
-  MenuItem,
-  Select,
   Box
 } from '@mui/material';
 import { LightBulbIcon, XMarkIcon } from '@heroicons/react/24/outline';
@@ -10,6 +7,7 @@ import { getDataService } from '../../../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../../../shared/utils/formatters';
 import LoadingSpinner from '../../../components/ui/loading-spinner';
 import { useProviderContext } from '../../../contexts/ProviderContext';
+import { StandardDropdown } from '../../../shared/components';
 
 // Lazy load AG Grid to reduce initial bundle size
 const AgGridWrapper = lazy(() => import('../../../components/AgGridWrapper'));
@@ -637,115 +635,56 @@ const NormalizedDataScreen: React.FC = () => {
 
         {/* Filter Dropdowns */}
         <div className="grid grid-cols-5 gap-4">
-          <FormControl fullWidth size="small">
-            <Select
-              value={globalFilters.surveyName}
-              onChange={(event: any) => handleFilterChange('surveyName', event.target.value)}
-              displayEmpty
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            >
-              <MenuItem value="" sx={{ color: '#6b7280' }}>
-                All Survey Names
-              </MenuItem>
-              {cascadingFilterOptions.surveyNames.map((surveyName) => (
-                <MenuItem key={surveyName} value={surveyName}>
-                  {surveyName}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <StandardDropdown
+            value={globalFilters.surveyName}
+            onChange={(value) => handleFilterChange('surveyName', value)}
+            options={cascadingFilterOptions.surveyNames}
+            label="Survey Name"
+            placeholder="Search survey names..."
+            variant="autocomplete"
+            size="small"
+          />
 
-          <FormControl fullWidth size="small">
-            <Select
-              value={globalFilters.specialty}
-              onChange={(event: any) => handleFilterChange('specialty', event.target.value)}
-              displayEmpty
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            >
-              <MenuItem value="" sx={{ color: '#6b7280' }}>
-                All Specialties
-              </MenuItem>
-              {cascadingFilterOptions.specialties.map((specialty) => (
-                <MenuItem key={specialty} value={specialty}>
-                  {formatSpecialtyForDisplay(specialty)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <StandardDropdown
+            value={globalFilters.specialty}
+            onChange={(value) => handleFilterChange('specialty', value)}
+            options={cascadingFilterOptions.specialties}
+            label="Specialty"
+            placeholder="Search specialties..."
+            getOptionLabel={formatSpecialtyForDisplay}
+            variant="autocomplete"
+            size="small"
+          />
 
-          <FormControl fullWidth size="small">
-            <Select
-              value={globalFilters.providerType}
-              onChange={(event: any) => handleFilterChange('providerType', event.target.value)}
-              displayEmpty
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            >
-              <MenuItem value="" sx={{ color: '#6b7280' }}>
-                All Provider Types
-              </MenuItem>
-              {cascadingFilterOptions.providerTypes.map((providerType) => (
-                <MenuItem key={providerType} value={providerType}>
-                  {providerType}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <StandardDropdown
+            value={globalFilters.providerType}
+            onChange={(value) => handleFilterChange('providerType', value)}
+            options={cascadingFilterOptions.providerTypes}
+            label="Provider Type"
+            placeholder="Search provider types..."
+            variant="autocomplete"
+            size="small"
+          />
 
-          <FormControl fullWidth size="small">
-            <Select
-              value={globalFilters.region}
-              onChange={(event: any) => handleFilterChange('region', event.target.value)}
-              displayEmpty
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            >
-              <MenuItem value="" sx={{ color: '#6b7280' }}>
-                All Regions
-              </MenuItem>
-              {cascadingFilterOptions.regions.map((region) => (
-                <MenuItem key={region} value={region}>
-                  {region}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <StandardDropdown
+            value={globalFilters.region}
+            onChange={(value) => handleFilterChange('region', value)}
+            options={cascadingFilterOptions.regions}
+            label="Region"
+            placeholder="Search regions..."
+            variant="autocomplete"
+            size="small"
+          />
 
-          <FormControl fullWidth size="small">
-            <Select
-              value={globalFilters.variable}
-              onChange={(event: any) => handleFilterChange('variable', event.target.value)}
-              displayEmpty
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            >
-              <MenuItem value="" sx={{ color: '#6b7280' }}>
-                All Variables
-              </MenuItem>
-              {cascadingFilterOptions.variables.map((variable) => (
-                <MenuItem key={variable} value={variable}>
-                  {variable}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <StandardDropdown
+            value={globalFilters.variable}
+            onChange={(value) => handleFilterChange('variable', value)}
+            options={cascadingFilterOptions.variables}
+            label="Variable"
+            placeholder="Search variables..."
+            variant="autocomplete"
+            size="small"
+          />
         </div>
       </Box>
 

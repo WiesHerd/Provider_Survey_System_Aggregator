@@ -2,7 +2,7 @@
  * Physician Analytics Component
  * 
  * Provider-specific analytics view for Physician data only.
- * This component filters and displays analytics specifically for physician compensation data.
+ * This component filters and displays analytics specifically for Physician compensation data.
  */
 
 import React from 'react';
@@ -13,7 +13,7 @@ import { ProviderTypeBadge } from '../../../shared/components';
 /**
  * Physician Analytics Component
  * 
- * Wraps the main SurveyAnalytics component with physician-specific filtering
+ * Wraps the main SurveyAnalytics component with Physician-specific filtering
  * and displays a provider type badge to indicate the current view.
  */
 export const PhysicianAnalytics: React.FC = () => {
@@ -26,15 +26,15 @@ export const PhysicianAnalytics: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Physician Analytics</h1>
           <p className="text-gray-600 mt-1">
-            Comprehensive analysis of physician compensation data
+            Comprehensive analysis of Physician compensation data
           </p>
         </div>
         <ProviderTypeBadge providerType="PHYSICIAN" size="lg" />
       </div>
 
-      {/* Analytics Content */}
+      {/* Analytics Content - Pass provider type filter */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <SurveyAnalytics />
+        <SurveyAnalytics providerTypeFilter="PHYSICIAN" />
       </div>
     </div>
   );

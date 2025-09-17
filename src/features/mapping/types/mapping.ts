@@ -126,6 +126,7 @@ export interface LearnedMappingsProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onRemoveMapping: (original: string) => void;
+  onApplyAllMappings?: () => void;
 }
 
 

@@ -161,7 +161,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getAllSpecialtyMappings(dataProviderType),
         dataService.getUnmappedSpecialties(dataProviderType),
-        dataService.getLearnedMappings('specialty')
+        dataService.getLearnedMappings('specialty', dataProviderType)
       ]);
       
       console.log('Loaded data:', { 
@@ -232,7 +232,7 @@ export const useMappingData = (): UseMappingDataReturn => {
         });
         
         // Create learned mapping for future automap runs
-        await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name);
+        await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name, selectedProviderType);
         
         newMappings.push(mapping);
       }
@@ -244,8 +244,8 @@ export const useMappingData = (): UseMappingDataReturn => {
       );
       setSelectedSpecialties([]);
       
-      // Refresh learned mappings to show the new ones
-      const learnedData = await dataService.getLearnedMappings('specialty');
+      // Refresh learned mappings to show the new ones (provider-type specific)
+      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
       setLearnedMappings(learnedData);
       // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
@@ -282,7 +282,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       
       // Create learned mappings for all specialties in the group
       for (const specialty of selectedSpecialties) {
-        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName);
+        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType);
       }
       
       // Update state
@@ -292,8 +292,8 @@ export const useMappingData = (): UseMappingDataReturn => {
       );
       setSelectedSpecialties([]);
       
-      // Refresh learned mappings to show the new ones
-      const learnedData = await dataService.getLearnedMappings('specialty');
+      // Refresh learned mappings to show the new ones (provider-type specific)
+      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
       setLearnedMappings(learnedData);
       // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {

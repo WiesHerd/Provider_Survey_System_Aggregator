@@ -1,7 +1,8 @@
 import React, { memo, useCallback } from 'react';
-import { FormControl, Autocomplete, TextField, Chip, Box, Tooltip } from '@mui/material';
+import { Chip, Box, Tooltip } from '@mui/material';
 import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import { FilterState, FilterOptions } from '../hooks/useAdvancedFiltering';
+import { StandardDropdown } from '../../../shared/components';
 
 interface EnterpriseFilterGridProps {
   filters: FilterState;
@@ -43,68 +44,18 @@ export const EnterpriseFilterGrid: React.FC<EnterpriseFilterGridProps> = memo(({
     options: string[],
     value: string
   ) => (
-    <FormControl fullWidth size="small" key={key}>
-      <Autocomplete
-        options={options}
-        value={value}
-        onChange={(event: any, newValue: string | null) => {
-          handleFilterChange(key, newValue);
-        }}
-        loading={loading}
-        disabled={loading}
-        renderInput={(params: any) => (
-          <TextField
-            {...params}
-            label={label}
-            placeholder={placeholder}
-            size="small"
-            InputProps={{
-              ...params.InputProps,
-              startAdornment: (
-                <Tooltip title={`Filter by ${label.toLowerCase()}`}>
-                  <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </Tooltip>
-              )
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-                '&:hover': {
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#6366f1',
-                  },
-                },
-                '&.Mui-focused': {
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#6366f1',
-                    borderWidth: '2px',
-                  },
-                },
-              },
-              '& .MuiAutocomplete-input': {
-                padding: '8px 12px',
-              },
-              '& .MuiAutocomplete-inputRoot': {
-                padding: '0 8px',
-              },
-            }}
-          />
-        )}
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-          },
-        }}
-        size="small"
-        noOptionsText="No options found"
-        loadingText="Loading options..."
-        aria-label={`Filter by ${label.toLowerCase()}`}
-        role="combobox"
-        aria-expanded={false}
-      />
-    </FormControl>
+    <StandardDropdown
+      key={key}
+      value={value}
+      onChange={(newValue) => handleFilterChange(key, newValue)}
+      options={options}
+      label={label}
+      placeholder={placeholder}
+      variant="autocomplete"
+      size="small"
+      loading={loading}
+      disabled={loading}
+    />
   ), [handleFilterChange, loading]);
 
   // Render active filter chips

@@ -54,7 +54,8 @@ export const useMappingDataUnified = () => {
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
-    removeLearnedMapping
+    removeLearnedMapping,
+    applyAllLearnedMappings
   } = useMappingOperations(
     mappings,
     unmappedSpecialties,
@@ -156,6 +157,7 @@ export const useMappingDataUnified = () => {
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
+    applyAllLearnedMappings,
     
     
     // Search and filters

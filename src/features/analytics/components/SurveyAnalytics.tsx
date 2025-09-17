@@ -6,8 +6,16 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { useAnalyticsData, AnalyticsTable, AnalyticsFilters } from '../index';
+import { useAnalyticsData } from '../hooks/useAnalyticsData';
+import { AnalyticsTable } from './AnalyticsTable';
+import { AnalyticsFilters } from './AnalyticsFilters';
 import { useYear } from '../../../contexts/YearContext';
+import { useProviderContext } from '../../../contexts/ProviderContext';
+import { filterAnalyticsData } from '../utils/analyticsCalculations';
+
+interface SurveyAnalyticsProps {
+  providerTypeFilter?: 'PHYSICIAN' | 'APP';
+}
 
 /**
  * Main SurveyAnalytics component
@@ -18,44 +26,89 @@ import { useYear } from '../../../contexts/YearContext';
  * 3. Displaying data in a structured table
  * 4. Handling export functionality
  */
-const SurveyAnalytics: React.FC = memo(() => {
+const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilter }) => {
   const { currentYear } = useYear();
+  const { selectedProviderType } = useProviderContext();
   
-  // Initialize analytics data hook
+  // Use the provider type from context (sidebar selection) or fallback to prop
+  const effectiveProviderType = selectedProviderType || providerTypeFilter;
+  
+  // Helper function to categorize provider types into PHYSICIAN/APP categories
+  const categorizeProviderType = (providerType: string): 'PHYSICIAN' | 'APP' | 'OTHER' => {
+    if (!providerType) return 'OTHER';
+    
+    const lower = providerType.toLowerCase();
+    
+    // APP categories (check these first to avoid conflicts with "Physician Assistant")
+    if (lower.includes('nurse practitioner') || lower.includes('np') || 
+        lower.includes('physician assistant') || lower.includes('pa') || 
+        lower.includes('crna') || lower.includes('advanced practice') || 
+        lower.includes('app')) {
+      return 'APP';
+    }
+    
+    // Physician categories (check after APP to avoid conflicts)
+    if (lower.includes('physician') || lower.includes('md') || lower.includes('do') || 
+        lower.includes('doctor') || lower.includes('phd')) {
+      return 'PHYSICIAN';
+    }
+    
+    return 'OTHER';
+  };
+  
+  // Initialize analytics data hook with empty filters (no pre-selection)
   const {
-    data,
     allData,
     loading,
     error,
     filters,
     setFilters,
-    exportToExcel,
-    exportToCSV
+    exportToExcel
   } = useAnalyticsData({
     specialty: '',
     surveySource: '',
     geographicRegion: '',
-    providerType: '',
+    providerType: '', // Don't pre-select provider type in filters
     year: ''
   });
 
+  // Apply provider type filtering behind the scenes, then apply UI filters
+  const data = useMemo(() => {
+    // First apply provider type filtering if specified
+    let providerFilteredData = allData;
+    if (effectiveProviderType) {
+      providerFilteredData = allData.filter(row => {
+        const category = categorizeProviderType(row.providerType || '');
+        return category === effectiveProviderType;
+      });
+    }
+    
+    // Then apply UI filters to the provider-filtered data
+    return filterAnalyticsData(providerFilteredData, filters);
+  }, [allData, filters, effectiveProviderType]);
 
-  // Generate cascading filter options based on current filter state
+  // Generate cascading filter options based on current filter state and provider type
   const filterOptions = useMemo(() => {
     console.log('🔍 SurveyAnalytics: Generating cascading filter options from', allData.length, 'all data records');
     console.log('🔍 SurveyAnalytics: Current filters:', filters);
+    console.log('🔍 SurveyAnalytics: Provider type filter:', providerTypeFilter);
     
-    // Enterprise-grade UX: Always show ALL available options
-    // This allows users to easily change any filter at any time without being locked into cascading behavior
-    console.log('🔍 SurveyAnalytics: Generating all available options for enterprise-grade UX');
+    // Filter data by provider type first if specified (behind the scenes)
+    let filteredData = allData;
+    if (effectiveProviderType) {
+      filteredData = allData.filter(row => {
+        const category = categorizeProviderType(row.providerType || '');
+        return category === effectiveProviderType;
+      });
+      console.log('🔍 SurveyAnalytics: Filtered by provider type', effectiveProviderType, 'to', filteredData.length, 'records');
+    }
     
-    // Generate options from the FULL dataset (not filtered)
-    // This allows users to change any filter at any time
-    const availableSpecialties = [...new Set(allData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
-    const availableSources = [...new Set(allData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
-    const availableRegions = [...new Set(allData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
-    const availableProviderTypes = [...new Set(allData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
-    const availableYears = [...new Set(allData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
+    // Generate options from the provider-filtered dataset
+    const availableSpecialties = [...new Set(filteredData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
+    const availableSources = [...new Set(filteredData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
+    const availableRegions = [...new Set(filteredData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
+    const availableProviderTypes = [...new Set(filteredData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
+    const availableYears = [...new Set(filteredData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
 
     console.log('🔍 SurveyAnalytics: Cascading filter options - specialties:', availableSpecialties.length, 'sources:', availableSources.length, 'regions:', availableRegions.length, 'providerTypes:', availableProviderTypes.length, 'years:', availableYears.length);
 
@@ -66,7 +119,7 @@ const SurveyAnalytics: React.FC = memo(() => {
       providerTypes: availableProviderTypes,
       years: availableYears
     };
-  }, [allData, filters, currentYear]);
+  }, [allData, filters, currentYear, effectiveProviderType, providerTypeFilter]);
 
   return (
     <div className="flex flex-col space-y-6">
@@ -86,7 +139,7 @@ const SurveyAnalytics: React.FC = memo(() => {
       {/* Data Table Section - Contained with horizontal scroll */}
       <div className="w-full">
         <AnalyticsTable
-          data={data}
+          data={data} // This will be filtered by the hook based on UI filters
           loading={loading}
           error={error}
           onExport={exportToExcel}
