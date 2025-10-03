@@ -266,7 +266,7 @@ const PageContent = () => {
     <div className="flex h-screen bg-gray-50">
       {!isDashboard && <EnhancedSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
       
-      <div className={`flex-1 transition-all duration-300 flex flex-col ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-20') : ''}`}>
+      <div className={`flex-1 transition-all duration-300 flex flex-col ${!isDashboard ? (isSidebarOpen ? 'pl-64' : 'pl-16') : ''}`}>
         {!isDashboard && (
           <PageHeader 
             title={headerContent.title} 

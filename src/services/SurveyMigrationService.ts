@@ -50,6 +50,7 @@ export class SurveyMigrationService {
                 let newProviderType = survey.providerType;
                 
                 // Check if survey name indicates APP but providerType is not APP
+                // This must come FIRST to catch "SullivanCotter APP" before the general "sullivan" check
                 if (survey.name && survey.name.toLowerCase().includes('app') && survey.providerType !== 'APP') {
                   newProviderType = 'APP';
                   needsUpdate = true;
@@ -57,15 +58,24 @@ export class SurveyMigrationService {
                 }
                 
                 // Check if survey name indicates Physician but providerType is not PHYSICIAN
+                // Only check for physician-specific keywords, not general survey names
                 else if (survey.name && (
                   survey.name.toLowerCase().includes('physician') || 
                   survey.name.toLowerCase().includes('mgma') || 
-                  survey.name.toLowerCase().includes('gallagher') || 
-                  survey.name.toLowerCase().includes('sullivan')
+                  survey.name.toLowerCase().includes('gallagher')
                 ) && survey.providerType !== 'PHYSICIAN') {
                   newProviderType = 'PHYSICIAN';
                   needsUpdate = true;
                   console.log(`🔧 Fixing survey "${survey.name}": ${survey.providerType} → PHYSICIAN`);
+                }
+                
+                // Check for Sullivan surveys that are NOT APP (i.e., physician surveys)
+                else if (survey.name && survey.name.toLowerCase().includes('sullivan') && 
+                         !survey.name.toLowerCase().includes('app') && 
+                         survey.providerType !== 'PHYSICIAN') {
+                  newProviderType = 'PHYSICIAN';
+                  needsUpdate = true;
+                  console.log(`🔧 Fixing Sullivan survey "${survey.name}": ${survey.providerType} → PHYSICIAN`);
                 }
                 
                 // Check if survey has no provider type but name gives us a clue
@@ -77,12 +87,16 @@ export class SurveyMigrationService {
                   } else if (survey.name && (
                     survey.name.toLowerCase().includes('physician') || 
                     survey.name.toLowerCase().includes('mgma') || 
-                    survey.name.toLowerCase().includes('gallagher') || 
-                    survey.name.toLowerCase().includes('sullivan')
+                    survey.name.toLowerCase().includes('gallagher')
                   )) {
                     newProviderType = 'PHYSICIAN';
                     needsUpdate = true;
                     console.log(`🔧 Setting provider type for "${survey.name}": undefined → PHYSICIAN`);
+                  } else if (survey.name && survey.name.toLowerCase().includes('sullivan') && 
+                           !survey.name.toLowerCase().includes('app')) {
+                    newProviderType = 'PHYSICIAN';
+                    needsUpdate = true;
+                    console.log(`🔧 Setting Sullivan survey provider type for "${survey.name}": undefined → PHYSICIAN`);
                   } else {
                     // Default to PHYSICIAN for surveys without clear indication
                     newProviderType = 'PHYSICIAN';
@@ -182,3 +196,5 @@ export class SurveyMigrationService {
     }
   }
 }
+
+

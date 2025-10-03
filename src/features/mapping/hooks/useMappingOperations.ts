@@ -18,6 +18,7 @@ export const useMappingOperations = (
   updateUnmappedSpecialties: (unmapped: IUnmappedSpecialty[]) => void,
   updateSelectedSpecialties: (selected: IUnmappedSpecialty[]) => void,
   updateLearnedMappings: (learned: Record<string, string>) => void,
+  updateLearnedMappingsWithSource: (learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>) => void,
   setLoadingState: (loading: boolean) => void,
   setErrorState: (error: string | null) => void
 ) => {
@@ -61,21 +62,24 @@ export const useMappingOperations = (
         dataProviderType 
       });
       
-      const [mappingsData, unmappedData, learnedData] = await Promise.all([
+      const [mappingsData, unmappedData, learnedData, learnedDataWithSource] = await Promise.all([
         testService('mappings', () => dataService.getAllSpecialtyMappings(dataProviderType)),
         testService('unmapped', () => dataService.getUnmappedSpecialties(dataProviderType)),
-        testService('learned', () => dataService.getLearnedMappings('specialty'))
+        testService('learned', () => dataService.getLearnedMappings('specialty')),
+        testService('learnedWithSource', () => dataService.getLearnedMappingsWithSource('specialty'))
       ]);
       
       console.log('✅ All data loaded successfully:', { 
         mappings: mappingsData.length, 
         unmapped: unmappedData.length, 
-        learned: Object.keys(learnedData || {}).length
+        learned: Object.keys(learnedData || {}).length,
+        learnedWithSource: learnedDataWithSource?.length || 0
       });
       
       updateMappings(mappingsData);
       updateUnmappedSpecialties(unmappedData);
       updateLearnedMappings(learnedData || {});
+      updateLearnedMappingsWithSource(learnedDataWithSource || []);
       
     } catch (err) {
       console.error('❌ Error loading data:', err);
@@ -119,8 +123,8 @@ export const useMappingOperations = (
 
       await dataService.createSpecialtyMapping(newMapping);
       
-      // Save as learned mapping
-      await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType);
+      // Save as learned mapping with survey source
+      await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType, specialty.surveySource);
       
       // Invalidate relevant cache entries
       cache.invalidateCache('mappings');
@@ -161,9 +165,9 @@ export const useMappingOperations = (
 
       await dataService.createSpecialtyMapping(newMapping);
       
-      // Save each specialty as learned mapping
+      // Save each specialty as learned mapping with survey source
       for (const specialty of selectedSpecialties) {
-        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType);
+        await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType, specialty.surveySource);
       }
       
       // Invalidate relevant cache entries
@@ -214,22 +218,73 @@ export const useMappingOperations = (
   }, [dataService, cache, loadData, setErrorState]);
 
   // Remove learned mapping
-  const removeLearnedMapping = useCallback(async (original: string) => {
+  const removeLearnedMapping = useCallback(async (standardizedName: string) => {
     try {
+      console.log('🗑️ removeLearnedMapping EXECUTING for standardized name:', standardizedName);
       setErrorState(null);
-      await dataService.removeLearnedMapping('specialty', original);
+      
+      // Get all learned mappings to find all source specialties for this standardized name
+      const currentLearnedMappings = await dataService.getLearnedMappings('specialty', selectedProviderType);
+      const currentLearnedMappingsWithSource = await dataService.getLearnedMappingsWithSource('specialty', selectedProviderType);
+      
+      // Find all original names that map to this standardized name
+      const originalNamesToDelete = Object.entries(currentLearnedMappings)
+        .filter(([original, corrected]) => corrected === standardizedName)
+        .map(([original]) => original);
+      
+      console.log('🗑️ Found original names to delete:', originalNamesToDelete);
+      
+      // Delete all learned mappings for this standardized name
+      for (const originalName of originalNamesToDelete) {
+        await dataService.removeLearnedMapping('specialty', originalName);
+        console.log('🗑️ Deleted learned mapping:', originalName);
+      }
       
       // Invalidate learned mappings cache
       cache.invalidateCache('learnedMappings');
       
-      // Refresh learned mappings (provider-type specific)
-      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
+      // Refresh both basic and source learned mappings
+      const [learnedData, learnedDataWithSource] = await Promise.all([
+        dataService.getLearnedMappings('specialty', selectedProviderType),
+        dataService.getLearnedMappingsWithSource('specialty', selectedProviderType)
+      ]);
+      
       updateLearnedMappings(learnedData || {});
+      updateLearnedMappingsWithSource(learnedDataWithSource || []);
+      
+      console.log('✅ DELETE COMPLETED - All learned mappings removed for:', standardizedName);
     } catch (err) {
       setErrorState('Failed to remove learned mapping');
-      console.error('Error removing learned mapping:', err);
+      console.error('❌ Error removing learned mapping:', err);
     }
-  }, [dataService, cache, updateLearnedMappings, setErrorState]);
+  }, [dataService, cache, selectedProviderType, updateLearnedMappings, updateLearnedMappingsWithSource, setErrorState]);
+
+  // Clear all learned mappings
+  const clearAllLearnedMappings = useCallback(async () => {
+    try {
+      setLoadingState(true);
+      setErrorState(null);
+      
+      console.log('🗑️ Clearing all learned mappings for provider type:', selectedProviderType);
+      
+      // Clear all learned mappings
+      await dataService.clearLearnedMappings('specialty');
+      
+      // Invalidate learned mappings cache
+      cache.invalidateCache('learnedMappings');
+      
+      // Clear learned mappings from state
+      updateLearnedMappings({});
+      
+      console.log('✅ Successfully cleared all learned mappings');
+      
+    } catch (err) {
+      setErrorState('Failed to clear all learned mappings');
+      console.error('Error clearing learned mappings:', err);
+    } finally {
+      setLoadingState(false);
+    }
+  }, [dataService, cache, updateLearnedMappings, setErrorState, setLoadingState]);
 
   // Apply all learned mappings to create actual mappings (provider-type specific)
   const applyAllLearnedMappings = useCallback(async () => {
@@ -288,13 +343,71 @@ export const useMappingOperations = (
     }
   }, [learnedMappings, dataService, loadData, setLoadingState, setErrorState, selectedProviderType]);
 
+  // Create individual mappings - each selected specialty gets its own mapping
+  const createIndividualMappings = useCallback(async () => {
+    if (selectedSpecialties.length === 0) return;
+
+    try {
+      setLoadingState(true);
+      setErrorState(null);
+      
+      console.log('🚀 Creating individual mappings for', selectedSpecialties.length, 'specialties');
+      
+      // Create individual mappings for each selected specialty
+      const newMappings: ISpecialtyMapping[] = [];
+      
+      for (const specialty of selectedSpecialties) {
+        // Each specialty gets its own mapping with its own name as standardized name
+        const sourceSpecialty = {
+          id: crypto.randomUUID(),
+          specialty: specialty.name,
+          originalName: specialty.name,
+          surveySource: specialty.surveySource,
+          mappingId: ''
+        };
+
+        const mapping = await dataService.createSpecialtyMapping({
+          id: crypto.randomUUID(),
+          standardizedName: specialty.name, // Each specialty maps to itself
+          sourceSpecialties: [sourceSpecialty], // Only one source specialty per mapping
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        
+        // Create learned mapping for future automap runs with survey source
+        await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name, selectedProviderType, specialty.surveySource);
+        
+        newMappings.push(mapping);
+      }
+      
+      // Update state
+      updateMappings([...mappings, ...newMappings]);
+      updateUnmappedSpecialties(unmappedSpecialties.filter(s => !selectedSpecialties.some(selected => selected.id === s.id)));
+      updateSelectedSpecialties([]);
+      
+      // Refresh learned mappings to show the new ones (provider-type specific)
+      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
+      updateLearnedMappings(learnedData);
+      
+      console.log(`🎉 Successfully created ${newMappings.length} individual mappings!`);
+      
+    } catch (error) {
+      console.error('Error creating individual mappings:', error);
+      setErrorState(error instanceof Error ? error.message : 'Failed to create individual mappings');
+    } finally {
+      setLoadingState(false);
+    }
+  }, [selectedSpecialties, dataService, selectedProviderType, updateMappings, updateUnmappedSpecialties, updateSelectedSpecialties, updateLearnedMappings, setLoadingState, setErrorState]);
+
   return {
     loadData,
     createMapping,
+    createIndividualMappings,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
+    clearAllLearnedMappings,
     applyAllLearnedMappings
   };
 };

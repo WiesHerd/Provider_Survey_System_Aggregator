@@ -12,6 +12,9 @@ export {
 
 export { SpecialtyAutocomplete } from './SpecialtyAutocomplete';
 
+// Confirmation Dialog - ENTERPRISE-GRADE confirmation system
+export { ConfirmationDialog } from './ConfirmationDialog';
+
 // Provider Type Components
 export {
   default as ProviderTypeSelector,

@@ -24,3 +24,9 @@ function clearProviderContext() {
 
 // Run the function
 clearProviderContext();
+
+
+
+
+
+

@@ -571,6 +571,16 @@ export class IndexedDBService {
         Promise.all(mappingPromises).then((results) => {
           console.log(`🔍 getAllSpecialtyMappings: Processing ${results.length} mappings for provider type: ${providerType}`);
           
+          // ENTERPRISE DEBUG: Log all mappings before filtering
+          console.log(`🔍 getAllSpecialtyMappings: All mappings before filtering:`, results.map(m => ({
+            id: m.id,
+            standardizedName: m.standardizedName,
+            sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
+              specialty: s.specialty,
+              surveySource: s.surveySource
+            }))
+          })));
+          
           // Filter by provider type if specified
           if (providerType) {
             // Get all surveys to determine which survey sources belong to the specified provider type
@@ -582,15 +592,56 @@ export class IndexedDBService {
                 surveysByProviderType.map(s => s.type || s.name));
               console.log(`🔍 Valid survey sources for ${providerType}:`, Array.from(validSurveySources));
               
-              // Filter mappings based on which survey sources they belong to
-              const filtered = results.filter((mapping: any) => {
-                // Check if any source specialty comes from a survey source with the correct provider type
-                return mapping.sourceSpecialties.some((source: any) => {
-                  return validSurveySources.has(source.surveySource);
+              // ENTERPRISE DEBUG: Log filtering details for each mapping
+              console.log(`🔍 getAllSpecialtyMappings: About to check ${results.length} mappings`);
+              results.forEach((mapping: any, index: number) => {
+                console.log(`🔍 getAllSpecialtyMappings: Checking mapping ${index + 1}:`, {
+                  standardizedName: mapping.standardizedName,
+                  sourceSpecialties: mapping.sourceSpecialties.map((s: any) => ({
+                    specialty: s.specialty,
+                    surveySource: s.surveySource,
+                    hasValidSource: validSurveySources.has(s.surveySource)
+                  }))
                 });
               });
               
+              // Filter mappings based on which survey sources they belong to
+              const filtered = results.filter((mapping: any) => {
+                // Check if any source specialty comes from a survey source with the correct provider type
+                const hasValidSource = mapping.sourceSpecialties.some((source: any) => {
+                  return validSurveySources.has(source.surveySource);
+                });
+                
+                // ENTERPRISE DEBUG: Check for MGMA mappings specifically
+                const hasMGMASource = mapping.sourceSpecialties.some((source: any) => {
+                  return source.surveySource === 'MGMA Physician';
+                });
+                
+                if (hasMGMASource) {
+                  console.log(`🔍 getAllSpecialtyMappings: Found MGMA mapping "${mapping.standardizedName}":`, {
+                    hasValidSource,
+                    hasMGMASource,
+                    sourceSpecialties: mapping.sourceSpecialties.map((s: any) => ({
+                      specialty: s.specialty,
+                      surveySource: s.surveySource,
+                      isValid: validSurveySources.has(s.surveySource)
+                    }))
+                  });
+                }
+                
+                console.log(`🔍 getAllSpecialtyMappings: Mapping "${mapping.standardizedName}" - hasValidSource: ${hasValidSource}`);
+                return hasValidSource;
+              });
+              
             console.log(`🔍 getAllSpecialtyMappings: Filtered to ${filtered.length} mappings for ${providerType}`);
+            console.log(`🔍 getAllSpecialtyMappings: Filtered mappings:`, filtered.map(m => ({
+              id: m.id,
+              standardizedName: m.standardizedName,
+              sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
+                specialty: s.specialty,
+                surveySource: s.surveySource
+              }))
+            })));
             resolve(filtered);
             }).catch(reject);
           } else {
@@ -652,20 +703,6 @@ export class IndexedDBService {
     });
   }
 
-  async clearAllSpecialtyMappings(): Promise<void> {
-    const db = await this.ensureDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['specialtyMappings', 'specialtyMappingSources'], 'readwrite');
-      const mappingStore = transaction.objectStore('specialtyMappings');
-      const sourceStore = transaction.objectStore('specialtyMappingSources');
-
-      mappingStore.clear();
-      sourceStore.clear();
-
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  }
 
   // Column Mapping Methods
   async getAllColumnMappings(providerType?: string): Promise<IColumnMapping[]> {
@@ -933,18 +970,51 @@ export class IndexedDBService {
   async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
     console.log(`🔍 getUnmappedSpecialties: Getting unmapped specialties for provider type: ${providerType}`);
     const surveys = await this.getAllSurveys();
-    console.log(`🔍 getUnmappedSpecialties: All surveys:`, surveys.map(s => ({ id: s.id, name: s.name, providerType: s.providerType })));
+    console.log(`🔍 getUnmappedSpecialties: All surveys:`, surveys.map(s => ({ id: s.id, name: s.name, type: s.type, providerType: s.providerType })));
     
     const mappings = await this.getAllSpecialtyMappings(providerType);
     console.log(`🔍 getUnmappedSpecialties: Found ${surveys.length} surveys and ${mappings.length} mappings`);
     
-    const mappedNames = new Set<string>();
+    // ENTERPRISE DEBUG: Log provider type filtering details
+    console.log(`🔍 getUnmappedSpecialties: Provider type filtering - requested: "${providerType}", surveys:`, 
+      surveys.map(s => ({ name: s.name, providerType: s.providerType, willInclude: !providerType || !s.providerType || s.providerType === providerType }))
+    );
+    
+    // ENTERPRISE FIX: Build survey-source specific mapped names
+    const mappedNamesBySource = new Map<string, Set<string>>();
     mappings.forEach(mapping => {
-      mappedNames.add(mapping.standardizedName.toLowerCase());
       mapping.sourceSpecialties.forEach((source: any) => {
-        mappedNames.add(source.specialty.toLowerCase());
+        const surveySource = source.surveySource;
+        if (!mappedNamesBySource.has(surveySource)) {
+          mappedNamesBySource.set(surveySource, new Set<string>());
+        }
+        mappedNamesBySource.get(surveySource)!.add(source.specialty.toLowerCase());
       });
     });
+    
+    // ENTERPRISE DEBUG: Log mapped names by source
+    console.log(`🔍 Mapped Names by Source:`, Array.from(mappedNamesBySource.entries()).map(([source, names]) => ({
+      source,
+      count: names.size,
+      sample: Array.from(names).slice(0, 5)
+    })));
+    
+    // ENTERPRISE DEBUG: Log all mappings details
+    console.log(`🔍 All Mappings Details:`, mappings.map(m => ({
+      id: m.id,
+      standardizedName: m.standardizedName,
+      sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
+        specialty: s.specialty,
+        surveySource: s.surveySource
+      }))
+    })));
+    
+    // ENTERPRISE DEBUG: Log total mapped names for reference
+    const totalMappedNames = new Set<string>();
+    mappedNamesBySource.forEach((names, source) => {
+      names.forEach(name => totalMappedNames.add(name));
+    });
+    console.log(`🔍 Total Mapped Names (${totalMappedNames.size}):`, Array.from(totalMappedNames).slice(0, 10), '...');
 
     const unmapped: IUnmappedSpecialty[] = [];
     const specialtyCounts = new Map<string, { count: number; sources: Set<string> }>();
@@ -958,12 +1028,22 @@ export class IndexedDBService {
         continue;
       }
       
-      console.log(`🔍 getUnmappedSpecialties: Processing survey ${survey.id} (${survey.name})`);
+      console.log(`🔍 getUnmappedSpecialties: Processing survey ${survey.id} (${survey.name}) - INCLUDED`);
       
       const { rows } = await this.getSurveyData(survey.id);
       
       // Get survey source with proper fallbacks
       const surveySource = survey.type || survey.name || 'Unknown';
+      
+      // ENTERPRISE DEBUG: Log survey source for MGMA
+      if (survey.name.toLowerCase().includes('mgma') || survey.type.toLowerCase().includes('mgma')) {
+        console.log(`🔍 MGMA Survey Source: "${surveySource}" (from type: "${survey.type}", name: "${survey.name}")`);
+      }
+      
+      // ENTERPRISE DEBUG: Log survey source for Gallagher
+      if (survey.name.toLowerCase().includes('gallagher') || survey.type.toLowerCase().includes('gallagher')) {
+        console.log(`🔍 GALLAGHER Survey Source: "${surveySource}" (from type: "${survey.type}", name: "${survey.name}")`);
+      }
       
       rows.forEach(row => {
         // ENTERPRISE STANDARD: No row-level filtering needed
@@ -971,12 +1051,59 @@ export class IndexedDBService {
         // If a survey was uploaded as PHYSICIAN/APP, ALL rows belong to that provider type
         
         const specialty = row.specialty || row.Specialty || row['Provider Type'];
-        if (specialty && typeof specialty === 'string' && !mappedNames.has(specialty.toLowerCase())) {
+        
+        // ENTERPRISE FIX: Check if specialty is mapped for this specific survey source
+        // Only consider it mapped if there are actual mappings for this specific survey source
+        const isMappedForThisSource = specialty && typeof specialty === 'string' && 
+          mappedNamesBySource.has(surveySource) && 
+          mappedNamesBySource.get(surveySource)!.has(specialty.toLowerCase());
+        
+        // ENTERPRISE DEBUG: Log specialty extraction details for MGMA
+        if (surveySource.toLowerCase().includes('mgma')) {
+          console.log(`🔍 MGMA Row Analysis:`, {
+            specialty: specialty,
+            specialtyType: typeof specialty,
+            hasSpecialty: !!specialty,
+            isString: typeof specialty === 'string',
+            isMapped: isMappedForThisSource,
+            surveySource: surveySource,
+            hasMappingsForSource: mappedNamesBySource.has(surveySource),
+            mappingsForSource: mappedNamesBySource.has(surveySource) ? Array.from(mappedNamesBySource.get(surveySource)!).slice(0, 5) : [],
+            rowKeys: Object.keys(row)
+          });
+        }
+        
+        // ENTERPRISE DEBUG: Log specialty extraction details for Gallagher
+        if (surveySource.toLowerCase().includes('gallagher')) {
+          console.log(`🔍 GALLAGHER Row Analysis:`, {
+            specialty: specialty,
+            specialtyType: typeof specialty,
+            hasSpecialty: !!specialty,
+            isString: typeof specialty === 'string',
+            isMapped: isMappedForThisSource,
+            surveySource: surveySource,
+            hasMappingsForSource: mappedNamesBySource.has(surveySource),
+            mappingsForSource: mappedNamesBySource.has(surveySource) ? Array.from(mappedNamesBySource.get(surveySource)!).slice(0, 5) : [],
+            rowKeys: Object.keys(row)
+          });
+        }
+        
+        if (specialty && typeof specialty === 'string' && !isMappedForThisSource) {
           const key = specialty.toLowerCase();
           const current = specialtyCounts.get(key) || { count: 0, sources: new Set() };
           current.count++;
           current.sources.add(surveySource);
           specialtyCounts.set(key, current);
+          
+          // ENTERPRISE DEBUG: Log specialty extraction for MGMA
+          if (surveySource.toLowerCase().includes('mgma')) {
+            console.log(`🔍 MGMA Specialty Found: "${specialty}" (key: "${key}")`);
+          }
+          
+          // ENTERPRISE DEBUG: Log specialty extraction for Gallagher
+          if (surveySource.toLowerCase().includes('gallagher')) {
+            console.log(`🔍 GALLAGHER Specialty Found: "${specialty}" (key: "${key}")`);
+          }
         }
       });
     }
@@ -995,6 +1122,28 @@ export class IndexedDBService {
     });
 
     console.log(`🔍 getUnmappedSpecialties: Returning ${unmapped.length} unmapped specialties for ${providerType}`);
+    console.log(`🔍 getUnmappedSpecialties: Unmapped specialties:`, unmapped.map(s => ({ name: s.name, surveySource: s.surveySource, frequency: s.frequency })));
+    
+    // ENTERPRISE DEBUG: Show specialty counts for MGMA
+    const mgmaSpecialties = Array.from(specialtyCounts.entries()).filter(([key, value]) => 
+      Array.from(value.sources).some(source => source.toLowerCase().includes('mgma'))
+    );
+    console.log(`🔍 MGMA Specialty Counts:`, mgmaSpecialties.map(([key, value]) => ({
+      specialty: key,
+      count: value.count,
+      sources: Array.from(value.sources)
+    })));
+    
+    // ENTERPRISE DEBUG: Show specialty counts for Gallagher
+    const gallagherSpecialties = Array.from(specialtyCounts.entries()).filter(([key, value]) => 
+      Array.from(value.sources).some(source => source.toLowerCase().includes('gallagher'))
+    );
+    console.log(`🔍 GALLAGHER Specialty Counts:`, gallagherSpecialties.map(([key, value]) => ({
+      specialty: key,
+      count: value.count,
+      sources: Array.from(value.sources)
+    })));
+    
     return unmapped;
   }
 
@@ -1705,13 +1854,46 @@ export class IndexedDBService {
   }
 
   /**
-   * Save a learned mapping with provider type
+   * Get learned mappings with survey source information
    */
-  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string): Promise<void> {
+  async getLearnedMappingsWithSource(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Array<{original: string, corrected: string, surveySource: string}>> {
     const db = await this.ensureDB();
     const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
     
-    console.log(`💾 Saving learned mapping: "${original}" → "${corrected}"`);
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        console.log(`📖 Retrieved ${request.result.length} learned mappings with source from IndexedDB:`, request.result);
+        const mappings: Array<{original: string, corrected: string, surveySource: string}> = [];
+        request.result.forEach((item: any) => {
+          // Filter by provider type if specified
+          if (!providerType || item.providerType === providerType || item.providerType === 'ALL') {
+            mappings.push({
+              original: item.original,
+              corrected: item.corrected,
+              surveySource: item.surveySource || 'Custom'
+            });
+          }
+        });
+        console.log(`📋 Processed learned mappings with source for provider type ${providerType || 'ALL'}:`, mappings);
+        resolve(mappings);
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Save a learned mapping with provider type and survey source
+   */
+  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string, surveySource?: string): Promise<void> {
+    const db = await this.ensureDB();
+    const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
+    
+    console.log(`💾 Saving learned mapping: "${original}" → "${corrected}" from survey: ${surveySource || 'Unknown'}`);
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([storeName], 'readwrite');
@@ -1720,6 +1902,7 @@ export class IndexedDBService {
         original: original.toLowerCase(),
         corrected,
         providerType: providerType || 'ALL', // Store provider type or 'ALL' for global mappings
+        surveySource: surveySource || 'Custom', // Store survey source or 'Custom' for manual mappings
         createdAt: new Date(),
         updatedAt: new Date()
       });
@@ -1742,10 +1925,81 @@ export class IndexedDBService {
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
-      const request = store.delete(original.toLowerCase());
+      
+      // For specialty mappings, we need to delete ALL records with the same corrected name
+      if (type === 'specialty') {
+        // Get all records and find the one with matching original name to get the corrected name
+        const getAllRequest = store.getAll();
+        
+        getAllRequest.onsuccess = () => {
+          const records = getAllRequest.result;
+          const recordToDelete = records.find((record: any) => 
+            record.original && record.original.toLowerCase() === original.toLowerCase()
+          );
+          
+          if (recordToDelete) {
+            const correctedName = recordToDelete.corrected;
+            console.log(`🗑️ Found learned mapping to delete:`, recordToDelete);
+            console.log(`🗑️ Will delete ALL learned mappings with corrected name: ${correctedName}`);
+            
+            // Find and delete ALL records with the same corrected name
+            const recordsToDelete = records.filter((record: any) => 
+              record.corrected && record.corrected.toLowerCase() === correctedName.toLowerCase()
+            );
+            
+            console.log(`🗑️ Found ${recordsToDelete.length} records to delete:`, recordsToDelete);
+            
+            // Delete all matching records
+            let deleteCount = 0;
+            const totalToDelete = recordsToDelete.length;
+            
+            if (totalToDelete === 0) {
+              console.log(`⚠️ No records found to delete`);
+              resolve();
+              return;
+            }
+            
+            recordsToDelete.forEach((record: any) => {
+              const deleteRequest = store.delete(record.id);
+              
+              deleteRequest.onsuccess = () => {
+                deleteCount++;
+                console.log(`✅ Deleted learned mapping ${deleteCount}/${totalToDelete}: ${record.original} -> ${record.corrected}`);
+                
+                if (deleteCount === totalToDelete) {
+                  console.log(`🎉 Successfully deleted all ${totalToDelete} learned mappings for: ${correctedName}`);
+                  resolve();
+                }
+              };
+              
+              deleteRequest.onerror = () => {
+                console.error(`❌ Error deleting learned mapping:`, deleteRequest.error);
+                reject(deleteRequest.error);
+              };
+            });
+          } else {
+            console.log(`⚠️ No learned mapping found with original name: ${original}`);
+            resolve(); // Not an error, just nothing to delete
+          }
+        };
+        
+        getAllRequest.onerror = () => {
+          console.error(`❌ Error getting learned mappings:`, getAllRequest.error);
+          reject(getAllRequest.error);
+        };
+      } else {
+        // For other types, use the original name as key (they use original as keyPath)
+        const request = store.delete(original.toLowerCase());
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          console.log(`✅ Successfully deleted learned mapping: ${original}`);
+          resolve();
+        };
+        request.onerror = () => {
+          console.error(`❌ Error deleting learned mapping:`, request.error);
+          reject(request.error);
+        };
+      }
     });
   }
 
@@ -1765,4 +2019,58 @@ export class IndexedDBService {
       request.onerror = () => reject(request.error);
     });
   }
+
+  /**
+   * Clear ALL specialty mappings (not just learned ones)
+   */
+  async clearAllSpecialtyMappings(): Promise<void> {
+    try {
+      console.log(`🧹 Clearing ALL specialty mappings...`);
+      
+      const db = await this.ensureDB();
+      const transaction = db.transaction(['specialtyMappings'], 'readwrite');
+      const store = transaction.objectStore('specialtyMappings');
+      
+      // Get all specialty mappings first to log them
+      const getAllRequest = store.getAll();
+      
+      return new Promise((resolve, reject) => {
+        getAllRequest.onsuccess = () => {
+          const mappings = getAllRequest.result;
+          console.log(`📋 Found ${mappings.length} specialty mappings to clear`);
+          
+          if (mappings.length === 0) {
+            console.log(`✅ No specialty mappings found`);
+            resolve();
+            return;
+          }
+          
+          // Log what we're about to delete
+          mappings.forEach(mapping => {
+            console.log(`🗑️ Will delete mapping: ${mapping.standardizedName} (${mapping.sourceSpecialties.length} sources)`);
+          });
+          
+          // Clear all mappings
+          const clearRequest = store.clear();
+          clearRequest.onsuccess = () => {
+            console.log(`✅ Successfully cleared ${mappings.length} specialty mappings`);
+            resolve();
+          };
+          clearRequest.onerror = () => {
+            console.error(`❌ Failed to clear specialty mappings`);
+            reject(clearRequest.error);
+          };
+        };
+        
+        getAllRequest.onerror = () => {
+          console.error(`❌ Failed to get specialty mappings`);
+          reject(getAllRequest.error);
+        };
+      });
+    } catch (error) {
+      console.error(`❌ Error clearing specialty mappings:`, error);
+      throw error;
+    }
+  }
 }
+

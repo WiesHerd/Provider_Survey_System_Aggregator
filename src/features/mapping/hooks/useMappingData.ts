@@ -20,6 +20,7 @@ interface UseMappingDataReturn {
   unmappedSpecialties: IUnmappedSpecialty[];
   selectedSpecialties: IUnmappedSpecialty[];
   learnedMappings: Record<string, string>;
+  learnedMappingsWithSource: Array<{original: string, corrected: string, surveySource: string}>;
   loading: boolean;
   error: string | null;
   activeTab: 'unmapped' | 'mapped' | 'learned';
@@ -46,10 +47,13 @@ interface UseMappingDataReturn {
   // Data operations
   loadData: () => Promise<void>;
   createMapping: () => Promise<void>;
+  createIndividualMappings: () => Promise<void>;
   createGroupedMapping: () => Promise<void>;
   deleteMapping: (mappingId: string) => Promise<void>;
   clearAllMappings: () => Promise<void>;
   removeLearnedMapping: (original: string) => Promise<void>;
+  clearAllLearnedMappings: () => Promise<void>;
+  applyAllLearnedMappings: () => Promise<void>;
   
   
   // Search and filters
@@ -71,9 +75,13 @@ export const useMappingData = (): UseMappingDataReturn => {
   const [unmappedSpecialties, setUnmappedSpecialties] = useState<IUnmappedSpecialty[]>([]);
   const [selectedSpecialties, setSelectedSpecialties] = useState<IUnmappedSpecialty[]>([]);
   const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
+  const [learnedMappingsWithSource, setLearnedMappingsWithSource] = useState<Array<{original: string, corrected: string, surveySource: string}>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
+  
+  // Force TypeScript recompilation
+  console.log('🔍 useMappingData: Hook initialized with learnedMappingsWithSource support');
   
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
@@ -158,10 +166,18 @@ export const useMappingData = (): UseMappingDataReturn => {
         dataProviderType,
         contextWorking: !!selectedProviderType
       });
-      const [mappingsData, unmappedData, learnedData] = await Promise.all([
+      
+      // ENTERPRISE DEBUG: Log provider type conversion
+      console.log('🔍 useMappingData: Provider type conversion:', {
+        selectedProviderType,
+        dataProviderType,
+        conversion: selectedProviderType === 'BOTH' ? 'BOTH -> undefined' : `${selectedProviderType} -> ${dataProviderType}`
+      });
+      const [mappingsData, unmappedData, learnedData, learnedDataWithSource] = await Promise.all([
         dataService.getAllSpecialtyMappings(dataProviderType),
         dataService.getUnmappedSpecialties(dataProviderType),
-        dataService.getLearnedMappings('specialty', dataProviderType)
+        dataService.getLearnedMappings('specialty', dataProviderType),
+        dataService.getLearnedMappingsWithSource('specialty', dataProviderType)
       ]);
       
       console.log('Loaded data:', { 
@@ -170,9 +186,43 @@ export const useMappingData = (): UseMappingDataReturn => {
         learned: Object.keys(learnedData || {}).length 
       });
       
+      // ENTERPRISE DEBUG: Log mappings details
+      console.log('🔍 useMappingData: Mappings details:', mappingsData.map(m => ({
+        id: m.id,
+        standardizedName: m.standardizedName,
+        sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
+          specialty: s.specialty,
+          surveySource: s.surveySource
+        }))
+      })));
+      
+      // ENTERPRISE DEBUG: Look specifically for MGMA mappings
+      const mgmaMappings = mappingsData.filter(m => 
+        m.sourceSpecialties.some((s: any) => s.surveySource === 'MGMA Physician')
+      );
+      console.log('🔍 useMappingData: MGMA mappings found:', mgmaMappings.length);
+      if (mgmaMappings.length > 0) {
+        console.log('🔍 useMappingData: MGMA mappings details:', mgmaMappings.map(m => ({
+          id: m.id,
+          standardizedName: m.standardizedName,
+          sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
+            specialty: s.specialty,
+            surveySource: s.surveySource
+          }))
+        })));
+      }
+      
+      // ENTERPRISE DEBUG: Log unmapped specialties details
+      console.log('🔍 useMappingData: Unmapped specialties details:', unmappedData.map(s => ({
+        name: s.name,
+        surveySource: s.surveySource,
+        frequency: s.frequency
+      })));
+      
       setMappings(mappingsData);
       setUnmappedSpecialties(unmappedData);
       setLearnedMappings(learnedData || {});
+      setLearnedMappingsWithSource(learnedDataWithSource || []);
       
       // Clear selected specialties when data loads to ensure clean state
       setSelectedSpecialties([]);
@@ -254,6 +304,57 @@ export const useMappingData = (): UseMappingDataReturn => {
     }
   }, [selectedSpecialties, dataService]);
 
+  // Create individual mappings - each selected specialty gets its own mapping
+  const createIndividualMappings = useCallback(async () => {
+    if (selectedSpecialties.length === 0) return;
+
+    try {
+      setError(null);
+      
+      // Create individual mappings for each selected specialty
+      const newMappings: ISpecialtyMapping[] = [];
+      
+      for (const specialty of selectedSpecialties) {
+        // Each specialty gets its own mapping with its own name as standardized name
+        const sourceSpecialty = {
+          id: crypto.randomUUID(),
+          specialty: specialty.name,
+          originalName: specialty.name,
+          surveySource: specialty.surveySource,
+          mappingId: ''
+        };
+
+        const mapping = await dataService.createSpecialtyMapping({
+          id: crypto.randomUUID(),
+          standardizedName: specialty.name, // Each specialty maps to itself
+          sourceSpecialties: [sourceSpecialty], // Only one source specialty per mapping
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        
+        // Create learned mapping for future automap runs
+        await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name, selectedProviderType);
+        
+        newMappings.push(mapping);
+      }
+      
+      // Update state
+      setMappings(prev => [...prev, ...newMappings]);
+      setUnmappedSpecialties(prev => 
+        prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
+      );
+      setSelectedSpecialties([]);
+      
+      // Refresh learned mappings to show the new ones (provider-type specific)
+      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
+      setLearnedMappings(learnedData);
+      // Keep user on unmapped tab to continue mapping more specialties
+    } catch (err) {
+      setError('Failed to create individual mappings');
+      console.error('Error creating individual mappings:', err);
+    }
+  }, [selectedSpecialties, dataService, selectedProviderType]);
+
   // Create grouped mapping - all selected specialties in one mapping
   const createGroupedMapping = useCallback(async () => {
     if (selectedSpecialties.length === 0) return;
@@ -310,8 +411,9 @@ export const useMappingData = (): UseMappingDataReturn => {
       // Update state
       setMappings(prev => prev.filter(m => m.id !== mappingId));
       
-      // Refresh unmapped specialties to show the deleted ones
-      const unmappedData = await dataService.getUnmappedSpecialties();
+      // Refresh unmapped specialties to show the deleted ones - WITH provider type filtering
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const unmappedData = await dataService.getUnmappedSpecialties(dataProviderType);
       setUnmappedSpecialties(unmappedData);
       
       // Switch to unmapped tab
@@ -320,7 +422,7 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError('Failed to delete mapping');
       console.error('Error deleting mapping:', err);
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   const clearAllMappings = useCallback(async () => {
     try {
@@ -343,15 +445,86 @@ export const useMappingData = (): UseMappingDataReturn => {
   const removeLearnedMapping = useCallback(async (original: string) => {
     try {
       setError(null);
+      console.log(`🗑️ Removing learned mapping: ${original} for provider type: ${selectedProviderType}`);
       await dataService.removeLearnedMapping('specialty', original);
-      // Refresh learned mappings
-      const learnedData = await dataService.getLearnedMappings('specialty');
+      
+      // Refresh learned mappings with provider type filtering
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const learnedData = await dataService.getLearnedMappings('specialty', dataProviderType);
+      const learnedDataWithSource = await dataService.getLearnedMappingsWithSource('specialty', dataProviderType);
+      
+      console.log(`🔄 Refreshed learned mappings after deletion:`, learnedData);
       setLearnedMappings(learnedData);
+      setLearnedMappingsWithSource(learnedDataWithSource);
     } catch (err) {
       setError('Failed to remove learned mapping');
       console.error('Error removing learned mapping:', err);
     }
+  }, [dataService, selectedProviderType]);
+
+  // Clear all learned mappings function
+  const clearAllLearnedMappings = useCallback(async () => {
+    try {
+      setError(null);
+      await dataService.clearLearnedMappings('specialty');
+      // Clear learned mappings from state
+      setLearnedMappings({});
+      console.log('✅ Successfully cleared all learned mappings');
+    } catch (err) {
+      setError('Failed to clear all learned mappings');
+      console.error('Error clearing learned mappings:', err);
+    }
   }, [dataService]);
+
+  const applyAllLearnedMappings = useCallback(async () => {
+    try {
+      setError(null);
+      
+      console.log('🚀 Applying learned mappings for provider type:', selectedProviderType);
+      
+      const learnedEntries = Object.entries(learnedMappings);
+      console.log(`Found ${learnedEntries.length} learned mappings to apply for ${selectedProviderType}`);
+      
+      let appliedCount = 0;
+      
+      for (const [originalSpecialty, standardizedSpecialty] of learnedEntries) {
+        try {
+          // Create a new mapping for this learned mapping
+          const newMapping = {
+            id: crypto.randomUUID(),
+            standardizedName: standardizedSpecialty,
+            sourceSpecialties: [{
+              id: crypto.randomUUID(),
+              specialty: originalSpecialty,
+              originalName: originalSpecialty,
+              surveySource: 'Custom' as const,
+              mappingId: standardizedSpecialty
+            }],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          // Save the mapping to the database
+          await dataService.createSpecialtyMapping(newMapping);
+          appliedCount++;
+          
+          console.log(`✅ Applied learned mapping for ${selectedProviderType}: ${originalSpecialty} -> ${standardizedSpecialty}`);
+          
+        } catch (mappingError) {
+          console.error(`❌ Failed to apply learned mapping ${originalSpecialty}:`, mappingError);
+        }
+      }
+      
+      // Refresh all data
+      await loadData();
+      
+      console.log(`🎉 Successfully applied ${appliedCount} learned mappings for ${selectedProviderType}!`);
+      
+    } catch (err) {
+      setError('Failed to apply learned mappings');
+      console.error('Error applying learned mappings:', err);
+    }
+  }, [learnedMappings, selectedProviderType, dataService, loadData]);
 
 
   // Utility functions
@@ -377,6 +550,7 @@ export const useMappingData = (): UseMappingDataReturn => {
     unmappedSpecialties,
     selectedSpecialties,
     learnedMappings,
+    learnedMappingsWithSource,
     loading,
     error,
     activeTab,
@@ -403,10 +577,13 @@ export const useMappingData = (): UseMappingDataReturn => {
          // Data operations
      loadData,
      createMapping,
+     createIndividualMappings,
      createGroupedMapping,
      deleteMapping,
      clearAllMappings,
      removeLearnedMapping,
+     clearAllLearnedMappings,
+     applyAllLearnedMappings,
     
     // Search and filters
     setSearchTerm,

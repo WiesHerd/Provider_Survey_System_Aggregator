@@ -5,7 +5,8 @@ import {
   CheckIcon,
   XMarkIcon,
   TableCellsIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  BoltIcon
 } from '@heroicons/react/24/outline';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
@@ -420,33 +421,50 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
             </div>
 
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
-              <ul className="divide-y divide-gray-200">
-                {filteredUnmapped.map((column) => (
-                  <li key={column} className="px-6 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="ml-3">
-                          <p className="text-sm font-medium text-gray-900">{column}</p>
-                          <p className="text-sm text-gray-500">Unmapped column</p>
+              {filteredUnmapped.length > 0 ? (
+                <ul className="divide-y divide-gray-200">
+                  {filteredUnmapped.map((column) => (
+                    <li key={column} className="px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-gray-900">{column}</p>
+                            <p className="text-sm text-gray-500">Unmapped column</p>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => {
+                            setNewMapping(prev => ({
+                              ...prev,
+                              sourceColumn: column
+                            }));
+                            setIsCreating(true);
+                          }}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          <AddIcon className="h-4 w-4 mr-2" />
+                          Map
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          setNewMapping(prev => ({
-                            ...prev,
-                            sourceColumn: column
-                          }));
-                          setIsCreating(true);
-                        }}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                      >
-                        <AddIcon className="h-4 w-4 mr-2" />
-                        Map
-                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="flex items-center justify-center py-20">
+                  <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                      <BoltIcon className="h-6 w-6 text-gray-500" />
                     </div>
-                  </li>
-                ))}
-              </ul>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Unmapped Columns Found</h3>
+                    <p className="text-gray-600 mb-4">
+                      {searchTerm 
+                        ? 'No unmapped columns match your search criteria.'
+                        : 'All columns are mapped, or no survey data is available.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -464,41 +482,60 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
             </div>
 
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
-              <ul className="divide-y divide-gray-200">
-                {filteredMappings.map((mapping) => (
-                  <li key={mapping.id} className="px-6 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center">
-                          <h3 className="text-sm font-medium text-gray-900">
-                            {mapping.sourceColumn} → {mapping.targetColumn}
-                          </h3>
-                          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {mapping.dataType}
-                          </span>
-                          {mapping.isRequired && (
-                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              Required
+              {filteredMappings.length > 0 ? (
+                <ul className="divide-y divide-gray-200">
+                  {filteredMappings.map((mapping) => (
+                    <li key={mapping.id} className="px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center">
+                            <h3 className="text-sm font-medium text-gray-900">
+                              {mapping.sourceColumn} → {mapping.targetColumn}
+                            </h3>
+                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {mapping.dataType}
                             </span>
-                          )}
+                            {mapping.isRequired && (
+                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Required
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1">
+                            <p className="text-sm text-gray-500">{mapping.description}</p>
+                          </div>
                         </div>
-                        <div className="mt-1">
-                          <p className="text-sm text-gray-500">{mapping.description}</p>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleDeleteMapping(mapping.id)}
+                            className="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50"
+                          >
+                            <DeleteSweepIcon className="h-4 w-4 mr-2" />
+                            Delete
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleDeleteMapping(mapping.id)}
-                          className="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50"
-                        >
-                          <DeleteSweepIcon className="h-4 w-4 mr-2" />
-                          Delete
-                        </button>
-                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="flex items-center justify-center py-20">
+                  <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                      <svg className="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Mapped Columns Found</h3>
+                    <p className="text-gray-600 mb-4">
+                      {mappedSearchTerm 
+                        ? 'No mapped columns match your search criteria.'
+                        : 'Create column mappings to organize and standardize your survey data.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

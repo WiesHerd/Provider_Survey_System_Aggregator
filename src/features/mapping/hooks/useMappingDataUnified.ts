@@ -22,6 +22,7 @@ export const useMappingDataUnified = () => {
     unmappedSpecialties,
     selectedSpecialties,
     learnedMappings,
+    learnedMappingsWithSource,
     loading,
     error,
     activeTab,
@@ -29,6 +30,7 @@ export const useMappingDataUnified = () => {
     updateUnmappedSpecialties,
     updateSelectedSpecialties,
     updateLearnedMappings,
+    updateLearnedMappingsWithSource,
     setLoadingState,
     setErrorState,
     setActiveTabState
@@ -51,10 +53,12 @@ export const useMappingDataUnified = () => {
   const {
     loadData,
     createMapping,
+    createIndividualMappings,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
+    clearAllLearnedMappings,
     applyAllLearnedMappings
   } = useMappingOperations(
     mappings,
@@ -65,6 +69,7 @@ export const useMappingDataUnified = () => {
     updateUnmappedSpecialties,
     updateSelectedSpecialties,
     updateLearnedMappings,
+    updateLearnedMappingsWithSource,
     setLoadingState,
     setErrorState
   );
@@ -107,14 +112,11 @@ export const useMappingDataUnified = () => {
         // Default to unmapped tab for new users
         setActiveTabState('unmapped');
       }
-      // If there are unmapped specialties and no mappings, default to unmapped tab
-      else if (unmappedSpecialties.length > 0 && mappings.length === 0) {
-        setActiveTabState('unmapped');
-      }
       // If there are learned mappings and no other data, default to learned tab
       else if (Object.keys(learnedMappings).length > 0 && mappings.length === 0 && unmappedSpecialties.length === 0) {
         setActiveTabState('learned');
       }
+      // Don't force switch to unmapped tab - let user choose their tab
       // Otherwise, keep current tab - don't force switch to mapped tab
     }
   }, [loading, mappings.length, unmappedSpecialties.length, learnedMappings, activeTab, setActiveTabState]);
@@ -128,6 +130,7 @@ export const useMappingDataUnified = () => {
     unmappedSpecialties,
     selectedSpecialties,
     learnedMappings,
+    learnedMappingsWithSource,
     loading,
     error,
     activeTab,
@@ -153,12 +156,13 @@ export const useMappingDataUnified = () => {
     // Data operations
     loadData,
     createMapping,
+    createIndividualMappings,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
+    clearAllLearnedMappings,
     applyAllLearnedMappings,
-    
     
     // Search and filters
     setSearchTerm: handleSearchChange,

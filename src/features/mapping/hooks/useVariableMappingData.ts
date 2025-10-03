@@ -449,15 +449,16 @@ export const useVariableMappingData = () => {
       await dataService.deleteVariableMapping(mappingId);
       setVariableMappings(prev => prev.filter(mapping => mapping.id !== mappingId));
       
-      // Reload unmapped variables to include any that were in this mapping
-      const unmapped = await detectUnmappedVariables();
+      // Reload unmapped variables to include any that were in this mapping - WITH provider type filtering
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const unmapped = await dataService.getUnmappedVariables(dataProviderType);
       setUnmappedVariables(unmapped);
       
     } catch (err) {
       console.error('Failed to delete variable mapping:', err);
       setError('Failed to delete variable mapping');
     }
-  }, [dataService, detectUnmappedVariables]);
+  }, [dataService, selectedProviderType]);
 
   // Clear all variable mappings
   const clearAllVariableMappings = useCallback(async () => {
@@ -465,15 +466,16 @@ export const useVariableMappingData = () => {
       await dataService.clearAllVariableMappings();
       setVariableMappings([]);
       
-      // Reload unmapped variables
-      const unmapped = await detectUnmappedVariables();
+      // Reload unmapped variables - WITH provider type filtering
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const unmapped = await dataService.getUnmappedVariables(dataProviderType);
       setUnmappedVariables(unmapped);
       
     } catch (err) {
       console.error('Failed to clear variable mappings:', err);
       setError('Failed to clear variable mappings');
     }
-  }, [dataService, detectUnmappedVariables]);
+  }, [dataService, selectedProviderType]);
 
   // Variable selection
   const selectVariable = useCallback((variable: IUnmappedVariable) => {

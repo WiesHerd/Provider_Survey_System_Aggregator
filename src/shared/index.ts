@@ -6,15 +6,14 @@
 // Types
 export * from './types';
 
+// Hooks
+export * from './hooks';
+
 // Utilities
 export * from './utils';
 
 // Components
-export {
-  default as ProviderTypeSelector,
-  CompactProviderTypeSelector,
-  ProviderTypeBadge
-} from './components/ProviderTypeSelector';
+export * from './components';
 
 // Re-export commonly used utilities for convenience
 export {

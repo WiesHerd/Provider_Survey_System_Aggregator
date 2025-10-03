@@ -79,3 +79,9 @@ async function clearAllSurveys() {
 
 // Run the function
 clearAllSurveys();
+
+
+
+
+
+

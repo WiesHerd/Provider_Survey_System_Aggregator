@@ -224,15 +224,16 @@ export const useRegionMappingData = () => {
       await dataService.deleteRegionMapping(mappingId);
       setMappings(prev => prev.filter(mapping => mapping.id !== mappingId));
       
-      // Reload unmapped regions to include any that were in this mapping
-      const unmapped = await dataService.getUnmappedRegions();
+      // Reload unmapped regions to include any that were in this mapping - WITH provider type filtering
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
     } catch (err) {
       console.error('Failed to delete region mapping:', err);
       setError('Failed to delete region mapping');
     }
-  }, [dataService, detectUnmappedRegions]);
+  }, [dataService, selectedProviderType]);
 
   // Clear all region mappings
   const clearAllMappings = useCallback(async () => {
@@ -240,15 +241,16 @@ export const useRegionMappingData = () => {
       await dataService.clearAllRegionMappings();
       setMappings([]);
       
-      // Reload unmapped regions
-      const unmapped = await detectUnmappedRegions();
+      // Reload unmapped regions - WITH provider type filtering
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
     } catch (err) {
       console.error('Failed to clear region mappings:', err);
       setError('Failed to clear region mappings');
     }
-  }, [dataService, detectUnmappedRegions]);
+  }, [dataService, selectedProviderType]);
 
   // Region selection
   const selectRegion = useCallback((region: IUnmappedRegion) => {

@@ -32,6 +32,7 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
   searchTerm,
   onSearchChange,
   onSpecialtySelect,
+  onSpecialtyDeselect,
   onClearSelection,
   onRefresh
 }) => {
@@ -114,6 +115,7 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
                     specialty={specialty}
                     isSelected={selectedSpecialties.some(s => s.id === specialty.id)}
                     onSelect={onSpecialtySelect}
+                    onDeselect={onSpecialtyDeselect}
                   />
                 ))}
               </div>

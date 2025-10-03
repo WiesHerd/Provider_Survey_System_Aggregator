@@ -1112,13 +1112,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         backgroundColor: 'white',
                         borderRadius: '8px',
                         minHeight: '40px',
-                        border: '1px solid #d1d5db',
-                        '&:hover': {
+                        '& fieldset': {
+                          borderColor: '#d1d5db',
+                        },
+                        '&:hover fieldset': {
                           borderColor: '#9ca3af',
                         },
-                        '&.Mui-focused': {
+                        '&.Mui-focused fieldset': {
                           borderColor: '#3b82f6',
-                          boxShadow: 'none',
+                          borderWidth: '1px',
                         }
                       }
                     }}
@@ -1191,15 +1193,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         borderRadius: '8px',
                         fontSize: '0.875rem',
                         minHeight: '40px',
-                        border: '1px solid #d1d5db',
-                        '&:hover': {
-                          borderColor: '#9ca3af',
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)'
+                        '& fieldset': {
+                          borderColor: '#d1d5db',
                         },
-                        '&.Mui-focused': {
-                          backgroundColor: 'white',
-                          boxShadow: 'none',
-                          borderColor: '#3b82f6'
+                        '&:hover fieldset': {
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '1px',
                         }
                       }
                     }}
@@ -1274,15 +1276,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         borderRadius: '8px',
                         fontSize: '0.875rem',
                         minHeight: '40px',
-                        border: '1px solid #d1d5db',
-                        '&:hover': {
-                          borderColor: '#9ca3af',
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)'
+                        '& fieldset': {
+                          borderColor: '#d1d5db',
                         },
-                        '&.Mui-focused': {
-                          backgroundColor: 'white',
-                          boxShadow: 'none',
-                          borderColor: '#3b82f6'
+                        '&:hover fieldset': {
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '1px',
                         }
                       }
                     }}

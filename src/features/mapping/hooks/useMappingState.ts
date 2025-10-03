@@ -11,6 +11,7 @@ export const useMappingState = () => {
   const [unmappedSpecialties, setUnmappedSpecialties] = useState<IUnmappedSpecialty[]>([]);
   const [selectedSpecialties, setSelectedSpecialties] = useState<IUnmappedSpecialty[]>([]);
   const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
+  const [learnedMappingsWithSource, setLearnedMappingsWithSource] = useState<Array<{original: string, corrected: string, surveySource: string}>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
@@ -32,6 +33,10 @@ export const useMappingState = () => {
     setLearnedMappings(newLearned);
   }, []);
 
+  const updateLearnedMappingsWithSource = useCallback((newLearnedWithSource: Array<{original: string, corrected: string, surveySource: string}>) => {
+    setLearnedMappingsWithSource(newLearnedWithSource);
+  }, []);
+
   const setLoadingState = useCallback((isLoading: boolean) => {
     setLoading(isLoading);
   }, []);
@@ -50,6 +55,7 @@ export const useMappingState = () => {
     unmappedSpecialties,
     selectedSpecialties,
     learnedMappings,
+    learnedMappingsWithSource,
     loading,
     error,
     activeTab,
@@ -59,11 +65,18 @@ export const useMappingState = () => {
     updateUnmappedSpecialties,
     updateSelectedSpecialties,
     updateLearnedMappings,
+    updateLearnedMappingsWithSource,
     setLoadingState,
     setErrorState,
     setActiveTabState
   };
 };
+
+
+
+
+
+
 
 
 

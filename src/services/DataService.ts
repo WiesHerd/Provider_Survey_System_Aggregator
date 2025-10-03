@@ -128,8 +128,8 @@ export class DataService {
     return await this.indexedDB.getLearnedMappings(type, providerType);
   }
 
-  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string): Promise<void> {
-    return await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType);
+  async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string, surveySource?: string): Promise<void> {
+    return await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType, surveySource);
   }
 
   async removeLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string): Promise<void> {
@@ -138,6 +138,10 @@ export class DataService {
 
   async clearLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<void> {
     return await this.indexedDB.clearLearnedMappings(type);
+  }
+
+  async getLearnedMappingsWithSource(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Array<{original: string, corrected: string, surveySource: string}>> {
+    return await this.indexedDB.getLearnedMappingsWithSource(type, providerType);
   }
 
   async healthCheck() {

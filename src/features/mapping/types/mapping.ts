@@ -109,6 +109,7 @@ export interface UnmappedSpecialtiesProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onSpecialtySelect: (specialty: IUnmappedSpecialty) => void;
+  onSpecialtyDeselect?: (specialty: IUnmappedSpecialty) => void;
   onClearSelection?: () => void;
   onRefresh: () => void;
 }
@@ -123,10 +124,12 @@ export interface MappedSpecialtiesProps {
 
 export interface LearnedMappingsProps {
   learnedMappings: Record<string, string>;
+  learnedMappingsWithSource?: Array<{original: string, corrected: string, surveySource: string}>;
   searchTerm: string;
   onSearchChange: (term: string) => void;
-  onRemoveMapping: (original: string) => void;
+  onRemoveLearnedMapping: (original: string) => void;
   onApplyAllMappings?: () => void;
+  onClearAllMappings?: () => void;
 }
 
 
@@ -134,6 +137,7 @@ export interface SpecialtyCardProps {
   specialty: IUnmappedSpecialty;
   isSelected: boolean;
   onSelect: (specialty: IUnmappedSpecialty) => void;
+  onDeselect?: (specialty: IUnmappedSpecialty) => void;
 }
 
 export interface MappingHelpProps {

@@ -93,22 +93,51 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     console.log('🔍 SurveyAnalytics: Current filters:', filters);
     console.log('🔍 SurveyAnalytics: Provider type filter:', providerTypeFilter);
     
-    // Filter data by provider type first if specified (behind the scenes)
+    // Start with all data
     let filteredData = allData;
+    
+    // Apply provider type filtering first
     if (effectiveProviderType) {
-      filteredData = allData.filter(row => {
+      filteredData = filteredData.filter(row => {
         const category = categorizeProviderType(row.providerType || '');
         return category === effectiveProviderType;
       });
       console.log('🔍 SurveyAnalytics: Filtered by provider type', effectiveProviderType, 'to', filteredData.length, 'records');
     }
     
-    // Generate options from the provider-filtered dataset
-    const availableSpecialties = [...new Set(filteredData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
-    const availableSources = [...new Set(filteredData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
-    const availableRegions = [...new Set(filteredData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
-    const availableProviderTypes = [...new Set(filteredData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
-    const availableYears = [...new Set(filteredData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
+    // Apply cascading filters - each filter affects the available options for others
+    let cascadingData = filteredData;
+    
+    // If year is selected, filter by year first
+    if (filters.year) {
+      cascadingData = cascadingData.filter(row => row.surveyYear === filters.year);
+      console.log('🔍 SurveyAnalytics: Filtered by year', filters.year, 'to', cascadingData.length, 'records');
+    }
+    
+    // If specialty is selected, filter by specialty
+    if (filters.specialty) {
+      cascadingData = cascadingData.filter(row => row.standardizedName === filters.specialty);
+      console.log('🔍 SurveyAnalytics: Filtered by specialty', filters.specialty, 'to', cascadingData.length, 'records');
+    }
+    
+    // If survey source is selected, filter by survey source
+    if (filters.surveySource) {
+      cascadingData = cascadingData.filter(row => row.surveySource === filters.surveySource);
+      console.log('🔍 SurveyAnalytics: Filtered by survey source', filters.surveySource, 'to', cascadingData.length, 'records');
+    }
+    
+    // If region is selected, filter by region
+    if (filters.geographicRegion) {
+      cascadingData = cascadingData.filter(row => row.geographicRegion === filters.geographicRegion);
+      console.log('🔍 SurveyAnalytics: Filtered by region', filters.geographicRegion, 'to', cascadingData.length, 'records');
+    }
+    
+    // Generate options from the cascading-filtered dataset
+    const availableSpecialties = [...new Set(cascadingData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
+    const availableSources = [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
+    const availableRegions = [...new Set(cascadingData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
+    const availableProviderTypes = [...new Set(cascadingData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
+    const availableYears = [...new Set(cascadingData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
 
     console.log('🔍 SurveyAnalytics: Cascading filter options - specialties:', availableSpecialties.length, 'sources:', availableSources.length, 'regions:', availableRegions.length, 'providerTypes:', availableProviderTypes.length, 'years:', availableYears.length);
 

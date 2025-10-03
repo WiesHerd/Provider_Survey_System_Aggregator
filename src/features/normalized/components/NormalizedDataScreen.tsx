@@ -127,24 +127,29 @@ const NormalizedDataScreen: React.FC = () => {
         const surveyData = surveyDataResponse?.rows || [];
         
         surveyData.forEach((row: any, index: number) => {
+          // Extract data from the correct structure
+          const rowData = row.data || row;
+          const providerType = row.providerType || rowData?.providerType || rowData?.['Provider Type'] || rowData?.provider_type || '';
+          const region = row.region || rowData?.region || rowData?.Region || rowData?.geographic_region || rowData?.geographicRegion || '';
+          
           allData.push({
             id: `${survey.id}-${index}`,
             surveyId: survey.id,
             surveyName: survey.name || survey.type || 'Unknown',
             surveyType: survey.type || 'Unknown',
             surveyYear: survey.year || 'Unknown',
-            originalSpecialty: row.specialty || row.originalSpecialty || '',
-            normalizedSpecialty: row.normalizedSpecialty || row.specialty || '',
-            originalProviderType: row.providerType || row.originalProviderType || '',
-            normalizedProviderType: row.normalizedProviderType || row.providerType || '',
-            originalRegion: row.geographicRegion || row.originalRegion || '',
-            normalizedRegion: row.normalizedRegion || row.geographicRegion || '',
-            n_orgs: row.n_orgs || 0,
-            n_incumbents: row.n_incumbents || 0,
-            p25: row.p25 || 0,
-            p50: row.p50 || 0,
-            p75: row.p75 || 0,
-            p90: row.p90 || 0,
+            originalSpecialty: row.specialty || rowData?.specialty || rowData?.Specialty || '',
+            normalizedSpecialty: row.normalizedSpecialty || row.specialty || rowData?.specialty || rowData?.Specialty || '',
+            originalProviderType: providerType,
+            normalizedProviderType: row.normalizedProviderType || providerType,
+            originalRegion: region,
+            normalizedRegion: row.normalizedRegion || region,
+            n_orgs: row.n_orgs || rowData?.n_orgs || 0,
+            n_incumbents: row.n_incumbents || rowData?.n_incumbents || 0,
+            p25: row.p25 || rowData?.p25 || 0,
+            p50: row.p50 || rowData?.p50 || 0,
+            p75: row.p75 || rowData?.p75 || 0,
+            p90: row.p90 || rowData?.p90 || 0,
             metricType: row.metricType || 'TCC',
             rawData: row
           });

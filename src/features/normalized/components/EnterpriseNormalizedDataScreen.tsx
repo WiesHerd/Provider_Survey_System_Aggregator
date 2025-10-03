@@ -131,9 +131,15 @@ export const EnterpriseNormalizedDataScreen: React.FC = () => {
 
             // Normalize data for this survey
             const normalizedSurveyData = surveyData.map((row: any, index: number) => {
-              const normalizedSpecialty = normalizeSpecialty(row.specialty, mappings, survey.name);
-              const normalizedProviderType = normalizeProviderType(row.provider_type);
-              const normalizedRegion = normalizeRegion(row.geographic_region, mappings, survey.name);
+              // Extract data from the correct structure
+              const rowData = row.data || row;
+              const providerType = row.providerType || rowData?.providerType || rowData?.['Provider Type'] || rowData?.provider_type || '';
+              const region = row.region || rowData?.region || rowData?.Region || rowData?.geographic_region || rowData?.geographicRegion || '';
+              const specialty = row.specialty || rowData?.specialty || rowData?.Specialty || '';
+              
+              const normalizedSpecialty = normalizeSpecialty(specialty, mappings, survey.name);
+              const normalizedProviderType = normalizeProviderType(providerType);
+              const normalizedRegion = normalizeRegion(region, mappings, survey.name);
 
               return {
                 id: `${survey.id}_${index}`,
@@ -141,18 +147,18 @@ export const EnterpriseNormalizedDataScreen: React.FC = () => {
                 surveyName: survey.name,
                 surveyType: survey.type,
                 surveyYear: survey.year,
-                originalSpecialty: row.specialty,
+                originalSpecialty: specialty,
                 normalizedSpecialty,
-                originalProviderType: row.provider_type,
+                originalProviderType: providerType,
                 normalizedProviderType,
-                originalRegion: row.geographic_region,
+                originalRegion: region,
                 normalizedRegion,
-                n_orgs: parseInt(row.n_orgs) || 0,
-                n_incumbents: parseInt(row.n_incumbents) || 0,
-                p25: parseFloat(row.p25) || 0,
-                p50: parseFloat(row.p50) || 0,
-                p75: parseFloat(row.p75) || 0,
-                p90: parseFloat(row.p90) || 0,
+                n_orgs: parseInt(row.n_orgs || rowData?.n_orgs) || 0,
+                n_incumbents: parseInt(row.n_incumbents || rowData?.n_incumbents) || 0,
+                p25: parseFloat(row.p25 || rowData?.p25) || 0,
+                p50: parseFloat(row.p50 || rowData?.p50) || 0,
+                p75: parseFloat(row.p75 || rowData?.p75) || 0,
+                p90: parseFloat(row.p90 || rowData?.p90) || 0,
                 rawData: row
               };
             });

@@ -9,15 +9,21 @@ import { getSurveySourceColor } from '../utils/mappingCalculations';
  * 
  * @param specialty - The unmapped specialty to display
  * @param isSelected - Whether the specialty is currently selected
- * @param onSelect - Callback when the specialty is clicked
+ * @param onSelect - Callback when the specialty is clicked to select
+ * @param onDeselect - Callback when the specialty is clicked to deselect
  */
 export const SpecialtyCard: React.FC<SpecialtyCardProps> = ({ 
   specialty, 
   isSelected, 
-  onSelect
+  onSelect,
+  onDeselect
 }) => {
   const handleClick = () => {
-    onSelect(specialty);
+    if (isSelected) {
+      onDeselect?.(specialty);
+    } else {
+      onSelect(specialty);
+    }
   };
 
   return (
