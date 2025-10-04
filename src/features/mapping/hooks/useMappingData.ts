@@ -234,6 +234,11 @@ export const useMappingData = (): UseMappingDataReturn => {
     }
   }, [dataService, selectedProviderType]);
 
+  // Reload data when provider type changes
+  useEffect(() => {
+    loadData();
+  }, [selectedProviderType, loadData]);
+
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {
     setSelectedSpecialties(prev => {

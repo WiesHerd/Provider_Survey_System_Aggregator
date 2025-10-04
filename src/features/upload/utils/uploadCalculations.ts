@@ -76,7 +76,34 @@ export const extractUniqueValues = (surveys: UploadedSurvey[]): UniqueValues => 
     
     const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
     const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
-    const regionIdx = headers.findIndex(h => h.includes('region') || h.includes('geography'));
+    
+    // More specific region detection - avoid practice setting columns
+    const regionIdx = headers.findIndex(h => {
+      const lower = h.toLowerCase();
+      // Look for geographical region indicators
+      const isGeographicRegion = (
+        lower.includes('geographic') && lower.includes('region') ||
+        lower === 'region' ||
+        lower === 'geographic_region' ||
+        lower === 'geographicregion' ||
+        lower.includes('location') ||
+        lower.includes('area') ||
+        lower.includes('market') ||
+        lower.includes('state')
+      );
+      
+      // Exclude practice setting columns
+      const isPracticeSetting = (
+        lower.includes('practice') ||
+        lower.includes('setting') ||
+        lower.includes('inpatient') ||
+        lower.includes('outpatient') ||
+        lower.includes('hospital') ||
+        lower.includes('medical group')
+      );
+      
+      return isGeographicRegion && !isPracticeSetting;
+    });
 
     lines.slice(1).forEach(line => {
       const values = line.split(',').map(v => v.trim());
@@ -115,7 +142,34 @@ export const filterSurveys = (surveys: UploadedSurvey[], filters: UploadGlobalFi
     
     const specialtyIdx = headers.findIndex(h => h.includes('specialty'));
     const providerTypeIdx = headers.findIndex(h => h.includes('provider') || h.includes('type'));
-    const regionIdx = headers.findIndex(h => h.includes('region') || h.includes('geography'));
+    
+    // More specific region detection - avoid practice setting columns
+    const regionIdx = headers.findIndex(h => {
+      const lower = h.toLowerCase();
+      // Look for geographical region indicators
+      const isGeographicRegion = (
+        lower.includes('geographic') && lower.includes('region') ||
+        lower === 'region' ||
+        lower === 'geographic_region' ||
+        lower === 'geographicregion' ||
+        lower.includes('location') ||
+        lower.includes('area') ||
+        lower.includes('market') ||
+        lower.includes('state')
+      );
+      
+      // Exclude practice setting columns
+      const isPracticeSetting = (
+        lower.includes('practice') ||
+        lower.includes('setting') ||
+        lower.includes('inpatient') ||
+        lower.includes('outpatient') ||
+        lower.includes('hospital') ||
+        lower.includes('medical group')
+      );
+      
+      return isGeographicRegion && !isPracticeSetting;
+    });
 
     // Check if any row matches the filters
     return lines.slice(1).some(line => {

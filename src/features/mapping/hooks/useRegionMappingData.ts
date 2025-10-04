@@ -84,6 +84,10 @@ export const useRegionMappingData = () => {
       const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
+      // Load learned mappings (FIXED!)
+      const learnedData = await dataService.getLearnedMappings('region', selectedProviderType);
+      setLearnedMappings(learnedData);
+      
     } catch (err) {
       console.error('Failed to load region mapping data:', err);
       setError('Failed to load region mapping data');
@@ -205,6 +209,15 @@ export const useRegionMappingData = () => {
       await dataService.createRegionMapping(mapping);
       setMappings(prev => [...prev, mapping]);
       
+      // Create learned mappings for all regions in the group (FIXED!)
+      for (const region of regions) {
+        await dataService.saveLearnedMapping('region', region.name, standardizedName, selectedProviderType, region.surveySource);
+      }
+      
+      // Update learned mappings state to show the new ones
+      const learnedData = await dataService.getLearnedMappings('region', selectedProviderType);
+      setLearnedMappings(learnedData);
+      
       // Remove mapped regions from unmapped list
       setUnmappedRegions(prev => 
         prev.filter(region => 
@@ -216,7 +229,7 @@ export const useRegionMappingData = () => {
       console.error('Failed to create grouped region mapping:', err);
       setError('Failed to create grouped region mapping');
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   // Delete region mapping
   const deleteMapping = useCallback(async (mappingId: string) => {
