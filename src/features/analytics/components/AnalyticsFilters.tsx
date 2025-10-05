@@ -5,7 +5,7 @@
  * Following enterprise patterns for component composition and reusability.
  */
 
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useCallback } from 'react';
 import { 
   Box, 
   Switch, 
@@ -30,6 +30,7 @@ import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { StandardDropdown } from '../../../shared/components';
+import { useMultiYearBlending } from '../hooks/useMultiYearBlending';
 
 /**
  * AnalyticsFilters component for filtering analytics data
@@ -51,133 +52,32 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   availableProviderTypes,
   availableYears
 }) => {
-  const [showMultiYear, setShowMultiYear] = useState(false);
-  const [selectedYears, setSelectedYears] = useState<string[]>([]);
+  // Use custom hook for multi-year blending logic
+  const {
+    showMultiYear,
+    setShowMultiYear,
+    selectedYears,
+    handleMultiYearToggle,
+    handleYearsSelectionChange,
+    handleBlendingMethodChange,
+    handlePercentageChange,
+    clearAllFilters
+  } = useMultiYearBlending({
+    filters,
+    availableYears,
+    onFiltersChange
+  });
   
+  // Handler for standard filter changes (specialty, region, etc.)
   const handleFilterChange = useCallback((field: keyof typeof filters, value: string) => {
-    // Simply update the specific filter that changed
-    // Allow multiple filters to work together
-    const newFilters = { ...filters, [field]: value };
-    onFiltersChange(newFilters);
+    onFiltersChange({ ...filters, [field]: value });
   }, [filters, onFiltersChange]);
   
-  // Multi-year blending handlers
-  const handleMultiYearToggle = useCallback((enabled: boolean) => {
-    if (enabled) {
-      // Initialize with two years if available
-      const years = availableYears.slice(0, Math.min(2, availableYears.length));
-      setSelectedYears(years);
-      const percentage = years.length > 0 ? 100 / years.length : 100;
-      
-      onFiltersChange({
-        ...filters,
-        year: '', // Clear single year selection
-        useMultiYearBlending: true,
-        multiYearBlending: {
-          method: 'equal',
-          years: years.map(year => ({
-            year,
-            percentage,
-            weight: 1
-          })),
-          totalPercentage: 100
-        }
-      });
-      setShowMultiYear(true);
-    } else {
-      // Disable multi-year blending
-      setSelectedYears([]);
-      onFiltersChange({
-        ...filters,
-        useMultiYearBlending: false,
-        multiYearBlending: undefined
-      });
-    }
-  }, [availableYears, filters, onFiltersChange]);
-  
-  const handleYearsSelectionChange = useCallback((event: any) => {
+  // Wrapper for years selection to match Material-UI event type
+  const handleYearsDropdownChange = useCallback((event: React.ChangeEvent<{ value: unknown }>) => {
     const value = event.target.value as string[];
-    setSelectedYears(value);
-    
-    if (value.length === 0) {
-      // If no years selected, disable blending
-      handleMultiYearToggle(false);
-      return;
-    }
-    
-    // Calculate equal percentages for selected years
-    const percentage = 100 / value.length;
-    const currentMethod = filters.multiYearBlending?.method || 'equal';
-    
-    onFiltersChange({
-      ...filters,
-      useMultiYearBlending: true,
-      multiYearBlending: {
-        method: currentMethod,
-        years: value.map(year => ({
-          year,
-          percentage: currentMethod === 'percentage' ? percentage : 100 / value.length,
-          weight: 1
-        })),
-        totalPercentage: 100
-      }
-    });
-  }, [filters, handleMultiYearToggle, onFiltersChange]);
-  
-  const handleBlendingMethodChange = useCallback((method: 'percentage' | 'weighted' | 'equal') => {
-    if (filters.multiYearBlending) {
-      const years = filters.multiYearBlending.years;
-      const percentage = 100 / years.length;
-      
-      onFiltersChange({
-        ...filters,
-        multiYearBlending: {
-          ...filters.multiYearBlending,
-          method,
-          years: years.map(y => ({
-            ...y,
-            percentage: method === 'percentage' ? percentage : 100 / years.length
-          })),
-          totalPercentage: 100
-        }
-      });
-    }
-  }, [filters, onFiltersChange]);
-  
-  const handlePercentageChange = useCallback((yearToUpdate: string, newPercentage: number) => {
-    if (filters.multiYearBlending) {
-      const newYears = filters.multiYearBlending.years.map(y => 
-        y.year === yearToUpdate 
-          ? { ...y, percentage: newPercentage }
-          : y
-      );
-      
-      const totalPercentage = newYears.reduce((sum, y) => sum + y.percentage, 0);
-      
-      onFiltersChange({
-        ...filters,
-        multiYearBlending: {
-          ...filters.multiYearBlending,
-          years: newYears,
-          totalPercentage
-        }
-      });
-    }
-  }, [filters, onFiltersChange]);
-  
-  // Helper to clear all filters
-  const clearAllFilters = useCallback(() => {
-    setSelectedYears([]);
-    onFiltersChange({
-      specialty: '',
-      surveySource: '',
-      geographicRegion: '',
-      providerType: '',
-      year: '',
-      useMultiYearBlending: false,
-      multiYearBlending: undefined
-    });
-  }, [onFiltersChange]);
+    handleYearsSelectionChange(value);
+  }, [handleYearsSelectionChange]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -326,7 +226,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
               <Select
                 multiple
                 value={selectedYears}
-                onChange={handleYearsSelectionChange}
+                onChange={handleYearsDropdownChange}
                 input={<OutlinedInput label="Select Years to Blend" />}
                 renderValue={(selected: unknown) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>

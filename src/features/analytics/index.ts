@@ -13,6 +13,7 @@ export { PhysicianAnalytics } from './components/PhysicianAnalytics';
 
 // Hooks
 export { useAnalyticsData } from './hooks/useAnalyticsData';
+export { useMultiYearBlending } from './hooks/useMultiYearBlending';
 
 // Types
 export type {
