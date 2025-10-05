@@ -23,7 +23,7 @@ import { StandardDropdown } from '../../../shared/components';
  * @param availableProviderTypes - Available provider type options
  * @param availableYears - Available year options
  */
-export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
+const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   filters,
   onFiltersChange,
   availableSpecialties,
@@ -382,6 +382,8 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = memo(({
 
     </div>
   );
-});
+};
 
+// Export memoized version
+export const AnalyticsFilters = memo(AnalyticsFiltersComponent);
 AnalyticsFilters.displayName = 'AnalyticsFilters';
