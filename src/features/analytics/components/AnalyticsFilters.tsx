@@ -5,7 +5,7 @@
  * Following enterprise patterns for component composition and reusability.
  */
 
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useCallback } from 'react';
 import { 
   Box, 
   Switch, 
@@ -54,15 +54,15 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   const [showMultiYear, setShowMultiYear] = useState(false);
   const [selectedYears, setSelectedYears] = useState<string[]>([]);
   
-  const handleFilterChange = (field: keyof typeof filters, value: string) => {
+  const handleFilterChange = useCallback((field: keyof typeof filters, value: string) => {
     // Simply update the specific filter that changed
     // Allow multiple filters to work together
     const newFilters = { ...filters, [field]: value };
     onFiltersChange(newFilters);
-  };
+  }, [filters, onFiltersChange]);
   
   // Multi-year blending handlers
-  const handleMultiYearToggle = (enabled: boolean) => {
+  const handleMultiYearToggle = useCallback((enabled: boolean) => {
     if (enabled) {
       // Initialize with two years if available
       const years = availableYears.slice(0, Math.min(2, availableYears.length));
@@ -93,9 +93,9 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         multiYearBlending: undefined
       });
     }
-  };
+  }, [availableYears, filters, onFiltersChange]);
   
-  const handleYearsSelectionChange = (event: any) => {
+  const handleYearsSelectionChange = useCallback((event: any) => {
     const value = event.target.value as string[];
     setSelectedYears(value);
     
@@ -122,9 +122,9 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         totalPercentage: 100
       }
     });
-  };
+  }, [filters, handleMultiYearToggle, onFiltersChange]);
   
-  const handleBlendingMethodChange = (method: 'percentage' | 'weighted' | 'equal') => {
+  const handleBlendingMethodChange = useCallback((method: 'percentage' | 'weighted' | 'equal') => {
     if (filters.multiYearBlending) {
       const years = filters.multiYearBlending.years;
       const percentage = 100 / years.length;
@@ -142,9 +142,9 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         }
       });
     }
-  };
+  }, [filters, onFiltersChange]);
   
-  const handlePercentageChange = (yearToUpdate: string, newPercentage: number) => {
+  const handlePercentageChange = useCallback((yearToUpdate: string, newPercentage: number) => {
     if (filters.multiYearBlending) {
       const newYears = filters.multiYearBlending.years.map(y => 
         y.year === yearToUpdate 
@@ -163,11 +163,21 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         }
       });
     }
-  };
+  }, [filters, onFiltersChange]);
   
-  const handleSliderChange = (yearToUpdate: string, newValue: number) => {
-    handlePercentageChange(yearToUpdate, newValue);
-  };
+  // Helper to clear all filters
+  const clearAllFilters = useCallback(() => {
+    setSelectedYears([]);
+    onFiltersChange({
+      specialty: '',
+      surveySource: '',
+      geographicRegion: '',
+      providerType: '',
+      year: '',
+      useMultiYearBlending: false,
+      multiYearBlending: undefined
+    });
+  }, [onFiltersChange]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -179,17 +189,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         {/* Clear Filters Button */}
         {(filters.specialty || filters.surveySource || filters.geographicRegion || filters.providerType || filters.year || filters.useMultiYearBlending) && (
           <button
-            onClick={() => {
-              onFiltersChange({
-                specialty: '',
-                surveySource: '',
-                geographicRegion: '',
-                providerType: '',
-                year: '',
-                useMultiYearBlending: false,
-                multiYearBlending: undefined
-              });
-            }}
+            onClick={clearAllFilters}
             className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
             title="Clear all filters"
           >
@@ -398,7 +398,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
                     
                     <Slider
                       value={yearItem.percentage}
-                      onChange={(_: Event, value: number | number[]) => handleSliderChange(yearItem.year, value as number)}
+                      onChange={(_: Event, value: number | number[]) => handlePercentageChange(yearItem.year, value as number)}
                       min={0}
                       max={100}
                       step={1}
