@@ -61,6 +61,26 @@ export interface AggregatedData {
 }
 
 /**
+ * Individual year in a multi-year blend
+ */
+export interface YearBlendItem {
+  year: string;
+  percentage: number; // Percentage weight (0-100)
+  weight: number;     // Alternative weight (e.g., sample size)
+  sampleSize?: number; // Sample size for this year
+  surveyCount?: number; // Number of surveys in this year
+}
+
+/**
+ * Multi-year blending configuration
+ */
+export interface YearBlendingConfig {
+  years: YearBlendItem[];
+  method: 'percentage' | 'weighted' | 'equal';
+  totalPercentage: number; // Must equal 100 for percentage method
+}
+
+/**
  * Analytics filter state
  */
 export interface AnalyticsFilters {
@@ -68,7 +88,11 @@ export interface AnalyticsFilters {
   surveySource: string;
   geographicRegion: string;
   providerType: string;
-  year: string;
+  year: string; // Single year selection (legacy/simple mode)
+  
+  // Multi-year blending
+  useMultiYearBlending?: boolean;
+  multiYearBlending?: YearBlendingConfig;
 }
 
 /**
@@ -143,6 +167,34 @@ export interface AnalyticsFiltersProps {
 }
 
 /**
+ * Blended analytics result with year breakdown
+ */
+export interface BlendedAnalyticsResult {
+  // Final blended data
+  blendedData: AggregatedData[];
+  
+  // Year-level breakdown for transparency
+  yearBreakdown: {
+    [year: string]: {
+      data: AggregatedData[];
+      sampleSize: number;
+      surveyCount: number;
+      contribution: number; // Percentage or weight contribution
+    };
+  };
+  
+  // Quality metrics
+  confidence: number; // 0-1, based on sample sizes and data quality
+  qualityWarnings: string[];
+  
+  // Metadata
+  totalSampleSize: number;
+  totalSurveyCount: number;
+  yearsIncluded: string[];
+  blendingMethod: 'percentage' | 'weighted' | 'equal';
+}
+
+/**
  * Analytics hook return type
  */
 export interface UseAnalyticsReturn {
@@ -155,4 +207,5 @@ export interface UseAnalyticsReturn {
   refetch: () => Promise<void>;
   exportToExcel: () => void;
   exportToCSV: () => void;
+  blendedResult?: BlendedAnalyticsResult | null; // Multi-year blending result
 }
