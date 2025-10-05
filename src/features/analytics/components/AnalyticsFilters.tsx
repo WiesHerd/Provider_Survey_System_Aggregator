@@ -6,9 +6,26 @@
  */
 
 import React, { memo, useState } from 'react';
-import { Box, Switch, FormControlLabel, Button, TextField, MenuItem, Select, FormControl, InputLabel, IconButton } from '@mui/material';
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { AnalyticsFiltersProps, YearBlendItem } from '../types/analytics';
+import { 
+  Box, 
+  Switch, 
+  FormControlLabel, 
+  TextField, 
+  FormControl, 
+  InputLabel,
+  Select,
+  MenuItem,
+  Checkbox,
+  ListItemText,
+  OutlinedInput,
+  Chip,
+  Radio,
+  RadioGroup,
+  FormLabel,
+  Slider
+} from '@mui/material';
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
+import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { StandardDropdown } from '../../../shared/components';
 
@@ -33,6 +50,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   availableYears
 }) => {
   const [showMultiYear, setShowMultiYear] = useState(false);
+  const [selectedYears, setSelectedYears] = useState<string[]>([]);
   
   const handleFilterChange = (field: keyof typeof filters, value: string) => {
     // Simply update the specific filter that changed
@@ -45,7 +63,8 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   const handleMultiYearToggle = (enabled: boolean) => {
     if (enabled) {
       // Initialize with two years if available
-      const years = availableYears.slice(0, 2);
+      const years = availableYears.slice(0, Math.min(2, availableYears.length));
+      setSelectedYears(years);
       const percentage = years.length > 0 ? 100 / years.length : 100;
       
       onFiltersChange({
@@ -53,7 +72,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         year: '', // Clear single year selection
         useMultiYearBlending: true,
         multiYearBlending: {
-          method: 'percentage',
+          method: 'equal',
           years: years.map(year => ({
             year,
             percentage,
@@ -62,8 +81,10 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
           totalPercentage: 100
         }
       });
+      setShowMultiYear(true);
     } else {
       // Disable multi-year blending
+      setSelectedYears([]);
       onFiltersChange({
         ...filters,
         useMultiYearBlending: false,
@@ -72,24 +93,63 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
     }
   };
   
+  const handleYearsSelectionChange = (event: any) => {
+    const value = event.target.value as string[];
+    setSelectedYears(value);
+    
+    if (value.length === 0) {
+      // If no years selected, disable blending
+      handleMultiYearToggle(false);
+      return;
+    }
+    
+    // Calculate equal percentages for selected years
+    const percentage = 100 / value.length;
+    const currentMethod = filters.multiYearBlending?.method || 'equal';
+    
+    onFiltersChange({
+      ...filters,
+      useMultiYearBlending: true,
+      multiYearBlending: {
+        method: currentMethod,
+        years: value.map(year => ({
+          year,
+          percentage: currentMethod === 'percentage' ? percentage : 100 / value.length,
+          weight: 1
+        })),
+        totalPercentage: 100
+      }
+    });
+  };
+  
   const handleBlendingMethodChange = (method: 'percentage' | 'weighted' | 'equal') => {
     if (filters.multiYearBlending) {
+      const years = filters.multiYearBlending.years;
+      const percentage = 100 / years.length;
+      
       onFiltersChange({
         ...filters,
         multiYearBlending: {
           ...filters.multiYearBlending,
-          method
+          method,
+          years: years.map(y => ({
+            ...y,
+            percentage: method === 'percentage' ? percentage : 100 / years.length
+          })),
+          totalPercentage: 100
         }
       });
     }
   };
   
-  const handleYearItemChange = (index: number, updates: Partial<YearBlendItem>) => {
+  const handlePercentageChange = (yearToUpdate: string, newPercentage: number) => {
     if (filters.multiYearBlending) {
-      const newYears = [...filters.multiYearBlending.years];
-      newYears[index] = { ...newYears[index], ...updates };
+      const newYears = filters.multiYearBlending.years.map(y => 
+        y.year === yearToUpdate 
+          ? { ...y, percentage: newPercentage }
+          : y
+      );
       
-      // Recalculate total percentage
       const totalPercentage = newYears.reduce((sum, y) => sum + y.percentage, 0);
       
       onFiltersChange({
@@ -103,41 +163,8 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
     }
   };
   
-  const handleAddYear = () => {
-    if (filters.multiYearBlending) {
-      const newYears = [
-        ...filters.multiYearBlending.years,
-        {
-          year: availableYears[0] || '',
-          percentage: 0,
-          weight: 1
-        }
-      ];
-      
-      onFiltersChange({
-        ...filters,
-        multiYearBlending: {
-          ...filters.multiYearBlending,
-          years: newYears
-        }
-      });
-    }
-  };
-  
-  const handleRemoveYear = (index: number) => {
-    if (filters.multiYearBlending && filters.multiYearBlending.years.length > 1) {
-      const newYears = filters.multiYearBlending.years.filter((_, i) => i !== index);
-      const totalPercentage = newYears.reduce((sum, y) => sum + y.percentage, 0);
-      
-      onFiltersChange({
-        ...filters,
-        multiYearBlending: {
-          ...filters.multiYearBlending,
-          years: newYears,
-          totalPercentage
-        }
-      });
-    }
+  const handleSliderChange = (yearToUpdate: string, newValue: number) => {
+    handlePercentageChange(yearToUpdate, newValue);
   };
 
   return (
@@ -249,7 +276,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         />
       </Box>
 
-      {/* Multi-Year Blending Section */}
+      {/* Multi-Year Blending Section - Professional UX */}
       <div className="mt-4 border-t border-gray-200 pt-4">
         <div className="flex items-center justify-between mb-3">
           <FormControlLabel
@@ -289,91 +316,145 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         </div>
 
         {/* Multi-Year Blending Controls */}
-        {filters.useMultiYearBlending && showMultiYear && filters.multiYearBlending && (
-          <div className="space-y-3 bg-gray-50 rounded-lg p-3">
-            {/* Blending Method Selector */}
+        {filters.useMultiYearBlending && showMultiYear && (
+          <div className="space-y-4 bg-gray-50 rounded-lg p-4">
+            {/* Multi-Select Years Dropdown */}
             <FormControl fullWidth size="small">
-              <InputLabel>Blending Method</InputLabel>
+              <InputLabel>Select Years to Blend</InputLabel>
               <Select
-                value={filters.multiYearBlending?.method || 'percentage'}
-                onChange={(e: any) => handleBlendingMethodChange(e.target.value as 'percentage' | 'weighted' | 'equal')}
-                label="Blending Method"
+                multiple
+                value={selectedYears}
+                onChange={handleYearsSelectionChange}
+                input={<OutlinedInput label="Select Years to Blend" />}
+                renderValue={(selected: unknown) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(selected as string[]).map((value) => (
+                      <Chip key={value} label={value} size="small" />
+                    ))}
+                  </Box>
+                )}
               >
-                <MenuItem value="percentage">Percentage-Based (e.g., 70% / 30%)</MenuItem>
-                <MenuItem value="weighted">Weighted by Sample Size</MenuItem>
-                <MenuItem value="equal">Equal Weighting</MenuItem>
+                {availableYears.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    <Checkbox checked={selectedYears.indexOf(year) > -1} />
+                    <ListItemText primary={year} />
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
 
-            {/* Year Blend Items */}
-            <div className="space-y-2">
-              {filters.multiYearBlending?.years.map((yearItem, index) => (
-                <div key={index} className="flex items-center gap-2 bg-white rounded p-2">
-                  {/* Year Selector */}
-                  <FormControl size="small" sx={{ minWidth: 120 }}>
-                    <InputLabel>Year</InputLabel>
-                    <Select
-                      value={yearItem.year}
-                      onChange={(e: any) => handleYearItemChange(index, { year: e.target.value })}
-                      label="Year"
-                    >
-                      {availableYears.map(year => (
-                        <MenuItem key={year} value={year}>{year}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+            {/* Show selected years count */}
+            {selectedYears.length > 0 && (
+              <div className="text-xs text-gray-600">
+                {selectedYears.length} {selectedYears.length === 1 ? 'year' : 'years'} selected: {selectedYears.join(', ')}
+              </div>
+            )}
 
-                  {/* Percentage Input (only for percentage method) */}
-                  {filters.multiYearBlending?.method === 'percentage' && (
+            {/* Blending Method - Radio Buttons */}
+            {selectedYears.length > 0 && (
+              <FormControl component="fieldset">
+                <FormLabel component="legend" className="text-sm font-medium text-gray-700">
+                  Blending Method
+                </FormLabel>
+                <RadioGroup
+                  row
+                  value={filters.multiYearBlending?.method || 'equal'}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBlendingMethodChange(e.target.value as 'percentage' | 'weighted' | 'equal')}
+                >
+                  <FormControlLabel 
+                    value="equal" 
+                    control={<Radio size="small" />} 
+                    label={<span className="text-sm">Equal</span>}
+                  />
+                  <FormControlLabel 
+                    value="percentage" 
+                    control={<Radio size="small" />} 
+                    label={<span className="text-sm">Custom %</span>}
+                  />
+                  <FormControlLabel 
+                    value="weighted" 
+                    control={<Radio size="small" />} 
+                    label={<span className="text-sm">By Sample Size</span>}
+                  />
+                </RadioGroup>
+              </FormControl>
+            )}
+
+            {/* Percentage Controls - Only show for selected years */}
+            {filters.multiYearBlending?.method === 'percentage' && selectedYears.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  Adjust Year Weights
+                </div>
+                
+                {filters.multiYearBlending.years.map((yearItem) => (
+                  <div key={yearItem.year} className="bg-white rounded p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">{yearItem.year}</span>
+                      <span className="text-sm font-bold text-purple-600">{yearItem.percentage.toFixed(1)}%</span>
+                    </div>
+                    
+                    <Slider
+                      value={yearItem.percentage}
+                      onChange={(_: Event, value: number | number[]) => handleSliderChange(yearItem.year, value as number)}
+                      min={0}
+                      max={100}
+                      step={1}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={(value: number) => `${value}%`}
+                      sx={{
+                        '& .MuiSlider-thumb': {
+                          backgroundColor: '#9333ea',
+                        },
+                        '& .MuiSlider-track': {
+                          backgroundColor: '#9333ea',
+                        },
+                        '& .MuiSlider-rail': {
+                          backgroundColor: '#e5e7eb',
+                        },
+                      }}
+                    />
+                    
                     <TextField
                       size="small"
                       type="number"
-                      label="Percentage"
                       value={yearItem.percentage}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleYearItemChange(index, { 
-                        percentage: parseFloat(e.target.value) || 0 
-                      })}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handlePercentageChange(yearItem.year, parseFloat(e.target.value) || 0)}
                       InputProps={{
                         endAdornment: <span className="text-gray-500">%</span>
                       }}
-                      sx={{ width: 120 }}
+                      sx={{ width: '100px' }}
                     />
+                  </div>
+                ))}
+
+                {/* Total Percentage Indicator */}
+                <div className={`text-sm p-3 rounded font-medium ${
+                  Math.abs((filters.multiYearBlending?.totalPercentage || 0) - 100) < 0.1
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span>Total:</span>
+                    <span className="font-bold">{(filters.multiYearBlending?.totalPercentage || 0).toFixed(1)}%</span>
+                  </div>
+                  {Math.abs((filters.multiYearBlending?.totalPercentage || 0) - 100) >= 0.1 && (
+                    <div className="text-xs mt-1">Must equal 100%</div>
                   )}
-
-                  {/* Remove Button */}
-                  <IconButton
-                    size="small"
-                    onClick={() => handleRemoveYear(index)}
-                    disabled={(filters.multiYearBlending?.years.length || 0) <= 1}
-                    className="text-gray-400 hover:text-red-500"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </IconButton>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
 
-            {/* Add Year Button */}
-            <Button
-              size="small"
-              onClick={handleAddYear}
-              startIcon={<PlusIcon className="w-4 h-4" />}
-              variant="outlined"
-              fullWidth
-            >
-              Add Year
-            </Button>
+            {/* Info for other methods */}
+            {filters.multiYearBlending?.method === 'equal' && selectedYears.length > 0 && (
+              <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border border-blue-200">
+                <strong>Equal Weighting:</strong> Each year weighted equally ({(100 / selectedYears.length).toFixed(1)}% each)
+              </div>
+            )}
 
-            {/* Total Percentage Warning */}
-            {filters.multiYearBlending?.method === 'percentage' && (
-              <div className={`text-xs p-2 rounded ${
-                Math.abs((filters.multiYearBlending?.totalPercentage || 0) - 100) < 0.1
-                  ? 'bg-green-50 text-green-700'
-                  : 'bg-yellow-50 text-yellow-700'
-              }`}>
-                Total: {(filters.multiYearBlending?.totalPercentage || 0).toFixed(1)}% 
-                {Math.abs((filters.multiYearBlending?.totalPercentage || 0) - 100) >= 0.1 && 
-                  ' (must equal 100%)'}
+            {filters.multiYearBlending?.method === 'weighted' && selectedYears.length > 0 && (
+              <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border border-blue-200">
+                <strong>Weighted by Sample Size:</strong> Years with more data automatically get more weight
               </div>
             )}
           </div>
