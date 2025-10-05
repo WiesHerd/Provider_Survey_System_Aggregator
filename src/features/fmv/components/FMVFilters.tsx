@@ -31,6 +31,39 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
     <div className="space-y-4">
       {/* All filters in one row */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 overflow-visible">
+        <div>
+          <TextField
+            select
+            label="Year"
+            value={filters.year}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+              handleFilterChange('year', e.target.value)
+            }
+            fullWidth
+            size="small"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#3b82f6',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#3b82f6',
+                  borderWidth: '2px',
+                },
+              },
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: '#3b82f6',
+              },
+            }}
+          >
+            <MenuItem value="All Years">All Years</MenuItem>
+            {uniqueValues.years.map(option => (
+              <MenuItem key={option} value={option}>{option}</MenuItem>
+            ))}
+          </TextField>
+        </div>
+
         <Box>
           <Autocomplete
             value={filters.specialty}
@@ -162,39 +195,6 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
           >
             <MenuItem value="All Sources">All Sources</MenuItem>
             {uniqueValues.surveySources.map(option => (
-              <MenuItem key={option} value={option}>{option}</MenuItem>
-            ))}
-          </TextField>
-        </div>
-
-        <div>
-          <TextField
-            select
-            label="Year"
-            value={filters.year}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-              handleFilterChange('year', e.target.value)
-            }
-            fullWidth
-            size="small"
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#3b82f6',
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#3b82f6',
-                  borderWidth: '2px',
-                },
-              },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: '#3b82f6',
-              },
-            }}
-          >
-            <MenuItem value="All Years">All Years</MenuItem>
-            {uniqueValues.years.map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>

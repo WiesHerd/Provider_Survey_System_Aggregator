@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getDataService } from '../../../services/DataService';
 import { AnalyticsDataService } from '../../analytics/services/analyticsDataService';
 import { 
   FMVFilters, 
@@ -8,18 +7,13 @@ import {
   MarketData, 
   UserPercentiles, 
   UniqueFilterValues,
-  NormalizedSurveyRow,
-  FMVCalculationState
+  NormalizedSurveyRow
 } from '../types/fmv';
 import { 
-  normalizeSurveyRow, 
-  applyFMVFilters, 
   calculateMarketData, 
   calculateUserPercentiles,
   calculateTotalTCC,
-  applyFTEAdjustment,
-  extractUniqueFilterValues,
-  normalizeString
+  applyFTEAdjustment
 } from '../utils/fmvCalculations';
 
 /**
@@ -37,6 +31,8 @@ export const useFMVData = () => {
     year: 'All Years',
     fte: 1.0,
     aggregationMethod: 'simple',
+    useSpecialtyBlending: false,
+    specialtyBlending: undefined,
   });
 
   const [compComponents, setCompComponents] = useState<CompensationComponent[]>([
@@ -66,8 +62,8 @@ export const useFMVData = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [allSurveyRows, setAllSurveyRows] = useState<any[]>([]);
   const [surveyCount, setSurveyCount] = useState(0);
+  const [blendedData, setBlendedData] = useState<any>(null);
 
   // Memoized calculations
   const tcc = useMemo(() => calculateTotalTCC(compComponents), [compComponents]);
@@ -109,9 +105,45 @@ export const useFMVData = () => {
         if (row.surveyYear) yearSet.add(row.surveyYear);
       });
       
+      // Filter to parent specialties only (not sub-specialties)
+      const parentSpecialties = Array.from(specialtySet).filter(specialty => {
+        // Parent specialties are typically broader categories
+        // Filter out sub-specialties that contain specific procedures or subspecialties
+        const lowerSpecialty = specialty.toLowerCase();
+        
+        // Exclude sub-specialties that contain these keywords
+        const subSpecialtyKeywords = [
+          'interventional', 'pediatric', 'geriatric', 'sports', 'trauma', 
+          'critical care', 'emergency', 'urgent care', 'outpatient', 'inpatient',
+          'surgical', 'medical', 'diagnostic', 'therapeutic', 'minimally invasive',
+          'robotic', 'laparoscopic', 'endoscopic', 'cardiac', 'vascular',
+          'neuro', 'orthopedic', 'plastic', 'reconstructive', 'cosmetic',
+          'dermatology', 'dermatologic', 'oncology', 'oncologic', 'hematology',
+          'rheumatology', 'endocrinology', 'gastroenterology', 'nephrology',
+          'pulmonology', 'allergy', 'immunology', 'infectious disease',
+          'psychiatry', 'psychiatric', 'neurology', 'neurologic', 'radiology',
+          'pathology', 'anesthesiology', 'anesthesia', 'obstetrics', 'gynecology',
+          'urology', 'urologic', 'ophthalmology', 'otolaryngology', 'ent'
+        ];
+        
+        // Check if specialty contains sub-specialty keywords
+        const isSubSpecialty = subSpecialtyKeywords.some(keyword => 
+          lowerSpecialty.includes(keyword)
+        );
+        
+        // Also exclude very specific procedure names
+        const isSpecificProcedure = lowerSpecialty.includes('procedure') || 
+                                  lowerSpecialty.includes('surgery') ||
+                                  lowerSpecialty.includes('treatment') ||
+                                  lowerSpecialty.includes('therapy');
+        
+        // Return true for parent specialties (not sub-specialties)
+        return !isSubSpecialty && !isSpecificProcedure;
+      }).sort();
+      
       // Convert Sets to Arrays and sort
       const result: UniqueFilterValues = {
-        specialties: Array.from(specialtySet).sort(),
+        specialties: parentSpecialties,
         providerTypes: Array.from(providerTypeSet).sort(),
         regions: Array.from(regionSet).sort(),
         surveySources: Array.from(surveySourceSet).sort(),
@@ -279,20 +311,79 @@ export const useFMVData = () => {
       console.log('🔍 FMV: Converted to', normalizedRows.length, 'normalized rows');
       console.log('🔍 FMV: Sample normalized row:', normalizedRows[0]);
 
-      // Calculate market data using the normalized rows with the selected aggregation method
-      console.log('🔍 FMV: Using aggregation method:', filters.aggregationMethod);
-      const calculatedMarketData = calculateMarketData(normalizedRows, filters.aggregationMethod);
+      // Handle specialty blending if enabled
+      if (filters.useSpecialtyBlending && filters.specialtyBlending) {
+        console.log('🔍 FMV: Using specialty blending:', filters.specialtyBlending);
+        
+        // Import blending calculation utilities
+        const { calculateBlendedMarketData } = await import('../utils/specialtyBlendingCalculations');
+        
+        // Group data by specialty for blending
+        const specialtyDataMap = new Map<string, NormalizedSurveyRow[]>();
+        normalizedRows.forEach(row => {
+          const specialty = row.normalizedSpecialty || row.specialty;
+          if (!specialtyDataMap.has(specialty)) {
+            specialtyDataMap.set(specialty, []);
+          }
+          specialtyDataMap.get(specialty)!.push(row);
+        });
+        
+        // Prepare specialty data for blending
+        const specialtyData = filters.specialtyBlending.specialties.map(blendItem => {
+          const specialtyRows = specialtyDataMap.get(blendItem.specialty) || [];
+          const specialtyMarketData = calculateMarketData(specialtyRows, filters.aggregationMethod);
+          
+          return {
+            specialty: blendItem.specialty,
+            data: specialtyMarketData,
+            percentage: blendItem.percentage,
+            weight: blendItem.weight,
+            sampleSize: specialtyRows.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0)
+          };
+        });
+        
+        // Calculate blended market data
+        const blendedMarketData = calculateBlendedMarketData(specialtyData, filters.specialtyBlending);
+        
+        // Store blended data for display
+        setBlendedData(blendedMarketData);
+        
+        // Use blended percentiles for user calculations
+        const calculatedMarketData = {
+          tcc: blendedMarketData.blendedPercentiles.tcc,
+          wrvu: blendedMarketData.blendedPercentiles.wrvu,
+          cf: blendedMarketData.blendedPercentiles.cf
+        };
+        
+        // Calculate user percentiles using blended data
+        const calculatedPercentiles = calculateUserPercentiles(
+          calculatedMarketData,
+          tccFTEAdjusted,
+          wrvusFTEAdjusted,
+          Number(cf)
+        );
 
-      // Calculate user percentiles
-      const calculatedPercentiles = calculateUserPercentiles(
-        calculatedMarketData,
-        tccFTEAdjusted,
-        wrvusFTEAdjusted,
-        Number(cf)
-      );
+        setMarketData(calculatedMarketData);
+        setPercentiles(calculatedPercentiles);
+      } else {
+        // Clear blended data when not using blending
+        setBlendedData(null);
+        
+        // Calculate market data using the normalized rows with the selected aggregation method
+        console.log('🔍 FMV: Using aggregation method:', filters.aggregationMethod);
+        const calculatedMarketData = calculateMarketData(normalizedRows, filters.aggregationMethod);
 
-      setMarketData(calculatedMarketData);
-      setPercentiles(calculatedPercentiles);
+        // Calculate user percentiles
+        const calculatedPercentiles = calculateUserPercentiles(
+          calculatedMarketData,
+          tccFTEAdjusted,
+          wrvusFTEAdjusted,
+          Number(cf)
+        );
+
+        setMarketData(calculatedMarketData);
+        setPercentiles(calculatedPercentiles);
+      }
     } catch (err) {
       console.error('Error fetching market data:', err);
       setError('Failed to load market data');
@@ -355,6 +446,8 @@ export const useFMVData = () => {
       year: 'All Years',
       fte: 1.0,
       aggregationMethod: 'simple',
+      useSpecialtyBlending: false,
+      specialtyBlending: undefined,
     });
   }, []);
 
@@ -398,8 +491,8 @@ export const useFMVData = () => {
     uniqueValues,
     loading,
     error,
-    allSurveyRows,
     surveyCount,
+    blendedData,
     
     // Calculated values
     tcc,

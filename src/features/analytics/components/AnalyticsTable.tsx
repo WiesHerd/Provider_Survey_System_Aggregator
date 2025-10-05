@@ -1,7 +1,7 @@
 /**
  * Analytics Feature - Data Table Component
  * 
- * This component displays analytics data in a structured table format.
+ * This component displays analytics data in a structured table format.image.png
  * Following enterprise patterns for component composition and performance.
  */
 
@@ -14,8 +14,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Box,
-  Typography,
   Button
 } from '@mui/material';
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
@@ -23,16 +21,6 @@ import { AnalyticsTableProps } from '../types/analytics';
 import { groupBySpecialty, calculateSummaryRows } from '../utils/analyticsCalculations';
 import { formatCurrency, formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
-/**
- * Format number without dollar sign, with proper comma separators and decimals
- * Following user preference for number formatting
- */
-const formatNumber = (value: number, decimals: number = 0): string => {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value);
-};
 
 /**
  * AnalyticsTable component for displaying analytics data
@@ -110,14 +98,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         </Button>
       </div>
 
-      {/* Table without internal scrolling - uses window scrollbar */}
-      <div className="rounded-lg border border-gray-200">
-        <TableContainer component={Paper} sx={{ 
-          // Remove maxHeight and overflow to use window scrollbar
-          '& .MuiTable-root': {
-            width: '100%'
-          }
-        }}>
+      {/* Table without internal scrolling - uses page scrollbar only */}
+      <div className="rounded-lg border border-gray-200 overflow-visible">
+        <TableContainer 
+          component={Paper} 
+          sx={{ 
+            // Remove maxHeight and overflow to use page scrollbar only
+            '& .MuiTable-root': {
+              width: '100%',
+              minWidth: '100%'
+            }
+          }}
+        >
         <Table stickyHeader size="small">
            <TableHead>
              <TableRow>

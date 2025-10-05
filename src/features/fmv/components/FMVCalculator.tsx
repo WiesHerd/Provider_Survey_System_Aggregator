@@ -2,11 +2,11 @@ import React, { useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { useFMVData } from '../hooks/useFMVData';
 import { FMVFilters } from './FMVFilters';
-import { CompareTypeSelector } from './CompareTypeSelector';
 import { TCCItemization } from './TCCItemization';
 import { WRVUsInput } from './WRVUsInput';
 import { CFInput } from './CFInput';
 import { ResultsPanel } from './ResultsPanel';
+import BlendedResultsPanel from './BlendedResultsPanel';
 import { SavedFMVManager } from './SavedFMVManager';
 import FairMarketValuePrintable from '../../../components/FairMarketValuePrintable';
 import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
@@ -28,6 +28,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     percentiles,
     uniqueValues,
     surveyCount,
+    blendedData,
     
     // Calculated values
     tcc,
@@ -119,15 +120,15 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   return (
     <div className="w-full min-h-screen">
       <div className="w-full flex flex-col gap-4">
-        {/* Filters Section */}
+        {/* Integrated Data Configuration */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="mb-6 flex justify-between items-start">
             <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Market Data Filters
+                Data Configuration
               </h2>
               <p className="text-sm text-gray-600">
-                Select criteria to filter the market data for comparison
+                Configure market data filters and specialty selection
               </p>
             </div>
             <button
@@ -140,6 +141,8 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               Print Report
             </button>
           </div>
+          
+          {/* Standard Market Data Filters */}
           <FMVFilters 
             filters={filters}
             onFiltersChange={updateFilters}
@@ -147,40 +150,68 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
           />
         </div>
 
-        {/* Provider Name */}
+
+        {/* Provider Name and Comparison Type */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Provider Name
-            </h2>
+            {/* Provider Name - Left Side */}
             <div className="w-80">
+              <label htmlFor="provider-name" className="block text-sm font-medium text-gray-700 mb-2">
+                Provider Name
+              </label>
               <input
                 id="provider-name"
                 type="text"
                 value={currentProviderName}
                 onChange={(e) => setCurrentProviderName(e.target.value)}
-                placeholder="Enter provider name (e.g., Dr. John Smith)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+                placeholder="Dr. John Smith"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
               />
+            </div>
+            
+            {/* Comparison Type - Right Side with Better Styling */}
+            <div className="flex items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Comparison Type
+                </label>
+                <div className="inline-flex bg-gray-100 rounded-xl p-1 shadow-inner">
+                  <button
+                    onClick={() => setCompareType('TCC')}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                      compareType === 'TCC'
+                        ? 'bg-white text-blue-600 shadow-md border border-blue-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    TCC
+                  </button>
+                  <button
+                    onClick={() => setCompareType('wRVUs')}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                      compareType === 'wRVUs'
+                        ? 'bg-white text-blue-600 shadow-md border border-blue-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    wRVUs
+                  </button>
+                  <button
+                    onClick={() => setCompareType('CFs')}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                      compareType === 'CFs'
+                        ? 'bg-white text-blue-600 shadow-md border border-blue-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    CF
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Comparison Type Selector */}
-        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Comparison Type
-            </h2>
-            <p className="text-sm text-gray-600">
-              Choose what type of compensation data you want to compare
-            </p>
-          </div>
-          <CompareTypeSelector 
-            compareType={compareType}
-            onCompareTypeChange={setCompareType}
-          />
-        </div>
 
         {/* Input Components based on comparison type */}
         {compareType === 'TCC' && (
@@ -240,29 +271,50 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
         )}
 
 
+
         {/* Results Panel */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <ResultsPanel 
-            compareType={compareType}
-            marketData={marketData}
-            percentiles={percentiles}
-            inputValue={
-              compareType === 'TCC' ? tccFTEAdjusted : 
-              compareType === 'wRVUs' ? wrvusFTEAdjusted : 
-              Number(cf)
-            }
-            rawValue={
-              compareType === 'TCC' ? Number(tcc) : 
-              compareType === 'wRVUs' ? Number(wrvus) : 
-              Number(cf)
-            }
-            fte={filters.fte}
-            aggregationMethod={filters.aggregationMethod}
-            surveyCount={surveyCount}
-            isFilteringSpecificSurvey={filters.surveySource !== 'All Sources'}
-            onResetFilters={resetFilters}
-            onAggregationMethodChange={(method) => updateFilters({ aggregationMethod: method })}
-          />
+          {filters.useSpecialtyBlending && blendedData ? (
+            <BlendedResultsPanel
+              blendedData={blendedData}
+              compareType={compareType}
+              inputValue={
+                compareType === 'TCC' ? tccFTEAdjusted : 
+                compareType === 'wRVUs' ? wrvusFTEAdjusted : 
+                Number(cf)
+              }
+              rawValue={
+                compareType === 'TCC' ? Number(tcc) : 
+                compareType === 'wRVUs' ? Number(wrvus) : 
+                Number(cf)
+              }
+              fte={filters.fte}
+              aggregationMethod={filters.aggregationMethod}
+              surveyCount={surveyCount}
+            />
+          ) : (
+            <ResultsPanel 
+              compareType={compareType}
+              marketData={marketData}
+              percentiles={percentiles}
+              inputValue={
+                compareType === 'TCC' ? tccFTEAdjusted : 
+                compareType === 'wRVUs' ? wrvusFTEAdjusted : 
+                Number(cf)
+              }
+              rawValue={
+                compareType === 'TCC' ? Number(tcc) : 
+                compareType === 'wRVUs' ? Number(wrvus) : 
+                Number(cf)
+              }
+              fte={filters.fte}
+              aggregationMethod={filters.aggregationMethod}
+              surveyCount={surveyCount}
+              isFilteringSpecificSurvey={filters.surveySource !== 'All Sources'}
+              onResetFilters={resetFilters}
+              onAggregationMethodChange={(method) => updateFilters({ aggregationMethod: method })}
+            />
+          )}
         </div>
 
         {/* Saved Calculations Manager */}

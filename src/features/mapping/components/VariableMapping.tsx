@@ -8,7 +8,9 @@ import {
   LightBulbIcon,
   XMarkIcon,
   EyeIcon,
-  PencilIcon
+  PencilIcon,
+  ArrowDownTrayIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { VariableMappingProps, IVariableMapping, IUnmappedVariable } from '../types/mapping';
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
@@ -208,6 +210,31 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                     Clear All
                   </button>
                 )}
+                {activeTab === 'learned' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        // Apply all learned mappings
+                        console.log('Apply all learned variable mappings');
+                      }}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
+                    >
+                      <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                      Apply All (0)
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to clear all learned mappings?')) {
+                          console.log('Clear all learned variable mappings');
+                        }
+                      }}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                    >
+                      <TrashIcon className="h-4 w-4 mr-2" />
+                      Clear All
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -270,17 +297,34 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                 />
               )}
               {activeTab === 'learned' && (
-                <div className="flex items-center justify-center py-20">
-                  <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                      <svg className="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
+                <div className="space-y-4">
+                  {/* Search Bar - Match SpecialtyMapping Pattern */}
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      placeholder="Search learned mappings..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+
+                  {/* Learned Mappings List - Match SpecialtyMapping Pattern */}
+                  <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                    <div className="flex items-center justify-center py-20">
+                      <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                          <BoltIcon className="h-6 w-6 text-gray-500" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Learned Mappings Found</h3>
+                        <p className="text-gray-600 mb-4">
+                          {searchTerm 
+                            ? 'No learned mappings match your search criteria.'
+                            : 'Learned mappings will appear here as you make corrections to field mappings.'
+                          }
+                        </p>
+                      </div>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Learned Mappings Yet</h3>
-                    <p className="text-gray-600 mb-4">
-                      Learned mappings will appear here after you create field mappings.
-                    </p>
                   </div>
                 </div>
               )}

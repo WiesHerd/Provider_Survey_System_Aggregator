@@ -11,6 +11,11 @@ export { ResultsPanel } from './components/ResultsPanel';
 export { SavedFMVManager } from './components/SavedFMVManager';
 export { AggregationMethodSelector } from './components/AggregationMethodSelector';
 
+// Specialty Blending Components
+export { SpecialtyBlendingSelector } from './components/SpecialtyBlendingSelector';
+export { SpecialtyBlendItemComponent } from './components/SpecialtyBlendItemComponent';
+export { BlendedResultsPanel } from './components/BlendedResultsPanel';
+
 // Hooks
 export { useFMVData } from './hooks/useFMVData';
 
@@ -41,6 +46,13 @@ export type {
   FMVApiResponse,
   FMVValidationResult,
   FMVCalculationOptions,
+  // Specialty Blending Types
+  SpecialtyBlendingConfig,
+  SpecialtyBlendItem,
+  BlendedMarketData,
+  SpecialtyBlendingSelectorProps,
+  SpecialtyBlendItemProps,
+  BlendedResultsPanelProps,
 } from './types/fmv';
 
 // Utilities
@@ -57,3 +69,10 @@ export {
   formatFMVValue,
   extractUniqueFilterValues,
 } from './utils/fmvCalculations';
+
+// Specialty Blending Utilities
+export {
+  calculateBlendedMarketData,
+  validateSpecialtyBlending,
+  getRecommendedBlendingMethod,
+} from './utils/specialtyBlendingCalculations';

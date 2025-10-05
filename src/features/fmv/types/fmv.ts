@@ -1,9 +1,46 @@
-import { BaseEntity, SurveySource, ProviderType, GeographicRegion } from '../../../shared/types';
+import { BaseEntity, SurveySource } from '../../../shared/types';
 
 /**
  * Aggregation method for multiple surveys
  */
 export type AggregationMethod = 'simple' | 'weighted' | 'pure';
+
+/**
+ * Specialty blending configuration for multi-specialty FMV calculations
+ */
+export interface SpecialtyBlendingConfig {
+  specialties: SpecialtyBlendItem[];
+  blendingMethod: 'percentage' | 'weighted';
+  totalPercentage: number; // Must equal 100 for percentage method
+}
+
+/**
+ * Individual specialty in a blended calculation
+ */
+export interface SpecialtyBlendItem {
+  specialty: string;
+  percentage: number; // For percentage-based blending (0-100)
+  weight: number;     // For weighted blending (sample size, etc.)
+  sampleSize?: number; // Optional: track sample size for quality assessment
+}
+
+/**
+ * Blended market data result
+ */
+export interface BlendedMarketData {
+  specialties: SpecialtyBlendingConfig;
+  blendedPercentiles: {
+    tcc: MarketPercentiles;
+    wrvu: MarketPercentiles;
+    cf: MarketPercentiles;
+  };
+  sourceData: {
+    [specialty: string]: MarketData;
+  };
+  confidence: number; // 0-1, based on sample sizes and data quality
+  totalSampleSize: number;
+  qualityWarnings: string[];
+}
 
 /**
  * FMV Calculator filters for market data
@@ -16,6 +53,8 @@ export interface FMVFilters {
   year: string;
   fte: number; // Keep FTE in filters for now since it's used in calculations
   aggregationMethod: AggregationMethod; // Method for aggregating multiple surveys
+  useSpecialtyBlending: boolean; // Toggle between single specialty and blended specialties
+  specialtyBlending?: SpecialtyBlendingConfig; // Configuration for specialty blending
 }
 
 /**
@@ -227,6 +266,41 @@ export interface AggregationMethodSelectorProps {
  */
 export interface FMVCalculatorProps {
   onPrint?: () => void;
+}
+
+/**
+ * Component props for specialty blending selector
+ */
+export interface SpecialtyBlendingSelectorProps {
+  useBlending: boolean;
+  blendingConfig: SpecialtyBlendingConfig | null;
+  availableSpecialties: string[];
+  onBlendingToggle: (useBlending: boolean) => void;
+  onBlendingConfigChange: (config: SpecialtyBlendingConfig) => void;
+}
+
+/**
+ * Component props for specialty blend item
+ */
+export interface SpecialtyBlendItemProps {
+  item: SpecialtyBlendItem;
+  availableSpecialties: string[];
+  onItemChange: (item: SpecialtyBlendItem) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}
+
+/**
+ * Component props for blended results panel
+ */
+export interface BlendedResultsPanelProps {
+  blendedData: BlendedMarketData | null;
+  compareType: CompareType;
+  inputValue: string | number;
+  rawValue: number;
+  fte: number;
+  aggregationMethod: AggregationMethod;
+  surveyCount?: number;
 }
 
 /**

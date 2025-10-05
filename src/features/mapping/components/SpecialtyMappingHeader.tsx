@@ -96,7 +96,7 @@ export const SpecialtyMappingHeader: React.FC<SpecialtyMappingHeaderProps> = ({
               <button
                 onClick={onCreateMapping}
                 disabled={false}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Map this specialty individually"
               >
                 <UserIcon className="h-4 w-4 mr-2" />
@@ -107,7 +107,7 @@ export const SpecialtyMappingHeader: React.FC<SpecialtyMappingHeaderProps> = ({
                 <button
                   onClick={onCreateGroupedMapping}
                   disabled={selectedCount === 0}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={`Map ${selectedCount} specialties together as one group`}
                 >
                   <UserGroupIcon className="h-4 w-4 mr-2" />
