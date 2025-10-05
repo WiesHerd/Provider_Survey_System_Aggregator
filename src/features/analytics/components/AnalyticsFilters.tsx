@@ -22,7 +22,9 @@ import {
   Radio,
   RadioGroup,
   FormLabel,
-  Slider
+  Slider,
+  InputAdornment,
+  Typography
 } from '@mui/material';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { AnalyticsFiltersProps } from '../types/analytics';
@@ -364,17 +366,17 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
                   <FormControlLabel 
                     value="equal" 
                     control={<Radio size="small" />} 
-                    label={<span className="text-sm">Equal</span>}
+                    label={<Typography variant="body2">Equal</Typography>}
                   />
                   <FormControlLabel 
                     value="percentage" 
                     control={<Radio size="small" />} 
-                    label={<span className="text-sm">Custom %</span>}
+                    label={<Typography variant="body2">Custom %</Typography>}
                   />
                   <FormControlLabel 
                     value="weighted" 
                     control={<Radio size="small" />} 
-                    label={<span className="text-sm">By Sample Size</span>}
+                    label={<Typography variant="body2">By Sample Size</Typography>}
                   />
                 </RadioGroup>
               </FormControl>
@@ -421,7 +423,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
                       value={yearItem.percentage}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => handlePercentageChange(yearItem.year, parseFloat(e.target.value) || 0)}
                       InputProps={{
-                        endAdornment: <span className="text-gray-500">%</span>
+                        endAdornment: <InputAdornment position="end">%</InputAdornment>
                       }}
                       sx={{ width: '100px' }}
                     />
