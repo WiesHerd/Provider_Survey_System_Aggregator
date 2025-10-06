@@ -102,6 +102,24 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
     }
   };
 
+  // Handle map individually (create separate mappings for each)
+  const handleMapIndividually = async () => {
+    if (selectedProviderTypes.length === 0) return;
+
+    try {
+      // Create individual mappings for each selected provider type
+      for (const providerType of selectedProviderTypes) {
+        await createMapping(providerType.name, [providerType]);
+      }
+      
+      // Clear selections and switch to mapped tab
+      clearSelectedProviderTypes();
+      setActiveTab('mapped');
+    } catch (error) {
+      console.error('Failed to create individual provider type mappings:', error);
+    }
+  };
+
   // Notify parent components of changes
   useEffect(() => {
     onMappingChange?.(mappings);
@@ -178,14 +196,28 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                       Deselect All
                     </button>
                     {selectedProviderTypes.length > 0 && (
-                      <button
-                        onClick={handleCreateMapping}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
-                        title="Create Manual Mapping"
-                      >
-                        <AddIcon className="h-4 w-4 mr-2" />
-                        Create Mapping ({selectedProviderTypes.length})
-                      </button>
+                      <>
+                        <button
+                          onClick={handleCreateMapping}
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                          title="Map selected provider types as a group"
+                        >
+                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          Map as Group ({selectedProviderTypes.length})
+                        </button>
+                        <button
+                          onClick={handleMapIndividually}
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 border border-purple-600"
+                          title="Map each selected provider type individually"
+                        >
+                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          Map Individually ({selectedProviderTypes.length})
+                        </button>
+                      </>
                     )}
                   </>
                 )}
@@ -294,6 +326,7 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                     <button
                       onClick={() => setShowHelp(false)}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                      title="Close help"
                     >
                       <XMarkIcon className="h-5 w-5 text-gray-400" />
                     </button>
