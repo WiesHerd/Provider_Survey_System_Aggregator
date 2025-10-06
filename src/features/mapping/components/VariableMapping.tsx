@@ -176,18 +176,11 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                 {activeTab === 'unmapped' && (
                   <>
                     <button
-                      onClick={selectAllVariables}
+                      onClick={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
                       disabled={unmappedVariables.length === 0}
                       className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Select All
-                    </button>
-                    <button
-                      onClick={deselectAllVariables}
-                      disabled={selectedVariables.length === 0}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Deselect All
+                      {selectedVariables.length === 0 ? 'Select All' : 'Deselect All'}
                     </button>
                     {selectedVariables.length > 0 && (
                       <button
