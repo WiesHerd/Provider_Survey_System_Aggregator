@@ -109,7 +109,7 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
     try {
       // Create individual mappings for each selected provider type
       for (const providerType of selectedProviderTypes) {
-        await createMapping(providerType.name, [providerType]);
+        await createGroupedMapping(providerType.name, [providerType]);
       }
       
       // Clear selections and switch to mapped tab
