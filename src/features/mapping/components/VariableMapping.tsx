@@ -172,29 +172,35 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center space-x-3 mb-4">
-                {activeTab === 'unmapped' && (
-                  <>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  {activeTab === 'unmapped' && selectedVariables.length > 0 && (
                     <button
-                      onClick={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
-                      disabled={unmappedVariables.length === 0}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handleCreateMapping}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                      title="Create Manual Mapping"
                     >
-                      {selectedVariables.length === 0 ? 'Select All' : 'Deselect All'}
+                      <AddIcon className="h-4 w-4 mr-2" />
+                      Create Mapping ({selectedVariables.length})
                     </button>
-                    {selectedVariables.length > 0 && (
-                      <button
-                        onClick={handleCreateMapping}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
-                        title="Create Manual Mapping"
-                      >
-                        <AddIcon className="h-4 w-4 mr-2" />
-                        Create Mapping ({selectedVariables.length})
-                      </button>
-                    )}
-                  </>
+                  )}
+                </div>
+                
+                {/* Select All button - positioned on the right for stable layout */}
+                {activeTab === 'unmapped' && (
+                  <button
+                    onClick={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
+                    disabled={unmappedVariables.length === 0}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {selectedVariables.length === 0 ? 'Select All' : 'Deselect All'}
+                  </button>
                 )}
-                {activeTab === 'mapped' && (
+              </div>
+              
+              {/* Mapped tab actions */}
+              {activeTab === 'mapped' && (
+                <div className="flex items-center justify-end mb-4">
                   <button
                     onClick={handleClearAllMappings}
                     className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
@@ -202,7 +208,8 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                     <DeleteSweepIcon className="h-4 w-4 mr-2" />
                     Clear All
                   </button>
-                )}
+                </div>
+              )}
                 {activeTab === 'learned' && (
                   <>
                     <button

@@ -178,43 +178,49 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center space-x-3 mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  {activeTab === 'unmapped' && selectedProviderTypes.length > 0 && (
+                    <>
+                      <button
+                        onClick={handleCreateMapping}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                        title="Map selected provider types as a group"
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        Map as Group ({selectedProviderTypes.length})
+                      </button>
+                      <button
+                        onClick={handleMapIndividually}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 border border-purple-600"
+                        title="Map each selected provider type individually"
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Map Individually ({selectedProviderTypes.length})
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                {/* Select All button - positioned on the right for stable layout */}
                 {activeTab === 'unmapped' && (
-                  <>
-                    <button
-                      onClick={selectedProviderTypes.length === 0 ? selectAllProviderTypes : deselectAllProviderTypes}
-                      disabled={unmappedProviderTypes.length === 0}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {selectedProviderTypes.length === 0 ? 'Select All' : 'Deselect All'}
-                    </button>
-                    {selectedProviderTypes.length > 0 && (
-                      <>
-                        <button
-                          onClick={handleCreateMapping}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
-                          title="Map selected provider types as a group"
-                        >
-                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                          Map as Group ({selectedProviderTypes.length})
-                        </button>
-                        <button
-                          onClick={handleMapIndividually}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 border border-purple-600"
-                          title="Map each selected provider type individually"
-                        >
-                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          Map Individually ({selectedProviderTypes.length})
-                        </button>
-                      </>
-                    )}
-                  </>
+                  <button
+                    onClick={selectedProviderTypes.length === 0 ? selectAllProviderTypes : deselectAllProviderTypes}
+                    disabled={unmappedProviderTypes.length === 0}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {selectedProviderTypes.length === 0 ? 'Select All' : 'Deselect All'}
+                  </button>
                 )}
-                {activeTab === 'mapped' && (
+              </div>
+              
+              {/* Mapped tab actions */}
+              {activeTab === 'mapped' && (
+                <div className="flex items-center justify-end mb-4">
                   <button
                     onClick={handleClearAllMappings}
                     className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
@@ -222,8 +228,8 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                     <DeleteSweepIcon className="h-4 w-4 mr-2" />
                     Clear All
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Error Display */}
