@@ -415,7 +415,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
             </div>
           )}
         </div>
-      </div>
     </>
   );
 };
