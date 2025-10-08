@@ -196,10 +196,12 @@ const SurveyUpload: React.FC = () => {
         
         // Filter surveys by current year and provider type
         const surveysAny = surveys as any[];
-        const yearFilteredSurveys = surveysAny.filter((survey: any) => {
-          const surveyYear = survey.year || survey.surveyYear || '';
-          return surveyYear === currentYear;
-        });
+        // TEMPORARY: Show all surveys regardless of year for multi-year testing
+        const yearFilteredSurveys = surveysAny; // Remove year filtering temporarily
+        // const yearFilteredSurveys = surveysAny.filter((survey: any) => {
+        //   const surveyYear = survey.year || survey.surveyYear || '';
+        //   return surveyYear === currentYear;
+        // });
         
         console.log(`Filtered surveys for year ${currentYear}:`, yearFilteredSurveys);
         
