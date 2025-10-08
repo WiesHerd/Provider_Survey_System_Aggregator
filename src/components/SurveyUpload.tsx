@@ -906,6 +906,25 @@ const SurveyUpload: React.FC = () => {
                         onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedYearFilter(e.target.value as string)}
                         displayEmpty
                         className="text-sm"
+                        sx={{
+                          '& .MuiOutlinedInput-notchedOutline': {
+                            borderColor: '#d1d5db', // Match gray border like other inputs
+                            borderWidth: '1px',
+                          },
+                          '&:hover .MuiOutlinedInput-notchedOutline': {
+                            borderColor: '#9ca3af', // Slightly darker gray on hover
+                            borderWidth: '1px',
+                          },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                            borderColor: '#6b7280', // Darker gray when focused
+                            borderWidth: '1px',
+                          },
+                          '& .MuiSelect-select': {
+                            padding: '8px 12px',
+                            fontSize: '14px',
+                            color: '#374151',
+                          }
+                        }}
                       >
                         {availableYears.map((year) => (
                           <MenuItem key={year} value={year}>
