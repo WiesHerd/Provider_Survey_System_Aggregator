@@ -220,67 +220,74 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         {/* Multi-Year Blending Controls */}
         {filters.useMultiYearBlending && showMultiYear && (
           <div className="space-y-4 bg-gray-50 rounded-lg p-4">
-            {/* Multi-Select Years Dropdown */}
-            <FormControl fullWidth size="small">
-              <InputLabel>Select Years to Blend</InputLabel>
-              <Select
-                multiple
-                value={selectedYears}
-                onChange={handleYearsDropdownChange}
-                input={<OutlinedInput label="Select Years to Blend" />}
-                renderValue={(selected: unknown) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {(selected as string[]).map((value) => (
-                      <Chip key={value} label={value} size="small" />
+            {/* Horizontal Layout: Years Selection and Blending Method */}
+            <div className="flex flex-col lg:flex-row lg:space-x-6 space-y-4 lg:space-y-0">
+              {/* Left Side: Multi-Select Years Dropdown */}
+              <div className="flex-1">
+                <FormControl fullWidth size="small">
+                  <InputLabel>Select Years to Blend</InputLabel>
+                  <Select
+                    multiple
+                    value={selectedYears}
+                    onChange={handleYearsDropdownChange}
+                    input={<OutlinedInput label="Select Years to Blend" />}
+                    renderValue={(selected: unknown) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {(selected as string[]).map((value) => (
+                          <Chip key={value} label={value} size="small" />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    {availableYears.map((year) => (
+                      <MenuItem key={year} value={year}>
+                        <Checkbox checked={selectedYears.indexOf(year) > -1} />
+                        <ListItemText primary={year} />
+                      </MenuItem>
                     ))}
-                  </Box>
+                  </Select>
+                </FormControl>
+
+                {/* Show selected years count */}
+                {selectedYears.length > 0 && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    {selectedYears.length} {selectedYears.length === 1 ? 'year' : 'years'} selected: {selectedYears.join(', ')}
+                  </div>
                 )}
-              >
-                {availableYears.map((year) => (
-                  <MenuItem key={year} value={year}>
-                    <Checkbox checked={selectedYears.indexOf(year) > -1} />
-                    <ListItemText primary={year} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Show selected years count */}
-            {selectedYears.length > 0 && (
-              <div className="text-xs text-gray-600">
-                {selectedYears.length} {selectedYears.length === 1 ? 'year' : 'years'} selected: {selectedYears.join(', ')}
               </div>
-            )}
 
-            {/* Blending Method - Radio Buttons */}
-            {selectedYears.length > 0 && (
-              <FormControl component="fieldset">
-                <FormLabel component="legend" className="text-sm font-medium text-gray-700">
-                  Blending Method
-                </FormLabel>
-                <RadioGroup
-                  row
-                  value={filters.multiYearBlending?.method || 'equal'}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBlendingMethodChange(e.target.value as 'percentage' | 'weighted' | 'equal')}
-                >
-                  <FormControlLabel 
-                    value="equal" 
-                    control={<Radio size="small" />} 
-                    label={<Typography variant="body2">Equal</Typography>}
-                  />
-                  <FormControlLabel 
-                    value="percentage" 
-                    control={<Radio size="small" />} 
-                    label={<Typography variant="body2">Custom %</Typography>}
-                  />
-                  <FormControlLabel 
-                    value="weighted" 
-                    control={<Radio size="small" />} 
-                    label={<Typography variant="body2">By Sample Size</Typography>}
-                  />
-                </RadioGroup>
-              </FormControl>
-            )}
+              {/* Right Side: Blending Method - Radio Buttons */}
+              {selectedYears.length > 0 && (
+                <div className="flex-1">
+                  <FormControl component="fieldset" fullWidth>
+                    <FormLabel component="legend" className="text-sm font-medium text-gray-700">
+                      Blending Method
+                    </FormLabel>
+                    <RadioGroup
+                      row
+                      value={filters.multiYearBlending?.method || 'equal'}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleBlendingMethodChange(e.target.value as 'percentage' | 'weighted' | 'equal')}
+                    >
+                      <FormControlLabel 
+                        value="equal" 
+                        control={<Radio size="small" />} 
+                        label={<Typography variant="body2">Equal</Typography>}
+                      />
+                      <FormControlLabel 
+                        value="percentage" 
+                        control={<Radio size="small" />} 
+                        label={<Typography variant="body2">Custom %</Typography>}
+                      />
+                      <FormControlLabel 
+                        value="weighted" 
+                        control={<Radio size="small" />} 
+                        label={<Typography variant="body2">By Sample Size</Typography>}
+                      />
+                    </RadioGroup>
+                  </FormControl>
+                </div>
+              )}
+            </div>
 
             {/* Percentage Controls - Only show for selected years */}
             {filters.multiYearBlending?.method === 'percentage' && selectedYears.length > 0 && (
