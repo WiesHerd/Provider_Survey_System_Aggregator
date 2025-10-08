@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { CloudArrowUpIcon, UserIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, UserIcon, UserGroupIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { useProviderContext } from '../contexts/ProviderContext';
+import { useYear } from '../contexts/YearContext';
 
 interface PageHeaderProps {
   title: string;
@@ -14,6 +15,7 @@ interface PageHeaderProps {
 const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloadButton, titleClassName, className }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const { selectedProviderType } = useProviderContext();
+  const { currentYear, setCurrentYear, availableYears } = useYear();
 
   const handleDownload = async () => {
     setIsDownloading(true);
@@ -78,6 +80,27 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
     );
   };
 
+  // Year Selector Component
+  const YearSelector = () => {
+    return (
+      <div className="flex items-center space-x-2">
+        <CalendarIcon className="w-4 h-4 text-gray-500" />
+        <select
+          value={currentYear}
+          onChange={(e) => setCurrentYear(e.target.value)}
+          className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors"
+          aria-label="Select year"
+        >
+          {availableYears.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
   return (
     <header className={`h-16 border-b border-gray-100 bg-white flex items-center justify-between px-8 mb-6 ${className || ''}`}>
       <div>
@@ -90,6 +113,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
       <div className="flex items-center space-x-4">
         {/* Data View Indicator */}
         <DataViewIndicator />
+        
+        {/* Year Selector */}
+        <YearSelector />
         
         {/* Download Button */}
         {showDownloadButton && (

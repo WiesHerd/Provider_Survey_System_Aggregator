@@ -2,7 +2,6 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useLocation, NavLink } from 'react-router-dom';
 import { IndexedDBService } from '../services/IndexedDBService';
 import { useProviderContext } from '../contexts/ProviderContext';
-import { useYear } from '../contexts/YearContext';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -59,7 +58,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	
 	// Use global provider context instead of local state
 	const { selectedProviderType, setProviderType, availableProviderTypes } = useProviderContext();
-	const { currentYear, setCurrentYear, availableYears } = useYear();
 	const [localAvailableProviderTypes, setLocalAvailableProviderTypes] = useState<Set<string>>(new Set(['PHYSICIAN']));
 	
 	// Detect what provider types are actually loaded
@@ -309,28 +307,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</div>
 			)}
 
-			{/* Year Selector */}
-			{isOpen && (
-				<div className="px-3 py-4 border-b border-gray-100">
-					<div className="mb-2">
-						<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-							Year
-						</h3>
-					</div>
-					<select
-						value={currentYear}
-						onChange={(e) => setCurrentYear(e.target.value)}
-						className="w-full px-3 py-2 text-sm bg-white border-2 border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-300 transition-colors"
-						aria-label="Select year"
-					>
-						{availableYears.map((year) => (
-							<option key={year} value={year}>
-								{year}
-							</option>
-						))}
-					</select>
-				</div>
-			)}
 
 			{/* Main Menu */}
 			<nav aria-label="Primary" className="flex-1 px-3 py-6 overflow-y-auto">
