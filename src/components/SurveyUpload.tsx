@@ -903,7 +903,7 @@ const SurveyUpload: React.FC = () => {
                     <FormControl size="small" className="min-w-[120px]">
                       <Select
                         value={selectedYearFilter}
-                        onChange={(e) => setSelectedYearFilter(e.target.value)}
+                        onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedYearFilter(e.target.value as string)}
                         displayEmpty
                         className="text-sm"
                       >
