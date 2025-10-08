@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CloudArrowUpIcon, UserIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, UserIcon, UserGroupIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useYear } from '../contexts/YearContext';
@@ -80,27 +80,25 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
     );
   };
 
-  // Year Selector Component
+  // Year Selector Component - Silicon Valley Style
   const YearSelector = () => {
     return (
-      <div className="relative">
-        {/* Year Badge with modern styling to match Physicians pill */}
-        <div 
-          className="
-            inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
-            transition-all duration-300 shadow-sm border backdrop-blur-sm
-            hover:scale-105 hover:shadow-md cursor-pointer
-            bg-gradient-to-r from-gray-50 to-gray-100 text-gray-800 border-gray-300/50 
-            hover:from-gray-100 hover:to-gray-200
-          "
-          title="Select year"
-        >
-          <span className="font-semibold tracking-wide">
+      <div className="relative group">
+        {/* Modern dropdown button with clear visual cues */}
+        <div className="
+          inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium
+          transition-all duration-200 shadow-sm border
+          hover:shadow-md cursor-pointer
+          bg-white text-gray-700 border-gray-200 
+          hover:border-gray-300 hover:bg-gray-50
+          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+        ">
+          <span className="font-medium">
             {currentYear}
           </span>
           
-          {/* Subtle status indicator dot */}
-          <div className="ml-2 w-1.5 h-1.5 rounded-full bg-gray-500 shadow-sm" />
+          {/* Clear dropdown indicator - Silicon Valley style */}
+          <ChevronDownIcon className="ml-2 w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors" />
         </div>
         
         {/* Invisible select overlay for functionality */}
