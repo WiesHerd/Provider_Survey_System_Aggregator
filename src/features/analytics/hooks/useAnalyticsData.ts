@@ -44,6 +44,10 @@ export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
     
     // If multi-year blending is enabled, use blended data
     if (filters.useMultiYearBlending && filters.multiYearBlending) {
+      console.log('🔍 useAnalyticsData: Multi-year blending enabled');
+      console.log('🔍 useAnalyticsData: Blending config:', filters.multiYearBlending);
+      console.log('🔍 useAnalyticsData: Years in config:', filters.multiYearBlending.years);
+      
       try {
         // Apply other filters first (specialty, region, etc.)
         const preFilteredData = filterAnalyticsData(data, {

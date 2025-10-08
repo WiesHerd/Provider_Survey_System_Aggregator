@@ -140,7 +140,12 @@ export const calculateMultiYearBlending = (
  * Validate blending configuration
  */
 const validateBlendingConfig = (config: YearBlendingConfig): void => {
+  console.log('🔍 validateBlendingConfig: Config received:', config);
+  console.log('🔍 validateBlendingConfig: Years array:', config.years);
+  console.log('🔍 validateBlendingConfig: Years length:', config.years?.length);
+  
   if (!config.years || config.years.length === 0) {
+    console.error('🔍 validateBlendingConfig: No years provided in config');
     throw new Error('At least one year is required for blending');
   }
   
