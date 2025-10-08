@@ -133,6 +133,10 @@ const SurveyUpload: React.FC = () => {
   // Add state for collapsible sections
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
+  
+  // Add year filter state
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ALL');
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
 
   // Filter survey options based on selected provider type
   const availableSurveyTypes = useMemo(() => {
@@ -194,14 +198,23 @@ const SurveyUpload: React.FC = () => {
         const surveys = await dataService.getAllSurveys();
         console.log('Loaded surveys:', surveys);
         
-        // Filter surveys by current year and provider type
+        // Filter surveys by selected year and provider type
         const surveysAny = surveys as any[];
-        // TEMPORARY: Show all surveys regardless of year for multi-year testing
-        const yearFilteredSurveys = surveysAny; // Remove year filtering temporarily
-        // const yearFilteredSurveys = surveysAny.filter((survey: any) => {
-        //   const surveyYear = survey.year || survey.surveyYear || '';
-        //   return surveyYear === currentYear;
-        // });
+        
+        // Extract available years from surveys
+        const years = [...new Set(surveysAny.map((survey: any) => 
+          survey.year || survey.surveyYear || ''
+        ).filter(year => year))].sort((a, b) => b.localeCompare(a));
+        setAvailableYears(['ALL', ...years]);
+        
+        // Apply year filter
+        let yearFilteredSurveys = surveysAny;
+        if (selectedYearFilter !== 'ALL') {
+          yearFilteredSurveys = surveysAny.filter((survey: any) => {
+            const surveyYear = survey.year || survey.surveyYear || '';
+            return surveyYear === selectedYearFilter;
+          });
+        }
         
         console.log(`Filtered surveys for year ${currentYear}:`, yearFilteredSurveys);
         
@@ -274,7 +287,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType]);
+  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedYearFilter]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -883,6 +896,33 @@ const SurveyUpload: React.FC = () => {
 
             {!isUploadedSurveysCollapsed && (
               <>
+                {/* Year Filter Dropdown */}
+                {availableYears.length > 1 && (
+                  <div className="mb-4 flex items-center space-x-3">
+                    <label className="text-sm font-medium text-gray-700">Filter by Year:</label>
+                    <FormControl size="small" className="min-w-[120px]">
+                      <Select
+                        value={selectedYearFilter}
+                        onChange={(e) => setSelectedYearFilter(e.target.value)}
+                        displayEmpty
+                        className="text-sm"
+                      >
+                        {availableYears.map((year) => (
+                          <MenuItem key={year} value={year}>
+                            {year === 'ALL' ? 'All Years' : year}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <span className="text-sm text-gray-500">
+                      {selectedYearFilter === 'ALL' 
+                        ? `Showing all ${uploadedSurveys.length} surveys`
+                        : `Showing ${uploadedSurveys.filter(s => (s.surveyYear || '') === selectedYearFilter).length} surveys from ${selectedYearFilter}`
+                      }
+                    </span>
+                  </div>
+                )}
+                
                 {isLoading ? (
                   <LoadingSpinner message="Loading surveys..." size="lg" variant="primary" />
                 ) : uploadedSurveys.length === 0 ? (
