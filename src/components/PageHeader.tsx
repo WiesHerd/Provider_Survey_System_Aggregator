@@ -31,37 +31,45 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
   // Year Selector Component - Silicon Valley Style
   const YearSelector = () => {
     return (
-      <div className="relative group">
-        {/* Modern dropdown button with clear visual cues */}
-        <div className="
-          inline-flex items-center px-3 py-2 rounded-xl text-sm font-medium
-          transition-all duration-200 shadow-sm border
-          hover:shadow-md cursor-pointer
-          bg-white text-gray-700 border-gray-200 
-          hover:border-gray-300 hover:bg-gray-50
-          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-        ">
-          <span className="font-medium">
-            {currentYear}
-          </span>
-          
-          {/* Clear dropdown indicator - Silicon Valley style */}
-          <ChevronDownIcon className="ml-2 w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors" />
-        </div>
+      <div className="flex items-center space-x-3">
+        {/* Year Label */}
+        <span className="text-sm font-medium text-gray-600">
+          Select Year:
+        </span>
         
-        {/* Invisible select overlay for functionality */}
-        <select
-          value={currentYear}
-          onChange={(e) => setCurrentYear(e.target.value)}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          aria-label="Select year"
-        >
-          {availableYears.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
+        {/* Year Dropdown */}
+        <div className="relative group">
+          {/* Modern dropdown button with clear visual cues */}
+          <div className="
+            inline-flex items-center px-3 py-2 rounded-xl text-sm font-medium
+            transition-all duration-200 shadow-sm border
+            hover:shadow-md cursor-pointer
+            bg-white text-gray-700 border-gray-200 
+            hover:border-gray-300 hover:bg-gray-50
+            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+          ">
+            <span className="font-medium">
+              {currentYear}
+            </span>
+            
+            {/* Clear dropdown indicator - Silicon Valley style */}
+            <ChevronDownIcon className="ml-2 w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors" />
+          </div>
+          
+          {/* Invisible select overlay for functionality */}
+          <select
+            value={currentYear}
+            onChange={(e) => setCurrentYear(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            aria-label="Select year"
+          >
+            {availableYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     );
   };
