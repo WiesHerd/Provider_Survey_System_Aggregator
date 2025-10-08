@@ -86,7 +86,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
       <div className="relative group">
         {/* Modern dropdown button with clear visual cues */}
         <div className="
-          inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium
+          inline-flex items-center px-3 py-2 rounded-xl text-sm font-medium
           transition-all duration-200 shadow-sm border
           hover:shadow-md cursor-pointer
           bg-white text-gray-700 border-gray-200 
