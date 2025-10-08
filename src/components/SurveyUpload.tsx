@@ -134,9 +134,6 @@ const SurveyUpload: React.FC = () => {
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
   
-  // Add year filter state
-  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ALL');
-  const [availableYears, setAvailableYears] = useState<string[]>([]);
 
   // Filter survey options based on selected provider type
   const availableSurveyTypes = useMemo(() => {
@@ -198,23 +195,12 @@ const SurveyUpload: React.FC = () => {
         const surveys = await dataService.getAllSurveys();
         console.log('Loaded surveys:', surveys);
         
-        // Filter surveys by selected year and provider type
+        // Filter surveys by current year and provider type
         const surveysAny = surveys as any[];
-        
-        // Extract available years from surveys
-        const years = [...new Set(surveysAny.map((survey: any) => 
-          survey.year || survey.surveyYear || ''
-        ).filter(year => year))].sort((a, b) => b.localeCompare(a));
-        setAvailableYears(['ALL', ...years]);
-        
-        // Apply year filter
-        let yearFilteredSurveys = surveysAny;
-        if (selectedYearFilter !== 'ALL') {
-          yearFilteredSurveys = surveysAny.filter((survey: any) => {
-            const surveyYear = survey.year || survey.surveyYear || '';
-            return surveyYear === selectedYearFilter;
-          });
-        }
+        const yearFilteredSurveys = surveysAny.filter((survey: any) => {
+          const surveyYear = survey.year || survey.surveyYear || '';
+          return surveyYear === currentYear;
+        });
         
         console.log(`Filtered surveys for year ${currentYear}:`, yearFilteredSurveys);
         
@@ -287,7 +273,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedYearFilter]);
+  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -896,51 +882,6 @@ const SurveyUpload: React.FC = () => {
 
             {!isUploadedSurveysCollapsed && (
               <>
-                {/* Year Filter Dropdown */}
-                {availableYears.length > 1 && (
-                  <div className="mb-4 flex items-center space-x-3">
-                    <label className="text-sm font-medium text-gray-700">Filter by Year:</label>
-                    <FormControl size="small" className="min-w-[120px]">
-                      <Select
-                        value={selectedYearFilter}
-                        onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSelectedYearFilter(e.target.value as string)}
-                        displayEmpty
-                        className="text-sm"
-                        sx={{
-                          '& .MuiOutlinedInput-notchedOutline': {
-                            borderColor: '#d1d5db', // Match gray border like other inputs
-                            borderWidth: '1px',
-                          },
-                          '&:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: '#9ca3af', // Slightly darker gray on hover
-                            borderWidth: '1px',
-                          },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                            borderColor: '#6b7280', // Darker gray when focused
-                            borderWidth: '1px',
-                          },
-                          '& .MuiSelect-select': {
-                            padding: '8px 12px',
-                            fontSize: '14px',
-                            color: '#374151',
-                          }
-                        }}
-                      >
-                        {availableYears.map((year) => (
-                          <MenuItem key={year} value={year}>
-                            {year === 'ALL' ? 'All Years' : year}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <span className="text-sm text-gray-500">
-                      {selectedYearFilter === 'ALL' 
-                        ? `Showing all ${uploadedSurveys.length} surveys`
-                        : `Showing ${uploadedSurveys.filter(s => (s.surveyYear || '') === selectedYearFilter).length} surveys from ${selectedYearFilter}`
-                      }
-                    </span>
-                  </div>
-                )}
                 
                 {isLoading ? (
                   <LoadingSpinner message="Loading surveys..." size="lg" variant="primary" />
