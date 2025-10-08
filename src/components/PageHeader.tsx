@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CloudArrowUpIcon, UserIcon, UserGroupIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, UserIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useYear } from '../contexts/YearContext';
@@ -83,12 +83,31 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
   // Year Selector Component
   const YearSelector = () => {
     return (
-      <div className="flex items-center space-x-2">
-        <CalendarIcon className="w-4 h-4 text-gray-500" />
+      <div className="relative">
+        {/* Year Badge with modern styling to match Physicians pill */}
+        <div 
+          className="
+            inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium
+            transition-all duration-300 shadow-sm border backdrop-blur-sm
+            hover:scale-105 hover:shadow-md cursor-pointer
+            bg-gradient-to-r from-gray-50 to-gray-100 text-gray-800 border-gray-300/50 
+            hover:from-gray-100 hover:to-gray-200
+          "
+          title="Select year"
+        >
+          <span className="font-semibold tracking-wide">
+            {currentYear}
+          </span>
+          
+          {/* Subtle status indicator dot */}
+          <div className="ml-2 w-1.5 h-1.5 rounded-full bg-gray-500 shadow-sm" />
+        </div>
+        
+        {/* Invisible select overlay for functionality */}
         <select
           value={currentYear}
           onChange={(e) => setCurrentYear(e.target.value)}
-          className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           aria-label="Select year"
         >
           {availableYears.map((year) => (
