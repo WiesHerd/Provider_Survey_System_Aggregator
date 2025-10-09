@@ -124,7 +124,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       <BlendingResults
         result={blendedResult}
         onBack={() => setShowResults(false)}
-        onClose={onClose}
+        onClose={onClose || (() => {})}
       />
     );
   }
@@ -135,7 +135,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         templates={templates}
         onLoadTemplate={handleLoadTemplate}
         onBack={() => setShowTemplates(false)}
-        onClose={onClose}
+        onClose={onClose || (() => {})}
       />
     );
   }

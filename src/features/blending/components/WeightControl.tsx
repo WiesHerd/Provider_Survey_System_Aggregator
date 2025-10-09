@@ -83,7 +83,7 @@ export const WeightControl: React.FC<WeightControlProps> = ({
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
           thumbClassName="w-5 h-5 bg-blue-600 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           trackClassName="h-2 bg-gray-200 rounded-lg"
-          renderThumb={(props, state) => (
+          renderThumb={(props: any, state: any) => (
             <div
               {...props}
               className="w-5 h-5 bg-blue-600 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
