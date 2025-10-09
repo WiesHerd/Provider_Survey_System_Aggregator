@@ -99,6 +99,11 @@ export const useSpecialtyBlending = ({
           });
           
           console.log('🔍 useSpecialtyBlending: Created', specialtyMap.size, 'specialty items');
+          
+          // Debug: Log unique provider types in the data
+          const uniqueProviderTypes = [...new Set(allSurveyData.map(s => s.providerType))];
+          console.log('🔍 useSpecialtyBlending: Unique provider types in data:', uniqueProviderTypes);
+          
           setAvailableSpecialties(Array.from(specialtyMap.values()));
         } else {
           console.log('🔍 useSpecialtyBlending: No data found');

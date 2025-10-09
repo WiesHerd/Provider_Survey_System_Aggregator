@@ -97,7 +97,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       const matchesSurvey = !selectedSurvey || row.surveySource === selectedSurvey;
       const matchesYear = !selectedYear || row.surveyYear === selectedYear;
       const matchesRegion = !selectedRegion || row.geographicRegion === selectedRegion;
-      const matchesProviderType = !selectedProviderType || row.providerType === selectedProviderType;
+      
+      // Handle provider type mapping - "Physician" should match "Staff Physician"
+      let matchesProviderType = true;
+      if (selectedProviderType) {
+        if (selectedProviderType === 'Staff Physician') {
+          matchesProviderType = row.providerType === 'Staff Physician';
+        } else {
+          matchesProviderType = row.providerType === selectedProviderType;
+        }
+      }
+      
       const matchesSpecialty = !specialtySearch || 
         (row.surveySpecialty && row.surveySpecialty.toLowerCase().includes(specialtySearch.toLowerCase()));
       return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
@@ -348,22 +358,21 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
             <p className="text-sm text-gray-600 mt-1">Select specific survey data points for blending</p>
           </div>
           <div className="px-6 py-6">
-            {/* Specialty Search */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Specialties
-              </label>
-              <input
-                type="text"
-                value={specialtySearch}
-                onChange={(e) => setSpecialtySearch(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="Type to search specialties (e.g., 'Family Medicine', 'Cardiology')"
-              />
-            </div>
-
             {/* Advanced Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              {/* Specialty Search - moved to left of other filters */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search Specialties
+                </label>
+                <input
+                  type="text"
+                  value={specialtySearch}
+                  onChange={(e) => setSpecialtySearch(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Type to search specialties"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Survey Source
@@ -421,9 +430,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   onChange={(e) => setSelectedProviderType(e.target.value)}
                 >
                   <option value="">All Provider Types</option>
-                  <option value="Physician">Physician</option>
-                  <option value="APP">Advanced Practice Provider</option>
-                  <option value="Nurse">Nurse</option>
+                  {[...new Set(allData.map((row: any) => row.providerType))].sort().map(providerType => (
+                    <option key={providerType} value={providerType}>
+                      {providerType === 'Staff Physician' ? 'Physician' : providerType}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
