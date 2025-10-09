@@ -5,7 +5,6 @@
 
 import React, { memo } from 'react';
 import {
-  Box,
   Card,
   CardContent,
   Typography,
@@ -58,7 +57,7 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
   return (
     <Card sx={{ mb: 3, borderRadius: '8px' }}>
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <div className="flex justify-between items-center mb-4">
           <Typography variant="h6" component="h2">
             Analytics Summary
           </Typography>
@@ -70,7 +69,7 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
               variant="outlined"
             />
           )}
-        </Box>
+        </div>
 
         <Grid container spacing={3}>
           {/* Data Volume Metrics */}
@@ -80,44 +79,44 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="primary">
                     {formatNumber(totalRecords)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Total Records
                   </Typography>
-                </Box>
+                </div>
               </Grid>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="primary">
                     {formatNumber(totalTccOrganizations + totalWrvuOrganizations + totalCfOrganizations)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Organizations
                   </Typography>
-                </Box>
+                </div>
               </Grid>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="primary">
                     {formatNumber(totalTccIncumbents + totalWrvuIncumbents + totalCfIncumbents)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Incumbents
                   </Typography>
-                </Box>
+                </div>
               </Grid>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="primary">
                     {uniqueSpecialties.size}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Specialties
                   </Typography>
-                </Box>
+                </div>
               </Grid>
             </Grid>
           </Grid>
@@ -133,55 +132,55 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="success.main">
                     {formatCurrency(averageTccP50)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     TCC P50
                   </Typography>
-                </Box>
+                </div>
               </Grid>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="success.main">
                     {formatNumber(averageWrvuP50)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     WRVU P50
                   </Typography>
-                </Box>
+                </div>
               </Grid>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="success.main">
                     {formatCurrency(averageCfP50)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     CF P50
                   </Typography>
-                </Box>
+                </div>
               </Grid>
               <Grid item xs={6}>
-                <Box>
+                <div>
                   <Typography variant="h4" component="div" color="success.main">
                     {averageCfP50 > 0 ? formatCurrency(averageTccP50 / averageCfP50) : '$0'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     TCC/CF Ratio
                   </Typography>
-                </Box>
+                </div>
               </Grid>
             </Grid>
           </Grid>
         </Grid>
 
         {/* Data Diversity */}
-        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+        <div className="mt-6 pt-4 border-t border-gray-200">
           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
             Data Diversity
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <div className="flex gap-2 flex-wrap">
             <Chip 
               label={`${uniqueSources.size} Survey Sources`}
               size="small"
@@ -197,16 +196,16 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
               size="small"
               variant="outlined"
             />
-          </Box>
-        </Box>
+          </div>
+        </div>
 
         {/* Active Filters Display */}
         {activeFiltersCount > 0 && (
-          <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          <div className="mt-4 pt-4 border-t border-gray-200">
             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
               Active Filters
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <div className="flex gap-2 flex-wrap">
               {Object.entries(filters).map(([key, value]) => {
                 if (!value) return null;
                 return (
@@ -219,8 +218,8 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
                   />
                 );
               })}
-            </Box>
-          </Box>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
