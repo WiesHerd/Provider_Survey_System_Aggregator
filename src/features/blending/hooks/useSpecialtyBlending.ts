@@ -5,9 +5,10 @@
  * including drag & drop, weight management, and template operations.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SpecialtyItem, SpecialtyBlend, SpecialtyBlendTemplate, BlendedResult, BlendingState, BlendingActions } from '../types/blending';
 import { validateBlend, normalizeWeights, calculateBlendedMetrics, calculateConfidence, generateBlendId } from '../utils/blendingCalculations';
+import { useAnalyticsData } from '../../analytics/hooks/useAnalyticsData';
 
 interface UseSpecialtyBlendingProps {
   initialSpecialties?: SpecialtyItem[];
@@ -21,6 +22,9 @@ export const useSpecialtyBlending = ({
   allowTemplates = true
 }: UseSpecialtyBlendingProps = {}): BlendingState & BlendingActions => {
   
+  // Get analytics data to populate available specialties
+  const { allData, loading: analyticsLoading, error: analyticsError } = useAnalyticsData();
+  
   // State
   const [selectedSpecialties, setSelectedSpecialties] = useState<SpecialtyItem[]>(initialSpecialties);
   const [availableSpecialties, setAvailableSpecialties] = useState<SpecialtyItem[]>([]);
@@ -29,6 +33,38 @@ export const useSpecialtyBlending = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Populate available specialties from analytics data
+  useEffect(() => {
+    if (allData && allData.length > 0) {
+      const specialtyMap = new Map<string, SpecialtyItem>();
+      
+      allData.forEach(item => {
+        if (item.surveySpecialty) {
+          const key = `${item.surveySpecialty}-${item.surveySource}-${item.surveyYear}`;
+          
+          if (!specialtyMap.has(key)) {
+            specialtyMap.set(key, {
+              id: key,
+              name: item.surveySpecialty,
+              records: item.tcc_n_orgs || 0,
+              weight: 0,
+              surveySource: item.surveySource,
+              surveyYear: item.surveyYear,
+              geographicRegion: item.geographicRegion || 'Unknown',
+              providerType: item.providerType || 'Unknown'
+            });
+          } else {
+            // Update record count
+            const existing = specialtyMap.get(key)!;
+            existing.records += (item.tcc_n_orgs || 0);
+          }
+        }
+      });
+      
+      setAvailableSpecialties(Array.from(specialtyMap.values()));
+    }
+  }, [allData]);
+
   // Validation
   const validation = useMemo(() => {
     return validateBlend(selectedSpecialties);
@@ -181,8 +217,8 @@ export const useSpecialtyBlending = ({
     availableSpecialties,
     currentBlend,
     templates,
-    isLoading,
-    error,
+    isLoading: isLoading || analyticsLoading,
+    error: error || analyticsError,
     validation,
     
     // Actions
