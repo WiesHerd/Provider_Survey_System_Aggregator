@@ -28,8 +28,9 @@ export const WeightControl: React.FC<WeightControlProps> = ({
     setInputValue(specialty.weight.toFixed(2));
   }, [specialty.weight]);
 
-  const handleSliderChange = (value: number) => {
-    const newWeight = Math.round(value * 100) / 100; // 2 decimal places
+  const handleSliderChange = (value: number | number[]) => {
+    const numericValue = Array.isArray(value) ? value[0] : value;
+    const newWeight = Math.round(numericValue * 100) / 100; // 2 decimal places
     setWeight(newWeight);
     setInputValue(newWeight.toFixed(2));
     onChange(newWeight);
