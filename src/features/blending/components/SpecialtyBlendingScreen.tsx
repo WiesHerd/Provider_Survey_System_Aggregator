@@ -313,7 +313,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                       specialty={selectedSpecialties.find(s => s.id === activeId) || availableSpecialties.find(s => s.id === activeId)!}
                       onRemove={() => {}}
                       onWeightChange={() => {}}
-                      isOverlay={true}
                     />
                   ) : null}
                 </DragOverlay>
