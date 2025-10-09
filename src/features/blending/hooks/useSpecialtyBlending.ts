@@ -49,7 +49,7 @@ export const useSpecialtyBlending = ({
               records: item.tcc_n_orgs || 0,
               weight: 0,
               surveySource: item.surveySource,
-              surveyYear: item.surveyYear,
+              surveyYear: item.surveyYear || 'Unknown',
               geographicRegion: item.geographicRegion || 'Unknown',
               providerType: item.providerType || 'Unknown'
             });
