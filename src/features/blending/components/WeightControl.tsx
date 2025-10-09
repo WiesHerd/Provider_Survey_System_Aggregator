@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import Slider from 'react-slider';
+import Slider from 'rc-slider';
+import 'rc-slider/assets/index.css';
 import { SpecialtyItem } from '../types/blending';
 
 interface WeightControlProps {
@@ -80,23 +81,16 @@ export const WeightControl: React.FC<WeightControlProps> = ({
           min={0}
           max={100}
           step={0.01} // 2 decimal places
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-          thumbClassName="w-5 h-5 bg-blue-600 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          trackClassName="h-2 bg-gray-200 rounded-lg"
-          renderThumb={(props: any, state: any) => (
-            <div
-              {...props}
-              className="w-5 h-5 bg-blue-600 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              style={{
-                ...props.style,
-                transform: 'translate(-50%, -50%)',
-              } as React.CSSProperties}
-            >
-              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded">
-                {state.valueNow.toFixed(2)}%
-              </div>
-            </div>
-          )}
+          trackStyle={{ backgroundColor: '#e5e7eb', height: '8px', borderRadius: '4px' }}
+          railStyle={{ backgroundColor: '#e5e7eb', height: '8px', borderRadius: '4px' }}
+          handleStyle={{
+            backgroundColor: '#3b82f6',
+            border: '2px solid #3b82f6',
+            height: '20px',
+            width: '20px',
+            marginTop: '-6px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          }}
         />
       </div>
       
