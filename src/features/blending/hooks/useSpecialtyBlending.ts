@@ -41,6 +41,11 @@ export const useSpecialtyBlending = ({
         const { AnalyticsDataService } = await import('../../analytics/services/analyticsDataService');
         const analyticsDataService = new AnalyticsDataService();
         
+        console.log('🔍 useSpecialtyBlending: Starting data fetch...');
+        
+        // Clear cache to ensure fresh data (same as analytics)
+        analyticsDataService.clearCache();
+        
         // Get all survey data using the same service as analytics
         const allSurveyData = await analyticsDataService.getAnalyticsData({
           specialty: '',
@@ -50,7 +55,12 @@ export const useSpecialtyBlending = ({
           year: ''
         });
         
+        console.log('🔍 useSpecialtyBlending: Fetched data -', allSurveyData.length, 'records');
+        console.log('🔍 useSpecialtyBlending: Sample data:', allSurveyData[0]);
+        
         if (allSurveyData && allSurveyData.length > 0) {
+          console.log('🔍 useSpecialtyBlending: Processing', allSurveyData.length, 'records');
+          
           // Set the raw data for the browser (this is already aggregated data)
           setAllData(allSurveyData);
           
@@ -58,6 +68,14 @@ export const useSpecialtyBlending = ({
           const specialtyMap = new Map<string, SpecialtyItem>();
           
           allSurveyData.forEach((survey: any) => {
+            console.log('🔍 useSpecialtyBlending: Processing survey:', {
+              surveySpecialty: survey.surveySpecialty,
+              surveySource: survey.surveySource,
+              surveyYear: survey.surveyYear,
+              geographicRegion: survey.geographicRegion,
+              providerType: survey.providerType
+            });
+            
             if (survey.surveySpecialty && survey.surveySource && survey.surveyYear) {
               const key = `${survey.surveySpecialty}-${survey.surveySource}-${survey.surveyYear}-${survey.geographicRegion || 'National'}-${survey.providerType || 'Physician'}`;
               
@@ -80,8 +98,10 @@ export const useSpecialtyBlending = ({
             }
           });
           
+          console.log('🔍 useSpecialtyBlending: Created', specialtyMap.size, 'specialty items');
           setAvailableSpecialties(Array.from(specialtyMap.values()));
         } else {
+          console.log('🔍 useSpecialtyBlending: No data found');
           // Fallback to empty array if no data
           setAllData([]);
           setAvailableSpecialties([]);
