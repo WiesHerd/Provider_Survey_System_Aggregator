@@ -37,18 +37,24 @@ export const useSpecialtyBlending = ({
         setIsLoading(true);
         setError(null);
         
-        // Import the data service to get real survey data
-        const { getDataService } = await import('../../../services/DataService');
-        const dataService = getDataService();
+        // Import the analytics data service to get real survey data
+        const { AnalyticsDataService } = await import('../../analytics/services/analyticsDataService');
+        const analyticsDataService = new AnalyticsDataService();
         
-        // Get all survey data
-        const allSurveyData = await dataService.getSurveyData();
+        // Get all survey data using the same service as analytics
+        const allSurveyData = await analyticsDataService.getAnalyticsData({
+          specialty: '',
+          surveySource: '',
+          geographicRegion: '',
+          providerType: '',
+          year: ''
+        });
         
         if (allSurveyData && allSurveyData.length > 0) {
-          // Set the raw data for the browser
+          // Set the raw data for the browser (this is already aggregated data)
           setAllData(allSurveyData);
           
-          // Process real survey data into specialty items
+          // Process aggregated survey data into specialty items
           const specialtyMap = new Map<string, SpecialtyItem>();
           
           allSurveyData.forEach((survey: any) => {
