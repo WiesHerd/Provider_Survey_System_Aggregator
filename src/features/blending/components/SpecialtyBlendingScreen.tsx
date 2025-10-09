@@ -281,7 +281,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                     {specialty.records.toLocaleString()} records
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Source: {specialty.source}
+                    Source: {specialty.surveySource}
                   </p>
                 </div>
               ))}
