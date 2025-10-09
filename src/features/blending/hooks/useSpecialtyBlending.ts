@@ -8,7 +8,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SpecialtyItem, SpecialtyBlend, SpecialtyBlendTemplate, BlendedResult, BlendingState, BlendingActions } from '../types/blending';
 import { validateBlend, normalizeWeights, calculateBlendedMetrics, calculateConfidence, generateBlendId } from '../utils/blendingCalculations';
-import { useAnalyticsData } from '../../analytics/hooks/useAnalyticsData';
 
 interface UseSpecialtyBlendingProps {
   initialSpecialties?: SpecialtyItem[];
@@ -22,9 +21,6 @@ export const useSpecialtyBlending = ({
   allowTemplates = true
 }: UseSpecialtyBlendingProps = {}): BlendingState & BlendingActions => {
   
-  // Get analytics data to populate available specialties
-  const { allData, loading: analyticsLoading, error: analyticsError } = useAnalyticsData();
-  
   // State
   const [selectedSpecialties, setSelectedSpecialties] = useState<SpecialtyItem[]>(initialSpecialties);
   const [availableSpecialties, setAvailableSpecialties] = useState<SpecialtyItem[]>([]);
@@ -33,37 +29,63 @@ export const useSpecialtyBlending = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Populate available specialties from analytics data
+  // Populate available specialties with mock data for now
   useEffect(() => {
-    if (allData && allData.length > 0) {
-      const specialtyMap = new Map<string, SpecialtyItem>();
-      
-      allData.forEach(item => {
-        if (item.surveySpecialty) {
-          const key = `${item.surveySpecialty}-${item.surveySource}-${item.surveyYear}`;
-          
-          if (!specialtyMap.has(key)) {
-            specialtyMap.set(key, {
-              id: key,
-              name: item.surveySpecialty,
-              records: item.tcc_n_orgs || 0,
-              weight: 0,
-              surveySource: item.surveySource,
-              surveyYear: item.surveyYear || 'Unknown',
-              geographicRegion: item.geographicRegion || 'Unknown',
-              providerType: item.providerType || 'Unknown'
-            });
-          } else {
-            // Update record count
-            const existing = specialtyMap.get(key)!;
-            existing.records += (item.tcc_n_orgs || 0);
-          }
-        }
-      });
-      
-      setAvailableSpecialties(Array.from(specialtyMap.values()));
-    }
-  }, [allData]);
+    const mockSpecialties: SpecialtyItem[] = [
+      {
+        id: 'family-medicine-2024',
+        name: 'Family Medicine',
+        records: 1250,
+        weight: 0,
+        surveySource: 'MGMA',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      {
+        id: 'internal-medicine-2024',
+        name: 'Internal Medicine',
+        records: 980,
+        weight: 0,
+        surveySource: 'MGMA',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      {
+        id: 'cardiology-2024',
+        name: 'Cardiology',
+        records: 750,
+        weight: 0,
+        surveySource: 'SullivanCotter',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      {
+        id: 'orthopedic-surgery-2024',
+        name: 'Orthopedic Surgery',
+        records: 650,
+        weight: 0,
+        surveySource: 'MGMA',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      {
+        id: 'dermatology-2024',
+        name: 'Dermatology',
+        records: 420,
+        weight: 0,
+        surveySource: 'SullivanCotter',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      }
+    ];
+    
+    setAvailableSpecialties(mockSpecialties);
+  }, []);
 
   // Validation
   const validation = useMemo(() => {
@@ -217,8 +239,8 @@ export const useSpecialtyBlending = ({
     availableSpecialties,
     currentBlend,
     templates,
-    isLoading: isLoading || analyticsLoading,
-    error: error || analyticsError,
+    isLoading,
+    error,
     validation,
     
     // Actions
