@@ -71,6 +71,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     }
 
     return allData.filter((row: any) => {
+      // Skip undefined or null rows
+      if (!row) {
+        return false;
+      }
+
       const matchesSurvey = !selectedSurvey || row.surveySource === selectedSurvey;
       const matchesYear = !selectedYear || row.surveyYear === selectedYear;
       const matchesRegion = !selectedRegion || row.geographicRegion === selectedRegion;
@@ -149,7 +154,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       return null;
     }
 
-    const selectedData = selectedDataRows.map(index => filteredSurveyData[index]);
+    const selectedData = selectedDataRows.map(index => filteredSurveyData[index]).filter(row => row); // Filter out undefined rows
     
     const blended = {
       tcc_p25: 0,
@@ -558,7 +563,13 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredSurveyData.map((row: any, index: number) => (
+                      {filteredSurveyData.map((row: any, index: number) => {
+                        // Skip rendering if row is undefined
+                        if (!row) {
+                          return null;
+                        }
+                        
+                        return (
                         <tr 
                           key={`${row.surveySource}-${row.surveyYear}-${row.surveySpecialty}-${index}`}
                           className={`hover:bg-gray-50 ${selectedDataRows.includes(index) ? 'bg-indigo-50' : ''}`}
@@ -599,7 +610,8 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                             {(row.tcc_n_orgs || row.n_orgs || 0).toLocaleString()}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -695,6 +707,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   <div className="space-y-3">
                     {selectedDataRows.map((index, i) => {
                       const row = filteredSurveyData[index];
+                      
+                      // Skip if row is undefined
+                      if (!row) {
+                        return null;
+                      }
+                      
                       const currentWeight = customWeights[index] || 0;
                       return (
                         <div key={index} className="flex items-center space-x-4 bg-white rounded-lg p-3 border border-gray-200">
@@ -725,7 +743,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                             <span className="text-sm text-gray-500">%</span>
                           </div>
                         </div>
-                      );
+                        );
                     })}
                   </div>
                   {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0) !== 100 && (
