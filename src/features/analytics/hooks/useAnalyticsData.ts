@@ -17,7 +17,7 @@ import { AnalyticsDataService } from '../services/analyticsDataService';
  * @param initialFilters - Initial filter values
  * @returns Object containing data, loading state, error, and actions
  */
-export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
+const useAnalyticsData = (initialFilters: AnalyticsFilters = {
   specialty: '',
   surveySource: '',
   geographicRegion: '',
@@ -191,3 +191,5 @@ export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
     exportToCSV
   };
 };
+
+export { useAnalyticsData };
