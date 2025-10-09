@@ -83,6 +83,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data' },
 				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
 				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
+				{ name: 'Specialty Blending', icon: MedicalCrossIcon, path: '/specialty-blending' },
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
 				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
 			]

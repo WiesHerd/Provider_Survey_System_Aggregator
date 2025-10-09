@@ -78,6 +78,7 @@ const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const NormalizedDataScreen = lazy(() => import('./features/normalized/components/NormalizedDataScreen'));
 const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
+const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreen').then(module => ({ default: module.SpecialtyBlendingScreen })));
 
 // Loading component for Suspense fallback
 const AppLoadingSpinner = () => (
@@ -252,6 +253,11 @@ const PageContent = () => {
           title: 'System Settings',
           description: 'Configure system preferences and settings'
         };
+      case '/specialty-blending':
+        return {
+          title: 'Specialty Blending',
+          description: 'Create custom specialty blends with precision weight controls'
+        };
       default:
         return {
           title: 'Survey Aggregator',
@@ -293,6 +299,7 @@ const PageContent = () => {
               <Route path="/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/custom-reports" element={<CustomReports />} />
               <Route path="/system-settings" element={<SystemSettings />} />
+              <Route path="/specialty-blending" element={<SpecialtyBlending />} />
               
               {/* Provider-specific routes */}
               <Route path="/physician/specialty-mapping" element={<SpecialtyMapping />} />
