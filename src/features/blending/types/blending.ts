@@ -83,6 +83,7 @@ export interface BlendingValidation {
 export interface BlendingState {
   selectedSpecialties: SpecialtyItem[];
   availableSpecialties: SpecialtyItem[];
+  allData: any[]; // Raw survey data for the browser
   currentBlend: SpecialtyBlend | null;
   templates: SpecialtyBlendTemplate[];
   isLoading: boolean;

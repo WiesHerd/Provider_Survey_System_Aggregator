@@ -24,6 +24,7 @@ export const useSpecialtyBlending = ({
   // State
   const [selectedSpecialties, setSelectedSpecialties] = useState<SpecialtyItem[]>(initialSpecialties);
   const [availableSpecialties, setAvailableSpecialties] = useState<SpecialtyItem[]>([]);
+  const [allData, setAllData] = useState<any[]>([]);
   const [currentBlend, setCurrentBlend] = useState<SpecialtyBlend | null>(null);
   const [templates, setTemplates] = useState<SpecialtyBlendTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,9 +42,12 @@ export const useSpecialtyBlending = ({
         const dataService = getDataService();
         
         // Get all survey data
-        const allSurveyData = await dataService.getAllSurveyData();
+        const allSurveyData = await dataService.getSurveyData();
         
         if (allSurveyData && allSurveyData.length > 0) {
+          // Set the raw data for the browser
+          setAllData(allSurveyData);
+          
           // Process real survey data into specialty items
           const specialtyMap = new Map<string, SpecialtyItem>();
           
@@ -73,6 +77,7 @@ export const useSpecialtyBlending = ({
           setAvailableSpecialties(Array.from(specialtyMap.values()));
         } else {
           // Fallback to empty array if no data
+          setAllData([]);
           setAvailableSpecialties([]);
         }
       } catch (err) {
@@ -237,7 +242,7 @@ export const useSpecialtyBlending = ({
     // State
     selectedSpecialties,
     availableSpecialties,
-    allData: [], // This will be populated from the data service
+    allData,
     currentBlend,
     templates,
     isLoading,

@@ -93,7 +93,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       return [];
     }
 
-    return allData.filter(row => {
+    return allData.filter((row: any) => {
       const matchesSurvey = !selectedSurvey || row.surveySource === selectedSurvey;
       const matchesYear = !selectedYear || row.surveyYear === selectedYear;
       const matchesRegion = !selectedRegion || row.geographicRegion === selectedRegion;
@@ -143,12 +143,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     if (selectedDataRows.length === filteredSurveyData.length) {
       setSelectedDataRows([]);
     } else {
-      setSelectedDataRows(filteredSurveyData.map((_, index) => index));
+      setSelectedDataRows(filteredSurveyData.map((_: any, index: number) => index));
     }
   }, [selectedDataRows.length, filteredSurveyData.length]);
 
   const selectAllData = useCallback(() => {
-    setSelectedDataRows(filteredSurveyData.map((_, index) => index));
+    setSelectedDataRows(filteredSurveyData.map((_: any, index: number) => index));
   }, [filteredSurveyData.length]);
 
   const clearAllData = useCallback(() => {
@@ -484,7 +484,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredSurveyData.map((row, index) => (
+                      {filteredSurveyData.map((row: any, index: number) => (
                         <tr 
                           key={`${row.surveySource}-${row.surveyYear}-${row.surveySpecialty}-${index}`}
                           className={`hover:bg-gray-50 ${selectedDataRows.includes(index) ? 'bg-indigo-50' : ''}`}
