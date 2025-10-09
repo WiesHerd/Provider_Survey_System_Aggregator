@@ -93,6 +93,22 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       
       const matchesSpecialty = !specialtySearch || 
         (row.surveySpecialty && row.surveySpecialty.toLowerCase().includes(specialtySearch.toLowerCase()));
+      
+      // Debug logging for first few rows when debugging
+      if (allData.length > 0 && Math.random() < 0.01) { // Log 1% of rows for debugging
+        console.log('🔍 Filtering row:', {
+          surveySource: row.surveySource,
+          surveyYear: row.surveyYear,
+          surveySpecialty: row.surveySpecialty,
+          selectedSurvey,
+          selectedYear,
+          specialtySearch,
+          matchesSurvey,
+          matchesYear,
+          matchesSpecialty
+        });
+      }
+      
       return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
     });
   }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch]);
@@ -536,6 +552,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                         <div>Total data available: {allData.length} records</div>
                         <div>Filters: Survey={selectedSurvey || 'Any'}, Year={selectedYear || 'Any'}, Region={selectedRegion || 'Any'}, Provider={selectedProviderType || 'Any'}</div>
                         {specialtySearch && <div>Search: "{specialtySearch}"</div>}
+                        <div className="mt-2 text-xs">
+                          <div>Debug - Sample survey sources: {[...new Set(allData.slice(0, 10).map(row => row?.surveySource).filter(Boolean))].join(', ')}</div>
+                          <div>Debug - Sample years: {[...new Set(allData.slice(0, 10).map(row => row?.surveyYear).filter(Boolean))].join(', ')}</div>
+                          <div>Debug - Sample specialties with 'family': {allData.filter(row => row?.surveySpecialty?.toLowerCase().includes('family')).slice(0, 3).map(row => row.surveySpecialty).join(', ')}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
