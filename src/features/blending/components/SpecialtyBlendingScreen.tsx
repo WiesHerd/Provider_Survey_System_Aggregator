@@ -30,6 +30,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const [showResults, setShowResults] = useState(false);
   const [blendedResult, setBlendedResult] = useState<any>(null);
   
+  // Filter state
+  const [selectedSurvey, setSelectedSurvey] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<string[]>([]);
+  
   // Drag & Drop state
   const [activeId, setActiveId] = useState<string | null>(null);
   
@@ -75,6 +80,30 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const handleDragCancel = () => {
     setActiveId(null);
   };
+
+  // Filter specialties based on survey and year
+  const filteredSpecialties = useMemo(() => {
+    return availableSpecialties.filter(specialty => {
+      const matchesSurvey = !selectedSurvey || specialty.surveySource === selectedSurvey;
+      const matchesYear = !selectedYear || specialty.surveyYear === selectedYear;
+      return matchesSurvey && matchesYear;
+    });
+  }, [availableSpecialties, selectedSurvey, selectedYear]);
+
+  // Toggle specialty selection
+  const toggleSpecialty = useCallback((specialty: SpecialtyItem) => {
+    setSelectedSpecialtyIds(prev => {
+      if (prev.includes(specialty.id)) {
+        // Remove specialty
+        removeSpecialty(specialty.id);
+        return prev.filter(id => id !== specialty.id);
+      } else {
+        // Add specialty
+        addSpecialty(specialty);
+        return [...prev, specialty.id];
+      }
+    });
+  }, [addSpecialty, removeSpecialty]);
   
   const handleCreateBlend = async () => {
     if (!blendName.trim()) {
@@ -260,31 +289,90 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
           </div>
         )}
         
-        {/* Available Specialties */}
+        {/* Specialty Selection */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">
-              Available Specialties ({availableSpecialties.length})
+              Specialty Selection
             </h2>
-            <p className="text-sm text-gray-600 mt-1">Click to add specialties to your blend</p>
+            <p className="text-sm text-gray-600 mt-1">Select specialties from different surveys and years</p>
           </div>
           <div className="px-6 py-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {availableSpecialties.map((specialty) => (
-                <div
-                  key={specialty.id}
-                  className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => addSpecialty(specialty)}
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Survey Source
+                </label>
+                <select 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  value={selectedSurvey}
+                  onChange={(e) => setSelectedSurvey(e.target.value)}
                 >
-                  <h3 className="font-medium text-gray-900">{specialty.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {specialty.records.toLocaleString()} records
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Source: {specialty.surveySource}
-                  </p>
-                </div>
-              ))}
+                  <option value="">All Surveys</option>
+                  <option value="MGMA">MGMA</option>
+                  <option value="SullivanCotter">SullivanCotter</option>
+                  <option value="Gallagher">Gallagher</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Year
+                </label>
+                <select 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                >
+                  <option value="">All Years</option>
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Multi-select Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Specialties ({filteredSpecialties.length} available)
+              </label>
+              <div className="border border-gray-300 rounded-xl max-h-64 overflow-y-auto">
+                {filteredSpecialties.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No specialties found with current filters
+                  </div>
+                ) : (
+                  <div className="p-2">
+                    {filteredSpecialties.map((specialty) => (
+                      <label
+                        key={specialty.id}
+                        className="flex items-center p-3 hover:bg-gray-50 rounded-lg cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedSpecialtyIds.includes(specialty.id)}
+                          onChange={() => toggleSpecialty(specialty)}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        />
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-900">
+                              {specialty.name}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {specialty.records.toLocaleString()} records
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {specialty.surveySource} • {specialty.surveyYear} • {specialty.geographicRegion}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -32,8 +32,9 @@ export const useSpecialtyBlending = ({
   // Populate available specialties with mock data for now
   useEffect(() => {
     const mockSpecialties: SpecialtyItem[] = [
+      // MGMA 2024
       {
-        id: 'family-medicine-2024',
+        id: 'family-medicine-mgma-2024',
         name: 'Family Medicine',
         records: 1250,
         weight: 0,
@@ -43,7 +44,7 @@ export const useSpecialtyBlending = ({
         providerType: 'Physician'
       },
       {
-        id: 'internal-medicine-2024',
+        id: 'internal-medicine-mgma-2024',
         name: 'Internal Medicine',
         records: 980,
         weight: 0,
@@ -53,7 +54,18 @@ export const useSpecialtyBlending = ({
         providerType: 'Physician'
       },
       {
-        id: 'cardiology-2024',
+        id: 'orthopedic-surgery-mgma-2024',
+        name: 'Orthopedic Surgery',
+        records: 650,
+        weight: 0,
+        surveySource: 'MGMA',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      // SullivanCotter 2024
+      {
+        id: 'cardiology-sullivan-2024',
         name: 'Cardiology',
         records: 750,
         weight: 0,
@@ -63,21 +75,53 @@ export const useSpecialtyBlending = ({
         providerType: 'Physician'
       },
       {
-        id: 'orthopedic-surgery-2024',
-        name: 'Orthopedic Surgery',
-        records: 650,
+        id: 'dermatology-sullivan-2024',
+        name: 'Dermatology',
+        records: 420,
+        weight: 0,
+        surveySource: 'SullivanCotter',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      // MGMA 2023
+      {
+        id: 'family-medicine-mgma-2023',
+        name: 'Family Medicine',
+        records: 1180,
         weight: 0,
         surveySource: 'MGMA',
+        surveyYear: '2023',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      {
+        id: 'internal-medicine-mgma-2023',
+        name: 'Internal Medicine',
+        records: 920,
+        weight: 0,
+        surveySource: 'MGMA',
+        surveyYear: '2023',
+        geographicRegion: 'National',
+        providerType: 'Physician'
+      },
+      // Gallagher 2024
+      {
+        id: 'cardiology-gallagher-2024',
+        name: 'Cardiology',
+        records: 680,
+        weight: 0,
+        surveySource: 'Gallagher',
         surveyYear: '2024',
         geographicRegion: 'National',
         providerType: 'Physician'
       },
       {
-        id: 'dermatology-2024',
-        name: 'Dermatology',
-        records: 420,
+        id: 'neurology-gallagher-2024',
+        name: 'Neurology',
+        records: 380,
         weight: 0,
-        surveySource: 'SullivanCotter',
+        surveySource: 'Gallagher',
         surveyYear: '2024',
         geographicRegion: 'National',
         providerType: 'Physician'
