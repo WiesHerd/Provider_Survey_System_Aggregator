@@ -7,10 +7,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getDataService } from '../../../services/DataService';
-import { AggregatedData, AnalyticsFilters, UseAnalyticsReturn, BlendedAnalyticsResult } from '../types/analytics';
+import { AggregatedData, AnalyticsFilters, UseAnalyticsReturn } from '../types/analytics';
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
 import { AnalyticsDataService } from '../services/analyticsDataService';
-import { calculateMultiYearBlending } from '../utils/multiYearBlending';
 
 /**
  * Custom hook for managing analytics data
@@ -33,56 +32,10 @@ export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
   const [mappings, setMappings] = useState<any[]>([]);
   const [columnMappings, setColumnMappings] = useState<any[]>([]);
   const [regionMappings, setRegionMappings] = useState<any[]>([]);
-  const [blendedResult, setBlendedResult] = useState<BlendedAnalyticsResult | null>(null);
 
-  // Memoized filtered data with multi-year blending support
+  // Memoized filtered data
   const filteredData = useMemo(() => {
-    console.log('🔍 useAnalyticsData: Filtering data with multi-year blending:', {
-      useMultiYearBlending: filters.useMultiYearBlending,
-      hasBlendingConfig: !!filters.multiYearBlending
-    });
-    
-    // If multi-year blending is enabled, use blended data
-    if (filters.useMultiYearBlending && filters.multiYearBlending) {
-      console.log('🔍 useAnalyticsData: Multi-year blending enabled');
-      console.log('🔍 useAnalyticsData: Blending config:', filters.multiYearBlending);
-      console.log('🔍 useAnalyticsData: Years in config:', filters.multiYearBlending.years);
-      
-      try {
-        // Apply other filters first (specialty, region, etc.)
-        const preFilteredData = filterAnalyticsData(data, {
-          ...filters,
-          year: '', // Don't filter by single year when blending
-          useMultiYearBlending: false // Temporarily disable for pre-filtering
-        });
-        
-        console.log('🔍 useAnalyticsData: Pre-filtered data:', preFilteredData.length, 'records');
-        
-        // Calculate multi-year blending
-        const blendingResult = calculateMultiYearBlending(
-          preFilteredData,
-          filters.multiYearBlending
-        );
-        
-        console.log('🔍 useAnalyticsData: Blended result:', blendingResult.blendedData.length, 'records');
-        console.log('🔍 useAnalyticsData: Years included:', blendingResult.yearsIncluded);
-        console.log('🔍 useAnalyticsData: Confidence:', blendingResult.confidence);
-        
-        // Store blended result for display
-        setBlendedResult(blendingResult);
-        
-        return blendingResult.blendedData;
-      } catch (err) {
-        console.error('🔍 useAnalyticsData: Error in multi-year blending:', err);
-        setError(err instanceof Error ? err.message : 'Failed to blend multi-year data');
-        setBlendedResult(null);
-        return [];
-      }
-    } else {
-      // Standard filtering without multi-year blending
-      setBlendedResult(null);
-      return filterAnalyticsData(data, filters);
-    }
+    return filterAnalyticsData(data, filters);
   }, [data, filters]);
 
   // Data fetching function - fetch ALL data without filters
@@ -227,7 +180,7 @@ export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
 
   // Return hook interface
   return {
-    data: filteredData, // Return filtered data for display (may be blended)
+    data: filteredData, // Return filtered data for display
     allData: data, // Return all data for filter options
     loading,
     error,
@@ -235,7 +188,6 @@ export const useAnalyticsData = (initialFilters: AnalyticsFilters = {
     setFilters: updateFilters,
     refetch: fetchData,
     exportToExcel,
-    exportToCSV,
-    blendedResult // Multi-year blending result with metadata
+    exportToCSV
   };
 };
