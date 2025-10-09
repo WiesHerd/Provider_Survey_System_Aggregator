@@ -6,11 +6,8 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { SpecialtyItem } from '../types/blending';
-import { SortableSpecialtyItem } from './SortableSpecialtyItem';
 import { WeightControl } from './WeightControl';
 import { TemplateManager } from './TemplateManager';
 import { BlendingResults } from './BlendingResults';
@@ -39,8 +36,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<string[]>([]);
   const [specialtySearch, setSpecialtySearch] = useState('');
   
-  // Drag & Drop state
-  const [activeId, setActiveId] = useState<string | null>(null);
   
   const {
     selectedSpecialties,
@@ -63,28 +58,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     allowTemplates: true
   });
   
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (active.id !== over?.id) {
-      const activeIndex = selectedSpecialties.findIndex(s => s.id === active.id);
-      const overIndex = selectedSpecialties.findIndex(s => s.id === over?.id);
-      
-      if (activeIndex !== -1 && overIndex !== -1) {
-        reorderSpecialties(activeIndex, overIndex);
-      }
-    }
-    
-    setActiveId(null);
-  };
-
-  const handleDragCancel = () => {
-    setActiveId(null);
-  };
 
   // Filter survey data based on all filters
   const filteredSurveyData = useMemo(() => {
@@ -713,66 +686,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
           </div>
         )}
 
-        {/* Selected Specialties */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Selected Specialties ({selectedSpecialties.length})
-              </h2>
-              <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
-                  Total Weight: {validation.totalWeight.toFixed(2)}%
-                </div>
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-          <div className="px-6 py-6">
-          
-            {selectedSpecialties.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                <p className="mt-4 text-lg font-medium text-gray-900">No specialties selected</p>
-                <p className="text-sm text-gray-500">Click on specialties above to add them to your blend</p>
-              </div>
-            ) : (
-              <DndContext 
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragCancel={handleDragCancel}
-                collisionDetection={closestCenter}
-              >
-                <SortableContext items={selectedSpecialties} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-4">
-                    {selectedSpecialties.map((specialty) => (
-                      <SortableSpecialtyItem
-                        key={specialty.id}
-                        specialty={specialty}
-                        onRemove={removeSpecialty}
-                        onWeightChange={updateWeight}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-                
-                <DragOverlay>
-                  {activeId ? (
-                    <SortableSpecialtyItem
-                      specialty={selectedSpecialties.find(s => s.id === activeId) || availableSpecialties.find(s => s.id === activeId)!}
-                      onRemove={() => {}}
-                      onWeightChange={() => {}}
-                    />
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-            )}
-          </div>
-        </div>
         
         {/* Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
