@@ -36,6 +36,10 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<string[]>([]);
   const [specialtySearch, setSpecialtySearch] = useState('');
   
+  // Blending method and custom weights
+  const [blendingMethod, setBlendingMethod] = useState<'weighted' | 'simple' | 'custom'>('weighted');
+  const [customWeights, setCustomWeights] = useState<Record<number, number>>({});
+  
   
   const {
     selectedSpecialties,
@@ -146,13 +150,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
 
     const selectedData = selectedDataRows.map(index => filteredSurveyData[index]);
     
-    // Calculate weighted averages for each metric
-    const totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
-    
-    if (totalRecords === 0) {
-      return null;
-    }
-
     const blended = {
       tcc_p25: 0,
       tcc_p50: 0,
@@ -167,11 +164,36 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       cf_p75: 0,
       cf_p90: 0,
       totalRecords: 0,
-      specialties: selectedData.map(row => row.surveySpecialty)
+      specialties: selectedData.map(row => row.surveySpecialty),
+      method: blendingMethod
     };
 
-    selectedData.forEach(row => {
-      const weight = (row.tcc_n_orgs || 0) / totalRecords;
+    // Calculate weights based on blending method
+    let weights: number[] = [];
+    
+    if (blendingMethod === 'weighted') {
+      // Weight by record count
+      const totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
+      weights = selectedData.map(row => (row.tcc_n_orgs || 0) / totalRecords);
+      blended.totalRecords = totalRecords;
+    } else if (blendingMethod === 'simple') {
+      // Equal weights
+      weights = selectedData.map(() => 1 / selectedData.length);
+      blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
+    } else if (blendingMethod === 'custom') {
+      // Custom weights from user input
+      const totalCustomWeight = selectedDataRows.reduce((sum, index) => sum + (customWeights[index] || 0), 0);
+      if (totalCustomWeight === 0) {
+        // Fallback to equal weights if no custom weights set
+        weights = selectedData.map(() => 1 / selectedData.length);
+      } else {
+        weights = selectedDataRows.map(index => (customWeights[index] || 0) / totalCustomWeight);
+      }
+      blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
+    }
+
+    selectedData.forEach((row, index) => {
+      const weight = weights[index] || 0;
       
       // TCC metrics
       blended.tcc_p25 += (row.tcc_p25 || 0) * weight;
@@ -192,9 +214,8 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       blended.cf_p90 += (row.cf_p90 || 0) * weight;
     });
 
-    blended.totalRecords = totalRecords;
     return blended;
-  }, [selectedDataRows, filteredSurveyData]);
+  }, [selectedDataRows, filteredSurveyData, blendingMethod, customWeights]);
   
   const handleCreateBlend = async () => {
     if (!blendName.trim()) {
@@ -576,111 +597,221 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
           </div>
         </div>
 
-        {/* Blended Results */}
-        {blendedMetrics && (
+        {/* Blending Method Controls */}
+        {selectedDataRows.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">
-                Blended Results
+                Blending Method
               </h2>
               <p className="text-sm text-gray-600 mt-1">
-                Weighted average of {blendedMetrics.specialties.join(', ')} ({blendedMetrics.totalRecords.toLocaleString()} records)
+                Choose how to blend the selected specialties
               </p>
             </div>
             <div className="px-6 py-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* TCC Results */}
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-blue-900 mb-3">Total Cash Compensation</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-xs text-blue-700">P25:</span>
-                      <span className="text-sm font-medium text-blue-900">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="blendingMethod"
+                    value="weighted"
+                    checked={blendingMethod === 'weighted'}
+                    onChange={(e) => setBlendingMethod(e.target.value as any)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">Weighted Average</div>
+                    <div className="text-xs text-gray-500">Weight by record count</div>
+                  </div>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="blendingMethod"
+                    value="simple"
+                    checked={blendingMethod === 'simple'}
+                    onChange={(e) => setBlendingMethod(e.target.value as any)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">Simple Average</div>
+                    <div className="text-xs text-gray-500">Equal weights for all</div>
+                  </div>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="blendingMethod"
+                    value="custom"
+                    checked={blendingMethod === 'custom'}
+                    onChange={(e) => setBlendingMethod(e.target.value as any)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">Custom Weights</div>
+                    <div className="text-xs text-gray-500">Set your own percentages</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Custom Weight Controls */}
+              {blendingMethod === 'custom' && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-900">Set Custom Weights (%)</h3>
+                  <div className="space-y-3">
+                    {selectedDataRows.map((index, i) => {
+                      const row = filteredSurveyData[index];
+                      return (
+                        <div key={index} className="flex items-center space-x-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 truncate">
+                              {row.surveySpecialty}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {row.surveySource} • {row.tcc_n_orgs?.toLocaleString()} records
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={customWeights[index] || 0}
+                              onChange={(e) => {
+                                const value = parseFloat(e.target.value) || 0;
+                                setCustomWeights(prev => ({ ...prev, [index]: value }));
+                              }}
+                              className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              placeholder="0"
+                            />
+                            <span className="text-sm text-gray-500">%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Total: {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0).toFixed(1)}%
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Blended Results - Google Style */}
+        {blendedMetrics && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Blended Results
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {blendingMethod === 'weighted' && 'Weighted by record count'}
+                    {blendingMethod === 'simple' && 'Simple average (equal weights)'}
+                    {blendingMethod === 'custom' && 'Custom weights applied'}
+                    {' • '}{blendedMetrics.specialties.join(', ')} ({blendedMetrics.totalRecords.toLocaleString()} records)
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-gray-900">
+                    ${blendedMetrics.tcc_p50.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-500">TCC P50</div>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-6">
+              {/* Google-style metrics table */}
+              <div className="overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Metric
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        P25
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        P50
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        P75
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        P90
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                          <div className="text-sm font-medium text-gray-900">Total Cash Compensation</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         ${blendedMetrics.tcc_p25.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-blue-700">P50:</span>
-                      <span className="text-sm font-medium text-blue-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
                         ${blendedMetrics.tcc_p50.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-blue-700">P75:</span>
-                      <span className="text-sm font-medium text-blue-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         ${blendedMetrics.tcc_p75.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-blue-700">P90:</span>
-                      <span className="text-sm font-medium text-blue-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         ${blendedMetrics.tcc_p90.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* wRVU Results */}
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-green-900 mb-3">Work RVUs</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-xs text-green-700">P25:</span>
-                      <span className="text-sm font-medium text-green-900">
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                          <div className="text-sm font-medium text-gray-900">Work RVUs</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         {blendedMetrics.wrvu_p25.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-green-700">P50:</span>
-                      <span className="text-sm font-medium text-green-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
                         {blendedMetrics.wrvu_p50.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-green-700">P75:</span>
-                      <span className="text-sm font-medium text-green-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         {blendedMetrics.wrvu_p75.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-green-700">P90:</span>
-                      <span className="text-sm font-medium text-green-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         {blendedMetrics.wrvu_p90.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CF Results */}
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-purple-900 mb-3">Conversion Factor</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-xs text-purple-700">P25:</span>
-                      <span className="text-sm font-medium text-purple-900">
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+                          <div className="text-sm font-medium text-gray-900">Conversion Factor</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         ${blendedMetrics.cf_p25.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-purple-700">P50:</span>
-                      <span className="text-sm font-medium text-purple-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
                         ${blendedMetrics.cf_p50.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-purple-700">P75:</span>
-                      <span className="text-sm font-medium text-purple-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         ${blendedMetrics.cf_p75.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-purple-700">P90:</span>
-                      <span className="text-sm font-medium text-purple-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         ${blendedMetrics.cf_p90.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
