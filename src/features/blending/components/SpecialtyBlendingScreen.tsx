@@ -164,6 +164,64 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const clearAllData = useCallback(() => {
     setSelectedDataRows([]);
   }, []);
+
+  // Calculate blended metrics for selected specialties
+  const blendedMetrics = useMemo(() => {
+    if (selectedDataRows.length === 0) {
+      return null;
+    }
+
+    const selectedData = selectedDataRows.map(index => filteredSurveyData[index]);
+    
+    // Calculate weighted averages for each metric
+    const totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
+    
+    if (totalRecords === 0) {
+      return null;
+    }
+
+    const blended = {
+      tcc_p25: 0,
+      tcc_p50: 0,
+      tcc_p75: 0,
+      tcc_p90: 0,
+      wrvu_p25: 0,
+      wrvu_p50: 0,
+      wrvu_p75: 0,
+      wrvu_p90: 0,
+      cf_p25: 0,
+      cf_p50: 0,
+      cf_p75: 0,
+      cf_p90: 0,
+      totalRecords: 0,
+      specialties: selectedData.map(row => row.surveySpecialty)
+    };
+
+    selectedData.forEach(row => {
+      const weight = (row.tcc_n_orgs || 0) / totalRecords;
+      
+      // TCC metrics
+      blended.tcc_p25 += (row.tcc_p25 || 0) * weight;
+      blended.tcc_p50 += (row.tcc_p50 || 0) * weight;
+      blended.tcc_p75 += (row.tcc_p75 || 0) * weight;
+      blended.tcc_p90 += (row.tcc_p90 || 0) * weight;
+      
+      // wRVU metrics
+      blended.wrvu_p25 += (row.wrvu_p25 || 0) * weight;
+      blended.wrvu_p50 += (row.wrvu_p50 || 0) * weight;
+      blended.wrvu_p75 += (row.wrvu_p75 || 0) * weight;
+      blended.wrvu_p90 += (row.wrvu_p90 || 0) * weight;
+      
+      // CF metrics
+      blended.cf_p25 += (row.cf_p25 || 0) * weight;
+      blended.cf_p50 += (row.cf_p50 || 0) * weight;
+      blended.cf_p75 += (row.cf_p75 || 0) * weight;
+      blended.cf_p90 += (row.cf_p90 || 0) * weight;
+    });
+
+    blended.totalRecords = totalRecords;
+    return blended;
+  }, [selectedDataRows, filteredSurveyData]);
   
   const handleCreateBlend = async () => {
     if (!blendName.trim()) {
@@ -544,6 +602,116 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
             </div>
           </div>
         </div>
+
+        {/* Blended Results */}
+        {blendedMetrics && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Blended Results
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Weighted average of {blendedMetrics.specialties.join(', ')} ({blendedMetrics.totalRecords.toLocaleString()} records)
+              </p>
+            </div>
+            <div className="px-6 py-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* TCC Results */}
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-blue-900 mb-3">Total Cash Compensation</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-xs text-blue-700">P25:</span>
+                      <span className="text-sm font-medium text-blue-900">
+                        ${blendedMetrics.tcc_p25.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-blue-700">P50:</span>
+                      <span className="text-sm font-medium text-blue-900">
+                        ${blendedMetrics.tcc_p50.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-blue-700">P75:</span>
+                      <span className="text-sm font-medium text-blue-900">
+                        ${blendedMetrics.tcc_p75.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-blue-700">P90:</span>
+                      <span className="text-sm font-medium text-blue-900">
+                        ${blendedMetrics.tcc_p90.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* wRVU Results */}
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-green-900 mb-3">Work RVUs</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-xs text-green-700">P25:</span>
+                      <span className="text-sm font-medium text-green-900">
+                        {blendedMetrics.wrvu_p25.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-green-700">P50:</span>
+                      <span className="text-sm font-medium text-green-900">
+                        {blendedMetrics.wrvu_p50.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-green-700">P75:</span>
+                      <span className="text-sm font-medium text-green-900">
+                        {blendedMetrics.wrvu_p75.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-green-700">P90:</span>
+                      <span className="text-sm font-medium text-green-900">
+                        {blendedMetrics.wrvu_p90.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CF Results */}
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-purple-900 mb-3">Conversion Factor</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-xs text-purple-700">P25:</span>
+                      <span className="text-sm font-medium text-purple-900">
+                        ${blendedMetrics.cf_p25.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-purple-700">P50:</span>
+                      <span className="text-sm font-medium text-purple-900">
+                        ${blendedMetrics.cf_p50.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-purple-700">P75:</span>
+                      <span className="text-sm font-medium text-purple-900">
+                        ${blendedMetrics.cf_p75.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-purple-700">P90:</span>
+                      <span className="text-sm font-medium text-purple-900">
+                        ${blendedMetrics.cf_p90.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Selected Specialties */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
