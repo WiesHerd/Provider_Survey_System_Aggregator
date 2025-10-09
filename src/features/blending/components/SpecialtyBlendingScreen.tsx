@@ -457,9 +457,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   onChange={(e) => setSelectedSurvey(e.target.value)}
                 >
                   <option value="">All Surveys</option>
-                  <option value="MGMA">MGMA</option>
-                  <option value="SullivanCotter">SullivanCotter</option>
-                  <option value="Gallagher">Gallagher</option>
+                  {[...new Set(allData.map(row => row?.surveySource).filter(Boolean))].sort().map(survey => (
+                    <option key={survey} value={survey}>{survey}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -472,9 +472,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   onChange={(e) => setSelectedYear(e.target.value)}
                 >
                   <option value="">All Years</option>
-                  <option value="2023">2023</option>
-                  <option value="2024">2024</option>
-                  <option value="2025">2025</option>
+                  {[...new Set(allData.map(row => row?.surveyYear).filter(Boolean))].sort().map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -487,11 +487,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   onChange={(e) => setSelectedRegion(e.target.value)}
                 >
                   <option value="">All Regions</option>
-                  <option value="National">National</option>
-                  <option value="Northeast">Northeast</option>
-                  <option value="Southeast">Southeast</option>
-                  <option value="Midwest">Midwest</option>
-                  <option value="West">West</option>
+                  {[...new Set(allData.map(row => row?.geographicRegion).filter(Boolean))].sort().map(region => (
+                    <option key={region} value={region}>{region}</option>
+                  ))}
                 </select>
               </div>
               <div>
