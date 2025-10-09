@@ -142,7 +142,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-full px-8 py-8">
         {/* Header Actions - positioned like upload screen */}
         <div className="flex justify-end mb-6">
           <div className="flex items-center space-x-3">
