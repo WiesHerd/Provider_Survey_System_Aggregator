@@ -33,6 +33,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   // Filter state
   const [selectedSurvey, setSelectedSurvey] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [selectedProviderType, setSelectedProviderType] = useState('');
+  const [selectedDataRows, setSelectedDataRows] = useState<number[]>([]);
   const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<string[]>([]);
   
   // Drag & Drop state
@@ -81,7 +84,77 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     setActiveId(null);
   };
 
-  // Filter specialties based on survey and year
+  // Filter survey data based on all filters
+  const filteredSurveyData = useMemo(() => {
+    // For now, we'll use mock survey data - this would come from your actual data service
+    const mockSurveyData = [
+      {
+        surveySpecialty: 'Family Medicine',
+        surveySource: 'MGMA',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician',
+        tcc_p50: 285000,
+        wrvu_p50: 4500,
+        cf_p50: 125000,
+        tcc_n_orgs: 1250
+      },
+      {
+        surveySpecialty: 'Internal Medicine',
+        surveySource: 'MGMA',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician',
+        tcc_p50: 320000,
+        wrvu_p50: 4800,
+        cf_p50: 140000,
+        tcc_n_orgs: 980
+      },
+      {
+        surveySpecialty: 'Cardiology',
+        surveySource: 'SullivanCotter',
+        surveyYear: '2024',
+        geographicRegion: 'National',
+        providerType: 'Physician',
+        tcc_p50: 450000,
+        wrvu_p50: 6200,
+        cf_p50: 180000,
+        tcc_n_orgs: 750
+      },
+      {
+        surveySpecialty: 'Family Medicine',
+        surveySource: 'MGMA',
+        surveyYear: '2023',
+        geographicRegion: 'National',
+        providerType: 'Physician',
+        tcc_p50: 275000,
+        wrvu_p50: 4300,
+        cf_p50: 120000,
+        tcc_n_orgs: 1180
+      },
+      {
+        surveySpecialty: 'Cardiology',
+        surveySource: 'Gallagher',
+        surveyYear: '2024',
+        geographicRegion: 'Northeast',
+        providerType: 'Physician',
+        tcc_p50: 480000,
+        wrvu_p50: 6500,
+        cf_p50: 190000,
+        tcc_n_orgs: 320
+      }
+    ];
+
+    return mockSurveyData.filter(row => {
+      const matchesSurvey = !selectedSurvey || row.surveySource === selectedSurvey;
+      const matchesYear = !selectedYear || row.surveyYear === selectedYear;
+      const matchesRegion = !selectedRegion || row.geographicRegion === selectedRegion;
+      const matchesProviderType = !selectedProviderType || row.providerType === selectedProviderType;
+      return matchesSurvey && matchesYear && matchesRegion && matchesProviderType;
+    });
+  }, [selectedSurvey, selectedYear, selectedRegion, selectedProviderType]);
+
+  // Filter specialties based on survey and year (keeping for compatibility)
   const filteredSpecialties = useMemo(() => {
     return availableSpecialties.filter(specialty => {
       const matchesSurvey = !selectedSurvey || specialty.surveySource === selectedSurvey;
@@ -104,6 +177,33 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       }
     });
   }, [addSpecialty, removeSpecialty]);
+
+  // Survey data row selection handlers
+  const toggleDataRow = useCallback((index: number) => {
+    setSelectedDataRows(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(i => i !== index);
+      } else {
+        return [...prev, index];
+      }
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedDataRows.length === filteredSurveyData.length) {
+      setSelectedDataRows([]);
+    } else {
+      setSelectedDataRows(filteredSurveyData.map((_, index) => index));
+    }
+  }, [selectedDataRows.length, filteredSurveyData.length]);
+
+  const selectAllData = useCallback(() => {
+    setSelectedDataRows(filteredSurveyData.map((_, index) => index));
+  }, [filteredSurveyData.length]);
+
+  const clearAllData = useCallback(() => {
+    setSelectedDataRows([]);
+  }, []);
   
   const handleCreateBlend = async () => {
     if (!blendName.trim()) {
@@ -289,17 +389,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
           </div>
         )}
         
-        {/* Specialty Selection */}
+        {/* Survey Data Browser */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">
-              Specialty Selection
+              Survey Data Browser
             </h2>
-            <p className="text-sm text-gray-600 mt-1">Select specialties from different surveys and years</p>
+            <p className="text-sm text-gray-600 mt-1">Select specific survey data points for blending</p>
           </div>
           <div className="px-6 py-6">
-            {/* Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Advanced Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Survey Source
@@ -330,47 +430,140 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   <option value="2025">2025</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Region
+                </label>
+                <select 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  value={selectedRegion}
+                  onChange={(e) => setSelectedRegion(e.target.value)}
+                >
+                  <option value="">All Regions</option>
+                  <option value="National">National</option>
+                  <option value="Northeast">Northeast</option>
+                  <option value="Southeast">Southeast</option>
+                  <option value="Midwest">Midwest</option>
+                  <option value="West">West</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Provider Type
+                </label>
+                <select 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  value={selectedProviderType}
+                  onChange={(e) => setSelectedProviderType(e.target.value)}
+                >
+                  <option value="">All Provider Types</option>
+                  <option value="Physician">Physician</option>
+                  <option value="APP">Advanced Practice Provider</option>
+                  <option value="Nurse">Nurse</option>
+                </select>
+              </div>
             </div>
 
-            {/* Multi-select Dropdown */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Specialties ({filteredSpecialties.length} available)
-              </label>
-              <div className="border border-gray-300 rounded-xl max-h-64 overflow-y-auto">
-                {filteredSpecialties.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
-                    No specialties found with current filters
+            {/* Data Table */}
+            <div className="border border-gray-300 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-900">
+                    Survey Data ({filteredSurveyData.length} records)
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-500">
+                      {selectedDataRows.length} selected
+                    </span>
+                    <button
+                      onClick={selectAllData}
+                      className="text-xs text-indigo-600 hover:text-indigo-800"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={clearAllData}
+                      className="text-xs text-gray-600 hover:text-gray-800"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto">
+                {filteredSurveyData.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    No survey data found with current filters
                   </div>
                 ) : (
-                  <div className="p-2">
-                    {filteredSpecialties.map((specialty) => (
-                      <label
-                        key={specialty.id}
-                        className="flex items-center p-3 hover:bg-gray-50 rounded-lg cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedSpecialtyIds.includes(specialty.id)}
-                          onChange={() => toggleSpecialty(specialty)}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                        <div className="ml-3 flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-900">
-                              {specialty.name}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {specialty.records.toLocaleString()} records
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {specialty.surveySource} • {specialty.surveyYear} • {specialty.geographicRegion}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
+                  <table className="w-full">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <input
+                            type="checkbox"
+                            checked={selectedDataRows.length === filteredSurveyData.length && filteredSurveyData.length > 0}
+                            onChange={toggleSelectAll}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Specialty</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Survey</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TCC P50</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">wRVU P50</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CF P50</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredSurveyData.map((row, index) => (
+                        <tr 
+                          key={`${row.surveySource}-${row.surveyYear}-${row.surveySpecialty}-${index}`}
+                          className={`hover:bg-gray-50 ${selectedDataRows.includes(index) ? 'bg-indigo-50' : ''}`}
+                        >
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedDataRows.includes(index)}
+                              onChange={() => toggleDataRow(index)}
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            {row.surveySpecialty}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {row.surveySource}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {row.surveyYear}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {row.geographicRegion}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {row.providerType}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            ${row.tcc_p50?.toLocaleString() || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {row.wrvu_p50?.toLocaleString() || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            ${row.cf_p50?.toLocaleString() || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {row.tcc_n_orgs?.toLocaleString() || 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             </div>
