@@ -5,9 +5,9 @@
  * featuring modern drag & drop interface and precision controls.
  */
 
-import React, { useState } from 'react';
-import { DndContext, DragEndEvent, DragOverlay } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import React, { useState, useCallback, useMemo } from 'react';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { SpecialtyItem } from '../types/blending';
 import { SortableSpecialtyItem } from './SortableSpecialtyItem';
@@ -30,6 +30,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const [showResults, setShowResults] = useState(false);
   const [blendedResult, setBlendedResult] = useState<any>(null);
   
+  // Drag & Drop state
+  const [activeId, setActiveId] = useState<string | null>(null);
+  
   const {
     selectedSpecialties,
     availableSpecialties,
@@ -50,6 +53,10 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     allowTemplates: true
   });
   
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -61,6 +68,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         reorderSpecialties(activeIndex, overIndex);
       }
     }
+    
+    setActiveId(null);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
   };
   
   const handleCreateBlend = async () => {
@@ -275,7 +288,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                 <p className="text-sm text-gray-500">Add specialties to create a blend</p>
               </div>
             ) : (
-              <DndContext onDragEnd={handleDragEnd}>
+              <DndContext 
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
+                collisionDetection={closestCenter}
+              >
                 <SortableContext items={selectedSpecialties} strategy={verticalListSortingStrategy}>
                   <div className="space-y-4">
                     {selectedSpecialties.map((specialty) => (
@@ -288,6 +306,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                     ))}
                   </div>
                 </SortableContext>
+                
+                <DragOverlay>
+                  {activeId ? (
+                    <SortableSpecialtyItem
+                      specialty={selectedSpecialties.find(s => s.id === activeId) || availableSpecialties.find(s => s.id === activeId)!}
+                      onRemove={() => {}}
+                      onWeightChange={() => {}}
+                      isOverlay={true}
+                    />
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             )}
           </div>
