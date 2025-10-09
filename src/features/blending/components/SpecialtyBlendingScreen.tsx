@@ -75,11 +75,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       const matchesYear = !selectedYear || row.surveyYear === selectedYear;
       const matchesRegion = !selectedRegion || row.geographicRegion === selectedRegion;
       
-      // Handle provider type mapping - "Physician" should match "Staff Physician"
+      // Handle provider type mapping
       let matchesProviderType = true;
       if (selectedProviderType) {
-        if (selectedProviderType === 'Staff Physician') {
-          matchesProviderType = row.providerType === 'Staff Physician';
+        if (selectedProviderType === 'Physician') {
+          // Match both "Staff Physician" and "Physician"
+          matchesProviderType = row.providerType === 'Staff Physician' || row.providerType === 'Physician';
         } else {
           matchesProviderType = row.providerType === selectedProviderType;
         }
@@ -521,7 +522,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
               <div className="max-h-96 overflow-y-auto">
                 {filteredSurveyData.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
-                    No survey data found with current filters
+                    <div className="mb-4">
+                      <div className="text-lg font-medium text-gray-900 mb-2">No survey data found</div>
+                      <div className="text-sm text-gray-600 mb-4">
+                        Try adjusting your filters or check if data is loaded
+                      </div>
+                      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+                        <div>Total data available: {allData.length} records</div>
+                        <div>Filters: Survey={selectedSurvey || 'Any'}, Year={selectedYear || 'Any'}, Region={selectedRegion || 'Any'}, Provider={selectedProviderType || 'Any'}</div>
+                        {specialtySearch && <div>Search: "{specialtySearch}"</div>}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <table className="w-full">
@@ -585,7 +596,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                             ${row.cf_p50?.toLocaleString() || 'N/A'}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            {row.tcc_n_orgs?.toLocaleString() || 'N/A'}
+                            {(row.tcc_n_orgs || row.n_orgs || 0).toLocaleString()}
                           </td>
                         </tr>
                       ))}
@@ -610,7 +621,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
             </div>
             <div className="px-6 py-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <label className="flex items-center space-x-3 cursor-pointer">
+                <label className={`flex items-center space-x-3 cursor-pointer p-4 rounded-lg border-2 transition-all ${
+                  blendingMethod === 'weighted' 
+                    ? 'border-indigo-500 bg-indigo-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
                   <input
                     type="radio"
                     name="blendingMethod"
@@ -619,13 +634,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                     onChange={(e) => setBlendingMethod(e.target.value as any)}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                   />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">Weighted Average</div>
                     <div className="text-xs text-gray-500">Weight by record count</div>
                   </div>
                 </label>
                 
-                <label className="flex items-center space-x-3 cursor-pointer">
+                <label className={`flex items-center space-x-3 cursor-pointer p-4 rounded-lg border-2 transition-all ${
+                  blendingMethod === 'simple' 
+                    ? 'border-indigo-500 bg-indigo-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
                   <input
                     type="radio"
                     name="blendingMethod"
@@ -634,13 +653,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                     onChange={(e) => setBlendingMethod(e.target.value as any)}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                   />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">Simple Average</div>
                     <div className="text-xs text-gray-500">Equal weights for all</div>
                   </div>
                 </label>
                 
-                <label className="flex items-center space-x-3 cursor-pointer">
+                <label className={`flex items-center space-x-3 cursor-pointer p-4 rounded-lg border-2 transition-all ${
+                  blendingMethod === 'custom' 
+                    ? 'border-indigo-500 bg-indigo-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
                   <input
                     type="radio"
                     name="blendingMethod"
@@ -649,7 +672,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                     onChange={(e) => setBlendingMethod(e.target.value as any)}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                   />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">Custom Weights</div>
                     <div className="text-xs text-gray-500">Set your own percentages</div>
                   </div>
@@ -658,19 +681,29 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
 
               {/* Custom Weight Controls */}
               {blendingMethod === 'custom' && (
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-gray-900">Set Custom Weights (%)</h3>
+                <div className="space-y-4 bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-900">Set Custom Weights (%)</h3>
+                    <div className={`text-sm font-medium ${
+                      Math.abs(Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0) - 100) < 0.1
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      Total: {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0).toFixed(1)}%
+                    </div>
+                  </div>
                   <div className="space-y-3">
                     {selectedDataRows.map((index, i) => {
                       const row = filteredSurveyData[index];
+                      const currentWeight = customWeights[index] || 0;
                       return (
-                        <div key={index} className="flex items-center space-x-4">
+                        <div key={index} className="flex items-center space-x-4 bg-white rounded-lg p-3 border border-gray-200">
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium text-gray-900 truncate">
                               {row.surveySpecialty}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {row.surveySource} • {row.tcc_n_orgs?.toLocaleString()} records
+                              {row.surveySource} • {(row.tcc_n_orgs || row.n_orgs || 0).toLocaleString()} records
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -679,12 +712,14 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                               min="0"
                               max="100"
                               step="0.1"
-                              value={customWeights[index] || 0}
+                              value={currentWeight}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value) || 0;
                                 setCustomWeights(prev => ({ ...prev, [index]: value }));
                               }}
-                              className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              className={`w-20 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                                currentWeight > 0 ? 'border-indigo-300 bg-indigo-50' : 'border-gray-300'
+                              }`}
                               placeholder="0"
                             />
                             <span className="text-sm text-gray-500">%</span>
@@ -693,9 +728,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                       );
                     })}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    Total: {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0).toFixed(1)}%
-                  </div>
+                  {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0) !== 100 && (
+                    <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                      💡 Tip: Weights should total 100% for optimal blending
+                    </div>
+                  )}
                 </div>
               )}
             </div>
