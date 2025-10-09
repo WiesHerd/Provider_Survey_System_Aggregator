@@ -168,7 +168,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         </div>
         
         {/* Blend Configuration */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Blend Configuration</h2>
@@ -209,7 +209,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         
         {/* Error Display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -226,7 +226,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         
         {/* Validation Warnings */}
         {validation.warnings.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
@@ -248,7 +248,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         )}
         
         {/* Selected Specialties */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">
@@ -294,7 +294,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         </div>
         
         {/* Actions */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Actions</h3>
