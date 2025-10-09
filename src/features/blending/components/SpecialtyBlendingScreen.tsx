@@ -260,6 +260,35 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
           </div>
         )}
         
+        {/* Available Specialties */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Available Specialties ({availableSpecialties.length})
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">Click to add specialties to your blend</p>
+          </div>
+          <div className="px-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {availableSpecialties.map((specialty) => (
+                <div
+                  key={specialty.id}
+                  className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => addSpecialty(specialty)}
+                >
+                  <h3 className="font-medium text-gray-900">{specialty.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {specialty.records.toLocaleString()} records
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Source: {specialty.source}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Selected Specialties */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -285,7 +314,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
                 <p className="mt-4 text-lg font-medium text-gray-900">No specialties selected</p>
-                <p className="text-sm text-gray-500">Add specialties to create a blend</p>
+                <p className="text-sm text-gray-500">Click on specialties above to add them to your blend</p>
               </div>
             ) : (
               <DndContext 
