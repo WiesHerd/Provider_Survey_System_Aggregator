@@ -29,106 +29,62 @@ export const useSpecialtyBlending = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Populate available specialties with mock data for now
+  // Populate available specialties from real survey data
   useEffect(() => {
-    const mockSpecialties: SpecialtyItem[] = [
-      // MGMA 2024
-      {
-        id: 'family-medicine-mgma-2024',
-        name: 'Family Medicine',
-        records: 1250,
-        weight: 0,
-        surveySource: 'MGMA',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      {
-        id: 'internal-medicine-mgma-2024',
-        name: 'Internal Medicine',
-        records: 980,
-        weight: 0,
-        surveySource: 'MGMA',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      {
-        id: 'orthopedic-surgery-mgma-2024',
-        name: 'Orthopedic Surgery',
-        records: 650,
-        weight: 0,
-        surveySource: 'MGMA',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      // SullivanCotter 2024
-      {
-        id: 'cardiology-sullivan-2024',
-        name: 'Cardiology',
-        records: 750,
-        weight: 0,
-        surveySource: 'SullivanCotter',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      {
-        id: 'dermatology-sullivan-2024',
-        name: 'Dermatology',
-        records: 420,
-        weight: 0,
-        surveySource: 'SullivanCotter',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      // MGMA 2023
-      {
-        id: 'family-medicine-mgma-2023',
-        name: 'Family Medicine',
-        records: 1180,
-        weight: 0,
-        surveySource: 'MGMA',
-        surveyYear: '2023',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      {
-        id: 'internal-medicine-mgma-2023',
-        name: 'Internal Medicine',
-        records: 920,
-        weight: 0,
-        surveySource: 'MGMA',
-        surveyYear: '2023',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      // Gallagher 2024
-      {
-        id: 'cardiology-gallagher-2024',
-        name: 'Cardiology',
-        records: 680,
-        weight: 0,
-        surveySource: 'Gallagher',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
-      },
-      {
-        id: 'neurology-gallagher-2024',
-        name: 'Neurology',
-        records: 380,
-        weight: 0,
-        surveySource: 'Gallagher',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician'
+    const fetchRealSurveyData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Import the data service to get real survey data
+        const { getDataService } = await import('../../../services/DataService');
+        const dataService = getDataService();
+        
+        // Get all survey data
+        const allSurveyData = await dataService.getAllSurveyData();
+        
+        if (allSurveyData && allSurveyData.length > 0) {
+          // Process real survey data into specialty items
+          const specialtyMap = new Map<string, SpecialtyItem>();
+          
+          allSurveyData.forEach((survey: any) => {
+            if (survey.surveySpecialty && survey.surveySource && survey.surveyYear) {
+              const key = `${survey.surveySpecialty}-${survey.surveySource}-${survey.surveyYear}-${survey.geographicRegion || 'National'}-${survey.providerType || 'Physician'}`;
+              
+              if (!specialtyMap.has(key)) {
+                specialtyMap.set(key, {
+                  id: key,
+                  name: survey.surveySpecialty,
+                  records: survey.tcc_n_orgs || 0,
+                  weight: 0,
+                  surveySource: survey.surveySource,
+                  surveyYear: survey.surveyYear,
+                  geographicRegion: survey.geographicRegion || 'National',
+                  providerType: survey.providerType || 'Physician'
+                });
+              } else {
+                // Update record count
+                const existing = specialtyMap.get(key)!;
+                existing.records += (survey.tcc_n_orgs || 0);
+              }
+            }
+          });
+          
+          setAvailableSpecialties(Array.from(specialtyMap.values()));
+        } else {
+          // Fallback to empty array if no data
+          setAvailableSpecialties([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch survey data:', err);
+        setError('Failed to load survey data. Please try again.');
+        setAvailableSpecialties([]);
+      } finally {
+        setIsLoading(false);
       }
-    ];
+    };
     
-    setAvailableSpecialties(mockSpecialties);
+    fetchRealSurveyData();
   }, []);
 
   // Validation
@@ -281,6 +237,7 @@ export const useSpecialtyBlending = ({
     // State
     selectedSpecialties,
     availableSpecialties,
+    allData: [], // This will be populated from the data service
     currentBlend,
     templates,
     isLoading,

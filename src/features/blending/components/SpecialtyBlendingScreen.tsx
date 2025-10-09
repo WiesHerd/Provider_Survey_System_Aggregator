@@ -37,6 +37,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const [selectedProviderType, setSelectedProviderType] = useState('');
   const [selectedDataRows, setSelectedDataRows] = useState<number[]>([]);
   const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<string[]>([]);
+  const [specialtySearch, setSpecialtySearch] = useState('');
   
   // Drag & Drop state
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const {
     selectedSpecialties,
     availableSpecialties,
+    allData,
     templates,
     isLoading,
     error,
@@ -86,73 +88,21 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
 
   // Filter survey data based on all filters
   const filteredSurveyData = useMemo(() => {
-    // For now, we'll use mock survey data - this would come from your actual data service
-    const mockSurveyData = [
-      {
-        surveySpecialty: 'Family Medicine',
-        surveySource: 'MGMA',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician',
-        tcc_p50: 285000,
-        wrvu_p50: 4500,
-        cf_p50: 125000,
-        tcc_n_orgs: 1250
-      },
-      {
-        surveySpecialty: 'Internal Medicine',
-        surveySource: 'MGMA',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician',
-        tcc_p50: 320000,
-        wrvu_p50: 4800,
-        cf_p50: 140000,
-        tcc_n_orgs: 980
-      },
-      {
-        surveySpecialty: 'Cardiology',
-        surveySource: 'SullivanCotter',
-        surveyYear: '2024',
-        geographicRegion: 'National',
-        providerType: 'Physician',
-        tcc_p50: 450000,
-        wrvu_p50: 6200,
-        cf_p50: 180000,
-        tcc_n_orgs: 750
-      },
-      {
-        surveySpecialty: 'Family Medicine',
-        surveySource: 'MGMA',
-        surveyYear: '2023',
-        geographicRegion: 'National',
-        providerType: 'Physician',
-        tcc_p50: 275000,
-        wrvu_p50: 4300,
-        cf_p50: 120000,
-        tcc_n_orgs: 1180
-      },
-      {
-        surveySpecialty: 'Cardiology',
-        surveySource: 'Gallagher',
-        surveyYear: '2024',
-        geographicRegion: 'Northeast',
-        providerType: 'Physician',
-        tcc_p50: 480000,
-        wrvu_p50: 6500,
-        cf_p50: 190000,
-        tcc_n_orgs: 320
-      }
-    ];
+    // Use real survey data from the hook
+    if (!allData || allData.length === 0) {
+      return [];
+    }
 
-    return mockSurveyData.filter(row => {
+    return allData.filter(row => {
       const matchesSurvey = !selectedSurvey || row.surveySource === selectedSurvey;
       const matchesYear = !selectedYear || row.surveyYear === selectedYear;
       const matchesRegion = !selectedRegion || row.geographicRegion === selectedRegion;
       const matchesProviderType = !selectedProviderType || row.providerType === selectedProviderType;
-      return matchesSurvey && matchesYear && matchesRegion && matchesProviderType;
+      const matchesSpecialty = !specialtySearch || 
+        (row.surveySpecialty && row.surveySpecialty.toLowerCase().includes(specialtySearch.toLowerCase()));
+      return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
     });
-  }, [selectedSurvey, selectedYear, selectedRegion, selectedProviderType]);
+  }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch]);
 
   // Filter specialties based on survey and year (keeping for compatibility)
   const filteredSpecialties = useMemo(() => {
@@ -398,6 +348,20 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
             <p className="text-sm text-gray-600 mt-1">Select specific survey data points for blending</p>
           </div>
           <div className="px-6 py-6">
+            {/* Specialty Search */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Search Specialties
+              </label>
+              <input
+                type="text"
+                value={specialtySearch}
+                onChange={(e) => setSpecialtySearch(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Type to search specialties (e.g., 'Family Medicine', 'Cardiology')"
+              />
+            </div>
+
             {/* Advanced Filters */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div>
