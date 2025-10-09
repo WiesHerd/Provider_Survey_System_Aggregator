@@ -141,66 +141,79 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   }
   
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Specialty Blending</h1>
-              <p className="text-gray-600 mt-1">Create custom specialty blends with precision weight controls</p>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowTemplates(true)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Load Template
-              </button>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Close
-              </button>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+          <div className="px-6 py-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Specialty Blending</h1>
+                <p className="text-gray-600 mt-1">Create custom specialty blends with precision weight controls</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Load Template
+                </button>
+                <button
+                  onClick={onClose}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
         
         {/* Blend Configuration */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Blend Configuration</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Blend Name *
-              </label>
-              <input
-                type="text"
-                value={blendName}
-                onChange={(e) => setBlendName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter blend name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <input
-                type="text"
-                value={blendDescription}
-                onChange={(e) => setBlendDescription(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter description (optional)"
-              />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+          <div className="px-6 py-6 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Blend Configuration</h2>
+            <p className="text-sm text-gray-600 mt-1">Configure your specialty blend settings</p>
+          </div>
+          <div className="px-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Blend Name *
+                </label>
+                <input
+                  type="text"
+                  value={blendName}
+                  onChange={(e) => setBlendName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+                  placeholder="Enter blend name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={blendDescription}
+                  onChange={(e) => setBlendDescription(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+                  placeholder="Enter description (optional)"
+                />
+              </div>
             </div>
           </div>
         </div>
         
         {/* Error Display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-8">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -217,7 +230,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         
         {/* Validation Warnings */}
         {validation.warnings.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
@@ -239,70 +252,95 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         )}
         
         {/* Selected Specialties */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Selected Specialties ({selectedSpecialties.length})
-            </h2>
-            <div className="text-sm text-gray-500">
-              Total Weight: {validation.totalWeight.toFixed(2)}%
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+          <div className="px-6 py-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Selected Specialties ({selectedSpecialties.length})
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">Drag to reorder, adjust weights with precision controls</p>
+              </div>
+              <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                Total Weight: {validation.totalWeight.toFixed(2)}%
+              </div>
             </div>
           </div>
+          <div className="px-6 py-6">
           
-          {selectedSpecialties.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <p className="mt-2">No specialties selected</p>
-              <p className="text-sm">Add specialties to create a blend</p>
-            </div>
-          ) : (
-            <DndContext onDragEnd={handleDragEnd}>
-              <SortableContext items={selectedSpecialties} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  {selectedSpecialties.map((specialty) => (
-                    <SortableSpecialtyItem
-                      key={specialty.id}
-                      specialty={specialty}
-                      onRemove={removeSpecialty}
-                      onWeightChange={updateWeight}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )}
+            {selectedSpecialties.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <p className="mt-4 text-lg font-medium text-gray-900">No specialties selected</p>
+                <p className="text-sm text-gray-500">Add specialties to create a blend</p>
+              </div>
+            ) : (
+              <DndContext onDragEnd={handleDragEnd}>
+                <SortableContext items={selectedSpecialties} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-4">
+                    {selectedSpecialties.map((specialty) => (
+                      <SortableSpecialtyItem
+                        key={specialty.id}
+                        specialty={specialty}
+                        onRemove={removeSpecialty}
+                        onWeightChange={updateWeight}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
         </div>
         
         {/* Actions */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex space-x-3">
-              <button
-                onClick={handleCreateBlend}
-                disabled={!validation.isValid || isLoading}
-                className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Creating...' : 'Create Blend'}
-              </button>
-              <button
-                onClick={handleSaveTemplate}
-                disabled={selectedSpecialties.length === 0}
-                className="px-6 py-2 bg-gray-600 text-white font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Save Template
-              </button>
-              <button
-                onClick={handleReset}
-                className="px-6 py-2 bg-white text-gray-700 font-medium border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              >
-                Reset
-              </button>
-            </div>
-            
-            <div className="text-sm text-gray-500">
-              {validation.isValid ? 'Ready to blend' : 'Please fix errors above'}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="px-6 py-6 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">Actions</h3>
+            <p className="text-sm text-gray-600 mt-1">Create your blend or save as template</p>
+          </div>
+          <div className="px-6 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleCreateBlend}
+                  disabled={!validation.isValid || isLoading}
+                  className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {isLoading ? 'Creating...' : 'Create Blend'}
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={selectedSpecialties.length === 0}
+                  className="inline-flex items-center px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Save Template
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="inline-flex items-center px-6 py-3 bg-white text-gray-700 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Reset
+                </button>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${validation.isValid ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                <span className="text-sm text-gray-600">
+                  {validation.isValid ? 'Ready to blend' : 'Please fix errors above'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
