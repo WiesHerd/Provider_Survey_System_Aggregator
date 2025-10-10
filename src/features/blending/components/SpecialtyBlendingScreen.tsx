@@ -20,6 +20,7 @@ import { BlendingResults } from './BlendingResults';
 import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
+import { ModernPagination } from '../../../shared/components/ModernPagination';
 
 // Removed AG Grid - using HTML table instead
 
@@ -74,7 +75,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   
   // Pagination for table performance
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(50);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   
   // Column resizing state
   const [columnWidths, setColumnWidths] = useState({
@@ -199,6 +200,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   useEffect(() => {
     setCurrentPage(1);
   }, [specialtySearch]);
+
+  // Handle page change
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  }, []);
 
   // Column resizing handlers
   const handleMouseDown = useCallback((column: string, e: React.MouseEvent) => {
@@ -1557,60 +1569,28 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                        </tbody>
                      </table>
                      
-                     {/* Pagination Controls */}
+                     {/* Modern Pagination */}
                      {totalPages > 1 && (
-                       <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                         <div className="flex-1 flex justify-between sm:hidden">
-                           <button
-                             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                             disabled={currentPage === 1}
-                             className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                           >
-                             Previous
-                           </button>
-                           <button
-                             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                             disabled={currentPage === totalPages}
-                             className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                           >
-                             Next
-                           </button>
-                         </div>
-                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                           <div>
-                             <p className="text-sm text-gray-700">
-                               Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                               <span className="font-medium">
-                                 {Math.min(currentPage * itemsPerPage, filteredSurveyData.length)}
-                               </span>{' '}
-                               of <span className="font-medium">{filteredSurveyData.length}</span> results
-                             </p>
-                           </div>
-                           <div>
-                             <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                               <button
-                                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                                 disabled={currentPage === 1}
-                                 className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                               >
-                                 <span className="sr-only">Previous</span>
-                                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                   <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                                 </svg>
-                               </button>
-                               <button
-                                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                                 disabled={currentPage === totalPages}
-                                 className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                               >
-                                 <span className="sr-only">Next</span>
-                                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                 </svg>
-                               </button>
-                             </nav>
-                           </div>
-                         </div>
+                       <div style={{ 
+                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                         border: '1px solid #e5e7eb',
+                         borderTop: 'none',
+                         borderRadius: '0 0 8px 8px',
+                         marginTop: '-1px', // Ensure seamless connection
+                         marginLeft: '8px', // Match table left margin
+                         marginRight: '8px', // Match table right margin
+                         width: 'calc(100% - 16px)', // Account for left and right margins
+                         boxSizing: 'border-box' // Include borders in width calculation
+                       }}>
+                         <ModernPagination
+                           currentPage={currentPage}
+                           totalPages={totalPages}
+                           pageSize={itemsPerPage}
+                           totalRows={filteredSurveyData.length}
+                           onPageChange={handlePageChange}
+                           onPageSizeChange={handlePageSizeChange}
+                           pageSizeOptions={[10, 25, 50, 100]}
+                         />
                        </div>
                      )}
                    </div>
