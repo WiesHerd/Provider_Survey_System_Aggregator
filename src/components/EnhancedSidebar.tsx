@@ -18,6 +18,7 @@ import {
 	CurrencyDollarIcon,
 	CircleStackIcon,
 	ArrowsPointingOutIcon,
+	TagIcon,
 } from '@heroicons/react/24/outline';
 
 
@@ -57,7 +58,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 		{
 			name: 'Data Mapping',
 			items: [
-				{ name: 'Specialties', icon: MedicalCrossIcon, path: '/specialty-mapping' },
+				{ name: 'Specialties', icon: TagIcon, path: '/specialty-mapping' },
 				{ name: 'Provider Types', icon: UserIcon, path: '/provider-type-mapping' },
 				{ name: 'Regions', icon: MapIcon, path: '/region-mapping' },
 				{ name: 'Comp Metrics', icon: CurrencyDollarIcon, path: '/variable-mapping' },
