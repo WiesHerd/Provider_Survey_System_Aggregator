@@ -4,13 +4,12 @@ import { motion } from 'framer-motion';
 import { cn } from '../utils/cn';
 import {
   ArrowUpTrayIcon,
-  LinkIcon,
+  TagIcon,
   TableCellsIcon,
   PresentationChartLineIcon,
   MapIcon,
-  CalculatorIcon,
   ChartBarIcon,
-  DocumentTextIcon,
+  DocumentChartBarIcon,
   UserIcon,
   CurrencyDollarIcon,
   CircleStackIcon,
@@ -51,7 +50,7 @@ const Dashboard: React.FC = () => {
         {
           title: 'Specialties',
           description: 'Map and standardize specialty names across surveys',
-          icon: LinkIcon,
+          icon: TagIcon,
           path: '/specialty-mapping',
           color: 'bg-emerald-500',
           gradient: 'from-emerald-500 to-emerald-600',
@@ -129,7 +128,7 @@ const Dashboard: React.FC = () => {
         {
           title: 'Custom Reports',
           description: 'Create custom reports and visualizations from your survey data',
-          icon: DocumentTextIcon,
+          icon: DocumentChartBarIcon,
           path: '/custom-reports',
           color: 'bg-teal-500',
           gradient: 'from-teal-500 to-teal-600',
@@ -137,7 +136,7 @@ const Dashboard: React.FC = () => {
         {
           title: 'Fair Market Value',
           description: 'Calculate and compare compensation with market data',
-          icon: CalculatorIcon,
+          icon: CurrencyDollarIcon,
           path: '/fair-market-value',
           color: 'bg-blue-600',
           gradient: 'from-blue-600 to-blue-700',
