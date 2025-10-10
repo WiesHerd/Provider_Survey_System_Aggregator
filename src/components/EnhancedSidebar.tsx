@@ -17,22 +17,9 @@ import {
 	UserIcon,
 	CurrencyDollarIcon,
 	CircleStackIcon,
+	ArrowsPointingOutIcon,
 } from '@heroicons/react/24/outline';
 
-// Medical cross icon to represent medical specialties
-const MedicalCrossIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-	<svg
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth={1.5}
-		strokeLinecap="round"
-		strokeLinejoin="round"
-		{...props}
-	>
-		<path d="M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6V4z" />
-	</svg>
-);
 
 interface SidebarProps {
 	isOpen: boolean;
@@ -83,7 +70,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data' },
 				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
 				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
-				{ name: 'Specialty Blending', icon: MedicalCrossIcon, path: '/specialty-blending' },
+				{ name: 'Specialty Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
 				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
 			]
