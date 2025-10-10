@@ -83,6 +83,19 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
 	const handleNavigation = (path: string) => navigate(path);
 
+	// Check if current path is in Analytics & Reports section
+	const isAnalyticsRoute = (path: string) => {
+		const analyticsRoutes = [
+			'/normalized-data',
+			'/analytics', 
+			'/regional-analytics',
+			'/specialty-blending',
+			'/custom-reports',
+			'/fair-market-value'
+		];
+		return analyticsRoutes.includes(path);
+	};
+
 	// Keyboard navigation: Arrow/Home/End over visible items
 	const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
 		const items = Array.from((listRef.current?.querySelectorAll('a[href]') || []) as NodeListOf<HTMLElement>);
@@ -269,8 +282,8 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</button>
 			</div>
 
-			{/* Provider Type Selector */}
-			{isOpen && (
+			{/* Provider Type Selector - Hidden in Analytics & Reports sections */}
+			{isOpen && !isAnalyticsRoute(currentPath) && (
 				<div className="px-3 py-4 border-b border-gray-100">
 					<div className="mb-2">
 						<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
