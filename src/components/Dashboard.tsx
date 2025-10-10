@@ -13,6 +13,8 @@ import {
   DocumentTextIcon,
   UserIcon,
   CurrencyDollarIcon,
+  CircleStackIcon,
+  ArrowsPointingOutIcon,
 } from '@heroicons/react/24/outline';
 
 interface WelcomeCard {
@@ -107,6 +109,22 @@ const Dashboard: React.FC = () => {
           path: '/regional-analytics',
           color: 'bg-red-500',
           gradient: 'from-red-500 to-red-600',
+        },
+        {
+          title: 'Normalized Data',
+          description: 'Preview and validate your processed survey data',
+          icon: CircleStackIcon,
+          path: '/normalized-data',
+          color: 'bg-slate-500',
+          gradient: 'from-slate-500 to-slate-600',
+        },
+        {
+          title: 'Specialty Blending',
+          description: 'Blend compensation data across specialties for analysis',
+          icon: ArrowsPointingOutIcon,
+          path: '/specialty-blending',
+          color: 'bg-violet-500',
+          gradient: 'from-violet-500 to-violet-600',
         },
         {
           title: 'Custom Reports',
@@ -251,6 +269,7 @@ const Dashboard: React.FC = () => {
                 "grid gap-4",
                 section.cards.length === 4 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" :
                 section.cards.length === 6 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
+                section.cards.length === 5 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
                 "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
               )}>
                 {section.cards.map((card) => (
