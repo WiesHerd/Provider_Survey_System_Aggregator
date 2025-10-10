@@ -287,7 +287,7 @@ const Dashboard: React.FC = () => {
                       onClick={() => navigate(card.path)}
                       className="w-full h-full"
                     >
-                      <div className="relative h-full bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200">
+                      <div className="relative h-full min-h-[160px] bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col">
                         {/* Icon */}
                         <div className="mb-4">
                           <div 
@@ -314,11 +314,11 @@ const Dashboard: React.FC = () => {
                         </div>
 
                         {/* Content */}
-                        <div>
+                        <div className="flex-1 flex flex-col">
                           <h3 className="text-base font-medium text-gray-900 mb-2">
                             {card.title}
                           </h3>
-                          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
+                          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3 flex-1">
                             {card.description}
                           </p>
                         </div>
