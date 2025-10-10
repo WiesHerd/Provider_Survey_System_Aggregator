@@ -25,6 +25,8 @@ interface AgGridWrapperProps {
   className?: string;
   defaultColDef?: any;
   suppressRowClickSelection?: boolean;
+  rowSelection?: 'single' | 'multiple';
+  suppressRowDeselection?: boolean;
   components?: any;
 }
 
@@ -44,6 +46,8 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
   className = 'ag-theme-alpine',
   defaultColDef,
   suppressRowClickSelection,
+  rowSelection,
+  suppressRowDeselection,
   components
 }) => {
   // Pagination state
@@ -290,11 +294,11 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
           suppressMenuHide={false}
           // EXACT styling matching the image
           headerHeight={44}
-          rowSelection="single"
+          rowSelection={rowSelection || "single"}
           animateRows={false}
                   // Excel-like cell selection and navigation (native AG Grid)
         // enableRangeSelection={true} // Removed - requires enterprise module
-          suppressRowDeselection={false}
+          suppressRowDeselection={suppressRowDeselection}
           suppressCellFocus={false}
           enableCellTextSelection={true}
           // Alternating row colors - EXACTLY like the image

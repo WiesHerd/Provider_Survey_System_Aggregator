@@ -56,7 +56,7 @@ interface SurveyData {
 export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
-  private readonly DB_VERSION = 5;
+  private readonly DB_VERSION = 6;
 
   async initialize(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -159,6 +159,16 @@ export class IndexedDBService {
         if (!db.objectStoreNames.contains('learnedProviderTypeMappings')) {
           const learnedProviderTypeStore = db.createObjectStore('learnedProviderTypeMappings', { keyPath: 'original' });
           learnedProviderTypeStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        // Create blend templates store
+        if (!db.objectStoreNames.contains('blendTemplates')) {
+          console.log('🔄 Creating blendTemplates store...');
+          const blendTemplatesStore = db.createObjectStore('blendTemplates', { keyPath: 'id' });
+          blendTemplatesStore.createIndex('name', 'name', { unique: false });
+          blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
+          blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
+          console.log('✅ blendTemplates store created successfully');
         }
       };
     });
@@ -2071,6 +2081,76 @@ export class IndexedDBService {
       console.error(`❌ Error clearing specialty mappings:`, error);
       throw error;
     }
+  }
+
+  // Blend Template Methods
+  /**
+   * Save a blend template
+   */
+  async saveBlendTemplate(template: any): Promise<void> {
+    const db = await this.ensureDB();
+    const transaction = db.transaction(['blendTemplates'], 'readwrite');
+    const store = transaction.objectStore('blendTemplates');
+    
+    return new Promise((resolve, reject) => {
+      const request = store.put(template);
+      
+      request.onsuccess = () => {
+        console.log('✅ Blend template saved successfully:', template.name);
+        resolve();
+      };
+      
+      request.onerror = () => {
+        console.error('❌ Error saving blend template:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Get all blend templates
+   */
+  async getAllBlendTemplates(): Promise<any[]> {
+    const db = await this.ensureDB();
+    const transaction = db.transaction(['blendTemplates'], 'readonly');
+    const store = transaction.objectStore('blendTemplates');
+    
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        console.log('✅ Retrieved blend templates:', request.result.length);
+        resolve(request.result);
+      };
+      
+      request.onerror = () => {
+        console.error('❌ Error retrieving blend templates:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Delete a blend template
+   */
+  async deleteBlendTemplate(id: string): Promise<void> {
+    const db = await this.ensureDB();
+    const transaction = db.transaction(['blendTemplates'], 'readwrite');
+    const store = transaction.objectStore('blendTemplates');
+    
+    return new Promise((resolve, reject) => {
+      const request = store.delete(id);
+      
+      request.onsuccess = () => {
+        console.log('✅ Blend template deleted successfully:', id);
+        resolve();
+      };
+      
+      request.onerror = () => {
+        console.error('❌ Error deleting blend template:', request.error);
+        reject(request.error);
+      };
+    });
   }
 }
 

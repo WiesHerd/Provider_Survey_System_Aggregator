@@ -99,8 +99,11 @@ export interface BlendingActions {
   createBlend: (name: string, description: string) => Promise<BlendedResult>;
   saveTemplate: (template: Omit<SpecialtyBlendTemplate, 'id' | 'createdAt'>) => Promise<void>;
   loadTemplate: (templateId: string) => void;
+  deleteTemplate: (templateId: string) => Promise<void>; // Delete template function
   validateBlend: () => BlendingValidation;
   resetBlend: () => void;
+  clearCache: () => void;
+  refreshTemplates: () => Promise<void>;
 }
 
 export interface BlendingProps {

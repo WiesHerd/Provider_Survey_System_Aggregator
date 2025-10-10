@@ -9,6 +9,53 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SpecialtyItem, SpecialtyBlend, SpecialtyBlendTemplate, BlendedResult, BlendingState, BlendingActions } from '../types/blending';
 import { validateBlend, normalizeWeights, calculateBlendedMetrics, calculateConfidence, generateBlendId } from '../utils/blendingCalculations';
 
+// Global cache that persists across component mounts
+class GlobalBlendingCache {
+  private static instance: GlobalBlendingCache;
+  private allDataCache: any[] | null = null;
+  private availableSpecialtiesCache: SpecialtyItem[] | null = null;
+  private lastFetch: number = 0;
+  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+  
+  static getInstance(): GlobalBlendingCache {
+    if (!GlobalBlendingCache.instance) {
+      GlobalBlendingCache.instance = new GlobalBlendingCache();
+    }
+    return GlobalBlendingCache.instance;
+  }
+  
+  hasFreshData(): boolean {
+    const now = Date.now();
+    return this.allDataCache !== null && 
+           this.availableSpecialtiesCache !== null &&
+           (now - this.lastFetch) < this.CACHE_DURATION;
+  }
+  
+  getCachedData(): { allData: any[], availableSpecialties: SpecialtyItem[] } | null {
+    if (this.hasFreshData()) {
+      return {
+        allData: this.allDataCache!,
+        availableSpecialties: this.availableSpecialtiesCache!
+      };
+    }
+    return null;
+  }
+  
+  setCachedData(allData: any[], availableSpecialties: SpecialtyItem[]): void {
+    this.allDataCache = allData;
+    this.availableSpecialtiesCache = availableSpecialties;
+    this.lastFetch = Date.now();
+    console.log('🔍 GlobalBlendingCache: Data cached for 30 minutes');
+  }
+  
+  clearCache(): void {
+    this.allDataCache = null;
+    this.availableSpecialtiesCache = null;
+    this.lastFetch = 0;
+    console.log('🔍 GlobalBlendingCache: Cache cleared');
+  }
+}
+
 interface UseSpecialtyBlendingProps {
   initialSpecialties?: SpecialtyItem[];
   maxSpecialties?: number;
@@ -30,21 +77,52 @@ export const useSpecialtyBlending = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Populate available specialties from real survey data
+  // Load saved templates from IndexedDB
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const { IndexedDBService } = await import('../../../services/IndexedDBService');
+        const dbService = new IndexedDBService();
+        const savedTemplates = await dbService.getAllBlendTemplates();
+        setTemplates(savedTemplates);
+        console.log('🔍 useSpecialtyBlending: Loaded', savedTemplates.length, 'templates');
+      } catch (error) {
+        console.error('Failed to load templates:', error);
+      }
+    };
+    
+    loadTemplates();
+  }, []);
+
+  // Populate available specialties from real survey data with global caching
   useEffect(() => {
     const fetchRealSurveyData = async () => {
+      const globalCache = GlobalBlendingCache.getInstance();
+      
+      // Check if we have fresh cached data first
+      const cachedData = globalCache.getCachedData();
+      if (cachedData) {
+        console.log('🔍 useSpecialtyBlending: Using cached data (instant load)');
+        setAllData(cachedData.allData);
+        setAvailableSpecialties(cachedData.availableSpecialties);
+        return;
+      }
+      
+      // Skip if data is already loaded to prevent unnecessary re-fetching
+      if (allData.length > 0) {
+        console.log('🔍 useSpecialtyBlending: Data already loaded, skipping fetch');
+        return;
+      }
+      
       try {
         setIsLoading(true);
         setError(null);
         
+        console.log('🔍 useSpecialtyBlending: Starting optimized data fetch...');
+        
         // Import the analytics data service to get real survey data
         const { AnalyticsDataService } = await import('../../analytics/services/analyticsDataService');
         const analyticsDataService = new AnalyticsDataService();
-        
-        console.log('🔍 useSpecialtyBlending: Starting data fetch...');
-        
-        // Clear cache to ensure fresh data (same as analytics)
-        analyticsDataService.clearCache();
         
         // Get all survey data using the same service as analytics
         const allSurveyData = await analyticsDataService.getAnalyticsData({
@@ -56,7 +134,6 @@ export const useSpecialtyBlending = ({
         });
         
         console.log('🔍 useSpecialtyBlending: Fetched data -', allSurveyData.length, 'records');
-        console.log('🔍 useSpecialtyBlending: Sample data:', allSurveyData[0]);
         
         if (allSurveyData && allSurveyData.length > 0) {
           console.log('🔍 useSpecialtyBlending: Processing', allSurveyData.length, 'records');
@@ -67,14 +144,9 @@ export const useSpecialtyBlending = ({
           // Process aggregated survey data into specialty items
           const specialtyMap = new Map<string, SpecialtyItem>();
           
-          allSurveyData.forEach((survey: any) => {
-            console.log('🔍 useSpecialtyBlending: Processing survey:', {
-              surveySpecialty: survey.surveySpecialty,
-              surveySource: survey.surveySource,
-              surveyYear: survey.surveyYear,
-              geographicRegion: survey.geographicRegion,
-              providerType: survey.providerType
-            });
+          // Use for loop instead of forEach for better performance
+          for (let i = 0; i < allSurveyData.length; i++) {
+            const survey = allSurveyData[i];
             
             if (survey.surveySpecialty && survey.surveySource && survey.surveyYear) {
               const key = `${survey.surveySpecialty}-${survey.surveySource}-${survey.surveyYear}-${survey.geographicRegion || 'National'}-${survey.providerType || 'Physician'}`;
@@ -96,15 +168,15 @@ export const useSpecialtyBlending = ({
                 existing.records += (survey.tcc_n_orgs || 0);
               }
             }
-          });
+          }
           
           console.log('🔍 useSpecialtyBlending: Created', specialtyMap.size, 'specialty items');
           
-          // Debug: Log unique provider types in the data
-          const uniqueProviderTypes = [...new Set(allSurveyData.map(s => s.providerType))];
-          console.log('🔍 useSpecialtyBlending: Unique provider types in data:', uniqueProviderTypes);
+          const availableSpecialties = Array.from(specialtyMap.values());
+          setAvailableSpecialties(availableSpecialties);
           
-          setAvailableSpecialties(Array.from(specialtyMap.values()));
+          // Cache the data globally for 30 minutes
+          globalCache.setCachedData(allSurveyData, availableSpecialties);
         } else {
           console.log('🔍 useSpecialtyBlending: No data found');
           // Fallback to empty array if no data
@@ -268,6 +340,44 @@ export const useSpecialtyBlending = ({
     setCurrentBlend(null);
     setError(null);
   }, []);
+
+  const clearCache = useCallback(() => {
+    const globalCache = GlobalBlendingCache.getInstance();
+    globalCache.clearCache();
+    console.log('🔍 useSpecialtyBlending: Cache cleared manually');
+  }, []);
+
+  const refreshTemplates = useCallback(async () => {
+    try {
+      const { IndexedDBService } = await import('../../../services/IndexedDBService');
+      const dbService = new IndexedDBService();
+      const updatedTemplates = await dbService.getAllBlendTemplates();
+      setTemplates(updatedTemplates);
+      console.log('🔍 useSpecialtyBlending: Templates refreshed');
+    } catch (error) {
+      console.error('Failed to refresh templates:', error);
+    }
+  }, []);
+
+  const deleteTemplate = useCallback(async (templateId: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const { IndexedDBService } = await import('../../../services/IndexedDBService');
+      const dbService = new IndexedDBService();
+      await dbService.deleteBlendTemplate(templateId);
+      
+      setTemplates(prev => prev.filter(t => t.id !== templateId));
+      console.log('🔍 useSpecialtyBlending: Template deleted successfully');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete template';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
   
   return {
     // State
@@ -288,8 +398,11 @@ export const useSpecialtyBlending = ({
     createBlend,
     saveTemplate,
     loadTemplate,
+    deleteTemplate,
     validateBlend: validateBlendAction,
-    resetBlend
+    resetBlend,
+    clearCache,
+    refreshTemplates
   };
 };
 
@@ -306,6 +419,21 @@ const fetchSpecialtyData = async (specialties: SpecialtyItem[]): Promise<any[]> 
 };
 
 const saveTemplateToStorage = async (template: SpecialtyBlendTemplate): Promise<void> => {
-  // TODO: Integrate with IndexedDB or API
-  console.log('Saving template:', template);
+  try {
+    console.log('🔍 Attempting to save template to IndexedDB:', template);
+    
+    // Import the IndexedDB service
+    const { IndexedDBService } = await import('../../../services/IndexedDBService');
+    const dbService = new IndexedDBService();
+    
+    console.log('🔍 IndexedDB service imported successfully');
+    
+    // Save the template to IndexedDB
+    await dbService.saveBlendTemplate(template);
+    console.log('✅ Template saved to IndexedDB:', template.name);
+  } catch (error) {
+    console.error('❌ Error saving template to IndexedDB:', error);
+    console.error('❌ Error details:', error);
+    throw error;
+  }
 };
