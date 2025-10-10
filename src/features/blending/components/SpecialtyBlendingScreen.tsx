@@ -743,15 +743,17 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       };
       
       await saveTemplate(templateData);
-      await refreshTemplates();
+      
+      // The hook already updates the templates state, so no need to refresh
+      console.log('🔍 Template saved, templates should be updated automatically');
       
       // Show success modal
       setShowSaveSuccess(true);
     } catch (err) {
       console.error('Failed to save template:', err);
       toast({
-        title: 'Failed to Save Template',
-        description: `An error occurred while saving the template: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        title: 'Failed to Save Blend',
+        description: `An error occurred while saving the blend: ${err instanceof Error ? err.message : 'Unknown error'}`,
         variant: 'destructive'
       });
     } finally {
@@ -909,8 +911,8 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   <button
                     onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
                     className="flex items-center justify-between px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm font-medium text-gray-700 hover:border-gray-400 transition-all duration-200 shadow-sm min-w-[200px]"
-                    aria-label="Load saved template"
-                    title="Select a saved template to load"
+                    aria-label="Load saved blend"
+                    title="Select a saved blend to load"
                   >
                     <span className="text-left truncate">
                       {selectedTemplateId ? templates.find(t => t.id === selectedTemplateId)?.name || 'Saved Blends...' : 'Saved Blends...'}
@@ -923,7 +925,10 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   {isTemplateDropdownOpen && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
                       <div className="py-1">
-                        {templates.length === 0 ? (
+                        {(() => {
+                          console.log('🔍 Rendering dropdown with templates:', templates);
+                          return templates.length === 0;
+                        })() ? (
                           <div className="px-4 py-3 text-sm text-gray-500 text-center">
                             <div className="flex flex-col items-center space-y-2">
                               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1035,7 +1040,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      Save Template
+                      Save Blend
                     </button>
                   </div>
                 </div>
@@ -1917,9 +1922,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         isOpen={showSaveConfirmation}
         onClose={() => setShowSaveConfirmation(false)}
         onConfirm={handleConfirmSave}
-        title="Save Template"
-        message={`Are you sure you want to save "${blendName}" as a template? This will create a reusable blend with ${selectedDataRows.length} selected specialties.`}
-        confirmText="Save Template"
+        title="Save Blend"
+        message={`Are you sure you want to save "${blendName}"? This will create a reusable blend with ${selectedDataRows.length} selected specialties.`}
+        confirmText="Save Blend"
         cancelText="Cancel"
         type="info"
         isLoading={isSaving}
@@ -1929,9 +1934,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       <SuccessModal
         isOpen={showSaveSuccess}
         onClose={() => setShowSaveSuccess(false)}
-        title="Template Saved Successfully!"
+        title="Blend Saved Successfully!"
         message={`"${blendName}" has been saved and is now available in your saved blends.`}
-        details={`Template includes ${selectedDataRows.length} specialties and is ready for future use.`}
+        details={`Blend includes ${selectedDataRows.length} specialties and is ready for future use.`}
         actionText="View Saved Blends"
         onAction={() => {
           setShowSaveSuccess(false);
