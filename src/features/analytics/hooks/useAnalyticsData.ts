@@ -28,6 +28,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [filters, setFilters] = useState<AnalyticsFilters>(initialFilters);
   const [mappings, setMappings] = useState<any[]>([]);
   const [columnMappings, setColumnMappings] = useState<any[]>([]);
@@ -45,6 +46,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setError(null);
 
       console.log('🔍 useAnalyticsData: Starting data fetch...');
+      setLoadingProgress(10);
       
       // Use singleton AnalyticsDataService instance (Google-style)
       const analyticsDataService = new AnalyticsDataService();
@@ -52,7 +54,9 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       
       // Clear cache to force recalculation with fixed percentile logic and provider type normalization
       analyticsDataService.clearCache();
+      setLoadingProgress(20);
       
+      setLoadingProgress(30);
       const allData = await analyticsDataService.getAnalyticsData({
         specialty: '',
         surveySource: '',
@@ -61,6 +65,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
         year: ''
       });
 
+      setLoadingProgress(80);
       console.log('🔍 useAnalyticsData: Fetched all data -', allData.length, 'records');
       console.log('🔍 useAnalyticsData: Sample data:', allData[0]);
       console.log('🔍 useAnalyticsData: Sample data wRVU/CF values:', {
@@ -81,6 +86,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setMappings(specialtyMappings);
       setColumnMappings(colMappings);
       setRegionMappings(regMappings);
+      setLoadingProgress(100);
     } catch (err) {
       console.error('🔍 useAnalyticsData: Error fetching analytics data:', err);
       console.error('🔍 useAnalyticsData: Error details:', {
@@ -91,6 +97,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setError(err instanceof Error ? err.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);
+      setLoadingProgress(0);
     }
   }, []); // Remove filters dependency - fetch all data once
 
@@ -183,6 +190,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
     data: filteredData, // Return filtered data for display
     allData: data, // Return all data for filter options
     loading,
+    loadingProgress,
     error,
     filters,
     setFilters: updateFilters,

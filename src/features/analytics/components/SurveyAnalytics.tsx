@@ -60,6 +60,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   const {
     allData,
     loading,
+    loadingProgress,
     error,
     filters,
     setFilters,
@@ -170,6 +171,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         <AnalyticsTable
           data={data} // This will be filtered by the hook based on UI filters
           loading={loading}
+          loadingProgress={loadingProgress}
           error={error}
           onExport={exportToExcel}
         />

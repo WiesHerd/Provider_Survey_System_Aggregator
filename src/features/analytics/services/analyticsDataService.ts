@@ -240,22 +240,23 @@ export class AnalyticsDataService {
       
       console.log(`🔍 AnalyticsDataService: Processing ${surveys.length} surveys in parallel...`);
       
-      // Process surveys in parallel (limit to 3 concurrent to avoid overwhelming IndexedDB)
-      const surveyPromises = surveys.map(async (survey) => {
+      // Limit concurrent surveys to avoid overwhelming IndexedDB
+      const maxConcurrent = Math.min(3, surveys.length);
+      const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
         console.log(`🔍 AnalyticsDataService: Processing survey: ${survey.name} (${survey.type})`);
         
         try {
-          // Get survey data with pagination to limit memory usage
-          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 1000 });
+          // Get survey data with pagination to limit memory usage (reduced for faster loading)
+          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
           console.log(`🔍 AnalyticsDataService: Survey ${survey.name} returned ${surveyData.rows.length} rows`);
           
           if (surveyData.rows.length === 0) {
             return [];
           }
           
-          // Normalize rows in batches to avoid blocking the main thread
+          // Normalize rows in batches to avoid blocking the main thread (smaller batches for faster processing)
           const normalizedRows: NormalizedRow[] = [];
-          const batchSize = 100;
+          const batchSize = 50;
           
           for (let i = 0; i < surveyData.rows.length; i += batchSize) {
             const batch = surveyData.rows.slice(i, i + batchSize);

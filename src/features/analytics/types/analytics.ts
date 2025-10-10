@@ -124,6 +124,7 @@ export interface SummaryCalculation {
 export interface AnalyticsTableProps {
   data: AggregatedData[];
   loading: boolean;
+  loadingProgress?: number;
   error: string | null;
   onExport: () => void;
 }
@@ -151,6 +152,7 @@ export interface UseAnalyticsReturn {
   data: AggregatedData[];
   allData: AggregatedData[];
   loading: boolean;
+  loadingProgress: number;
   error: string | null;
   filters: AnalyticsFilters;
   setFilters: (filters: AnalyticsFilters) => void;

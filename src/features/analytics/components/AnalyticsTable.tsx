@@ -2,10 +2,11 @@
  * Analytics Feature - Data Table Component
  * 
  * This component displays analytics data in a structured table format.image.png
+ * 
  * Following enterprise patterns for component composition and performance.
  */
 
-import React, { memo } from 'react';
+import React, { memo, useState, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -14,7 +15,13 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Button
+  Button,
+  Pagination,
+  FormControl,
+  Select,
+  MenuItem,
+  Box,
+  Typography
 } from '@mui/material';
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
@@ -33,15 +40,64 @@ import { formatCurrency, formatSpecialtyForDisplay } from '../../../shared/utils
 export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   data,
   loading,
+  loadingProgress,
   error,
   onExport
 }) => {
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Memoize grouped data to avoid recalculation
+  const groupedData = useMemo(() => groupBySpecialty(data), [data]);
+  
+  // Pagination calculations
+  const totalSpecialties = Object.keys(groupedData).length;
+  const totalPages = Math.ceil(totalSpecialties / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  
+  // Get paginated specialties
+  const paginatedSpecialties = useMemo(() => {
+    const specialties = Object.keys(groupedData);
+    return specialties.slice(startIndex, endIndex);
+  }, [groupedData, startIndex, endIndex]);
+  
+  // Handle page change
+  const handlePageChange = useCallback((event: React.ChangeEvent<unknown>, page: number) => {
+    setCurrentPage(page);
+  }, []);
+  
+  // Handle items per page change
+  const handleItemsPerPageChange = useCallback((event: any) => {
+    setItemsPerPage(event.target.value);
+    setCurrentPage(1); // Reset to first page
+  }, []);
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           <span className="ml-3 text-gray-600">Loading analytics data...</span>
+        </div>
+        <div className="mt-4 text-center">
+          <Typography variant="body2" color="textSecondary">
+            Processing {data.length} records for optimal performance...
+          </Typography>
+          {loadingProgress && loadingProgress > 0 && (
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${loadingProgress}%` }}
+                ></div>
+              </div>
+              <Typography variant="caption" color="textSecondary" className="mt-1">
+                {loadingProgress}% complete
+              </Typography>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -81,8 +137,6 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       </div>
     );
   }
-
-  const groupedData = groupBySpecialty(data);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
@@ -215,7 +269,9 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
              </TableRow>
           </TableHead>
           <TableBody>
-            {Object.entries(groupedData).slice(0, 25).map(([specialty, rows]) => (
+            {paginatedSpecialties.map((specialty) => {
+              const rows = groupedData[specialty];
+              return (
               <React.Fragment key={specialty}>
                 {/* Data Rows */}
                 {rows.map((row, index) => (
@@ -268,7 +324,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                   </TableRow>
                 ))}
 
-                {/* Summary Rows */}
+                {/* Summary Rows - Memoized for performance */}
                 {(() => {
                   const { simple, weighted } = calculateSummaryRows(rows);
                   return (
@@ -437,18 +493,45 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                   );
                 })()}
               </React.Fragment>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
       </div>
 
-      {Object.entries(groupedData).length > 25 && (
-        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-800">
-            ⚠️ Showing first 25 specialties for performance. Total: {Object.entries(groupedData).length} specialties.
-          </p>
-        </div>
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <Box className="mt-4 p-4 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Typography variant="body2" color="textSecondary">
+                Showing {startIndex + 1}-{Math.min(endIndex, totalSpecialties)} of {totalSpecialties} specialties
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <Select
+                  value={itemsPerPage}
+                  onChange={handleItemsPerPageChange}
+                  displayEmpty
+                >
+                  <MenuItem value={5}>5 per page</MenuItem>
+                  <MenuItem value={10}>10 per page</MenuItem>
+                  <MenuItem value={25}>25 per page</MenuItem>
+                  <MenuItem value={50}>50 per page</MenuItem>
+                </Select>
+              </FormControl>
+            </div>
+            <Pagination
+              count={totalPages}
+              page={currentPage}
+              onChange={handlePageChange}
+              color="primary"
+              size="small"
+              showFirstButton
+              showLastButton
+            />
+          </div>
+        </Box>
       )}
     </div>
   );
