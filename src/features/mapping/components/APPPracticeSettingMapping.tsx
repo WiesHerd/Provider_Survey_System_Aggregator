@@ -15,7 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 interface APPPracticeSettingMapping {
   id: string;
@@ -274,9 +274,11 @@ export const APPPracticeSettingMapping: React.FC<APPPracticeSettingMappingProps>
 
   if (loading || dataLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner message="Loading APP practice setting mappings..." />
-      </div>
+      <AnalysisProgressBar
+        message="Loading APP practice setting mappings..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 

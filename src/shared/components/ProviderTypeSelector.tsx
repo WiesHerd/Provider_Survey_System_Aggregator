@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { ProviderTypeSelectorProps } from '../../types/provider';
 import { useProviderTypeDetection } from '../../hooks/useProviderTypeDetection';
+import LoadingSpinner from './LoadingSpinner';
 import { ProviderTypeInfo } from '../../services/ProviderTypeDetectionService';
 
 /**
@@ -160,9 +161,13 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   if (isLoading) {
     return (
       <div className={`relative ${className}`}>
-        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-gray-50 border border-gray-300 rounded-md">
-          <span className="text-gray-500">Loading provider types...</span>
-          <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+        <div className="w-full flex items-center justify-center px-3 py-2.5 text-sm font-normal bg-gray-50 border border-gray-300 rounded-md">
+          <LoadingSpinner 
+            message="Loading provider types..."
+            size="sm"
+            showMessage={true}
+            className="py-2"
+          />
         </div>
       </div>
     );
@@ -209,7 +214,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       {/* Dropdown Button - Google Style with Data Indicator */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-white border border-gray-300 rounded-xl hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+        className="w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 h-10"
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -230,7 +235,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
           />
           
           {/* Menu - Google Style with Data Indicators */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
             {options.length === 0 ? (
               <div className="px-3 py-2.5 text-sm text-gray-500 text-center">
                 No provider data available
@@ -368,7 +373,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
       {/* Compact Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded-xl hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+        className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -389,7 +394,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
           />
           
           {/* Menu */}
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden min-w-[100px]">
+          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg z-20 overflow-hidden min-w-[100px]">
             {options.map((option) => {
               const isSelected = value === option.value;
               

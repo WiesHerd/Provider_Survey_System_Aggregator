@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 interface APPProviderTypeMapping {
   id: string;
@@ -274,9 +274,11 @@ export const APPProviderTypeMapping: React.FC<APPProviderTypeMappingProps> = ({
 
   if (loading || dataLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner message="Loading APP provider type mappings..." />
-      </div>
+      <AnalysisProgressBar
+        message="Loading APP provider type mappings..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 

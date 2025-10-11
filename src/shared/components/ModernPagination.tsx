@@ -92,6 +92,8 @@ export const ModernPagination: React.FC<ModernPaginationProps> = ({
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+            aria-label="Rows per page"
+            title="Select number of rows per page"
           >
             {pageSizeOptions.map((size) => (
               <option key={size} value={size}>
@@ -174,3 +176,5 @@ export const ModernPagination: React.FC<ModernPaginationProps> = ({
     </div>
   );
 };
+
+export default ModernPagination;

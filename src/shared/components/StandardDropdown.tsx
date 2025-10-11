@@ -93,13 +93,18 @@ export const StandardDropdown: React.FC<StandardDropdownProps> = memo(({
                 backgroundColor: 'white',
                 borderRadius: '8px',
                 height: size === 'small' ? '40px' : '56px',
-                border: '1px solid #d1d5db',
+                border: '1px solid #d1d5db !important',
                 '&:hover': { 
-                  borderColor: '#9ca3af' 
+                  borderColor: '#9ca3af !important',
+                  borderWidth: '1px !important'
                 },
                 '&.Mui-focused': { 
                   boxShadow: 'none', 
-                  borderColor: '#3b82f6' 
+                  borderColor: '#3b82f6 !important',
+                  borderWidth: '1px !important'
+                },
+                '& fieldset': {
+                  border: 'none !important'
                 }
               },
               '& .MuiInputLabel-root': {

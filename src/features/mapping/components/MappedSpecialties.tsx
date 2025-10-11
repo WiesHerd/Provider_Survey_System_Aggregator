@@ -2,10 +2,12 @@ import React, { memo, useMemo, useCallback, useState, useEffect } from 'react';
 import {
   TextField,
   Typography,
-  InputAdornment
+  InputAdornment,
+  IconButton
 } from '@mui/material';
 import { 
-  MagnifyingGlassIcon as SearchIcon
+  MagnifyingGlassIcon as SearchIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { MappedSpecialtiesProps } from '../types/mapping';
 import { MappedSpecialtyItem } from './MappedSpecialtyItem';
@@ -63,6 +65,23 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
             startAdornment: (
               <InputAdornment position="start">
                 <SearchIcon className="h-4 w-4 text-gray-400" />
+              </InputAdornment>
+            ),
+            endAdornment: searchTerm && (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => onSearchChange('')}
+                  sx={{
+                    padding: '4px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                  aria-label="Clear search"
+                >
+                  <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                </IconButton>
               </InputAdornment>
             ),
           }}

@@ -13,7 +13,7 @@ import { useProviderTypeMappingData } from '../hooks/useProviderTypeMappingData'
 import { UnmappedProviderTypes } from './UnmappedProviderTypes';
 import { MappedProviderTypes } from './MappedProviderTypes';
 import { LearnedProviderTypeMappings } from './LearnedProviderTypeMappings';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 /**
  * ProviderTypeMapping component - Main orchestrator for provider type mapping functionality
@@ -131,10 +131,10 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
 
   if (loading) {
     return (
-      <LoadingSpinner 
-        message="Loading provider type mappings..." 
-        fullScreen={true}
-        size="lg"
+      <AnalysisProgressBar
+        message="Loading provider type mappings..."
+        progress={100}
+        recordCount={0}
       />
     );
   }

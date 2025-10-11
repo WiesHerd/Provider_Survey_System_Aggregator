@@ -75,7 +75,6 @@ const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
 const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
-const NormalizedDataScreen = lazy(() => import('./features/normalized/components/NormalizedDataScreen'));
 const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreen').then(module => ({ default: module.SpecialtyBlendingScreen })));
@@ -296,7 +295,6 @@ const PageContent = () => {
               <Route path="/analytics" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
-              <Route path="/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/custom-reports" element={<CustomReports />} />
               <Route path="/system-settings" element={<SystemSettings />} />
               <Route path="/specialty-blending" element={<SpecialtyBlending />} />
@@ -310,7 +308,6 @@ const PageContent = () => {
               <Route path="/physician/analytics" element={<SurveyAnalytics />} />
               <Route path="/physician/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/physician/fair-market-value" element={<FairMarketValue />} />
-              <Route path="/physician/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/physician/custom-reports" element={<CustomReports />} />
               
               <Route path="/app/specialty-mapping" element={<SpecialtyMapping />} />
@@ -322,7 +319,6 @@ const PageContent = () => {
               <Route path="/app/analytics" element={<SurveyAnalytics />} />
               <Route path="/app/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/app/fair-market-value" element={<FairMarketValue />} />
-              <Route path="/app/normalized-data" element={<NormalizedDataScreen />} />
               <Route path="/app/custom-reports" element={<CustomReports />} />
               
               {/* Cross-provider routes */}

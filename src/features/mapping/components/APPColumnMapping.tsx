@@ -9,11 +9,17 @@ import {
   BoltIcon,
   LightBulbIcon,
   ArrowDownTrayIcon,
-  TrashIcon
+  TrashIcon,
+  MagnifyingGlassIcon as SearchIcon
 } from '@heroicons/react/24/outline';
+import {
+  TextField,
+  InputAdornment,
+  IconButton
+} from '@mui/material';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 interface APPColumnMapping {
   id: string;
@@ -289,9 +295,11 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
 
   if (loading || dataLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner message="Loading APP column mappings..." />
-      </div>
+      <AnalysisProgressBar
+        message="Loading APP column mappings..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 
@@ -539,12 +547,42 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
         {activeTab === 'mapped' && (
           <div className="space-y-4">
             <div className="flex-1 max-w-lg">
-              <input
-                type="text"
+              <TextField
+                fullWidth
                 placeholder="Search mapped columns..."
                 value={mappedSearchTerm}
-                onChange={(e) => setMappedSearchTerm(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMappedSearchTerm(e.target.value)}
+                size="small"
+                sx={{ 
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: '0.875rem',
+                    height: '40px'
+                  }
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon className="h-4 w-4 text-gray-400" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: mappedSearchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setMappedSearchTerm('')}
+                        sx={{
+                          padding: '4px',
+                          '&:hover': {
+                            backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                          }
+                        }}
+                        aria-label="Clear search"
+                      >
+                        <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
               />
             </div>
 

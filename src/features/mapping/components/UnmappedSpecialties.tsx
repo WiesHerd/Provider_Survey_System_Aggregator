@@ -5,12 +5,14 @@ import {
   Paper,
   Button,
   InputAdornment,
-  Alert
+  Alert,
+  IconButton
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
   ExclamationTriangleIcon as WarningIcon,
-  BoltIcon
+  BoltIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { UnmappedSpecialtiesProps } from '../types/mapping';
 import { SpecialtyCard } from './SpecialtyCard';
@@ -63,6 +65,23 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
              startAdornment: (
                <InputAdornment position="start">
                  <SearchIcon className="h-4 w-4 text-gray-400" />
+               </InputAdornment>
+             ),
+             endAdornment: searchTerm && (
+               <InputAdornment position="end">
+                 <IconButton
+                   size="small"
+                   onClick={() => onSearchChange('')}
+                   sx={{
+                     padding: '4px',
+                     '&:hover': {
+                       backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                     }
+                   }}
+                   aria-label="Clear search"
+                 >
+                   <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                 </IconButton>
                </InputAdornment>
              ),
            }}

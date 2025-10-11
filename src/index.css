@@ -101,4 +101,17 @@ input, select, textarea, button {
   border-radius: 12px !important;
 }
 
-/* AG Grid styling is now handled by ag-grid-custom.css */ 
+/* AG Grid styling is now handled by ag-grid-custom.css */
+
+/* Pagination container styling for consistent appearance across screens */
+.pagination-container {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  margin-top: -1px; /* Ensure seamless connection */
+  margin-left: 8px; /* Match table left margin */
+  margin-right: 8px; /* Match table right margin */
+  width: calc(100% - 16px); /* Account for left and right margins */
+  box-sizing: border-box; /* Include borders in width calculation */
+} 

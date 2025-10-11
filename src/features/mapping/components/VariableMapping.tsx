@@ -10,13 +10,19 @@ import {
   EyeIcon,
   PencilIcon,
   ArrowDownTrayIcon,
-  TrashIcon
+  TrashIcon,
+  MagnifyingGlassIcon as SearchIcon
 } from '@heroicons/react/24/outline';
+import {
+  TextField,
+  InputAdornment,
+  IconButton
+} from '@mui/material';
 import { VariableMappingProps, IVariableMapping, IUnmappedVariable } from '../types/mapping';
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 /**
  * VariableMapping component - Main orchestrator for variable mapping functionality
@@ -127,9 +133,11 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <LoadingSpinner />
-      </div>
+      <AnalysisProgressBar
+        message="Loading variable mappings..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 
@@ -300,12 +308,42 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                 <div className="space-y-4">
                   {/* Search Bar - Match SpecialtyMapping Pattern */}
                   <div className="mb-4">
-                    <input
-                      type="text"
+                    <TextField
+                      fullWidth
                       placeholder="Search learned mappings..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                      size="small"
+                      sx={{ 
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px'
+                        }
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon className="h-4 w-4 text-gray-400" />
+                          </InputAdornment>
+                        ),
+                        endAdornment: searchTerm && (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              onClick={() => setSearchTerm('')}
+                              sx={{
+                                padding: '4px',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                                }
+                              }}
+                              aria-label="Clear search"
+                            >
+                              <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                   </div>
 

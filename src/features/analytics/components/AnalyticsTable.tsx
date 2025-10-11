@@ -14,19 +14,13 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Button,
-  Pagination,
-  FormControl,
-  Select,
-  MenuItem,
-  Box,
-  Typography
+  Paper
 } from '@mui/material';
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
 import { groupBySpecialty, calculateSummaryRows } from '../utils/analyticsCalculations';
 import { formatCurrency, formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
 
 
 /**
@@ -64,42 +58,23 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   }, [groupedData, startIndex, endIndex]);
   
   // Handle page change
-  const handlePageChange = useCallback((event: React.ChangeEvent<unknown>, page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
   }, []);
   
   // Handle items per page change
-  const handleItemsPerPageChange = useCallback((event: any) => {
-    setItemsPerPage(event.target.value);
+  const handleItemsPerPageChange = useCallback((newPageSize: number) => {
+    setItemsPerPage(newPageSize);
     setCurrentPage(1); // Reset to first page
   }, []);
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600">Loading analytics data...</span>
-        </div>
-        <div className="mt-4 text-center">
-          <Typography variant="body2" color="textSecondary">
-            Processing {data.length} records for optimal performance...
-          </Typography>
-          {loadingProgress && loadingProgress > 0 && (
-            <div className="mt-2">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${loadingProgress}%` }}
-                ></div>
-              </div>
-              <Typography variant="caption" color="textSecondary" className="mt-1">
-                {loadingProgress}% complete
-              </Typography>
-            </div>
-          )}
-        </div>
-      </div>
+      <AnalysisProgressBar
+        message="Loading analytics data..."
+        progress={loadingProgress || 0}
+        recordCount={data.length}
+      />
     );
   }
 
@@ -114,9 +89,12 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
           <p className="text-gray-500 mb-4">{error}</p>
-          <Button variant="contained" onClick={() => window.location.reload()}>
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
             Retry
-          </Button>
+          </button>
         </div>
       </div>
     );
@@ -142,25 +120,24 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
       {/* Export button positioned at top right */}
       <div className="flex justify-end mb-2">
-        <Button
-          variant="outlined"
-          startIcon={<DocumentTextIcon className="w-4 h-4" />}
+        <button
           onClick={onExport}
-          className="rounded-lg"
+          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
         >
+          <DocumentTextIcon className="w-4 h-4 mr-2" />
           Export Data
-        </Button>
+        </button>
       </div>
 
-      {/* Table without internal scrolling - uses page scrollbar only */}
-      <div className="rounded-lg border border-gray-200 overflow-visible">
+      {/* Table with horizontal scrolling */}
+      <div className="rounded-lg border border-gray-200 overflow-x-auto">
         <TableContainer 
           component={Paper} 
           sx={{ 
-            // Remove maxHeight and overflow to use page scrollbar only
+            maxHeight: '600px',
+            overflow: 'auto',
             '& .MuiTable-root': {
-              width: '100%',
-              minWidth: '100%'
+              minWidth: '1200px' // Ensure table has minimum width for all columns
             }
           }}
         >
@@ -500,38 +477,19 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       </TableContainer>
       </div>
 
-      {/* Pagination Controls */}
+      {/* Modern Pagination - Consistent with other screens */}
       {totalPages > 1 && (
-        <Box className="mt-4 p-4 bg-gray-50 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Typography variant="body2" color="textSecondary">
-                Showing {startIndex + 1}-{Math.min(endIndex, totalSpecialties)} of {totalSpecialties} specialties
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <Select
-                  value={itemsPerPage}
-                  onChange={handleItemsPerPageChange}
-                  displayEmpty
-                >
-                  <MenuItem value={5}>5 per page</MenuItem>
-                  <MenuItem value={10}>10 per page</MenuItem>
-                  <MenuItem value={25}>25 per page</MenuItem>
-                  <MenuItem value={50}>50 per page</MenuItem>
-                </Select>
-              </FormControl>
-            </div>
-            <Pagination
-              count={totalPages}
-              page={currentPage}
-              onChange={handlePageChange}
-              color="primary"
-              size="small"
-              showFirstButton
-              showLastButton
-            />
-          </div>
-        </Box>
+        <div className="pagination-container">
+          <ModernPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={itemsPerPage}
+            totalRows={totalSpecialties}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handleItemsPerPageChange}
+            pageSizeOptions={[5, 10, 25, 50]}
+          />
+        </div>
       )}
     </div>
   );

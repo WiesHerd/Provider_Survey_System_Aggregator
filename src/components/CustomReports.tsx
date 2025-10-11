@@ -39,21 +39,25 @@ import {
 } from '@heroicons/react/24/outline';
 import { getDataService } from '../services/DataService';
 import LoadingSpinner from './ui/loading-spinner';
+import { AnalysisProgressBar } from '../shared/components';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping } from '../types/specialty';
+import { useYear } from '../contexts/YearContext';
 
 interface ReportConfig {
   id: string;
   name: string;
   dimension: string;
   metric: string;
+  metrics: string[]; // Add multi-select metrics
   chartType: 'bar' | 'line' | 'pie';
   filters: {
     specialties: string[];
     regions: string[];
     surveySources: string[];
+    years: string[]; // Add year filtering
   };
   created: Date;
 }
@@ -68,6 +72,8 @@ interface ChartDataItem {
   value: number;
   count: number;
   originalName: string;
+  metrics?: string[];
+  metricValues?: Record<string, number>;
 }
 
 const COLORS = ['#6A5ACD', '#8B7DD6', '#A89DE0', '#C5BDE9', '#E2D1F2'];
@@ -77,6 +83,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   title = 'Custom Reports' 
 }) => {
   console.log('🔄 CustomReports component rendering...');
+  
+  // Year context
+  const { currentYear } = useYear();
   
   // State management
   const [loading, setLoading] = useState(true);
@@ -89,21 +98,24 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     name: '',
     dimension: 'specialty',
     metric: 'tcc_p50',
+    metrics: ['tcc_p50'], // Add multi-select metrics
     chartType: 'bar',
     filters: {
       specialties: [],
       regions: [],
-      surveySources: []
+      surveySources: [],
+      years: [currentYear] // Default to current year
     }
   });
 
   // Available options
   const [availableOptions, setAvailableOptions] = useState({
-    dimensions: [] as string[],
-    metrics: [] as string[],
+    dimensions: ['specialty', 'region', 'providerType'],
+    metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
     specialties: [] as string[],
     regions: [] as string[],
-    surveySources: [] as string[]
+    surveySources: [] as string[],
+    years: [] as string[]
   });
 
   // All available options (before cascading)
@@ -280,12 +292,16 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           console.log('🔍 DEBUG - Available regions for filter:', regions);
           console.log('🔍 DEBUG - Available survey sources for filter:', surveySources);
           
+          // Extract available years from survey data
+          const years = [...new Set(surveyData.map(row => String(row.surveyYear || '')).filter(Boolean))].sort();
+          
           setAvailableOptions({
             dimensions: ['specialty', 'region', 'providerType'],
             metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
             specialties,
             regions,
-            surveySources
+            surveySources,
+            years
           });
         }
       } catch (error) {
@@ -357,7 +373,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
     return {
       specialties: allAvailableOptions.specialties, // Always use all available specialties
-      regions: Array.from(availableRegions).sort(),
+      regions: allAvailableOptions.regions, // Always use all available regions (no cascading)
       surveySources: Array.from(availableSurveySources).sort()
     };
   }, [surveyData, currentConfig.filters.regions, currentConfig.filters.surveySources, specialtyMappings, allAvailableOptions.specialties, allAvailableOptions.regions, allAvailableOptions.surveySources]);
@@ -379,6 +395,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     
     if (!surveyData.length) {
       console.log('❌ No survey data available');
+      return [];
+    }
+
+    // Check if we have metrics selected
+    if (!currentConfig.metrics.length && !currentConfig.metric) {
+      console.log('❌ No metrics selected');
       return [];
     }
 
@@ -508,6 +530,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       });
       console.log(`📋 Survey source filter: ${beforeSourceFilter} → ${filteredData.length} rows`);
     }
+    
+    if (currentConfig.filters.years.length > 0) {
+      console.log('📅 Filtering by years:', currentConfig.filters.years);
+      const beforeYearFilter = filteredData.length;
+      filteredData = filteredData.filter(row => {
+        const year = String(row.surveyYear || '');
+        const matches = currentConfig.filters.years.includes(year);
+        
+        // Debug first few rows
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`📅 Row year: "${year}" - matches: ${matches}`);
+        }
+        
+        return matches;
+      });
+      console.log(`📅 Year filter: ${beforeYearFilter} → ${filteredData.length} rows`);
+    }
 
     console.log('✅ After all filters:', filteredData.length, 'rows remaining');
 
@@ -535,24 +574,32 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         dimensionValue = String(row[currentConfig.dimension as keyof ISurveyRow] || 'Unknown');
       }
       
-      const metricValue = Number(row[currentConfig.metric as keyof ISurveyRow]) || 0;
+      // Handle multiple metrics - use the first selected metric for chart display
+      const selectedMetric = currentConfig.metrics.length > 0 ? currentConfig.metrics[0] : currentConfig.metric;
+      const metricValue = Number(row[selectedMetric as keyof ISurveyRow]) || 0;
       
       if (!acc[dimensionValue]) {
         acc[dimensionValue] = {
           name: dimensionValue,
           value: 0,
           count: 0,
-          total: 0
+          total: 0,
+          // Store all selected metrics for multi-metric display
+          metrics: currentConfig.metrics.length > 0 ? currentConfig.metrics : [currentConfig.metric],
+          metricValues: {} as Record<string, number>
         };
       }
       
       if (metricValue > 0) {
         acc[dimensionValue].total += metricValue;
         acc[dimensionValue].count += 1;
+        
+        // Store individual metric values for multi-metric analysis
+        acc[dimensionValue].metricValues[selectedMetric] = metricValue;
       }
       
       return acc;
-    }, {} as Record<string, { name: string; value: number; count: number; total: number }>);
+    }, {} as Record<string, { name: string; value: number; count: number; total: number; metrics: string[]; metricValues: Record<string, number> }>);
 
     console.log('📊 Grouped data keys:', Object.keys(grouped));
 
@@ -583,7 +630,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log('📊 Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
-  }, [surveyData, currentConfig.dimension, currentConfig.metric, currentConfig.chartType, currentConfig.filters, specialtyMappings]);
+  }, [surveyData, currentConfig.dimension, currentConfig.metric, currentConfig.metrics, currentConfig.chartType, currentConfig.filters, specialtyMappings]);
 
   // Handle configuration changes
   const handleConfigChange = (key: keyof typeof currentConfig, value: any) => {
@@ -639,8 +686,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       name: '',
       dimension: report.dimension,
       metric: report.metric,
+      metrics: report.metrics || [report.metric], // Use saved metrics or fallback to single metric
       chartType: report.chartType,
-      filters: report.filters
+      filters: {
+        ...report.filters,
+        years: report.filters.years || [currentYear] // Default to current year if not saved
+      }
     });
   };
 
@@ -881,7 +932,13 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   };
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <AnalysisProgressBar
+        message="Loading custom reports..."
+        progress={100}
+        recordCount={0}
+      />
+    );
   }
 
   return (
@@ -889,30 +946,22 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       {/* Action Buttons - Top of page */}
       <div className="flex justify-between items-center">
       <div className="flex gap-2">
-        <Button
-          variant="contained"
-          startIcon={<BookmarkIcon className="h-4 w-4" />}
+        <button
           onClick={saveCurrentReport}
           disabled={!currentConfig.name.trim()}
-          sx={{
-            backgroundColor: '#6A5ACD',
-            borderRadius: '8px',
-            '&:hover': {
-              backgroundColor: '#5A4ACD'
-            }
-          }}
+          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
+          <BookmarkIcon className="h-4 w-4 mr-2" />
           Save Report
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<DocumentArrowDownIcon className="h-4 w-4" />}
+        </button>
+        <button
           onClick={exportData}
           disabled={chartData.length === 0}
-          sx={{ borderRadius: '8px' }}
+          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
+          <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
           Export
-        </Button>
+        </button>
       </div>
 
         {/* Saved Reports Dropdown */}
@@ -1019,35 +1068,200 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </Select>
             </FormControl>
 
-            {/* Metric Selector */}
+            {/* Metrics Selector - Multi-select */}
             <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Measure (Y-Axis)
+                Measures (Y-Axis)
               </Typography>
-              <Select
-                value={currentConfig.metric}
-                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('metric', e.target.value)}
-                sx={{
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
+              <Autocomplete
+                multiple
+                value={currentConfig.metrics}
+                onChange={(event: any, newValue: string[]) => {
+                  handleConfigChange('metrics', newValue);
+                  // Also update the single metric for backward compatibility
+                  if (newValue.length > 0) {
+                    handleConfigChange('metric', newValue[0]);
                   }
                 }}
-              >
-                <MenuItem value="tcc_p25">TCC 25th Percentile</MenuItem>
-                <MenuItem value="tcc_p50">TCC 50th Percentile</MenuItem>
-                <MenuItem value="tcc_p75">TCC 75th Percentile</MenuItem>
-                <MenuItem value="tcc_p90">TCC 90th Percentile</MenuItem>
-                <MenuItem value="wrvu_p25">wRVU 25th Percentile</MenuItem>
-                <MenuItem value="wrvu_p50">wRVU 50th Percentile</MenuItem>
-                <MenuItem value="wrvu_p75">wRVU 75th Percentile</MenuItem>
-                <MenuItem value="wrvu_p90">wRVU 90th Percentile</MenuItem>
-                <MenuItem value="cf_p25">CF 25th Percentile</MenuItem>
-                <MenuItem value="cf_p50">CF 50th Percentile</MenuItem>
-                <MenuItem value="cf_p75">CF 75th Percentile</MenuItem>
-                <MenuItem value="cf_p90">CF 90th Percentile</MenuItem>
-              </Select>
+                options={availableOptions.metrics}
+                getOptionLabel={(option: string) => {
+                  const labels: { [key: string]: string } = {
+                    'tcc_p25': 'TCC 25th Percentile',
+                    'tcc_p50': 'TCC 50th Percentile',
+                    'tcc_p75': 'TCC 75th Percentile',
+                    'tcc_p90': 'TCC 90th Percentile',
+                    'wrvu_p25': 'wRVU 25th Percentile',
+                    'wrvu_p50': 'wRVU 50th Percentile',
+                    'wrvu_p75': 'wRVU 75th Percentile',
+                    'wrvu_p90': 'wRVU 90th Percentile',
+                    'cf_p25': 'CF 25th Percentile',
+                    'cf_p50': 'CF 50th Percentile',
+                    'cf_p75': 'CF 75th Percentile',
+                    'cf_p90': 'CF 90th Percentile'
+                  };
+                  return labels[option] || option;
+                }}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Select measures..."
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        minHeight: '40px',
+                        '& fieldset': {
+                          borderColor: '#d1d5db',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '1px',
+                        }
+                      }
+                    }}
+                  />
+                )}
+                renderTags={(value: string[], getTagProps: any) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {value.map((option: string, index: number) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={`${option}-${index}`}
+                        label={(() => {
+                          const labels: { [key: string]: string } = {
+                            'tcc_p25': 'TCC P25',
+                            'tcc_p50': 'TCC P50',
+                            'tcc_p75': 'TCC P75',
+                            'tcc_p90': 'TCC P90',
+                            'wrvu_p25': 'wRVU P25',
+                            'wrvu_p50': 'wRVU P50',
+                            'wrvu_p75': 'wRVU P75',
+                            'wrvu_p90': 'wRVU P90',
+                            'cf_p25': 'CF P25',
+                            'cf_p50': 'CF P50',
+                            'cf_p75': 'CF P75',
+                            'cf_p90': 'CF P90'
+                          };
+                          return labels[option] || option;
+                        })()}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: '#8B5CF6', 
+                          color: 'white',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            '&:hover': { color: 'white' }
+                          }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                sx={{
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
+                    maxHeight: '300px'
+                  },
+                  '& .MuiAutocomplete-option': {
+                    padding: '8px 12px',
+                    fontSize: '0.875rem',
+                    '&:hover': { backgroundColor: '#f3f4f6' },
+                    '&.Mui-selected': { 
+                      backgroundColor: '#ede9fe',
+                      color: '#5b21b6'
+                    }
+                  }
+                }}
+                noOptionsText="No measures found"
+                clearOnBlur={false}
+                disableCloseOnSelect={true}
+              />
+            </FormControl>
+
+            {/* Year Filter */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Years
+              </Typography>
+              <Autocomplete
+                multiple
+                value={currentConfig.filters.years}
+                onChange={(event: any, newValue: string[]) => handleFilterChange('years', newValue)}
+                options={availableOptions.years}
+                getOptionLabel={(option: string) => option}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Select years..."
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        minHeight: '40px',
+                        '& fieldset': {
+                          borderColor: '#d1d5db',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '1px',
+                        }
+                      }
+                    }}
+                  />
+                )}
+                renderTags={(value: string[], getTagProps: any) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {value.map((option: string, index: number) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={`${option}-${index}`}
+                        label={option}
+                        size="small"
+                        sx={{
+                          backgroundColor: '#10B981',
+                          color: 'white',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            '&:hover': { color: 'white' }
+                          }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                sx={{
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
+                    maxHeight: '300px'
+                  },
+                  '& .MuiAutocomplete-option': {
+                    padding: '8px 12px',
+                    fontSize: '0.875rem',
+                    '&:hover': { backgroundColor: '#f3f4f6' },
+                    '&.Mui-selected': {
+                      backgroundColor: '#d1fae5',
+                      color: '#065f46'
+                    }
+                  }
+                }}
+                noOptionsText="No years found"
+                clearOnBlur={false}
+                disableCloseOnSelect={true}
+              />
             </FormControl>
 
             {/* Chart Type Selector */}
@@ -1350,7 +1564,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 {currentConfig.name || 'Report Preview'}
               </Typography>
                             <Typography variant="body2" className="text-gray-600">
-                {currentConfig.dimension.replace('_', ' ')} × {currentConfig.metric.replace('_', ' ')} ({chartData.length} items)
+                {currentConfig.dimension.replace('_', ' ')} × {currentConfig.metrics.length > 1 ? 
+                  `${currentConfig.metrics.length} measures` : 
+                  currentConfig.metric.replace('_', ' ')
+                } {currentConfig.filters.years.length > 1 ? 
+                  `(${currentConfig.filters.years.join(', ')})` : 
+                  currentConfig.filters.years.length === 1 ? 
+                  `(${currentConfig.filters.years[0]})` : 
+                  ''
+                } ({chartData.length} items)
                 {(() => {
                   const values = chartData.map(item => item.value);
                   const min = Math.min(...values);
@@ -1395,21 +1617,41 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                          currentConfig.dimension === 'providerType' ? 'Provider Type' : 
                          currentConfig.dimension}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                        {currentConfig.metric === 'tcc_p25' ? 'TCC 25th Percentile' :
-                         currentConfig.metric === 'tcc_p50' ? 'TCC 50th Percentile' :
-                         currentConfig.metric === 'tcc_p75' ? 'TCC 75th Percentile' :
-                         currentConfig.metric === 'tcc_p90' ? 'TCC 90th Percentile' :
-                         currentConfig.metric === 'wrvu_p25' ? 'wRVU 25th Percentile' :
-                         currentConfig.metric === 'wrvu_p50' ? 'wRVU 50th Percentile' :
-                         currentConfig.metric === 'wrvu_p75' ? 'wRVU 75th Percentile' :
-                         currentConfig.metric === 'wrvu_p90' ? 'wRVU 90th Percentile' :
-                         currentConfig.metric === 'cf_p25' ? 'CF 25th Percentile' :
-                         currentConfig.metric === 'cf_p50' ? 'CF 50th Percentile' :
-                         currentConfig.metric === 'cf_p75' ? 'CF 75th Percentile' :
-                         currentConfig.metric === 'cf_p90' ? 'CF 90th Percentile' :
-                         currentConfig.metric.replace('_', ' ').toUpperCase()}
-                      </th>
+                      {currentConfig.metrics.length > 1 ? (
+                        currentConfig.metrics.map((metric, index) => (
+                          <th key={metric} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                            {metric === 'tcc_p25' ? 'TCC 25th' :
+                             metric === 'tcc_p50' ? 'TCC 50th' :
+                             metric === 'tcc_p75' ? 'TCC 75th' :
+                             metric === 'tcc_p90' ? 'TCC 90th' :
+                             metric === 'wrvu_p25' ? 'wRVU 25th' :
+                             metric === 'wrvu_p50' ? 'wRVU 50th' :
+                             metric === 'wrvu_p75' ? 'wRVU 75th' :
+                             metric === 'wrvu_p90' ? 'wRVU 90th' :
+                             metric === 'cf_p25' ? 'CF 25th' :
+                             metric === 'cf_p50' ? 'CF 50th' :
+                             metric === 'cf_p75' ? 'CF 75th' :
+                             metric === 'cf_p90' ? 'CF 90th' :
+                             metric.replace('_', ' ').toUpperCase()}
+                          </th>
+                        ))
+                      ) : (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                          {currentConfig.metric === 'tcc_p25' ? 'TCC 25th Percentile' :
+                           currentConfig.metric === 'tcc_p50' ? 'TCC 50th Percentile' :
+                           currentConfig.metric === 'tcc_p75' ? 'TCC 75th Percentile' :
+                           currentConfig.metric === 'tcc_p90' ? 'TCC 90th Percentile' :
+                           currentConfig.metric === 'wrvu_p25' ? 'wRVU 25th Percentile' :
+                           currentConfig.metric === 'wrvu_p50' ? 'wRVU 50th Percentile' :
+                           currentConfig.metric === 'wrvu_p75' ? 'wRVU 75th Percentile' :
+                           currentConfig.metric === 'wrvu_p90' ? 'wRVU 90th Percentile' :
+                           currentConfig.metric === 'cf_p25' ? 'CF 25th Percentile' :
+                           currentConfig.metric === 'cf_p50' ? 'CF 50th Percentile' :
+                           currentConfig.metric === 'cf_p75' ? 'CF 75th Percentile' :
+                           currentConfig.metric === 'cf_p90' ? 'CF 90th Percentile' :
+                           currentConfig.metric.replace('_', ' ').toUpperCase()}
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Count
                       </th>
@@ -1421,12 +1663,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
                           {item.name}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
-                          {currentConfig.metric.includes('wrvu') ? 
-                            item.value.toLocaleString() : 
-                            `$${item.value.toLocaleString()}`
-                          }
-                        </td>
+                        {currentConfig.metrics.length > 1 ? (
+                          currentConfig.metrics.map((metric, index) => (
+                            <td key={metric} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                              {metric.includes('wrvu') ? 
+                                (item.metricValues?.[metric] || 0).toLocaleString() : 
+                                `$${(item.metricValues?.[metric] || 0).toLocaleString()}`
+                              }
+                            </td>
+                          ))
+                        ) : (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                            {currentConfig.metric.includes('wrvu') ? 
+                              item.value.toLocaleString() : 
+                              `$${item.value.toLocaleString()}`
+                            }
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {item.count}
                         </td>

@@ -643,8 +643,11 @@ const SurveyUpload: React.FC = () => {
                       console.error('Download failed:', error);
                     }
                   }}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                  className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 border border-gray-300"
                 >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                   Download Sample
                 </button>
               </div>
@@ -746,7 +749,7 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* Survey Year Selection */}
-                <div className="col-span-2">
+                <div className="col-span-3">
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
@@ -786,15 +789,15 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="col-span-4 flex items-end space-x-3">
-                  <div {...getRootProps()} className="flex-1">
+                <div className="col-span-3 flex items-end justify-end space-x-3">
+                  <div {...getRootProps()} className="flex-shrink-0">
                     <input {...getInputProps()} />
                     <button
                       type="button"
-                      className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 flex items-center justify-center h-10"
+                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center h-10"
                     >
                       <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                      Select File
+                      Browse
                     </button>
                   </div>
                   <button
@@ -804,10 +807,10 @@ const SurveyUpload: React.FC = () => {
                              (providerType === 'CUSTOM' && !customProviderType) ||
                              (surveyType === 'CUSTOM' && !customSurveyName.trim()) || 
                              isUploading}
-                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
+                    className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
                   >
                     <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
-                    {isUploading ? 'Uploading...' : 'Upload Survey'}
+                    {isUploading ? 'Uploading...' : '+ New Survey'}
                   </button>
                 </div>
 
@@ -835,6 +838,8 @@ const SurveyUpload: React.FC = () => {
                     <button
                       onClick={() => files[0].id && removeFile(files[0].id)}
                       className="text-gray-400 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
+                      title="Remove file"
+                      aria-label="Remove selected file"
                     >
                       <XMarkIcon className="h-5 w-5" />
                     </button>
@@ -872,7 +877,7 @@ const SurveyUpload: React.FC = () => {
               {uploadedSurveys.length > 0 && (
                 <button
                   onClick={handleClearAll}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 transition-colors duration-200 rounded-lg hover:bg-red-50"
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
                   <XMarkIcon className="h-4 w-4 mr-1.5" />
                   Clear All
@@ -1036,14 +1041,14 @@ const SurveyUpload: React.FC = () => {
                   setShowDeleteConfirmation(false);
                   setSurveyToDelete(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteSurvey}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Delete
               </button>
@@ -1064,14 +1069,14 @@ const SurveyUpload: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowClearAllConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmClearAll}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-500 border border-transparent rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Delete
               </button>

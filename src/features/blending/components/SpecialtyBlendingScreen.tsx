@@ -11,7 +11,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  TextField
+  TextField,
+  IconButton
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
@@ -21,6 +22,8 @@ import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
 import { ModernPagination } from '../../../shared/components/ModernPagination';
+import { AnalysisProgressBar } from '../../../shared/components';
+import { BookmarkSlashIcon } from '@heroicons/react/24/outline';
 
 // Removed AG Grid - using HTML table instead
 
@@ -40,29 +43,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   const [blendedResult, setBlendedResult] = useState<any>(null);
   const [isDataBrowserCollapsed, setIsDataBrowserCollapsed] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
   
   // Modal states
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isTemplateDropdownOpen) {
-        const target = event.target as Element;
-        if (!target.closest('.template-dropdown')) {
-          setIsTemplateDropdownOpen(false);
-        }
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isTemplateDropdownOpen]);
   
   // Filter state
   const [selectedSurvey, setSelectedSurvey] = useState('');
@@ -864,21 +850,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   // Show loading state while data is being fetched
   if (isLoading) {
     return (
-    <div className="min-h-screen bg-gray-50">
-        <div className="w-full px-2 py-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-              <span className="ml-3 text-gray-600">Loading survey data...</span>
-            </div>
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-500">
-                Fetching and processing survey data for blending
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AnalysisProgressBar
+        message="Loading survey data..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 
@@ -919,94 +895,79 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Blend Configuration</h2>
               <div className="flex items-center space-x-3">
-                <div className="relative template-dropdown">
-                  <button
-                    onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
-                    className="flex items-center justify-between px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm font-medium text-gray-700 hover:border-gray-400 transition-all duration-200 shadow-sm min-w-[200px]"
-                    aria-label="Load saved blend"
-                    title="Select a saved blend to load"
-                  >
-                    <span className="text-left truncate">
-                      {selectedTemplateId ? templates.find(t => t.id === selectedTemplateId)?.name || 'Saved Blends...' : 'Saved Blends...'}
-                    </span>
-                    <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isTemplateDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  
-                  {isTemplateDropdownOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
-                      <div className="py-1">
-                        {(() => {
-                          console.log('🔍 Rendering dropdown with templates:', templates);
-                          return templates.length === 0;
-                        })() ? (
-                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                            <div className="flex flex-col items-center space-y-2">
-                              <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <span>No saved blends</span>
-                            </div>
+                {/* Saved Blends Dropdown - Matching CustomReports pattern */}
+                {templates.length > 0 && (
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <Select
+                      value={selectedTemplateId || ""}
+                      onChange={(e: SelectChangeEvent<string>) => {
+                        const templateId = e.target.value;
+                        if (templateId) {
+                          handleLoadTemplate(templateId);
+                        }
+                      }}
+                      displayEmpty
+                      renderValue={(selected: string) => {
+                        if (!selected) {
+                          return <em>📁 Saved Blends</em>;
+                        }
+                        const template = templates.find(t => t.id === selected);
+                        return template ? (
+                          <div className="flex items-center">
+                            <span className="mr-2">📁</span>
+                            <span className="truncate">{template.name}</span>
                           </div>
-                        ) : (
-                          templates.map((template) => (
-                            <div key={template.id} className="group relative">
-                              <button
-                                onClick={() => {
-                                  handleLoadTemplate(template.id);
-                                  setIsTemplateDropdownOpen(false);
-                                }}
-                                className="w-full px-4 py-3 text-left text-sm text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors duration-150 group-hover:bg-gray-50"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-gray-900 truncate">{template.name}</div>
-                                    {template.description && template.description !== template.name && (
-                                      <div className="text-xs text-gray-500 mt-1 truncate">{template.description}</div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center space-x-2 ml-3">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleLoadTemplate(template.id);
-                                        setIsTemplateDropdownOpen(false);
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-md transition-all duration-150"
-                                      title="Load template"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (window.confirm(`Are you sure you want to delete "${template.name}"?`)) {
-                                          handleDeleteTemplate(template.id);
-                                        }
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all duration-150"
-                                      title="Delete saved blend"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                </div>
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                        ) : <em>📁 Saved Blends</em>;
+                      }}
+                      aria-label="Saved Blends"
+                      sx={{
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#d1d5db',
+                          borderWidth: '1px',
+                        },
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '1px',
+                        }
+                      }}
+                    >
+                      <MenuItem value="" disabled>
+                        <em>📁 Saved Blends</em>
+                      </MenuItem>
+                      {templates.map((template) => (
+                        <MenuItem key={template.id} value={template.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div className="font-medium text-gray-900">{template.name}</div>
+                            {template.description && template.description !== template.name && (
+                              <div className="text-xs text-gray-500">{template.description}</div>
+                            )}
+                          </div>
+                          <IconButton 
+                            size="small" 
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Are you sure you want to delete "${template.name}"?`)) {
+                                handleDeleteTemplate(template.id);
+                              }
+                            }}
+                            sx={{ 
+                              color: '#ef4444',
+                              '&:hover': { backgroundColor: '#fee2e2' }
+                            }}
+                          >
+                            <BookmarkSlashIcon className="h-3 w-3" />
+                          </IconButton>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
               </div>
             </div>
           </div>
@@ -1142,7 +1103,26 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                   placeholder="Type to search specialties"
                    sx={{
                      '& .MuiOutlinedInput-root': {
-                       borderRadius: '8px',
+                       backgroundColor: 'white',
+                       borderRadius: '8px !important',
+                       height: '40px',
+                       border: '1px solid #d1d5db !important',
+                       '&:hover': { 
+                         borderColor: '#9ca3af !important',
+                         borderWidth: '1px !important'
+                       },
+                       '&.Mui-focused': { 
+                         boxShadow: 'none', 
+                         borderColor: '#3b82f6 !important',
+                         borderWidth: '1px !important'
+                       },
+                       '& fieldset': {
+                         border: 'none !important',
+                         borderRadius: '8px !important'
+                       },
+                       '& .MuiOutlinedInput-notchedOutline': {
+                         borderRadius: '8px !important'
+                       }
                      }
                    }}
                 />
@@ -1158,7 +1138,22 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                      onChange={(e: SelectChangeEvent) => setSelectedSurvey(e.target.value)}
                      sx={{
                        '& .MuiOutlinedInput-root': {
+                         backgroundColor: 'white',
                          borderRadius: '8px',
+                         height: '40px',
+                         border: '1px solid #d1d5db !important',
+                         '&:hover': { 
+                           borderColor: '#9ca3af !important',
+                           borderWidth: '1px !important'
+                         },
+                         '&.Mui-focused': { 
+                           boxShadow: 'none', 
+                           borderColor: '#3b82f6 !important',
+                           borderWidth: '1px !important'
+                         },
+                         '& fieldset': {
+                           border: 'none !important'
+                         }
                        }
                      }}
                    >
@@ -1180,7 +1175,22 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                      onChange={(e: SelectChangeEvent) => setSelectedYear(e.target.value)}
                      sx={{
                        '& .MuiOutlinedInput-root': {
+                         backgroundColor: 'white',
                          borderRadius: '8px',
+                         height: '40px',
+                         border: '1px solid #d1d5db !important',
+                         '&:hover': { 
+                           borderColor: '#9ca3af !important',
+                           borderWidth: '1px !important'
+                         },
+                         '&.Mui-focused': { 
+                           boxShadow: 'none', 
+                           borderColor: '#3b82f6 !important',
+                           borderWidth: '1px !important'
+                         },
+                         '& fieldset': {
+                           border: 'none !important'
+                         }
                        }
                      }}
                    >
@@ -1202,7 +1212,22 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                      onChange={(e: SelectChangeEvent) => setSelectedRegion(e.target.value)}
                      sx={{
                        '& .MuiOutlinedInput-root': {
+                         backgroundColor: 'white',
                          borderRadius: '8px',
+                         height: '40px',
+                         border: '1px solid #d1d5db !important',
+                         '&:hover': { 
+                           borderColor: '#9ca3af !important',
+                           borderWidth: '1px !important'
+                         },
+                         '&.Mui-focused': { 
+                           boxShadow: 'none', 
+                           borderColor: '#3b82f6 !important',
+                           borderWidth: '1px !important'
+                         },
+                         '& fieldset': {
+                           border: 'none !important'
+                         }
                        }
                      }}
                    >
@@ -1224,7 +1249,22 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                      onChange={(e: SelectChangeEvent) => setSelectedProviderType(e.target.value)}
                      sx={{
                        '& .MuiOutlinedInput-root': {
+                         backgroundColor: 'white',
                          borderRadius: '8px',
+                         height: '40px',
+                         border: '1px solid #d1d5db !important',
+                         '&:hover': { 
+                           borderColor: '#9ca3af !important',
+                           borderWidth: '1px !important'
+                         },
+                         '&.Mui-focused': { 
+                           boxShadow: 'none', 
+                           borderColor: '#3b82f6 !important',
+                           borderWidth: '1px !important'
+                         },
+                         '& fieldset': {
+                           border: 'none !important'
+                         }
                        }
                      }}
                    >
@@ -1258,15 +1298,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
               </div>
               
                {isLoading ? (
-                 <div className="p-8 text-center text-gray-500 bg-white rounded-b-xl">
-                   <div className="mb-4">
-                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                     <div className="text-lg font-medium text-gray-900 mb-2">Loading survey data...</div>
-                     <div className="text-sm text-gray-600">
-                       {allData.length > 0 ? 'Processing cached data...' : 'Fetching data from storage...'}
-                     </div>
-                   </div>
-                 </div>
+                 <AnalysisProgressBar
+                   message="Loading survey data..."
+                   progress={100}
+                   recordCount={allData.length}
+                 />
                ) : filteredSurveyData.length === 0 ? (
                  <div className="p-8 text-center text-gray-500 bg-white rounded-b-xl">
                     <div className="mb-4">
@@ -1920,7 +1956,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         actionText="View Saved Blends"
         onAction={() => {
           setShowSaveSuccess(false);
-          setIsTemplateDropdownOpen(true);
+          // Focus on the saved blends dropdown
+          const selectElement = document.querySelector('[aria-label="Saved Blends"]') as HTMLElement;
+          if (selectElement) {
+            selectElement.focus();
+          }
         }}
       />
     </div>

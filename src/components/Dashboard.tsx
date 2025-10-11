@@ -14,6 +14,7 @@ import {
   CurrencyDollarIcon,
   CircleStackIcon,
   ArrowsPointingOutIcon,
+  AcademicCapIcon,
 } from '@heroicons/react/24/outline';
 
 interface WelcomeCard {
@@ -40,7 +41,7 @@ const Dashboard: React.FC = () => {
       description: 'Upload and standardize your survey data for consistency',
       cards: [
         {
-          title: 'Upload Data',
+          title: 'New Survey',
           description: 'Upload and validate your survey data files',
           icon: ArrowUpTrayIcon,
           path: '/upload',
@@ -50,7 +51,7 @@ const Dashboard: React.FC = () => {
         {
           title: 'Specialties',
           description: 'Map and standardize specialty names across surveys',
-          icon: TagIcon,
+          icon: AcademicCapIcon,
           path: '/specialty-mapping',
           color: 'bg-emerald-500',
           gradient: 'from-emerald-500 to-emerald-600',
@@ -94,7 +95,7 @@ const Dashboard: React.FC = () => {
       description: 'Generate insights and reports from your survey data',
       cards: [
         {
-          title: 'Survey Analytics',
+          title: 'Benchmarking',
           description: 'Analyze and compare data across multiple surveys',
           icon: PresentationChartLineIcon,
           path: '/analytics',
@@ -102,23 +103,15 @@ const Dashboard: React.FC = () => {
           gradient: 'from-amber-500 to-amber-600',
         },
         {
-          title: 'Regional Analytics',
+          title: 'Regional Data',
           description: 'Analyze data across multiple regions',
-          icon: ChartBarIcon,
+          icon: MapIcon,
           path: '/regional-analytics',
           color: 'bg-red-500',
           gradient: 'from-red-500 to-red-600',
         },
         {
-          title: 'Normalized Data',
-          description: 'Preview and validate your processed survey data',
-          icon: CircleStackIcon,
-          path: '/normalized-data',
-          color: 'bg-slate-500',
-          gradient: 'from-slate-500 to-slate-600',
-        },
-        {
-          title: 'Specialty Blending',
+          title: 'Custom Blending',
           description: 'Blend compensation data across specialties for analysis',
           icon: ArrowsPointingOutIcon,
           path: '/specialty-blending',

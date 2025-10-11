@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
-  TrashIcon as DeleteIcon
+  TrashIcon as DeleteIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 interface LearnedProviderTypeMappingsProps {
@@ -51,6 +52,23 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
             startAdornment: (
               <InputAdornment position="start">
                 <SearchIcon className="h-4 w-4 text-gray-400" />
+              </InputAdornment>
+            ),
+            endAdornment: searchTerm && (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => onSearchChange('')}
+                  sx={{
+                    padding: '4px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                  aria-label="Clear search"
+                >
+                  <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                </IconButton>
               </InputAdornment>
             ),
           }}

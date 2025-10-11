@@ -3,7 +3,7 @@ import { FormControl, Autocomplete, TextField } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
-import LoadingSpinner from './ui/loading-spinner';
+import { AnalysisProgressBar } from '../shared/components';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 
@@ -530,17 +530,11 @@ export const RegionalAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-            <LoadingSpinner 
-              message="Analyzing compensation data across regions..."
-              size="lg"
-              variant="primary"
-            />
-          </div>
-        </div>
-      </div>
+      <AnalysisProgressBar
+        message="Loading regional analytics..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 
@@ -572,28 +566,25 @@ export const RegionalAnalytics: React.FC = () => {
                   <TextField
                     {...params}
                     placeholder="Search for a specialty..."
+                    size="small"
                     sx={{
                       '& .MuiOutlinedInput-root': {
-                        backgroundColor: 'rgba(249, 250, 251, 0.5)',
-                        border: '1px solid #d1d5db',
-                          borderRadius: '8px',
-                        fontSize: '0.875rem',
-                        height: '48px',
-                        '&:hover': {
-                          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                          borderColor: '#9ca3af',
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        height: '40px',
+                        border: '1px solid #d1d5db !important',
+                        '&:hover': { 
+                          borderColor: '#9ca3af !important',
+                          borderWidth: '1px !important'
                         },
-                        '&.Mui-focused': {
-                          backgroundColor: 'white',
-                          boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
-                          borderColor: '#3b82f6',
+                        '&.Mui-focused': { 
+                          boxShadow: 'none', 
+                          borderColor: '#3b82f6 !important',
+                          borderWidth: '1px !important'
+                        },
+                        '& fieldset': {
+                          border: 'none !important'
                         }
-                      },
-                      '& .MuiInputBase-input': {
-                        paddingTop: '12px',
-                        paddingBottom: '12px',
-                        paddingLeft: '16px',
-                        paddingRight: '16px',
                       }
                     }}
                   />
@@ -638,28 +629,25 @@ export const RegionalAnalytics: React.FC = () => {
                     <TextField
                       {...params}
                       placeholder="All Provider Types"
+                      size="small"
                       sx={{
                         '& .MuiOutlinedInput-root': {
-                          backgroundColor: 'rgba(249, 250, 251, 0.5)',
-                          border: '1px solid #d1d5db',
+                          backgroundColor: 'white',
                           borderRadius: '8px',
-                          fontSize: '0.875rem',
-                          height: '48px',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                            borderColor: '#9ca3af',
+                          height: '40px',
+                          border: '1px solid #d1d5db !important',
+                          '&:hover': { 
+                            borderColor: '#9ca3af !important',
+                            borderWidth: '1px !important'
                           },
-                          '&.Mui-focused': {
-                            backgroundColor: 'white',
-                            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
-                            borderColor: '#3b82f6',
+                          '&.Mui-focused': { 
+                            boxShadow: 'none', 
+                            borderColor: '#3b82f6 !important',
+                            borderWidth: '1px !important'
+                          },
+                          '& fieldset': {
+                            border: 'none !important'
                           }
-                        },
-                        '& .MuiInputBase-input': {
-                          paddingTop: '12px',
-                          paddingBottom: '12px',
-                          paddingLeft: '16px',
-                          paddingRight: '16px',
                         }
                       }}
                     />
@@ -702,28 +690,25 @@ export const RegionalAnalytics: React.FC = () => {
                     <TextField
                       {...params}
                       placeholder="All Survey Sources"
+                      size="small"
                       sx={{
                         '& .MuiOutlinedInput-root': {
-                          backgroundColor: 'rgba(249, 250, 251, 0.5)',
-                          border: '1px solid #d1d5db',
+                          backgroundColor: 'white',
                           borderRadius: '8px',
-                          fontSize: '0.875rem',
-                          height: '48px',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                            borderColor: '#9ca3af',
+                          height: '40px',
+                          border: '1px solid #d1d5db !important',
+                          '&:hover': { 
+                            borderColor: '#9ca3af !important',
+                            borderWidth: '1px !important'
                           },
-                          '&.Mui-focused': {
-                            backgroundColor: 'white',
-                            boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
-                            borderColor: '#3b82f6',
+                          '&.Mui-focused': { 
+                            boxShadow: 'none', 
+                            borderColor: '#3b82f6 !important',
+                            borderWidth: '1px !important'
+                          },
+                          '& fieldset': {
+                            border: 'none !important'
                           }
-                        },
-                        '& .MuiInputBase-input': {
-                          paddingTop: '12px',
-                          paddingBottom: '12px',
-                          paddingLeft: '16px',
-                          paddingRight: '16px',
                         }
                       }}
                     />
@@ -761,7 +746,7 @@ export const RegionalAnalytics: React.FC = () => {
                   setSelectedProviderType('');
                   setSelectedSurveySource('');
                 }}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                className="inline-flex items-center px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
                 title="Clear all filters"
               >
                 <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">

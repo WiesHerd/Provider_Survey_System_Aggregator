@@ -10,6 +10,7 @@ import { getDataService } from '../../../services/DataService';
 import { AggregatedData, AnalyticsFilters, UseAnalyticsReturn } from '../types/analytics';
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
 import { AnalyticsDataService } from '../services/analyticsDataService';
+import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 
 /**
  * Custom hook for managing analytics data
@@ -28,11 +29,13 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState(0);
   const [filters, setFilters] = useState<AnalyticsFilters>(initialFilters);
   const [mappings, setMappings] = useState<any[]>([]);
   const [columnMappings, setColumnMappings] = useState<any[]>([]);
   const [regionMappings, setRegionMappings] = useState<any[]>([]);
+  
+  // Use smooth progress hook
+  const { progress: loadingProgress, startProgress, completeProgress, resetProgress } = useSmoothProgress();
 
   // Memoized filtered data
   const filteredData = useMemo(() => {
@@ -44,19 +47,17 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
     try {
       setLoading(true);
       setError(null);
+      startProgress(); // Start smooth progress animation
 
       console.log('🔍 useAnalyticsData: Starting data fetch...');
-      setLoadingProgress(10);
-      
+
       // Use singleton AnalyticsDataService instance (Google-style)
       const analyticsDataService = new AnalyticsDataService();
       console.log('🔍 useAnalyticsData: Using AnalyticsDataService instance');
       
       // Clear cache to force recalculation with fixed percentile logic and provider type normalization
       analyticsDataService.clearCache();
-      setLoadingProgress(20);
       
-      setLoadingProgress(30);
       const allData = await analyticsDataService.getAnalyticsData({
         specialty: '',
         surveySource: '',
@@ -65,7 +66,6 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
         year: ''
       });
 
-      setLoadingProgress(80);
       console.log('🔍 useAnalyticsData: Fetched all data -', allData.length, 'records');
       console.log('🔍 useAnalyticsData: Sample data:', allData[0]);
       console.log('🔍 useAnalyticsData: Sample data wRVU/CF values:', {
@@ -86,7 +86,9 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setMappings(specialtyMappings);
       setColumnMappings(colMappings);
       setRegionMappings(regMappings);
-      setLoadingProgress(100);
+      
+      // Complete progress animation
+      completeProgress();
     } catch (err) {
       console.error('🔍 useAnalyticsData: Error fetching analytics data:', err);
       console.error('🔍 useAnalyticsData: Error details:', {
@@ -97,7 +99,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setError(err instanceof Error ? err.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);
-      setLoadingProgress(0);
+      resetProgress();
     }
   }, []); // Remove filters dependency - fetch all data once
 

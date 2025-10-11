@@ -13,7 +13,7 @@ import { useRegionMappingData } from '../hooks/useRegionMappingData';
 import { UnmappedRegions } from './UnmappedRegions';
 import { MappedRegions } from './MappedRegions';
 import { LearnedRegionMappings } from './LearnedRegionMappings';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 /**
  * RegionMapping component - Main orchestrator for region mapping functionality
@@ -118,9 +118,11 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <LoadingSpinner />
-      </div>
+      <AnalysisProgressBar
+        message="Loading region mappings..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 

@@ -30,13 +30,16 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   className,
   showMessage = true
 }) => {
-  // Microsoft/Google style spinner - ALWAYS the same
+  // Gradient spinner with gap - matches the exact style from region-mapping
   const SpinnerIcon = () => (
     <div 
-      className="w-8 h-8 border-2 border-gray-200 rounded-full animate-spin border-t-indigo-600"
+      className="w-8 h-8 rounded-full animate-spin"
       style={{
+        background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
         animationDuration: '1s',
-        animationTimingFunction: 'linear'
+        animationTimingFunction: 'linear',
+        mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
+        WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
       }}
     />
   );
@@ -76,12 +79,15 @@ export const ButtonSpinner: React.FC<{ size?: 'sm' | 'md'; className?: string }>
 }) => (
   <div 
     className={cn(
-      'w-5 h-5 border-2 border-gray-200 rounded-full animate-spin border-t-current inline-block',
+      'w-5 h-5 rounded-full animate-spin inline-block',
       className
     )}
     style={{
+      background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
       animationDuration: '1s',
-      animationTimingFunction: 'linear'
+      animationTimingFunction: 'linear',
+      mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
+      WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
     }}
   />
 );

@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 
 interface APPVariableMapping {
   id: string;
@@ -324,9 +324,11 @@ export const APPVariableMapping: React.FC<APPVariableMappingProps> = ({
 
   if (loading || dataLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner message="Loading APP variable mappings..." />
-      </div>
+      <AnalysisProgressBar
+        message="Loading APP variable mappings..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 

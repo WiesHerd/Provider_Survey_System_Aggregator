@@ -1,8 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useProviderContext } from '../contexts/ProviderContext';
-import { ProviderTypeSelector } from '../shared/components';
 import { UIProviderType } from '../types/provider';
+import { FormControl, Select, MenuItem } from '@mui/material';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -19,6 +19,9 @@ import {
 	CircleStackIcon,
 	ArrowsPointingOutIcon,
 	TagIcon,
+	PlusIcon,
+	Cog6ToothIcon,
+	AcademicCapIcon,
 } from '@heroicons/react/24/outline';
 
 
@@ -46,47 +49,46 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const listRef = useRef<HTMLDivElement>(null);
 	const { selectedProviderType, setProviderType } = useProviderContext();
 	
-	// Define all menu groups - same items regardless of provider type
+	// Define all menu groups with ChatGPT-style organization
 	const allMenuGroups: MenuGroup[] = [
 		{
-			name: 'Getting Started',
+			name: 'Quick Actions',
 			items: [
-				{ name: 'Home', icon: HomeIcon, path: '/dashboard' },
-				{ name: 'Upload Data', icon: ArrowUpTrayIcon, path: '/upload' },
+				{ name: 'New Survey', icon: PlusIcon, path: '/upload' },
 			]
 		},
 		{
-			name: 'Data Mapping',
+			name: 'Data Management',
 			items: [
-				{ name: 'Specialties', icon: TagIcon, path: '/specialty-mapping' },
+				{ name: 'Specialties', icon: AcademicCapIcon, path: '/specialty-mapping' },
 				{ name: 'Provider Types', icon: UserIcon, path: '/provider-type-mapping' },
 				{ name: 'Regions', icon: MapIcon, path: '/region-mapping' },
 				{ name: 'Comp Metrics', icon: CurrencyDollarIcon, path: '/variable-mapping' },
-				{ name: 'Other Column Mappings', icon: TableCellsIcon, path: '/column-mapping' },
+				{ name: 'Column Mappings', icon: TableCellsIcon, path: '/column-mapping' },
 			]
 		},
 		{
-			name: 'Analytics & Reports',
+			name: 'Analysis Tools',
 			items: [
-				{ name: 'Normalized Data', icon: CircleStackIcon, path: '/normalized-data' },
-				{ name: 'Survey Analytics', icon: PresentationChartLineIcon, path: '/analytics' },
-				{ name: 'Regional Analytics', icon: ChartBarIcon, path: '/regional-analytics' },
-				{ name: 'Specialty Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
+				{ name: 'Benchmarking', icon: PresentationChartLineIcon, path: '/analytics' },
+				{ name: 'Regional Data', icon: MapIcon, path: '/regional-analytics' },
+				{ name: 'Custom Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
 				{ name: 'Custom Reports', icon: DocumentChartBarIcon, path: '/custom-reports' },
-				{ name: 'Fair Market Value', icon: CurrencyDollarIcon, path: '/fair-market-value' },
+				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
 			]
 		}
 	];
 
-	// Use all menu groups - no filtering needed since we show the same items regardless of provider type
+
+	// Use all menu groups - no filtering needed
 	const menuGroups = allMenuGroups;
+
 
 	const handleNavigation = (path: string) => navigate(path);
 
 	// Check if current path is in Analytics & Reports section
 	const isAnalyticsRoute = (path: string) => {
 		const analyticsRoutes = [
-			'/normalized-data',
 			'/analytics', 
 			'/regional-analytics',
 			'/specialty-blending',
@@ -129,24 +131,24 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				to={item.path}
 				aria-current={isActive ? 'page' : undefined}
 				className={({ isActive }) => `
-					w-full flex items-center px-3 py-2 rounded-md transition-all duration-200 group
+					w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 group
 					${!isOpen ? 'justify-center' : ''}
 					${isActive 
-						? 'bg-indigo-50 text-indigo-600 border-r-2 border-indigo-600' 
-						: 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+						? 'bg-gray-100 text-gray-900 font-medium' 
+						: 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
 					}
 				`}
 			>
-				<item.icon className={`w-4 h-4 flex-shrink-0 transition-colors duration-200
-					${isActive ? 'text-indigo-600' : 'text-gray-500 group-hover:text-gray-700'}
+				<item.icon className={`w-5 h-5 flex-shrink-0 transition-colors duration-200
+					${isActive ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700'}
 				`} />
 				{isOpen && (
-					<span className="ml-3 font-medium text-sm truncate">
+					<span className="ml-3 text-sm truncate">
 						{item.name}
 					</span>
 				)}
 				{!isOpen && (
-					<div className="absolute left-16 px-2 py-1 ml-2 text-sm font-medium text-white bg-gray-900 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+					<div className="absolute left-16 px-3 py-2 ml-2 text-sm font-medium text-white bg-gray-900 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
 						{item.name}
 					</div>
 				)}
@@ -158,13 +160,13 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 		if (group.items.length === 0) return null;
 
 		return (
-			<div key={group.name} className="mb-6">
+			<div key={group.name} className="mb-8">
 				{isOpen && (
-					<h3 className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+					<h3 className="px-3 mb-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
 						{group.name}
 					</h3>
 				)}
-				<div className="space-y-1">
+				<div className="space-y-0.5">
 					{group.items.map(renderMenuItem)}
 				</div>
 			</div>
@@ -176,9 +178,13 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			isOpen ? 'w-64' : 'w-16'
 		}`}>
 			{/* Header */}
-			<div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
+			<div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
 				{isOpen && (
-					<div className="flex items-center">
+					<button 
+						onClick={() => handleNavigation('/dashboard')}
+						className="flex items-center hover:bg-gray-50 rounded-lg p-2 transition-colors duration-200"
+						aria-label="Go to Dashboard"
+					>
 						<div className="w-12 h-12 flex items-center justify-center">
 							<img 
 								src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
@@ -224,10 +230,14 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 							<span className="text-indigo-600">Bench</span>
 							<span className="text-purple-600">Point</span>
 						</span>
-					</div>
+					</button>
 				)}
 				{!isOpen && (
-					<div className="w-12 h-12 flex items-center justify-center mx-auto">
+					<button 
+						onClick={() => handleNavigation('/dashboard')}
+						className="w-12 h-12 flex items-center justify-center mx-auto hover:bg-gray-50 rounded-lg transition-colors duration-200"
+						aria-label="Go to Dashboard"
+					>
 						<img 
 							src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
 							alt="BenchPoint - Survey Aggregator" 
@@ -267,7 +277,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 								}
 							}} 
 						/>
-					</div>
+					</button>
 				)}
 				<button
 					onClick={() => setIsOpen(!isOpen)}
@@ -282,30 +292,70 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</button>
 			</div>
 
+
 			{/* Provider Type Selector - Hidden in Analytics & Reports sections */}
 			{isOpen && !isAnalyticsRoute(currentPath) && (
 				<div className="px-3 py-4 border-b border-gray-100">
 					<div className="mb-2">
-						<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+						<h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
 							Data View
 						</h3>
 					</div>
-					<ProviderTypeSelector
-						value={selectedProviderType}
-						onChange={(providerType) => setProviderType(providerType, 'sidebar')}
-						showBothOption={false}
-						context="navigation"
-						className="w-full"
-					/>
+					<FormControl fullWidth>
+						<Select
+							value={selectedProviderType}
+							onChange={(e: any) => setProviderType(e.target.value as 'PHYSICIAN' | 'APP', 'sidebar')}
+							sx={{
+								backgroundColor: 'white',
+								height: '40px',
+								'& .MuiOutlinedInput-root': {
+									fontSize: '0.875rem',
+									height: '40px',
+									borderRadius: '8px',
+								},
+								'& .MuiSelect-select': {
+									paddingTop: '8px',
+									paddingBottom: '8px',
+									textAlign: 'left',
+								}
+							}}
+						>
+							<MenuItem value="PHYSICIAN">Physician</MenuItem>
+							<MenuItem value="APP">Advanced Practice Provider</MenuItem>
+						</Select>
+					</FormControl>
 				</div>
 			)}
 
 			{/* Main Menu */}
 			<nav aria-label="Primary" className="flex-1 px-3 py-6 overflow-y-auto">
 				<div ref={listRef} onKeyDown={handleKeyDown}>
+					{/* Main Menu Groups */}
 					{menuGroups.map(renderMenuGroup)}
 				</div>
 			</nav>
+
+			{/* User Profile Section */}
+			{isOpen && (
+				<div className="px-3 py-4 border-t border-gray-100">
+					<div className="flex items-center space-x-3">
+						<div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+							<UserIcon className="w-5 h-5 text-indigo-600" />
+						</div>
+						<div className="flex-1 min-w-0">
+							<p className="text-sm font-medium text-gray-900 truncate">Survey Admin</p>
+							<p className="text-xs text-gray-500 truncate">Professional Plan</p>
+						</div>
+						<button 
+							className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-200"
+							aria-label="Settings"
+							title="Settings"
+						>
+							<Cog6ToothIcon className="w-4 h-4" />
+						</button>
+					</div>
+				</div>
+			)}
 
 		</div>
 	);

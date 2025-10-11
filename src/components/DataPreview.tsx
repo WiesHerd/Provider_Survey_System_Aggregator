@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -10,10 +10,9 @@ import {
 } from '@mui/material';
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
+import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import LoadingSpinner from './ui/loading-spinner';
-
-// Lazy load AG Grid to reduce initial bundle size
-const AgGridWrapper = lazy(() => import('./AgGridWrapper'));
+import AgGridWrapper from './AgGridWrapper';
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
@@ -539,33 +538,50 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Filter Dropdowns - Perfectly Aligned */}
         <div className="grid grid-cols-4 gap-4">
           <FormControl fullWidth size="small">
-            <Select
+            <Autocomplete
               value={globalFilters.specialty}
-              onChange={(event: any) => {
+              onChange={(event: any, newValue: string | null) => {
                 const syntheticEvent = {
                   target: {
                     name: 'specialty',
-                    value: event.target.value
+                    value: newValue || ''
                   }
                 };
                 handleFilterChange(syntheticEvent);
               }}
-              displayEmpty
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            >
-              <MenuItem value="" sx={{ color: '#6b7280' }}>
-                All Specialties
-              </MenuItem>
-              {cascadingFilterOptions.specialties.map((specialty) => (
-                <MenuItem key={specialty} value={specialty}>
-                  {formatSpecialtyForDisplay(specialty)}
-                </MenuItem>
-              ))}
-            </Select>
+              options={cascadingFilterOptions.specialties}
+              getOptionLabel={(option: string) => option ? formatSpecialtyForDisplay(option) : ''}
+              renderInput={(params: any) => (
+                <TextField
+                  {...params}
+                  placeholder="All Specialties"
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'white',
+                      borderRadius: '8px',
+                      height: '40px',
+                      border: '1px solid #d1d5db !important',
+                      '&:hover': { 
+                        borderColor: '#9ca3af !important',
+                        borderWidth: '1px !important'
+                      },
+                      '&.Mui-focused': { 
+                        boxShadow: 'none', 
+                        borderColor: '#3b82f6 !important',
+                        borderWidth: '1px !important'
+                      },
+                      '& fieldset': {
+                        border: 'none !important'
+                      }
+                    }
+                  }}
+                />
+              )}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
+              clearOnBlur={false}
+              blurOnSelect={true}
+            />
           </FormControl>
 
           <FormControl fullWidth size="small">
@@ -583,8 +599,23 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'white',
                   borderRadius: '8px',
-                },
+                  height: '40px',
+                  border: '1px solid #d1d5db !important',
+                  '&:hover': { 
+                    borderColor: '#9ca3af !important',
+                    borderWidth: '1px !important'
+                  },
+                  '&.Mui-focused': { 
+                    boxShadow: 'none', 
+                    borderColor: '#3b82f6 !important',
+                    borderWidth: '1px !important'
+                  },
+                  '& fieldset': {
+                    border: 'none !important'
+                  }
+                }
               }}
             >
               <MenuItem value="" sx={{ color: '#6b7280' }}>
@@ -613,8 +644,23 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'white',
                   borderRadius: '8px',
-                },
+                  height: '40px',
+                  border: '1px solid #d1d5db !important',
+                  '&:hover': { 
+                    borderColor: '#9ca3af !important',
+                    borderWidth: '1px !important'
+                  },
+                  '&.Mui-focused': { 
+                    boxShadow: 'none', 
+                    borderColor: '#3b82f6 !important',
+                    borderWidth: '1px !important'
+                  },
+                  '& fieldset': {
+                    border: 'none !important'
+                  }
+                }
               }}
             >
               <MenuItem value="" sx={{ color: '#6b7280' }}>
@@ -643,8 +689,23 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               displayEmpty
               sx={{
                 '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'white',
                   borderRadius: '8px',
-                },
+                  height: '40px',
+                  border: '1px solid #d1d5db !important',
+                  '&:hover': { 
+                    borderColor: '#9ca3af !important',
+                    borderWidth: '1px !important'
+                  },
+                  '&.Mui-focused': { 
+                    boxShadow: 'none', 
+                    borderColor: '#3b82f6 !important',
+                    borderWidth: '1px !important'
+                  },
+                  '& fieldset': {
+                    border: 'none !important'
+                  }
+                }
               }}
             >
               <MenuItem value="" sx={{ color: '#6b7280' }}>
@@ -668,8 +729,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             <LoadingSpinner message="Updating data..." size="sm" variant="primary" />
           </div>
         )}
-        <Suspense fallback={<LoadingSpinner message="Loading data table..." size="lg" variant="primary" />}>
-          <AgGridWrapper
+        <AgGridWrapper
             onGridReady={(params: any) => {
               setGridApi(params.api);
               setColumnApi(params.columnApi);
@@ -706,7 +766,6 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             suppressColumnVirtualisation={false}
             suppressHorizontalScroll={false}
           />
-        </Suspense>
       </div>
     </div>
   );

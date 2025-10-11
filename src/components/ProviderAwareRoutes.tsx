@@ -26,7 +26,6 @@ const FairMarketValue = lazy(() => import('./FairMarketValue'));
 const CustomReportsWrapper = lazy(() => import('./CustomReportsWrapper'));
 const SystemSettings = lazy(() => import('./SystemSettings'));
 const DownloadTest = lazy(() => import('./DownloadTest').then(module => ({ default: module.DownloadTest })));
-const NormalizedDataScreen = lazy(() => import('../features/normalized/components/NormalizedDataScreen'));
 
 // Provider-specific components
 const PhysicianAnalytics = lazy(() => import('../features/analytics/components/PhysicianAnalytics'));
@@ -216,8 +215,6 @@ export const ProviderAwareRoutes: React.FC<ProviderAwareRoutesProps> = () => {
         {/* Reports - always available */}
         <Route path="/custom-reports" element={<CustomReportsWrapper />} />
 
-        {/* Data Views - always available */}
-        <Route path="/normalized-data" element={<NormalizedDataScreen />} />
 
         {/* System - always available */}
         <Route path="/system-settings" element={<SystemSettings />} />

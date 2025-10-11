@@ -17,7 +17,7 @@ import { CheckIcon } from '@heroicons/react/24/solid';
 
 import { getDataService } from '../services/DataService';
 import { IColumnMapping, IColumnInfo } from '../types/column';
-import { LoadingSpinner, SuspenseSpinner } from '../shared/components';
+import { AnalysisProgressBar, SuspenseSpinner } from '../shared/components';
 import { useProviderContext } from '../contexts/ProviderContext';
 
 // Lazy load components for better performance
@@ -422,10 +422,10 @@ const ColumnMapping: React.FC = () => {
 
   if (loading) {
     return (
-      <LoadingSpinner 
-        message="Loading column mappings..." 
-        fullScreen={true}
-        size="lg"
+      <AnalysisProgressBar
+        message="Loading column mappings..."
+        progress={100}
+        recordCount={0}
       />
     );
   }
@@ -496,10 +496,10 @@ const ColumnMapping: React.FC = () => {
                   <button
                     onClick={handleToggleSelectAll}
                     disabled={allUnmappedCount === 0}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                       isBulkSelected
-                        ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
+                        ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white border-indigo-600 focus:ring-indigo-500 shadow-lg hover:shadow-xl'
+                        : 'bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 border-gray-300 focus:ring-gray-500 shadow-lg hover:shadow-xl'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {isBulkSelected && <CheckIcon className="w-4 h-4" />}
@@ -510,7 +510,7 @@ const ColumnMapping: React.FC = () => {
                   {selectedColumns.length > 0 && (
                     <button
                       onClick={handleCreateMapping}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
+                      className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-lg hover:shadow-xl"
                       title="Create Manual Mapping"
                     >
                       <AddIcon className="h-4 w-4 mr-2" />
@@ -524,7 +524,7 @@ const ColumnMapping: React.FC = () => {
               {activeTab === 'mapped' && (
                 <button
                   onClick={handleClearAllMappings}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                  className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
                   Clear All Mappings
                 </button>

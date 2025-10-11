@@ -5,7 +5,7 @@ import { SpecialtyMappingHeader } from './SpecialtyMappingHeader';
 import { SpecialtyMappingContent } from './SpecialtyMappingContent';
 import { SpecialtyMappingHelp } from './SpecialtyMappingHelp';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import LoadingSpinner from '../../../components/ui/loading-spinner';
+import { AnalysisProgressBar } from '../../../shared/components';
 import { ConfirmationDialog } from '../../../shared';
 
 /**
@@ -86,10 +86,10 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
   
   if (loading && !emergencyTimeout) {
     return (
-      <LoadingSpinner 
-        message="Loading specialty mappings..." 
-        fullScreen={true}
-        size="lg"
+      <AnalysisProgressBar
+        message="Loading specialty mappings..."
+        progress={100}
+        recordCount={0}
       />
     );
   }

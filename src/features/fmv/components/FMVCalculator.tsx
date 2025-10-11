@@ -9,6 +9,7 @@ import { ResultsPanel } from './ResultsPanel';
 import BlendedResultsPanel from './BlendedResultsPanel';
 import { SavedFMVManager } from './SavedFMVManager';
 import FairMarketValuePrintable from '../../../components/FairMarketValuePrintable';
+import { AnalysisProgressBar } from '../../../shared/components';
 import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
 
 /**
@@ -29,6 +30,8 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     uniqueValues,
     surveyCount,
     blendedData,
+    loading,
+    error,
     
     // Calculated values
     tcc,
@@ -116,6 +119,17 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
       marketPercentile
     };
   };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <AnalysisProgressBar
+        message="Loading Fair Market Value data..."
+        progress={100}
+        recordCount={0}
+      />
+    );
+  }
 
   return (
     <div className="w-full min-h-screen">
