@@ -19,7 +19,13 @@ export interface ISurveyRow {
   wrvu_p50: number;
   wrvu_p75: number;
   wrvu_p90: number;
-  [key: string]: string | number;
+  // Variable-based data fields
+  variable?: string;
+  p25?: number;
+  p50?: number;
+  p75?: number;
+  p90?: number;
+  [key: string]: string | number | undefined;
 }
 
 

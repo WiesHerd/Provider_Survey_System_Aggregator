@@ -97,3 +97,6 @@ window.populate2024Data = populate2024Data;
 console.log('🔍 2024 data populator loaded. Run populate2024Data() in the console.');
 
 
+
+
+

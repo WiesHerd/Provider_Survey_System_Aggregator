@@ -191,7 +191,6 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
               onLearnedSearchChange={setMappedSearchTerm}
               onRemoveLearnedMapping={handleRemoveLearnedMapping}
               onApplyAllLearnedMappings={applyAllLearnedMappings}
-              onClearAllLearnedMappings={handleClearAllLearnedMappings}
             />
           </div>
         </div>

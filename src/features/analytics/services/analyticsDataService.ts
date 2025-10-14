@@ -73,10 +73,20 @@ class GlobalAnalyticsCache {
   private mappingsCache: {
     specialtyMappings: any[] | null;
     columnMappings: any[] | null;
+    learnedSpecialtyMappings: Record<string, string> | null;
+    learnedColumnMappings: Record<string, string> | null;
+    learnedRegionMappings: Record<string, string> | null;
+    learnedVariableMappings: Record<string, string> | null;
+    learnedProviderTypeMappings: Record<string, string> | null;
     lastFetch: number;
   } = {
     specialtyMappings: null,
     columnMappings: null,
+    learnedSpecialtyMappings: null,
+    learnedColumnMappings: null,
+    learnedRegionMappings: null,
+    learnedVariableMappings: null,
+    learnedProviderTypeMappings: null,
     lastFetch: 0
   };
   
@@ -133,29 +143,68 @@ class GlobalAnalyticsCache {
     this.mappingsCache = {
       specialtyMappings: null,
       columnMappings: null,
+      learnedSpecialtyMappings: null,
+      learnedColumnMappings: null,
+      learnedRegionMappings: null,
+      learnedVariableMappings: null,
+      learnedProviderTypeMappings: null,
       lastFetch: 0
     };
   }
   
   // Get cached mappings
-  getCachedMappings(): { specialtyMappings: any[] | null, columnMappings: any[] | null } {
+  getCachedMappings(): { 
+    specialtyMappings: any[] | null, 
+    columnMappings: any[] | null,
+    learnedSpecialtyMappings: Record<string, string> | null,
+    learnedColumnMappings: Record<string, string> | null,
+    learnedRegionMappings: Record<string, string> | null,
+    learnedVariableMappings: Record<string, string> | null,
+    learnedProviderTypeMappings: Record<string, string> | null
+  } {
     const now = Date.now();
     if (this.mappingsCache.specialtyMappings && 
         this.mappingsCache.columnMappings && 
         (now - this.mappingsCache.lastFetch) < this.CACHE_DURATION) {
       return {
         specialtyMappings: this.mappingsCache.specialtyMappings,
-        columnMappings: this.mappingsCache.columnMappings
+        columnMappings: this.mappingsCache.columnMappings,
+        learnedSpecialtyMappings: this.mappingsCache.learnedSpecialtyMappings,
+        learnedColumnMappings: this.mappingsCache.learnedColumnMappings,
+        learnedRegionMappings: this.mappingsCache.learnedRegionMappings,
+        learnedVariableMappings: this.mappingsCache.learnedVariableMappings,
+        learnedProviderTypeMappings: this.mappingsCache.learnedProviderTypeMappings
       };
     }
-    return { specialtyMappings: null, columnMappings: null };
+    return { 
+      specialtyMappings: null, 
+      columnMappings: null,
+      learnedSpecialtyMappings: null,
+      learnedColumnMappings: null,
+      learnedRegionMappings: null,
+      learnedVariableMappings: null,
+      learnedProviderTypeMappings: null
+    };
   }
   
   // Set cached mappings
-  setCachedMappings(specialtyMappings: any[], columnMappings: any[]): void {
+  setCachedMappings(
+    specialtyMappings: any[], 
+    columnMappings: any[],
+    learnedSpecialtyMappings?: Record<string, string>,
+    learnedColumnMappings?: Record<string, string>,
+    learnedRegionMappings?: Record<string, string>,
+    learnedVariableMappings?: Record<string, string>,
+    learnedProviderTypeMappings?: Record<string, string>
+  ): void {
     this.mappingsCache = {
       specialtyMappings,
       columnMappings,
+      learnedSpecialtyMappings: learnedSpecialtyMappings || null,
+      learnedColumnMappings: learnedColumnMappings || null,
+      learnedRegionMappings: learnedRegionMappings || null,
+      learnedVariableMappings: learnedVariableMappings || null,
+      learnedProviderTypeMappings: learnedProviderTypeMappings || null,
       lastFetch: Date.now()
     };
   }
@@ -166,30 +215,72 @@ export class AnalyticsDataService {
   private globalCache = GlobalAnalyticsCache.getInstance();
 
   /**
-   * Get cached mappings or fetch fresh ones
+   * Get cached mappings or fetch fresh ones (including learned mappings)
    */
-  private async getCachedMappings(): Promise<{ specialtyMappings: any[], columnMappings: any[] }> {
+  private async getCachedMappings(providerType?: string): Promise<{ 
+    specialtyMappings: any[], 
+    columnMappings: any[],
+    learnedSpecialtyMappings: Record<string, string>,
+    learnedColumnMappings: Record<string, string>,
+    learnedRegionMappings: Record<string, string>,
+    learnedVariableMappings: Record<string, string>,
+    learnedProviderTypeMappings: Record<string, string>
+  }> {
     // Check global cache first
     const cachedMappings = this.globalCache.getCachedMappings();
     if (cachedMappings.specialtyMappings && cachedMappings.columnMappings) {
       console.log('🔍 AnalyticsDataService: Using global cached mappings');
       return {
         specialtyMappings: cachedMappings.specialtyMappings,
-        columnMappings: cachedMappings.columnMappings
+        columnMappings: cachedMappings.columnMappings,
+        learnedSpecialtyMappings: cachedMappings.learnedSpecialtyMappings || {},
+        learnedColumnMappings: cachedMappings.learnedColumnMappings || {},
+        learnedRegionMappings: cachedMappings.learnedRegionMappings || {},
+        learnedVariableMappings: cachedMappings.learnedVariableMappings || {},
+        learnedProviderTypeMappings: cachedMappings.learnedProviderTypeMappings || {}
       };
     }
     
-    // Fetch fresh mappings
-    console.log('🔍 AnalyticsDataService: Fetching fresh mappings');
-    const [specialtyMappings, columnMappings] = await Promise.all([
+    // Fetch fresh mappings and learned mappings
+    console.log('🔍 AnalyticsDataService: Fetching fresh mappings and learned mappings');
+    const [
+      specialtyMappings, 
+      columnMappings,
+      learnedSpecialtyMappings,
+      learnedColumnMappings,
+      learnedRegionMappings,
+      learnedVariableMappings,
+      learnedProviderTypeMappings
+    ] = await Promise.all([
       this.dataService.getAllSpecialtyMappings(),
-      this.dataService.getAllColumnMappings()
+      this.dataService.getAllColumnMappings(),
+      this.dataService.getLearnedMappings('specialty', providerType),
+      this.dataService.getLearnedMappings('column', providerType),
+      this.dataService.getLearnedMappings('region', providerType),
+      this.dataService.getLearnedMappings('variable', providerType),
+      this.dataService.getLearnedMappings('providerType', providerType)
     ]);
     
-    // Update global cache
-    this.globalCache.setCachedMappings(specialtyMappings, columnMappings);
+    // Update global cache with all mappings
+    this.globalCache.setCachedMappings(
+      specialtyMappings, 
+      columnMappings,
+      learnedSpecialtyMappings,
+      learnedColumnMappings,
+      learnedRegionMappings,
+      learnedVariableMappings,
+      learnedProviderTypeMappings
+    );
     
-    return { specialtyMappings, columnMappings };
+    return { 
+      specialtyMappings, 
+      columnMappings,
+      learnedSpecialtyMappings,
+      learnedColumnMappings,
+      learnedRegionMappings,
+      learnedVariableMappings,
+      learnedProviderTypeMappings
+    };
   }
 
   /**
@@ -222,8 +313,16 @@ export class AnalyticsDataService {
       // If no fresh data, fetch it
       console.log('🔍 AnalyticsDataService: No fresh data, fetching from database');
       
-      // Get all surveys and cached mappings
-      const [surveys, { specialtyMappings, columnMappings }] = await Promise.all([
+      // Get all surveys and cached mappings (including learned mappings)
+      const [surveys, { 
+        specialtyMappings, 
+        columnMappings,
+        learnedSpecialtyMappings,
+        learnedColumnMappings,
+        learnedRegionMappings,
+        learnedVariableMappings,
+        learnedProviderTypeMappings
+      }] = await Promise.all([
         this.dataService.getAllSurveys(),
         this.getCachedMappings()
       ]);
@@ -261,7 +360,13 @@ export class AnalyticsDataService {
           for (let i = 0; i < surveyData.rows.length; i += batchSize) {
             const batch = surveyData.rows.slice(i, i + batchSize);
             const batchNormalized = batch.map(row => 
-            this.normalizeRow(row, survey, specialtyMappings, columnMappings)
+            this.normalizeRow(row, survey, specialtyMappings, columnMappings, {
+              learnedSpecialtyMappings,
+              learnedColumnMappings,
+              learnedRegionMappings,
+              learnedVariableMappings,
+              learnedProviderTypeMappings
+            })
           );
             normalizedRows.push(...batchNormalized);
             
@@ -341,8 +446,16 @@ export class AnalyticsDataService {
     try {
       console.log('🔍 AnalyticsDataService: Starting background refresh');
       
-      // Get fresh data without affecting current cache
-      const [surveys, { specialtyMappings, columnMappings }] = await Promise.all([
+      // Get fresh data without affecting current cache (including learned mappings)
+      const [surveys, { 
+        specialtyMappings, 
+        columnMappings,
+        learnedSpecialtyMappings,
+        learnedColumnMappings,
+        learnedRegionMappings,
+        learnedVariableMappings,
+        learnedProviderTypeMappings
+      }] = await Promise.all([
         this.dataService.getAllSurveys(),
         this.getCachedMappings()
       ]);
@@ -364,7 +477,13 @@ export class AnalyticsDataService {
           for (let i = 0; i < surveyData.rows.length; i += batchSize) {
             const batch = surveyData.rows.slice(i, i + batchSize);
             const batchNormalized = batch.map(row => 
-              this.normalizeRow(row, survey, specialtyMappings, columnMappings)
+              this.normalizeRow(row, survey, specialtyMappings, columnMappings, {
+                learnedSpecialtyMappings,
+                learnedColumnMappings,
+                learnedRegionMappings,
+                learnedVariableMappings,
+                learnedProviderTypeMappings
+              })
             );
             normalizedRows.push(...batchNormalized);
             
@@ -398,14 +517,21 @@ export class AnalyticsDataService {
   }
 
   /**
-   * Normalize a raw survey row using mappings
+   * Normalize a raw survey row using mappings and learned mappings
    * Data is in long format: each row has a 'variable' field (TCC, wRVU, CF) and p25/p50/p75/p90 values
    */
   private normalizeRow(
     row: any, 
     survey: any, 
     specialtyMappings: ISpecialtyMapping[], 
-    columnMappings: IColumnMapping[]
+    columnMappings: IColumnMapping[],
+    learnedMappings?: {
+      learnedSpecialtyMappings: Record<string, string>;
+      learnedColumnMappings: Record<string, string>;
+      learnedRegionMappings: Record<string, string>;
+      learnedVariableMappings: Record<string, string>;
+      learnedProviderTypeMappings: Record<string, string>;
+    }
   ): NormalizedRow {
     // The row might be a SurveyData object with the actual data in the 'data' property
     const actualRowData = row.data || row;
@@ -426,27 +552,28 @@ export class AnalyticsDataService {
                         actualRowData.normalizedSpecialty || actualRowData['Provider Type'] ||
                         row.specialty || 'Unknown';
     
-    // Normalize specialty using specialty mappings
+    // Normalize specialty using specialty mappings and learned mappings
     const normalizedSpecialty = this.normalizeSpecialty(
       rawSpecialty,
       specialtyMappings,
-      survey.type
+      survey.type,
+      learnedMappings?.learnedSpecialtyMappings
     );
     
     // Extract provider type
     const rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
                            actualRowData.provider_type || row.providerType || 'Physician';
     
-    // Normalize provider type
-    const normalizedProviderType = this.normalizeProviderType(rawProviderType);
+    // Normalize provider type using learned mappings
+    const normalizedProviderType = this.normalizeProviderType(rawProviderType, learnedMappings?.learnedProviderTypeMappings);
     
     // Extract region
     const rawRegion = actualRowData.geographicRegion || actualRowData.region || 
                      actualRowData.Region || actualRowData.geographic_region ||
                      row.region || 'National';
     
-    // Normalize region
-    const normalizedRegion = this.normalizeRegion(rawRegion);
+    // Normalize region using learned mappings
+    const normalizedRegion = this.normalizeRegion(rawRegion, learnedMappings?.learnedRegionMappings);
     
     // Extract organizational data
     const extractOrgNumber = (value: any): number => {
@@ -682,16 +809,23 @@ export class AnalyticsDataService {
   }
 
   /**
-   * Normalize specialty using specialty mappings
+   * Normalize specialty using specialty mappings and learned mappings
    */
   private normalizeSpecialty(
     specialty: string, 
     mappings: ISpecialtyMapping[], 
-    surveySource: string
+    surveySource: string,
+    learnedMappings?: Record<string, string>
   ): string {
     if (!specialty || specialty === 'Unknown') return 'Unknown';
     
-    // First, try exact mapping match
+    // First, try learned mappings (highest priority for enterprise scalability)
+    if (learnedMappings && learnedMappings[specialty.toLowerCase()]) {
+      console.log('🔍 AnalyticsDataService: Found learned specialty mapping:', specialty, '->', learnedMappings[specialty.toLowerCase()]);
+      return learnedMappings[specialty.toLowerCase()];
+    }
+    
+    // Second, try exact mapping match
     for (const mapping of mappings) {
       const hasSourceSpecialty = mapping.sourceSpecialties.some(source => 
         source.surveySource === surveySource && 
@@ -738,10 +872,16 @@ export class AnalyticsDataService {
   }
 
   /**
-   * Normalize provider type
+   * Normalize provider type using learned mappings
    */
-  private normalizeProviderType(providerType: string): string {
+  private normalizeProviderType(providerType: string, learnedMappings?: Record<string, string>): string {
     if (!providerType || providerType === 'Staff Physician') return 'Staff Physician';
+    
+    // First, try learned mappings (highest priority for enterprise scalability)
+    if (learnedMappings && learnedMappings[providerType.toLowerCase()]) {
+      console.log('🔍 AnalyticsDataService: Found learned provider type mapping:', providerType, '->', learnedMappings[providerType.toLowerCase()]);
+      return learnedMappings[providerType.toLowerCase()];
+    }
     
     const lower = providerType.toLowerCase();
     
@@ -764,10 +904,16 @@ export class AnalyticsDataService {
   }
 
   /**
-   * Normalize region
+   * Normalize region using learned mappings
    */
-  private normalizeRegion(region: string): string {
+  private normalizeRegion(region: string, learnedMappings?: Record<string, string>): string {
     if (!region || region === 'National') return 'National';
+    
+    // First, try learned mappings (highest priority for enterprise scalability)
+    if (learnedMappings && learnedMappings[region.toLowerCase()]) {
+      console.log('🔍 AnalyticsDataService: Found learned region mapping:', region, '->', learnedMappings[region.toLowerCase()]);
+      return learnedMappings[region.toLowerCase()];
+    }
     
     const lower = region.toLowerCase();
     

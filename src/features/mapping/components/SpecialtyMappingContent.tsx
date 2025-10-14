@@ -31,7 +31,6 @@ interface SpecialtyMappingContentProps {
   onLearnedSearchChange: (term: string) => void;
   onRemoveLearnedMapping: (original: string) => void;
   onApplyAllLearnedMappings: () => void;
-  onClearAllLearnedMappings: () => void;
 }
 
 /**
@@ -61,8 +60,7 @@ export const SpecialtyMappingContent: React.FC<SpecialtyMappingContentProps> = (
   learnedSearchTerm,
   onLearnedSearchChange,
   onRemoveLearnedMapping,
-  onApplyAllLearnedMappings,
-  onClearAllLearnedMappings
+  onApplyAllLearnedMappings
 }) => {
   return (
     <div className="min-h-[400px]">
@@ -94,7 +92,6 @@ export const SpecialtyMappingContent: React.FC<SpecialtyMappingContentProps> = (
           onSearchChange={onLearnedSearchChange}
           onRemoveLearnedMapping={onRemoveLearnedMapping}
           onApplyAllMappings={onApplyAllLearnedMappings}
-          onClearAllMappings={onClearAllLearnedMappings}
         />
       )}
     </div>

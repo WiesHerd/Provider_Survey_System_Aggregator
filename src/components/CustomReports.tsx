@@ -4,33 +4,36 @@ import {
   Select, 
   MenuItem, 
   TextField, 
-  Button, 
   Card, 
   CardContent, 
   Typography,
   Chip,
   Box,
   IconButton,
-  Tooltip,
-  Autocomplete
+  Autocomplete,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  Legend, 
-  ResponsiveContainer, 
   LineChart, 
   Line, 
   PieChart, 
   Pie, 
   Cell,
-  LabelList
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as RechartsTooltip, 
+  Legend, 
+  ResponsiveContainer
 } from 'recharts';
+import { EChartsBar, EChartsCF } from './charts';
 import { 
   ChartBarIcon, 
   DocumentArrowDownIcon,
@@ -38,8 +41,6 @@ import {
   BookmarkSlashIcon
 } from '@heroicons/react/24/outline';
 import { getDataService } from '../services/DataService';
-import LoadingSpinner from './ui/loading-spinner';
-import { AnalysisProgressBar } from '../shared/components';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { ISurveyRow } from '../types/survey';
@@ -50,6 +51,7 @@ interface ReportConfig {
   id: string;
   name: string;
   dimension: string;
+  secondaryDimension?: string | null; // Add secondary grouping dimension
   metric: string;
   metrics: string[]; // Add multi-select metrics
   chartType: 'bar' | 'line' | 'pie';
@@ -57,6 +59,7 @@ interface ReportConfig {
     specialties: string[];
     regions: string[];
     surveySources: string[];
+    providerTypes: string[];
     years: string[]; // Add year filtering
   };
   created: Date;
@@ -74,6 +77,8 @@ interface ChartDataItem {
   originalName: string;
   metrics?: string[];
   metricValues?: Record<string, number>;
+  metricTotals?: Record<string, number>;
+  metricCounts?: Record<string, number>;
 }
 
 const COLORS = ['#6A5ACD', '#8B7DD6', '#A89DE0', '#C5BDE9', '#E2D1F2'];
@@ -92,11 +97,16 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   const [surveyData, setSurveyData] = useState<ISurveyRow[]>([]);
   const [savedReports, setSavedReports] = useState<ReportConfig[]>([]);
   const [specialtyMappings, setSpecialtyMappings] = useState<ISpecialtyMapping[]>([]);
+  // Modal functionality removed for cleaner interface
+  // const [showDataViewer, setShowDataViewer] = useState(false);
+  // const [selectedDataItem, setSelectedDataItem] = useState<ChartDataItem | null>(null);
+  // const [rawDataForItem, setRawDataForItem] = useState<ISurveyRow[]>([]);
   
   // Current report configuration
   const [currentConfig, setCurrentConfig] = useState<Omit<ReportConfig, 'id' | 'created'>>({
     name: '',
     dimension: 'specialty',
+    secondaryDimension: null, // Add secondary grouping dimension
     metric: 'tcc_p50',
     metrics: ['tcc_p50'], // Add multi-select metrics
     chartType: 'bar',
@@ -104,17 +114,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       specialties: [],
       regions: [],
       surveySources: [],
+      providerTypes: [],
       years: [currentYear] // Default to current year
     }
   });
 
   // Available options
   const [availableOptions, setAvailableOptions] = useState({
-    dimensions: ['specialty', 'region', 'providerType'],
+    dimensions: ['specialty', 'region', 'providerType', 'surveySource'],
     metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
     specialties: [] as string[],
     regions: [] as string[],
     surveySources: [] as string[],
+    providerTypes: [] as string[],
     years: [] as string[]
   });
 
@@ -122,7 +134,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   const [allAvailableOptions, setAllAvailableOptions] = useState({
     specialties: [] as string[],
     regions: [] as string[],
-    surveySources: [] as string[]
+    surveySources: [] as string[],
+    providerTypes: [] as string[]
   });
 
   // Services
@@ -134,9 +147,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       try {
         setLoading(true);
         
-        // Load specialty mappings and column mappings first
+        // Load specialty mappings first
         const mappings = await dataService.getAllSpecialtyMappings();
-        const columnMappings = await dataService.getAllColumnMappings();
         console.log('🗺️ Loaded specialty mappings:', mappings.length, 'mappings');
         console.log('📋 Sample mappings:', mappings.slice(0, 3).map(mapping => ({
           standardizedName: mapping.standardizedName,
@@ -166,7 +178,13 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                                   row.Geographic_Region || row.Region || row['Geographic Region'] || '',
                   providerType: row.providerType || row.provider_type || row.ProviderType || 
                               row.Provider_Type || row['Provider Type'] || row.Type || '',
-                  // Initialize compensation fields
+                  // Preserve variable field for variable-based data
+                  variable: row.variable || '',
+                  p25: row.p25 || 0,
+                  p50: row.p50 || 0,
+                  p75: row.p75 || 0,
+                  p90: row.p90 || 0,
+                  // Initialize compensation fields (will be populated based on variable)
                   tcc_p25: 0,
                   tcc_p50: 0,
                   tcc_p75: 0,
@@ -183,7 +201,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   n_incumbents: 0
                 };
 
-                // Handle variable-based data structure (same as RegionalAnalytics)
+                // Handle variable-based data structure
+                // NEW APPROACH: Keep variable-based rows separate instead of flattening
                 if (row.variable) {
                   const variable = String(row.variable).toLowerCase();
                   const p25 = Number(row.p25) || 0;
@@ -191,17 +210,54 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   const p75 = Number(row.p75) || 0;
                   const p90 = Number(row.p90) || 0;
                   
-                  if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
-                    transformedRow.tcc_p25 = p25;
-                    transformedRow.tcc_p50 = p50;
-                    transformedRow.tcc_p75 = p75;
-                    transformedRow.tcc_p90 = p90;
-                  } else if (variable.includes('cf') || variable.includes('conversion')) {
+                  // Debug variable classification
+                  if (Math.random() < 0.1) { // Log 10% of rows for debugging
+                    console.log('🔍 Variable classification debug:', {
+                      variable: row.variable,
+                      variableLower: variable,
+                      p50: p50,
+                      specialty: row.specialty
+                    });
+                  }
+                  
+                  // For variable-based data, populate the appropriate fields based on variable type
+                  // This preserves the original row structure instead of flattening
+                  
+                  // Check CF patterns FIRST (most specific) - TCC per wRVU ratios
+                  if (variable.includes('conversion') || 
+                      variable.includes(' cf ') ||
+                      variable.includes('_cf_') ||
+                      variable.includes('factor') || 
+                      variable.includes('conversion factor') ||
+                      variable.includes('per rvu') || 
+                      variable.includes('per work rvu') || 
+                      variable.includes('per wrvu') ||
+                      variable.includes('/rvu') ||
+                      variable.includes('/ rvu') ||
+                      variable.includes('/wrvu') ||
+                      variable.includes('/ wrvu') ||
+                      // CRITICAL: Catch TCC per wRVU patterns that were being misclassified
+                      (variable.includes('tcc') && (variable.includes('per') || variable.includes('/'))) ||
+                      variable.includes('tcc per') ||
+                      variable.includes('tcc/') ||
+                      variable.includes('compensation per') ||
+                      variable.includes('dollars per')) {
+                    console.log('🔍 Classified as CF:', row.variable, 'P50:', p50);
                     transformedRow.cf_p25 = p25;
                     transformedRow.cf_p50 = p50;
                     transformedRow.cf_p75 = p75;
                     transformedRow.cf_p90 = p90;
-                  } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+                  }
+                  // Check TCC patterns (less specific) - Raw TCC compensation
+                  else if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
+                    console.log('🔍 Classified as TCC:', row.variable, 'P50:', p50);
+                    transformedRow.tcc_p25 = p25;
+                    transformedRow.tcc_p50 = p50;
+                    transformedRow.tcc_p75 = p75;
+                    transformedRow.tcc_p90 = p90;
+                  }
+                  // Check wRVU patterns (less specific) - Work RVUs
+                  else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
                     transformedRow.wrvu_p25 = p25;
                     transformedRow.wrvu_p50 = p50;
                     transformedRow.wrvu_p75 = p75;
@@ -232,43 +288,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           setSurveyData(allData);
           
           // Extract available options from survey data (not just mapped specialties)
-          const allSpecialtiesFromData = [...new Set(allData.map((row: ISurveyRow) => String(row.specialty || row.normalizedSpecialty || '')).filter(Boolean))] as string[];
-          const mappedSpecialties = mappings.map((mapping: ISpecialtyMapping) => mapping.standardizedName).filter(Boolean);
-          
-          console.log('🔍 Raw specialties from data:', allSpecialtiesFromData);
-          console.log('🗺️ Mapped specialties:', mappedSpecialties);
-          
-          // Use ONLY standardized specialty names from mappings (like Regional Analytics)
-          // This ensures we show the parent specialties, not the raw data specialties
-          const specialties = mappedSpecialties.filter(mappedSpecialty => {
-            // Check if this mapped specialty has any data by looking at source specialties
-            const mapping = mappings.find(m => m.standardizedName === mappedSpecialty);
-            if (mapping) {
-              const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
-              const hasData = allSpecialtiesFromData.some(dataSpecialty => 
-                sourceSpecialties.some(sourceSpec => 
-                  dataSpecialty.toLowerCase().includes(sourceSpec) || 
-                  sourceSpec.includes(dataSpecialty.toLowerCase())
-                )
-              );
-              
-              if (hasData) {
-                console.log(`✅ Mapped specialty "${mappedSpecialty}" has data`);
-                return true;
-              } else {
-                console.log(`❌ Mapped specialty "${mappedSpecialty}" has NO data`);
-                return false;
-              }
-            }
-            return false;
-          }).sort();
-          
+          // Extract unique RAW specialties directly from data (unmapped)
+          const specialties = [...new Set(allData
+            .map((row: ISurveyRow) => String(row.specialty || row.normalizedSpecialty || ''))
+            .filter(Boolean)
+          )].sort();
+
           console.log(`📊 Specialty filtering summary:`);
-          console.log(`   - Raw specialties from data: ${allSpecialtiesFromData.length}`);
-          console.log(`   - Total mapped specialties: ${mappedSpecialties.length}`);
-          console.log(`   - Final standardized specialties with data: ${specialties.length}`);
-          console.log(`   - Filtered out: ${mappedSpecialties.length - specialties.length} mapped specialties without data`);
-          console.log(`   - Using parent/standardized names only (like Regional Analytics)`);
+          console.log(`   - Raw unmapped specialties from data: ${specialties.length}`);
+          console.log(`   - Using raw specialty names (NO mapping applied)`);
           
           const regions = [...new Set(allData.map((row: ISurveyRow) => String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '')).filter(Boolean))] as string[];
           
@@ -277,20 +305,26 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           // we'll need to get this from the surveys list
           const surveySources = [...new Set(surveys.map((survey: any) => (survey as any).type || survey.surveyProvider || '').filter(Boolean))] as string[];
           
+          // Extract provider types from data
+          const providerTypes = [...new Set(allData.map((row: ISurveyRow) => String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '')).filter(Boolean))] as string[];
+          
           console.log(`📊 Data summary:`);
           console.log(`   - Regions with data: ${regions.length}`);
           console.log(`   - Survey sources with data: ${surveySources.length}`);
+          console.log(`   - Provider types with data: ${providerTypes.length}`);
           
           // Store all available options
           setAllAvailableOptions({
             specialties,
             regions,
-            surveySources
+            surveySources,
+            providerTypes
           });
 
           console.log('🔍 DEBUG - Available specialties for filter:', specialties);
           console.log('🔍 DEBUG - Available regions for filter:', regions);
           console.log('🔍 DEBUG - Available survey sources for filter:', surveySources);
+          console.log('🔍 DEBUG - Available provider types for filter:', providerTypes);
           
           // Extract available years from survey data
           const years = [...new Set(surveyData.map(row => String(row.surveyYear || '')).filter(Boolean))].sort();
@@ -301,6 +335,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             specialties,
             regions,
             surveySources,
+            providerTypes,
             years
           });
         }
@@ -404,97 +439,32 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       return [];
     }
 
+    // Use the first metric for chart display, but collect all metrics for table
+    const primaryMetric = currentConfig.metrics.length > 0 ? currentConfig.metrics[0] : currentConfig.metric;
+    console.log('🎯 Primary metric for chart:', primaryMetric);
+    console.log('📊 All selected metrics:', currentConfig.metrics);
+
     // Apply filters
     let filteredData = surveyData;
     console.log('🔍 Starting with', filteredData.length, 'rows');
     
     if (currentConfig.filters.specialties.length > 0) {
-        console.log('🎯 Filtering by specialties:', currentConfig.filters.specialties);
+      console.log('🎯 Filtering by raw specialties:', currentConfig.filters.specialties);
+      
+      const beforeSpecialtyFilter = filteredData.length;
+      
+      // Direct raw specialty filtering (NO mapping)
+      filteredData = filteredData.filter(row => {
+        const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '');
+        const matches = currentConfig.filters.specialties.includes(rowSpecialty);
         
-      // Create a mapping from standardized names to source specialties
-      const specialtyMappingLookup = new Map<string, string[]>();
-        console.log('🎯 Selected specialties:', currentConfig.filters.specialties);
-        console.log('🗺️ Available mappings:', specialtyMappings.map(m => m.standardizedName));
-        
-      specialtyMappings.forEach(mapping => {
-        if (currentConfig.filters.specialties.includes(mapping.standardizedName)) {
-          const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
-          specialtyMappingLookup.set(mapping.standardizedName, sourceSpecialties);
-            console.log(`📋 Mapping "${mapping.standardizedName}" to:`, sourceSpecialties);
-          }
-        });
-        
-        // If no mappings found, try to find partial matches
-        if (specialtyMappingLookup.size === 0) {
-          console.log('⚠️ No exact mappings found, trying partial matches...');
-          specialtyMappings.forEach(mapping => {
-            const standardizedName = mapping.standardizedName.toLowerCase();
-            if (currentConfig.filters.specialties.some(selected => 
-              selected.toLowerCase().includes(standardizedName) || 
-              standardizedName.includes(selected.toLowerCase())
-            )) {
-              const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
-              specialtyMappingLookup.set(mapping.standardizedName, sourceSpecialties);
-              console.log(`📋 Partial match: "${mapping.standardizedName}" to:`, sourceSpecialties);
-            }
-          });
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`🔍 Row specialty: "${rowSpecialty}" - matches: ${matches}`);
         }
         
-        console.log('🔍 Specialty mapping lookup:', Object.fromEntries(specialtyMappingLookup));
-        
-        const beforeSpecialtyFilter = filteredData.length;
-      filteredData = filteredData.filter(row => {
-        const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
-          
-          // Check if it matches any of the mapped specialties
-          let matches = false;
-          
-          // First, try exact match with mapped specialties
-          for (const [standardizedName, sourceSpecialties] of specialtyMappingLookup.entries()) {
-            if (sourceSpecialties.includes(rowSpecialty)) {
-              matches = true;
-              break;
-            }
-          }
-          
-          // If no exact match, try partial matching for specialty names
-          if (!matches) {
-            for (const [standardizedName, sourceSpecialties] of specialtyMappingLookup.entries()) {
-              if (sourceSpecialties.some(sourceSpec => 
-                rowSpecialty.includes(sourceSpec.toLowerCase()) || 
-                sourceSpec.toLowerCase().includes(rowSpecialty)
-              )) {
-                matches = true;
-                break;
-              }
-            }
-          }
-          
-          // If still no match, try matching against the standardized name itself
-          if (!matches) {
-            for (const [standardizedName, sourceSpecialties] of specialtyMappingLookup.entries()) {
-              if (rowSpecialty.includes(standardizedName.toLowerCase()) || 
-                  standardizedName.toLowerCase().includes(rowSpecialty)) {
-                matches = true;
-                break;
-              }
-            }
-          }
-          
-          // Debug: Log what we're looking for vs what we found
-          if (filteredData.indexOf(row) < 3) {
-            console.log(`🔍 Row specialty: "${rowSpecialty}" - looking for:`, Array.from(specialtyMappingLookup.keys()));
-            console.log(`🔍 Available source specialties:`, Array.from(specialtyMappingLookup.values()).flat());
-          }
-          
-          // Debug first few rows
-          if (filteredData.indexOf(row) < 5) {
-            console.log(`🔍 Row specialty: "${rowSpecialty}" - matches: ${matches}`);
-          }
-          
-          return matches;
-        });
-        console.log(`🎯 Specialty filter: ${beforeSpecialtyFilter} → ${filteredData.length} rows`);
+        return matches;
+      });
+      console.log(`🎯 Specialty filter: ${beforeSpecialtyFilter} → ${filteredData.length} rows`);
     }
     
     if (currentConfig.filters.regions.length > 0) {
@@ -531,11 +501,33 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log(`📋 Survey source filter: ${beforeSourceFilter} → ${filteredData.length} rows`);
     }
     
+    if (currentConfig.filters.providerTypes.length > 0) {
+      console.log('👨‍⚕️ Filtering by provider types:', currentConfig.filters.providerTypes);
+      const beforeProviderTypeFilter = filteredData.length;
+      filteredData = filteredData.filter(row => {
+        const providerType = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
+        const matches = currentConfig.filters.providerTypes.includes(providerType);
+        
+        // Debug first few rows
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`👨‍⚕️ Row provider type: "${providerType}" - matches: ${matches}`);
+        }
+        
+        return matches;
+      });
+      console.log(`👨‍⚕️ Provider type filter: ${beforeProviderTypeFilter} → ${filteredData.length} rows`);
+    }
+    
     if (currentConfig.filters.years.length > 0) {
       console.log('📅 Filtering by years:', currentConfig.filters.years);
       const beforeYearFilter = filteredData.length;
       filteredData = filteredData.filter(row => {
         const year = String(row.surveyYear || '');
+        // If year is empty, include it (don't filter out data without year info)
+        if (!year || year === '') {
+          console.log(`📅 Row year: "${year}" - including (no year data)`);
+          return true;
+        }
         const matches = currentConfig.filters.years.includes(year);
         
         // Debug first few rows
@@ -548,6 +540,59 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log(`📅 Year filter: ${beforeYearFilter} → ${filteredData.length} rows`);
     }
 
+    // CRITICAL: Add variable-based filtering to ensure correct metric selection
+    console.log('🎯 Applying variable-based filtering for metric:', primaryMetric);
+    const beforeVariableFilter = filteredData.length;
+    
+    if (primaryMetric.includes('tcc') && !primaryMetric.includes('cf')) {
+      // For TCC metrics, filter for TCC compensation rows (NOT TCC per RVU ratios)
+      console.log('🔍 DEBUG: Before TCC filtering, checking all variables:');
+      filteredData.slice(0, 10).forEach((row, index) => {
+        console.log(`  Row ${index}: variable="${(row as any).variable}", p50=${(row as any).p50 || row.tcc_p50}`);
+      });
+      
+      filteredData = filteredData.filter(row => {
+        const variable = String((row as any).variable || '').toLowerCase();
+        const p50Value = (row as any).p50 || row.tcc_p50 || 0;
+        
+        // STRICT filtering: Only include pure TCC compensation, exclude any per-RVU ratios
+        const isTccCompensation = (variable === 'tcc' || variable === 'total cash compensation' || variable === 'compensation')
+                                 && !variable.includes('per') && !variable.includes('/') && !variable.includes('work rvu');
+        
+        console.log(`🎯 TCC filter - Row variable: "${variable}", p50: ${p50Value}, isTccCompensation: ${isTccCompensation}`);
+        
+        return isTccCompensation;
+      });
+      console.log(`🎯 TCC variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
+    } else if (primaryMetric.includes('cf')) {
+      // For CF metrics, filter for TCC per RVU ratio rows
+      filteredData = filteredData.filter(row => {
+        const variable = String((row as any).variable || '').toLowerCase();
+        const isCfRatio = variable.includes('per') || variable.includes('/') || 
+                          variable.includes('conversion') || variable.includes('factor');
+        
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`🎯 CF filter - Row variable: "${variable}" - isCfRatio: ${isCfRatio}`);
+        }
+        
+        return isCfRatio;
+      });
+      console.log(`🎯 CF variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
+    } else if (primaryMetric.includes('wrvu')) {
+      // For wRVU metrics, filter for Work RVU rows
+      filteredData = filteredData.filter(row => {
+        const variable = String((row as any).variable || '').toLowerCase();
+        const isWrvu = variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work');
+        
+        if (filteredData.indexOf(row) < 5) {
+          console.log(`🎯 wRVU filter - Row variable: "${variable}" - isWrvu: ${isWrvu}`);
+        }
+        
+        return isWrvu;
+      });
+      console.log(`🎯 wRVU variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
+    }
+
     console.log('✅ After all filters:', filteredData.length, 'rows remaining');
 
     // Group by dimension and aggregate metric
@@ -557,26 +602,44 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       // Handle special cases for field name mapping
       if (currentConfig.dimension === 'region') {
         dimensionValue = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || 'Unknown');
+      } else if (currentConfig.dimension === 'surveySource') {
+        dimensionValue = String((row as any).surveySource || 'Unknown');
       } else if (currentConfig.dimension === 'specialty') {
-        // Use specialty mappings to get standardized name
-        const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '').toLowerCase();
-        let standardizedName = 'Unknown';
+        // Create composite key for specialty to ensure uniqueness when filters are applied
+        const specialty = String(row.specialty || row.normalizedSpecialty || 'Unknown');
+        const surveySource = String((row as any).surveySource || '');
+        const region = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
+        const providerType = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
+        const year = String(row.surveyYear || '');
+        const variable = String((row as any).variable || '');
         
-        for (const mapping of specialtyMappings) {
-          const sourceSpecialties = mapping.sourceSpecialties.map(src => src.specialty.toLowerCase());
-          if (sourceSpecialties.includes(rowSpecialty)) {
-            standardizedName = mapping.standardizedName;
-            break;
-          }
-        }
-        dimensionValue = standardizedName;
+        // Create composite key that includes all relevant dimensions INCLUDING variable
+        // This ensures each unique combination gets its own row and prevents mixing TCC/CF data
+        dimensionValue = `${specialty}-${surveySource}-${region}-${providerType}-${year}-${variable}`;
       } else {
         dimensionValue = String(row[currentConfig.dimension as keyof ISurveyRow] || 'Unknown');
       }
+
+      // Add secondary dimension to the key if specified
+      if (currentConfig.secondaryDimension) {
+        let secondaryValue = '';
+        if (currentConfig.secondaryDimension === 'region') {
+          secondaryValue = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
+        } else if (currentConfig.secondaryDimension === 'surveySource') {
+          secondaryValue = String((row as any).surveySource || '');
+        } else if (currentConfig.secondaryDimension === 'providerType') {
+          secondaryValue = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
+        } else {
+          secondaryValue = String(row[currentConfig.secondaryDimension as keyof ISurveyRow] || '');
+        }
+        
+        // Append secondary dimension to create hierarchical grouping
+        dimensionValue = `${dimensionValue}-${secondaryValue}`;
+      }
       
-      // Handle multiple metrics - use the first selected metric for chart display
-      const selectedMetric = currentConfig.metrics.length > 0 ? currentConfig.metrics[0] : currentConfig.metric;
-      const metricValue = Number(row[selectedMetric as keyof ISurveyRow]) || 0;
+      // Handle multiple metrics - collect all selected metrics
+      const selectedMetrics = currentConfig.metrics.length > 0 ? currentConfig.metrics : [currentConfig.metric];
+      const primaryMetricValue = Number(row[primaryMetric as keyof ISurveyRow]) || 0;
       
       if (!acc[dimensionValue]) {
         acc[dimensionValue] = {
@@ -585,37 +648,158 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           count: 0,
           total: 0,
           // Store all selected metrics for multi-metric display
-          metrics: currentConfig.metrics.length > 0 ? currentConfig.metrics : [currentConfig.metric],
-          metricValues: {} as Record<string, number>
+          metrics: selectedMetrics,
+          metricValues: {} as Record<string, number>,
+          metricTotals: {} as Record<string, number>,
+          metricCounts: {} as Record<string, number>
         };
       }
       
-      if (metricValue > 0) {
-        acc[dimensionValue].total += metricValue;
+      // Process each selected metric
+      selectedMetrics.forEach(metric => {
+        const metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+      
+        if (metricValue > 0) {
+          // For percentile data (P25, P50, P75, P90), use the value directly
+          // Since we now use composite keys, each key is unique - no overwriting needed
+          acc[dimensionValue].metricValues[metric] = metricValue;
+          
+          // Debug logging for TCC values
+          if (metric.includes('tcc') && metricValue < 1000) {
+            console.log(`🔍 DEBUG: Low TCC value detected for ${metric}:`, {
+              metric,
+              rawValue: row[metric as keyof ISurveyRow],
+              numericValue: metricValue,
+              rowSpecialty: row.specialty,
+              rowSurveySource: (row as any).surveySource,
+              rowRegion: (row as any).geographic_region,
+              rowProviderType: (row as any).providerType
+            });
+          }
+        }
+      });
+      
+      // Use primary metric for main aggregation
+      if (primaryMetricValue > 0) {
+        acc[dimensionValue].total += primaryMetricValue;
         acc[dimensionValue].count += 1;
-        
-        // Store individual metric values for multi-metric analysis
-        acc[dimensionValue].metricValues[selectedMetric] = metricValue;
       }
       
       return acc;
-    }, {} as Record<string, { name: string; value: number; count: number; total: number; metrics: string[]; metricValues: Record<string, number> }>);
+    }, {} as Record<string, { name: string; value: number; count: number; total: number; metrics: string[]; metricValues: Record<string, number>; metricTotals: Record<string, number>; metricCounts: Record<string, number> }>);
 
     console.log('📊 Grouped data keys:', Object.keys(grouped));
+    console.log('🔍 DEBUG: Grouped data details:');
+    Object.entries(grouped).forEach(([key, value]) => {
+      console.log(`  Key: "${key}"`);
+      console.log(`    - metricValues:`, value.metricValues);
+      console.log(`    - count: ${value.count}`);
+    });
 
     // Calculate averages and format
-    const allData = Object.values(grouped)
-      .map((item: { name: string; value: number; count: number; total: number }) => ({
-        name: currentConfig.dimension === 'specialty' ? formatSpecialtyForDisplay(item.name) : item.name,
-        value: item.count > 0 ? Math.round(item.total / item.count) : 0,
-        count: item.count,
-        originalName: item.name
-      }))
-      .filter(item => item.value > 0)
+    const rawData = Object.values(grouped)
+      .map((item: any) => {
+        // Use primary metric value directly (percentile data)
+        const primaryValue = item.metricValues[primaryMetric] || 0;
+        
+        // Use percentile values directly (no averaging needed)
+        const metricValues: Record<string, number> = {};
+        item.metrics.forEach((metric: string) => {
+          // Use the direct percentile value from the data
+          metricValues[metric] = item.metricValues[metric] || 0;
+        });
+        
+        // For specialty dimension with composite keys, extract just the specialty name for display
+        let displayName = item.name;
+        if (currentConfig.dimension === 'specialty' && item.name.includes('-')) {
+          // Extract just the specialty part from the composite key
+          // Format: specialty-surveySource-region-providerType-year-variable-secondaryDimension
+          const parts = item.name.split('-');
+          const specialtyPart = parts[0];
+          let formattedName = formatSpecialtyForDisplay(specialtyPart);
+          
+          // Add secondary dimension to display name if present
+          if (currentConfig.secondaryDimension && parts.length > 6) {
+            const secondaryValue = parts[6]; // Secondary dimension is after the variable
+            formattedName = `${formattedName} (${secondaryValue})`;
+          }
+          
+          displayName = formattedName;
+        } else if (currentConfig.dimension === 'specialty') {
+          displayName = formatSpecialtyForDisplay(item.name);
+        } else if (currentConfig.dimension === 'surveySource') {
+          // For survey source, use the source name directly
+          displayName = item.name;
+        } else if (currentConfig.secondaryDimension && item.name.includes('-')) {
+          // Handle secondary dimension for other primary dimensions
+          const parts = item.name.split('-');
+          const primaryValue = parts[0];
+          const secondaryValue = parts[1];
+          displayName = `${primaryValue} (${secondaryValue})`;
+        }
+        
+        return {
+          name: displayName,
+          value: primaryValue,
+          count: item.count,
+          originalName: item.name,
+          metrics: item.metrics,
+          metricValues: metricValues
+        };
+      })
+      .filter(item => item.value > 0);
+
+    // GOOGLE-STYLE AGGREGATION: Group by display name and aggregate values
+    const aggregatedData = rawData.reduce((acc, item) => {
+      const key = item.name; // Use display name as the aggregation key
+      
+      if (!acc[key]) {
+        acc[key] = {
+          name: item.name,
+          value: 0,
+          count: 0,
+          originalName: item.originalName,
+          metrics: item.metrics,
+          metricValues: {}
+        };
+      }
+      
+      // For TCC compensation data, we want the HIGHEST value (not average)
+      // This ensures we get the correct compensation amount, not a ratio
+      if (item.value > acc[key].value) {
+        acc[key].value = item.value;
+        acc[key].count = item.count;
+        acc[key].originalName = item.originalName;
+        acc[key].metricValues = item.metricValues;
+      }
+      
+      return acc;
+    }, {} as Record<string, any>);
+
+    const allData = Object.values(aggregatedData)
       .sort((a, b) => b.value - a.value);
     
     console.log('📈 Final chart data:', allData.length, 'items');
     console.log('📊 Sample chart data:', allData.slice(0, 3));
+    console.log('🔍 Debug - Chart data details:', allData.map(item => ({
+      name: item.name,
+      value: item.value,
+      count: item.count,
+      metrics: item.metrics,
+      metricValues: item.metricValues
+    })));
+    
+    // Debug TCC values specifically
+    allData.forEach(item => {
+      if (item.metricValues && Object.keys(item.metricValues).some(key => key.includes('tcc'))) {
+        console.log('🔍 DEBUG: TCC values in final data:', {
+          name: item.name,
+          value: item.value,
+          metricValues: item.metricValues,
+          originalName: item.originalName
+        });
+      }
+    });
     
     // For specialty dimension, require at least one specialty to be selected
     if (currentConfig.dimension === 'specialty') {
@@ -630,12 +814,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log('📊 Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
-  }, [surveyData, currentConfig.dimension, currentConfig.metric, currentConfig.metrics, currentConfig.chartType, currentConfig.filters, specialtyMappings]);
+  }, [surveyData, currentConfig]);
+
+  // Table sort: default to value desc for table-first clarity
+  const [tableSortDesc, setTableSortDesc] = useState(true);
+  const tableData = useMemo(() => {
+    const rows = [...chartData];
+    rows.sort((a, b) => (tableSortDesc ? b.value - a.value : a.value - b.value));
+    return rows;
+  }, [chartData, tableSortDesc]);
 
   // Handle configuration changes
   const handleConfigChange = (key: keyof typeof currentConfig, value: any) => {
     setCurrentConfig(prev => ({ ...prev, [key]: value }));
   };
+
+  // Table row click functionality removed for cleaner interface
+  // const handleTableRowClick = async (item: ChartDataItem) => { ... }
 
   // Handle filter changes
   const handleFilterChange = (filterType: keyof typeof currentConfig.filters, value: string[]) => {
@@ -704,12 +899,44 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Export chart data
   const exportData = () => {
-    const csvContent = chartData.map(row => 
-      `${row.name},${row.value},${row.count}`
-    ).join('\n');
-    
-    const headers = `${currentConfig.dimension},${currentConfig.metric},Count\n`;
-    const blob = new Blob([headers + csvContent], { type: 'text/csv' });
+    // Build metadata block for enterprise-grade exports
+    const metricLabel = (() => {
+      const map: Record<string, string> = {
+        'tcc_p25': 'TCC 25th Percentile',
+        'tcc_p50': 'TCC 50th Percentile',
+        'tcc_p75': 'TCC 75th Percentile',
+        'tcc_p90': 'TCC 90th Percentile',
+        'wrvu_p25': 'wRVU 25th Percentile',
+        'wrvu_p50': 'wRVU 50th Percentile',
+        'wrvu_p75': 'wRVU 75th Percentile',
+        'wrvu_p90': 'wRVU 90th Percentile',
+        'cf_p25': 'CF 25th Percentile',
+        'cf_p50': 'CF 50th Percentile',
+        'cf_p75': 'CF 75th Percentile',
+        'cf_p90': 'CF 90th Percentile'
+      };
+      return map[currentConfig.metric] || currentConfig.metric;
+    })();
+
+    const yearsText = currentConfig.filters.years.length > 0 ? currentConfig.filters.years.join(', ') : 'All';
+    const regionsText = currentConfig.filters.regions.length > 0 ? `${currentConfig.filters.regions.length} selected` : 'All';
+    const sourcesText = currentConfig.filters.surveySources.length > 0 ? `${currentConfig.filters.surveySources.length} selected` : 'All';
+    const specialtiesText = currentConfig.filters.specialties.length > 0 ? `${currentConfig.filters.specialties.length} selected` : 'All';
+
+    const metaLines = [
+      `Report: ${currentConfig.dimension} × ${metricLabel}`,
+      `Years: ${yearsText}`,
+      `Regions: ${regionsText}`,
+      `Survey Sources: ${sourcesText}`,
+      `Specialties: ${specialtiesText}`,
+      `Items: ${chartData.length}`,
+      `Generated: ${new Date().toISOString()}`
+    ].join('\n');
+
+    const tableHeaders = `${currentConfig.dimension},${currentConfig.metric},Count\n`;
+    const tableRows = chartData.map(row => `${row.name},${row.value},${row.count}`).join('\n');
+
+    const blob = new Blob([metaLines + '\n\n' + tableHeaders + tableRows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -748,6 +975,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     };
   };
 
+
   // Render chart based on type
   const renderChart = () => {
     if (chartData.length === 0) {
@@ -762,6 +990,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       );
     }
 
+    // For single metric charts (line/pie), determine the type
     const isCurrency = currentConfig.metric.includes('tcc') || currentConfig.metric.includes('cf');
     const isWRVU = currentConfig.metric.includes('wrvu');
     
@@ -845,17 +1074,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   strokeWidth={2}
                   dot={{ fill: '#6A5ACD', strokeWidth: 2, r: 4 }}
                 />
-                {/* Add LabelList for value labels on line points */}
-                <LabelList 
-                  dataKey="value" 
-                  position="top" 
-                  formatter={(value: number) => 
-                    isCurrency ? `$${(value / 1000).toFixed(0)}K` : 
-                    isWRVU ? value.toLocaleString() : 
-                    `$${value}`
-                  }
-                  style={{ fontSize: 10, fill: '#374151', fontWeight: 500 }}
-                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -863,81 +1081,58 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       );
     }
 
-    // Default bar chart
-    const isManyItems = chartData.length > 15;
-    const chartHeight = 400; // Fixed height for all charts - enterprise standard
-    const xAxisHeight = isManyItems ? 120 : 100;
+
+    // Default bar chart with ECharts - enterprise-grade visualization
+    // Separate CF metrics (different scale) into their own chart
+    const hasCFMetrics = currentConfig.metrics.some(m => m.includes('cf'));
+    const hasOtherMetrics = currentConfig.metrics.some(m => m.includes('tcc') || m.includes('wrvu'));
     
     return (
-      <div className="w-full overflow-x-auto">
-        <div style={{ 
-          width: '100%',
-          minWidth: '100%'
-        }}>
-          <ResponsiveContainer width="100%" height={chartHeight}>
-            <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="name" 
-                angle={isManyItems ? -45 : -45} 
-                textAnchor="end" 
-                height={xAxisHeight}
-                tick={{ fontSize: isManyItems ? 9 : 12 }}
-                interval={isManyItems ? 2 : 0} // Show every 3rd label for many items
-              />
-              <YAxis 
-                domain={[yAxisConfig.min, yAxisConfig.max]}
-                tickFormatter={(value) => 
-                  isCurrency ? `$${(value / 1000).toFixed(0)}K` : 
-                  isWRVU ? value.toLocaleString() : 
-                  `$${value}`
-                }
-              />
-              <RechartsTooltip 
-                formatter={(value: any) => [
-                  isCurrency ? `$${value.toLocaleString()}` : 
-                  isWRVU ? value.toLocaleString() : 
-                  `$${value}`,
-                  currentConfig.metric.replace('_', ' ').toUpperCase()
-                ]}
-              />
-              <Legend />
-              <Bar 
-                dataKey="value" 
-                fill="#6A5ACD" 
-                radius={[4, 4, 0, 0]}
-                name={currentConfig.metric.replace('_', ' ').toUpperCase()}
-              >
-                {/* Add value labels on top of each bar */}
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#6A5ACD" />
-                ))}
-              </Bar>
-              {/* Add LabelList for value labels on bars */}
-              <LabelList 
-                dataKey="value" 
-                position="top" 
-                formatter={(value: number) => 
-                  isCurrency ? `$${(value / 1000).toFixed(0)}K` : 
-                  isWRVU ? value.toLocaleString() : 
-                  `$${value}`
-                }
-                style={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+      <div className="w-full space-y-6">
+        {/* Main Chart: TCC + wRVU */}
+        {hasOtherMetrics && (
+          <div className="w-full">
+            <EChartsBar 
+              data={chartData}
+              metrics={currentConfig.metrics}
+              chartHeight={600}
+            />
+          </div>
+        )}
+        
+        {/* Secondary Chart: Conversion Factor (separate scale) */}
+        {hasCFMetrics && (
+          <div className="w-full">
+            <div className="mb-3">
+              <Typography variant="subtitle1" className="text-gray-900 font-semibold">
+                Conversion Factor Analysis
+              </Typography>
+              <Typography variant="body2" className="text-gray-600">
+                CF values shown separately due to different scale ($40-$200 vs $100K-$400K)
+              </Typography>
+            </div>
+            <EChartsCF 
+              data={chartData}
+              metrics={currentConfig.metrics}
+              chartHeight={600}
+            />
         </div>
+        )}
       </div>
     );
   };
 
   if (loading) {
     return (
-      <AnalysisProgressBar
-        message="Loading custom reports..."
-        progress={100}
-        recordCount={0}
-      />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Custom Reports</h3>
+            <p className="text-gray-600">Loading survey data and building reports...</p>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1046,7 +1241,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               />
             </FormControl>
 
-            {/* Dimension Selector */}
+            {/* Primary Dimension Selector */}
             <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Group By (X-Axis)
@@ -1065,6 +1260,37 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 <MenuItem value="specialty">Specialty</MenuItem>
                 <MenuItem value="region">Region</MenuItem>
                 <MenuItem value="providerType">Provider Type</MenuItem>
+                <MenuItem value="surveySource">Survey Source</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Secondary Dimension Selector */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Secondary Grouping (Optional)
+              </Typography>
+              <Select
+                value={currentConfig.secondaryDimension || ''}
+                onChange={(e: SelectChangeEvent<string>) => handleConfigChange('secondaryDimension', e.target.value || null)}
+                sx={{
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                  }
+                }}
+              >
+                <MenuItem value="">None</MenuItem>
+                {availableOptions.dimensions
+                  .filter(dim => dim !== currentConfig.dimension)
+                  .map(dim => (
+                    <MenuItem key={dim} value={dim}>
+                      {dim === 'specialty' ? 'Specialty' : 
+                       dim === 'region' ? 'Region' : 
+                       dim === 'providerType' ? 'Provider Type' : 
+                       dim === 'surveySource' ? 'Survey Source' : dim}
+                    </MenuItem>
+                  ))}
               </Select>
             </FormControl>
 
@@ -1296,7 +1522,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             Filters
           </Typography>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Specialty Filter */}
             <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
@@ -1550,6 +1776,89 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 disableCloseOnSelect={true}
               />
             </FormControl>
+
+            {/* Provider Type Filter */}
+            <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
+              <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+                Provider Types
+              </Typography>
+              <Autocomplete
+                multiple
+                value={currentConfig.filters.providerTypes}
+                onChange={(event: any, newValue: string[]) => handleFilterChange('providerTypes', newValue)}
+                options={availableOptions.providerTypes}
+                getOptionLabel={(option: string) => option}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    placeholder="Select provider types..."
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        minHeight: '40px',
+                        '& fieldset': {
+                          borderColor: '#d1d5db',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#9ca3af',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#3b82f6',
+                          borderWidth: '1px',
+                        }
+                      }
+                    }}
+                  />
+                )}
+                renderTags={(value: string[], getTagProps: any) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {value.map((option: string, index: number) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={option}
+                        label={option}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: '#F59E0B', 
+                          color: 'white',
+                          fontWeight: '500',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            '&:hover': { color: 'white' }
+                          }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                sx={{
+                  '& .MuiAutocomplete-paper': {
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
+                    maxHeight: '300px',
+                    marginTop: '4px'
+                  },
+                  '& .MuiAutocomplete-option': {
+                    padding: '8px 12px',
+                    fontSize: '0.875rem',
+                    '&:hover': { backgroundColor: '#f3f4f6' },
+                    '&.Mui-selected': { 
+                      backgroundColor: '#fef3c7',
+                      color: '#b45309',
+                      fontWeight: 500
+                    }
+                  }
+                }}
+                noOptionsText="No provider types found"
+                clearOnBlur={false}
+                disableCloseOnSelect={true}
+              />
+            </FormControl>
           </div>
         </CardContent>
       </Card>
@@ -1564,37 +1873,20 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 {currentConfig.name || 'Report Preview'}
               </Typography>
                             <Typography variant="body2" className="text-gray-600">
-                {currentConfig.dimension.replace('_', ' ')} × {currentConfig.metrics.length > 1 ? 
-                  `${currentConfig.metrics.length} measures` : 
-                  currentConfig.metric.replace('_', ' ')
-                } {currentConfig.filters.years.length > 1 ? 
-                  `(${currentConfig.filters.years.join(', ')})` : 
-                  currentConfig.filters.years.length === 1 ? 
-                  `(${currentConfig.filters.years[0]})` : 
-                  ''
-                } ({chartData.length} items)
                 {(() => {
-                  const values = chartData.map(item => item.value);
-                  const min = Math.min(...values);
-                  const max = Math.max(...values);
-                  const range = max - min;
-                  const percentageDifference = range / max;
-                  
-                  if (percentageDifference < 0.05 && range > 0) {
-                    return (
-                      <span className="ml-2 text-blue-600 text-sm">
-                        • Enhanced scaling applied for better visibility
-                      </span>
-                    );
-                  }
-                  return null;
+                  const metricLabelMap: Record<string, string> = {
+                    'tcc_p25': 'TCC 25th', 'tcc_p50': 'TCC 50th', 'tcc_p75': 'TCC 75th', 'tcc_p90': 'TCC 90th',
+                    'wrvu_p25': 'wRVU 25th', 'wrvu_p50': 'wRVU 50th', 'wrvu_p75': 'wRVU 75th', 'wrvu_p90': 'wRVU 90th',
+                    'cf_p25': 'CF 25th', 'cf_p50': 'CF 50th', 'cf_p75': 'CF 75th', 'cf_p90': 'CF 90th'
+                  };
+                  const yearsText = currentConfig.filters.years.length > 0 ? `(${currentConfig.filters.years.join(', ')})` : '';
+                  const regionsText = currentConfig.filters.regions.length > 0 ? `${currentConfig.filters.regions.length} regions` : 'All regions';
+                  const sourcesText = currentConfig.filters.surveySources.length > 0 ? `${currentConfig.filters.surveySources.length} sources` : 'All sources';
+                  const specialtiesText = currentConfig.dimension === 'specialty' ? (
+                    currentConfig.filters.specialties.length > 0 ? `${currentConfig.filters.specialties.length} specialties` : 'All specialties'
+                  ) : '';
+                  return `${currentConfig.dimension.replace('_',' ')} × ${metricLabelMap[currentConfig.metric] || currentConfig.metric} ${yearsText} • ${chartData.length} items • ${regionsText} • ${sourcesText}${specialtiesText ? ' • ' + specialtiesText : ''}`;
                 })()}
-
-                {currentConfig.dimension === 'specialty' && currentConfig.filters.specialties.length === 0 && (
-                  <span className="ml-2 text-orange-600 text-sm">
-                    • Select at least one specialty to view data
-                  </span>
-                )}
               </Typography>
             </div>
           </div>
@@ -1602,25 +1894,47 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           {renderChart()}
           
           {/* Data Table */}
-          {chartData.length > 0 && (
-            <div className="mt-8">
+          {chartData.length > 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-8">
               <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
                 Data Table
               </Typography>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+              <div className="rounded-lg border border-gray-200 overflow-x-auto">
+                <TableContainer component={Paper} sx={{ maxHeight: '600px', overflow: 'auto' }}>
+                  <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ 
+                        fontWeight: 'bold', 
+                        backgroundColor: '#F5F5F5',
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 2,
+                        minWidth: '200px'
+                      }}>
                         {currentConfig.dimension === 'specialty' ? 'Specialty' : 
                          currentConfig.dimension === 'region' ? 'Region' : 
                          currentConfig.dimension === 'providerType' ? 'Provider Type' : 
+                         currentConfig.dimension === 'surveySource' ? 'Survey Source' :
                          currentConfig.dimension}
-                      </th>
+                      </TableCell>
                       {currentConfig.metrics.length > 1 ? (
                         currentConfig.metrics.map((metric, index) => (
-                          <th key={metric} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                            {metric === 'tcc_p25' ? 'TCC 25th' :
+                      <TableCell 
+                        key={metric} 
+                        sx={{ 
+                          fontWeight: 'bold', 
+                          backgroundColor: metric.includes('tcc') ? '#E3F2FD' : 
+                                        metric.includes('wrvu') ? '#E8F5E8' : 
+                                        metric.includes('cf') ? '#FFF3E0' : '#F5F5F5',
+                          borderRight: '1px solid #E0E0E0',
+                          cursor: index === 0 ? 'pointer' : 'default'
+                        }} 
+                        align="right"
+                        onClick={index === 0 ? () => setTableSortDesc(prev => !prev) : undefined}
+                        title={index === 0 ? 'Toggle sort' : undefined}
+                      >
+                        {(metric === 'tcc_p25' ? 'TCC 25th' :
                              metric === 'tcc_p50' ? 'TCC 50th' :
                              metric === 'tcc_p75' ? 'TCC 75th' :
                              metric === 'tcc_p90' ? 'TCC 90th' :
@@ -1632,12 +1946,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                              metric === 'cf_p50' ? 'CF 50th' :
                              metric === 'cf_p75' ? 'CF 75th' :
                              metric === 'cf_p90' ? 'CF 90th' :
-                             metric.replace('_', ' ').toUpperCase()}
-                          </th>
+                         metric.replace('_', ' ').toUpperCase()) + (index === 0 ? (tableSortDesc ? ' ▼' : ' ▲') : '')}
+                      </TableCell>
                         ))
                       ) : (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                          {currentConfig.metric === 'tcc_p25' ? 'TCC 25th Percentile' :
+                    <TableCell sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: currentConfig.metric.includes('tcc') ? '#E3F2FD' : 
+                                    currentConfig.metric.includes('wrvu') ? '#E8F5E8' : 
+                                    currentConfig.metric.includes('cf') ? '#FFF3E0' : '#F5F5E5',
+                      borderRight: '1px solid #E0E0E0',
+                      cursor: 'pointer'
+                    }} align="right" onClick={() => setTableSortDesc(prev => !prev)} title="Toggle sort">
+                      {(currentConfig.metric === 'tcc_p25' ? 'TCC 25th Percentile' :
                            currentConfig.metric === 'tcc_p50' ? 'TCC 50th Percentile' :
                            currentConfig.metric === 'tcc_p75' ? 'TCC 75th Percentile' :
                            currentConfig.metric === 'tcc_p90' ? 'TCC 90th Percentile' :
@@ -1649,51 +1970,96 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                            currentConfig.metric === 'cf_p50' ? 'CF 50th Percentile' :
                            currentConfig.metric === 'cf_p75' ? 'CF 75th Percentile' :
                            currentConfig.metric === 'cf_p90' ? 'CF 90th Percentile' :
-                           currentConfig.metric.replace('_', ' ').toUpperCase()}
-                        </th>
+                       currentConfig.metric.replace('_', ' ').toUpperCase()) + (tableSortDesc ? ' ▼' : ' ▲')}
+                    </TableCell>
                       )}
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <TableCell sx={{ 
+                        fontWeight: 'bold', 
+                        backgroundColor: '#F5F5F5'
+                      }} align="right">
                         Count
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {chartData.map((item, index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
-                          {item.name}
-                        </td>
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {tableData.map((item, index) => (
+                      <TableRow 
+                        key={index} 
+                      >
+                        <TableCell sx={{ 
+                          position: 'sticky',
+                          left: 0,
+                          backgroundColor: 'white',
+                          borderRight: '1px solid #e0e0e0',
+                          zIndex: 1,
+                          fontWeight: 'medium'
+                        }}>
+                          <span className="text-gray-900">{item.name}</span>
+                        </TableCell>
                         {currentConfig.metrics.length > 1 ? (
                           currentConfig.metrics.map((metric, index) => (
-                            <td key={metric} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                            <TableCell 
+                              key={metric} 
+                              sx={{ 
+                                backgroundColor: metric.includes('tcc') ? '#E3F2FD' : 
+                                              metric.includes('wrvu') ? '#E8F5E8' : 
+                                              metric.includes('cf') ? '#FFF3E0' : 'white',
+                                borderRight: '1px solid #E0E0E0'
+                              }} 
+                              align="right"
+                            >
                               {metric.includes('wrvu') ? 
                                 (item.metricValues?.[metric] || 0).toLocaleString() : 
                                 `$${(item.metricValues?.[metric] || 0).toLocaleString()}`
                               }
-                            </td>
+                            </TableCell>
                           ))
                         ) : (
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                          <TableCell sx={{ 
+                            backgroundColor: currentConfig.metric.includes('tcc') ? '#E3F2FD' : 
+                                          currentConfig.metric.includes('wrvu') ? '#E8F5E8' : 
+                                          currentConfig.metric.includes('cf') ? '#FFF3E0' : 'white',
+                            borderRight: '1px solid #E0E0E0'
+                          }} align="right">
                             {currentConfig.metric.includes('wrvu') ? 
                               item.value.toLocaleString() : 
                               `$${item.value.toLocaleString()}`
                             }
-                          </td>
+                          </TableCell>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <TableCell align="right" sx={{ backgroundColor: 'white' }}>
                           {item.count}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
+              </TableContainer>
               </div>
             </div>
-          )}
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mt-8">
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                  <ChartBarIcon className="w-8 h-8 text-gray-400" />
+              </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+                <p className="text-gray-500 mb-2">Try adjusting your filters or configuration</p>
+                {currentConfig.dimension === 'specialty' && currentConfig.filters.specialties.length === 0 && (
+                  <p className="text-sm text-orange-600 mt-2">
+                    Select at least one specialty to view data
+                  </p>
+                )}
+          </div>
+        </div>
+      )}
         </CardContent>
       </Card>
+
+      {/* Data Viewer Modal - Completely removed for cleaner interface */}
     </div>
   );
 };
 
 export default CustomReports;
+

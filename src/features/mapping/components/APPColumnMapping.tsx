@@ -449,6 +449,7 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
                   }
                 }}
                 className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                title="Delete all column mappings (this action cannot be undone)"
               >
                 <DeleteSweepIcon className="h-4 w-4 mr-2" />
                 Clear All
@@ -462,6 +463,7 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
                     console.log('Apply all learned mappings');
                   }}
                   className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
+                  title="Convert all learned mappings to permanent mappings"
                 >
                   <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
                   Apply All ({Object.keys(learnedMappings).length})
@@ -473,6 +475,7 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
                     }
                   }}
                   className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                  title="Delete all learned mappings (this action cannot be undone)"
                 >
                   <TrashIcon className="h-4 w-4 mr-2" />
                   Clear All

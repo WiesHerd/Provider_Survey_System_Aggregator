@@ -129,7 +129,6 @@ export interface LearnedMappingsProps {
   onSearchChange: (term: string) => void;
   onRemoveLearnedMapping: (original: string) => void;
   onApplyAllMappings?: () => void;
-  onClearAllMappings?: () => void;
 }
 
 
