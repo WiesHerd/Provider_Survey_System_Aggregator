@@ -22,6 +22,8 @@ import { VariableMappingProps, IVariableMapping, IUnmappedVariable } from '../ty
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
+import { LearnedVariableMappings } from './LearnedVariableMappings';
+import { VariableMappingHeader } from './VariableMappingHeader';
 import { AnalysisProgressBar } from '../../../shared/components';
 
 /**
@@ -39,6 +41,9 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   const [editingMapping, setEditingMapping] = useState<IVariableMapping | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [variableCategory, setVariableCategory] = useState<'compensation' | 'categorical'>('compensation');
+  
+  // Learned mappings state
+  const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
 
   // Custom hook for data management
   const {
@@ -87,6 +92,13 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     }
   };
 
+  // Handle remove learned mapping
+  const removeLearnedMapping = (original: string) => {
+    const updated = { ...learnedMappings };
+    delete updated[original];
+    setLearnedMappings(updated);
+  };
+
   // Handle create new mapping (auto-join like auto-mapping)
   const handleCreateMapping = async () => {
     if (selectedVariables.length === 0) return;
@@ -107,6 +119,29 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
       setActiveTab('mapped');
     } catch (error) {
       console.error('Failed to create variable mapping:', error);
+    }
+  };
+
+  // Handle map individually (create separate mappings for each)
+  const handleMapIndividually = async () => {
+    if (selectedVariables.length === 0) return;
+
+    try {
+      // Create separate mappings for each selected variable
+      for (const variable of selectedVariables) {
+        await createGroupedVariableMapping(
+          variable.name.toLowerCase().replace(/\s+/g, '_'),
+          'compensation', // Default to compensation for consistency
+          'general', // Default subtype
+          [variable]
+        );
+      }
+      
+      // Clear selections and switch to mapped tab
+      clearSelectedVariables();
+      setActiveTab('mapped');
+    } catch (error) {
+      console.error('Failed to create individual variable mappings:', error);
     }
   };
 
@@ -148,106 +183,41 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
 
           {/* Main Mapping Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            {/* Tabs with Action Buttons */}
-            <div className="border-b border-gray-200 mb-4 flex items-center justify-between">
-              <div className="flex items-center">
-                <button
-                  onClick={() => setShowHelp(true)}
-                  className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-all duration-200"
-                  aria-label="Show help"
-                >
-                  <LightBulbIcon className="h-5 w-5 text-indigo-600" />
-                </button>
-                <nav className="-mb-px flex space-x-8">
-                  {[
-                    { key: 'unmapped', label: `Unmapped Fields (${unmappedVariables.length})` },
-                    { key: 'mapped', label: `Mapped Fields (${variableMappings.length})` },
-                    { key: 'learned', label: `Learned Mappings (0)` }
-                  ].map((tab) => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActiveTab(tab.key as 'unmapped' | 'mapped' | 'learned')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                        activeTab === tab.key
-                          ? 'border-indigo-500 text-indigo-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
+            {/* Header with Tabs and Action Buttons */}
+            <VariableMappingHeader
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              unmappedCount={unmappedVariables.length}
+              mappedCount={variableMappings.length}
+              learnedCount={Object.keys(learnedMappings).length}
+              selectedCount={selectedVariables.length}
+              allUnmappedCount={unmappedVariables.length}
+              onShowHelp={() => setShowHelp(true)}
+              onCreateMapping={handleCreateMapping}
+              onCreateIndividualMappings={handleMapIndividually}
+              onClearAllMappings={handleClearAllMappings}
+              onApplyAllLearnedMappings={() => {
+                console.log('Apply all learned variable mappings');
+              }}
+              onClearAllLearnedMappings={() => {
+                if (window.confirm('Are you sure you want to clear all learned mappings?')) {
+                  console.log('Clear all learned variable mappings');
+                }
+              }}
+            />
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  {activeTab === 'unmapped' && selectedVariables.length > 0 && (
-                    <button
-                      onClick={handleCreateMapping}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
-                      title="Create Manual Mapping"
-                    >
-                      <AddIcon className="h-4 w-4 mr-2" />
-                      Create Mapping ({selectedVariables.length})
-                    </button>
-                  )}
-                </div>
-                
-                {/* Select All button - positioned on the right for stable layout */}
-                {activeTab === 'unmapped' && (
-                  <button
-                    onClick={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
-                    disabled={unmappedVariables.length === 0}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {selectedVariables.length === 0 ? 'Select All' : 'Deselect All'}
-                  </button>
-                )}
+            {/* Select All button for unmapped tab */}
+            {activeTab === 'unmapped' && (
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
+                  disabled={unmappedVariables.length === 0}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {selectedVariables.length === 0 ? 'Select All' : 'Deselect All'}
+                </button>
               </div>
-              
-              {/* Mapped tab actions */}
-              {activeTab === 'mapped' && (
-                <div className="flex items-center justify-end mb-4">
-                  <button
-                    onClick={handleClearAllMappings}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
-                    title="Delete all variable mappings (this action cannot be undone)"
-                  >
-                    <DeleteSweepIcon className="h-4 w-4 mr-2" />
-                    Clear All
-                  </button>
-                </div>
-              )}
-                {activeTab === 'learned' && (
-                  <>
-                    <button
-                      onClick={() => {
-                        // Apply all learned mappings
-                        console.log('Apply all learned variable mappings');
-                      }}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                      title="Convert all learned mappings to permanent mappings"
-                    >
-                      <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
-                      Apply All (0)
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to clear all learned mappings?')) {
-                          console.log('Clear all learned variable mappings');
-                        }
-                      }}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
-                      title="Delete all learned mappings (this action cannot be undone)"
-                    >
-                      <TrashIcon className="h-4 w-4 mr-2" />
-                      Clear All
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Error Display */}
             {error && (
@@ -308,66 +278,16 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                 />
               )}
               {activeTab === 'learned' && (
-                <div className="space-y-4">
-                  {/* Search Bar - Match SpecialtyMapping Pattern */}
-                  <div className="mb-4">
-                    <TextField
-                      fullWidth
-                      placeholder="Search learned mappings..."
-                      value={searchTerm}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                      size="small"
-                      sx={{ 
-                        '& .MuiOutlinedInput-root': {
-                          fontSize: '0.875rem',
-                          height: '40px'
-                        }
-                      }}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon className="h-4 w-4 text-gray-400" />
-                          </InputAdornment>
-                        ),
-                        endAdornment: searchTerm && (
-                          <InputAdornment position="end">
-                            <IconButton
-                              size="small"
-                              onClick={() => setSearchTerm('')}
-                              sx={{
-                                padding: '4px',
-                                '&:hover': {
-                                  backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                                }
-                              }}
-                              aria-label="Clear search"
-                            >
-                              <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </div>
-
-                  {/* Learned Mappings List - Match SpecialtyMapping Pattern */}
-                  <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    <div className="flex items-center justify-center py-20">
-                      <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
-                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                          <BoltIcon className="h-6 w-6 text-gray-500" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Learned Mappings Found</h3>
-                        <p className="text-gray-600 mb-4">
-                          {searchTerm 
-                            ? 'No learned mappings match your search criteria.'
-                            : 'Learned mappings will appear here as you make corrections to field mappings.'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <LearnedVariableMappings
+                  learnedMappings={learnedMappings}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  onRemoveMapping={removeLearnedMapping}
+                  onApplyAllMappings={() => {
+                    // Apply all learned mappings
+                    console.log('Apply all learned variable mappings');
+                  }}
+                />
               )}
             </div>
           </div>
@@ -456,6 +376,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
             </div>
           )}
         </div>
+      </div>
     </>
   );
 };

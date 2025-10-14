@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
+import { LearnedColumnMappings } from './LearnedColumnMappings';
 import { AnalysisProgressBar } from '../../../shared/components';
 
 interface APPColumnMapping {
@@ -650,88 +651,22 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
 
         {/* Learned Tab Content - Match SpecialtyMapping Pattern */}
         {activeTab === 'learned' && (
-          <div className="space-y-4">
-            <div className="flex-1 max-w-lg">
-              <input
-                type="text"
-                placeholder="Search learned mappings..."
-                value={learnedSearchTerm}
-                onChange={(e) => setLearnedSearchTerm(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
-              {Object.keys(learnedMappings).length > 0 ? (
-                <ul className="divide-y divide-gray-200">
-                  {Object.entries(learnedMappings)
-                    .filter(([key, value]) => 
-                      key.toLowerCase().includes(learnedSearchTerm.toLowerCase()) ||
-                      value.toLowerCase().includes(learnedSearchTerm.toLowerCase())
-                    )
-                    .map(([original, corrected]) => (
-                    <li key={original} className="px-6 py-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center">
-                            <h3 className="text-sm font-medium text-gray-900">
-                              {original} → {corrected}
-                            </h3>
-                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Learned
-                            </span>
-                          </div>
-                          <div className="mt-1">
-                            <p className="text-sm text-gray-500">Auto-learned mapping from user corrections</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => {
-                              // Apply this learned mapping
-                              console.log('Apply learned mapping:', original, corrected);
-                            }}
-                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
-                          >
-                            <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
-                            Apply
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm('Remove this learned mapping?')) {
-                                const updated = { ...learnedMappings };
-                                delete updated[original];
-                                setLearnedMappings(updated);
-                              }
-                            }}
-                            className="inline-flex items-center px-3 py-2 border border-red-300 text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50"
-                          >
-                            <TrashIcon className="h-4 w-4 mr-2" />
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="flex items-center justify-center py-20">
-                  <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                      <BoltIcon className="h-6 w-6 text-gray-500" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Learned Mappings Found</h3>
-                    <p className="text-gray-600 mb-4">
-                      {learnedSearchTerm 
-                        ? 'No learned mappings match your search criteria.'
-                        : 'Learned mappings will appear here as you make corrections to column mappings.'
-                      }
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <LearnedColumnMappings
+            learnedMappings={learnedMappings}
+            searchTerm={learnedSearchTerm}
+            onSearchChange={setLearnedSearchTerm}
+            onRemoveMapping={(original) => {
+              if (window.confirm('Remove this learned mapping?')) {
+                const updated = { ...learnedMappings };
+                delete updated[original];
+                setLearnedMappings(updated);
+              }
+            }}
+            onApplyAllMappings={() => {
+              // Apply all learned mappings
+              console.log('Apply all learned column mappings');
+            }}
+          />
         )}
 
         {/* Create Mapping Dialog */}

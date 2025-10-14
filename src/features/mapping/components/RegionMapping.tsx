@@ -6,7 +6,9 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   LightBulbIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowDownTrayIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { RegionMappingProps } from '../types/mapping';
 import { useRegionMappingData } from '../hooks/useRegionMappingData';
@@ -203,6 +205,33 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                     <DeleteSweepIcon className="h-4 w-4 mr-2" />
                     Clear All
                   </button>
+                )}
+                {activeTab === 'learned' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        // Apply all learned mappings
+                        console.log('Apply all learned region mappings');
+                      }}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
+                      title="Convert all learned mappings to permanent mappings"
+                    >
+                      <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                      Apply All ({Object.keys(learnedMappings).length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to clear all learned mappings?')) {
+                          console.log('Clear all learned region mappings');
+                        }
+                      }}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                      title="Delete all learned mappings (this action cannot be undone)"
+                    >
+                      <TrashIcon className="h-4 w-4 mr-2" />
+                      Clear All
+                    </button>
+                  </>
                 )}
               </div>
             </div>
