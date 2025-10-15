@@ -1133,10 +1133,10 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           <div className="min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
               <div className="text-center">
-                {/* Purple/Indigo Arc Spinner - STANDARD SIZE */}
-                <div className="w-8 h-8 mx-auto mb-4">
+                {/* Purple/Indigo Arc Spinner - LARGER SIZE TO MATCH ANALYTICS */}
+                <div className="w-12 h-12 mx-auto mb-4">
                   <div 
-                    className="w-8 h-8 rounded-full animate-spin"
+                    className="w-12 h-12 rounded-full animate-spin"
                     style={{
                       background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
                       animationDuration: '1s',
