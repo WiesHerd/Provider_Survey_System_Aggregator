@@ -74,21 +74,23 @@ const MappedColumns: React.FC<MappedColumnsProps> = ({ mapping, onEdit, onDelete
                 <div className="absolute -left-1 top-1/2 h-0.5 w-2 bg-gray-200" />
               )}
               
-                             {/* Column card */}
-               <div 
-                 className="p-3 rounded-xl border border-gray-200 min-w-0 bg-white hover:bg-gray-50 transition-colors duration-150 shadow-sm hover:shadow-md"
-                 style={{ borderLeftColor: getSurveySourceColor(column.surveySource), borderLeftWidth: '4px' }}
-               >
+              {/* Column card */}
+              <div 
+                className="p-2 rounded border border-gray-200 min-w-0 bg-white hover:bg-gray-50 transition-colors duration-150 shadow-sm hover:shadow-md"
+                style={{ 
+                  borderLeftColor: getSurveySourceColor(column.surveySource), 
+                  borderLeftWidth: '3px' 
+                }}
+              >
                 <div className="flex justify-between items-center gap-2">
-                  <div className="min-w-0">
-                    <Typography className="font-semibold text-base truncate">
-                      {column.name}
-                    </Typography>
-                    <Typography variant="caption" className="text-gray-500 text-sm">
-                      Type: {column.dataType}
-                    </Typography>
-                  </div>
-                  <Typography variant="caption" style={{ color: getSurveySourceColor(column.surveySource) }} className="text-sm font-semibold whitespace-nowrap">
+                  <Typography className="font-medium text-sm truncate">
+                    {column.name}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    style={{ color: getSurveySourceColor(column.surveySource) }} 
+                    className="text-xs font-medium whitespace-nowrap"
+                  >
                     {column.surveySource}
                   </Typography>
                 </div>

@@ -107,14 +107,17 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       setError(null);
       
       // Load actual data from services with provider type filtering
-      const [mappingsData, unmappedData] = await Promise.all([
+      const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getProviderTypeMappings(selectedProviderType),
-        dataService.getUnmappedProviderTypes(selectedProviderType)
+        dataService.getUnmappedProviderTypes(selectedProviderType),
+        dataService.getLearnedMappings('providerType', selectedProviderType)
       ]);
       
       setMappings(mappingsData);
       setUnmappedProviderTypes(unmappedData);
-      setLearnedMappings({}); // TODO: Implement learned mappings if needed
+      setLearnedMappings(learnedData || {});
+      
+      console.log('🔍 Loaded provider type learned mappings:', learnedData);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load provider type mapping data. Please ensure you have uploaded survey data first.');
@@ -190,7 +193,14 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       // Save learned mappings for each provider type
       for (const providerType of providerTypes) {
         try {
-          await dataService.saveLearnedMapping('providerType', providerType.name, standardizedName);
+          console.log('💾 Saving learned provider type mapping:', providerType.name, '->', standardizedName, 'from survey:', providerType.surveySource);
+          await dataService.saveLearnedMapping(
+            'providerType', 
+            providerType.name, 
+            standardizedName, 
+            selectedProviderType, // Pass current provider type filter
+            providerType.surveySource // Pass survey source
+          );
         } catch (learnedError) {
           console.warn('Failed to save learned mapping for', providerType.name, learnedError);
         }
@@ -200,7 +210,7 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create grouped provider type mapping');
     }
-  }, [loadData]);
+  }, [loadData, selectedProviderType]);
 
   const deleteMapping = useCallback(async (mappingId: string) => {
     try {
@@ -220,13 +230,14 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     }
   }, [loadData]);
 
-  const removeLearnedMapping = useCallback((original: string) => {
-    setLearnedMappings(prev => {
-      const updated = { ...prev };
-      delete updated[original];
-      return updated;
-    });
-  }, []);
+  const removeLearnedMapping = useCallback(async (original: string) => {
+    try {
+      await dataService.removeLearnedMapping('providerType', original);
+      await loadData(); // Reload to get updated learned mappings
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove learned mapping');
+    }
+  }, [loadData]);
 
 
   // Clear error

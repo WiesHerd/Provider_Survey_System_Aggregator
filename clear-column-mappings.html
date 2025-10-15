@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Column Mappings</title>
+</head>
+<body>
+    <h1>Clear Column Mappings</h1>
+    <button onclick="clearColumnMappings()">Clear All Column Mappings</button>
+    <div id="output"></div>
+
+    <script>
+        function log(message) {
+            console.log(message);
+            document.getElementById('output').innerHTML += '<div>' + message + '</div>';
+        }
+
+        async function clearColumnMappings() {
+            try {
+                log('🧹 Clearing all column mappings...');
+                
+                // Open IndexedDB
+                const request = indexedDB.open('SurveyAggregatorDB', 6);
+                
+                request.onsuccess = () => {
+                    const db = request.result;
+                    const transaction = db.transaction(['columnMappings'], 'readwrite');
+                    const store = transaction.objectStore('columnMappings');
+                    
+                    // Get all mappings first to log them
+                    const getAllRequest = store.getAll();
+                    
+                    getAllRequest.onsuccess = () => {
+                        const mappings = getAllRequest.result;
+                        log(`📋 Found ${mappings.length} column mappings to clear`);
+                        
+                        if (mappings.length === 0) {
+                            log(`✅ No column mappings found`);
+                            return;
+                        }
+                        
+                        // Log what we're about to delete
+                        mappings.forEach(mapping => {
+                            log(`🗑️ Will delete mapping: ${mapping.standardizedName}`);
+                            log(`   Source columns: ${JSON.stringify(mapping.sourceColumns.map(col => ({
+                                name: col.name,
+                                surveySource: col.surveySource
+                            })))}`);
+                        });
+                        
+                        // Clear all mappings
+                        const clearRequest = store.clear();
+                        clearRequest.onsuccess = () => {
+                            log(`✅ Successfully cleared ${mappings.length} column mappings`);
+                            log(`🎉 Column mappings cleared! You can now recreate them with the correct data structure.`);
+                        };
+                        clearRequest.onerror = () => {
+                            log(`❌ Failed to clear column mappings`);
+                        };
+                    };
+                    
+                    getAllRequest.onerror = () => {
+                        log(`❌ Failed to get column mappings`);
+                    };
+                };
+                
+                request.onerror = () => {
+                    log('❌ Failed to open IndexedDB');
+                };
+                
+            } catch (error) {
+                log('❌ Error clearing column mappings: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

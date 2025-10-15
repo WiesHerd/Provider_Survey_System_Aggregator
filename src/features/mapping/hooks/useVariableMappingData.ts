@@ -18,6 +18,7 @@ export const useVariableMappingData = () => {
   const [variableMappings, setVariableMappings] = useState<IVariableMapping[]>([]);
   const [unmappedVariables, setUnmappedVariables] = useState<IUnmappedVariable[]>([]);
   const [selectedVariables, setSelectedVariables] = useState<IUnmappedVariable[]>([]);
+  const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
@@ -51,6 +52,20 @@ export const useVariableMappingData = () => {
     );
   }, [variableMappings, mappedSearchTerm]);
 
+  const filteredLearned = useMemo(() => {
+    if (!mappedSearchTerm) return learnedMappings;
+    const filtered: Record<string, string> = {};
+    Object.entries(learnedMappings).forEach(([key, value]) => {
+      if (
+        key.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+        value.toLowerCase().includes(mappedSearchTerm.toLowerCase())
+      ) {
+        filtered[key] = value;
+      }
+    });
+    return filtered;
+  }, [learnedMappings, mappedSearchTerm]);
+
   // Load data
   const loadData = useCallback(async () => {
     try {
@@ -65,18 +80,23 @@ export const useVariableMappingData = () => {
         dataProviderType 
       });
       
-      const [mappingsData, unmappedData] = await Promise.all([
+      const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getVariableMappings(dataProviderType),
-        dataService.getUnmappedVariables(dataProviderType)
+        dataService.getUnmappedVariables(dataProviderType),
+        dataService.getLearnedMappings('variable', selectedProviderType)
       ]);
       
       console.log('Loaded data:', { 
         mappings: mappingsData?.length || 0, 
-        unmapped: unmappedData?.length || 0
+        unmapped: unmappedData?.length || 0,
+        learned: Object.keys(learnedData || {}).length
       });
       
       setVariableMappings(mappingsData || []);
       setUnmappedVariables(unmappedData || []);
+      setLearnedMappings(learnedData || {});
+      
+      console.log('🔍 Loaded variable learned mappings:', learnedData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load variable mapping data');
@@ -428,6 +448,23 @@ export const useVariableMappingData = () => {
       };
 
       await dataService.createVariableMapping(mapping);
+      
+      // Save learned mappings for each variable
+      for (const variable of variables) {
+        try {
+          console.log('💾 Saving learned variable mapping:', variable.name, '->', standardizedName, 'from survey:', variable.surveySource);
+          await dataService.saveLearnedMapping(
+            'variable', 
+            variable.name, 
+            standardizedName, 
+            selectedProviderType, // Pass current provider type filter
+            variable.surveySource // Pass survey source
+          );
+        } catch (learnedError) {
+          console.warn('Failed to save learned mapping for', variable.name, learnedError);
+        }
+      }
+      
       setVariableMappings(prev => [...prev, mapping]);
       
       // Remove mapped variables from unmapped list
@@ -441,7 +478,7 @@ export const useVariableMappingData = () => {
       console.error('Failed to create grouped variable mapping:', err);
       setError('Failed to create grouped variable mapping');
     }
-  }, [dataService]);
+  }, [dataService, selectedProviderType]);
 
   // Delete variable mapping
   const deleteVariableMapping = useCallback(async (mappingId: string) => {
@@ -511,11 +548,22 @@ export const useVariableMappingData = () => {
     loadData();
   }, [loadData]);
 
+  // Remove learned mapping
+  const removeLearnedMapping = useCallback(async (original: string) => {
+    try {
+      await dataService.removeLearnedMapping('variable', original);
+      await loadData(); // Reload to get updated learned mappings
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove learned mapping');
+    }
+  }, [dataService, loadData]);
+
   return {
     // State
     variableMappings,
     unmappedVariables,
     selectedVariables,
+    learnedMappings,
     loading,
     error,
     activeTab,
@@ -527,6 +575,7 @@ export const useVariableMappingData = () => {
     // Computed values
     filteredUnmapped,
     filteredMappings,
+    filteredLearned,
     
     // Actions
     setActiveTab,
@@ -541,6 +590,7 @@ export const useVariableMappingData = () => {
     createGroupedVariableMapping,
     deleteVariableMapping,
     clearAllVariableMappings,
+    removeLearnedMapping,
     
     // Auto-detection
     autoDetectVariables,

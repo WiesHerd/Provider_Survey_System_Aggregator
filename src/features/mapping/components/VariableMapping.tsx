@@ -23,7 +23,7 @@ import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
 import { LearnedVariableMappings } from './LearnedVariableMappings';
-import { VariableMappingHeader } from './VariableMappingHeader';
+import { BaseMappingHeader, BaseMappingContent, HelpModal } from './shared';
 import { AnalysisProgressBar } from '../../../shared/components';
 
 /**
@@ -41,9 +41,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   const [editingMapping, setEditingMapping] = useState<IVariableMapping | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [variableCategory, setVariableCategory] = useState<'compensation' | 'categorical'>('compensation');
-  
-  // Learned mappings state
-  const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
 
   // Custom hook for data management
   const {
@@ -51,6 +48,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     variableMappings,
     unmappedVariables,
     selectedVariables,
+    learnedMappings,
     loading,
     error,
     activeTab,
@@ -62,6 +60,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     // Computed values
     filteredUnmapped,
     filteredMappings,
+    filteredLearned,
     
     // Actions
     setActiveTab,
@@ -76,7 +75,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     createGroupedVariableMapping,
     deleteVariableMapping,
     clearAllVariableMappings,
-    
+    removeLearnedMapping,
     
     // Search and filters
     setSearchTerm,
@@ -93,10 +92,10 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   };
 
   // Handle remove learned mapping
-  const removeLearnedMapping = (original: string) => {
-    const updated = { ...learnedMappings };
-    delete updated[original];
-    setLearnedMappings(updated);
+  const handleRemoveLearnedMapping = async (original: string) => {
+    if (window.confirm('Remove this learned mapping?')) {
+      await removeLearnedMapping(original);
+    }
   };
 
   // Handle create new mapping (auto-join like auto-mapping)
@@ -183,19 +182,22 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
 
           {/* Main Mapping Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            {/* Header with Tabs and Action Buttons */}
-            <VariableMappingHeader
+            {/* Header Component - Tabs and Actions */}
+            <BaseMappingHeader
+              entityName="Variable"
               activeTab={activeTab}
               onTabChange={setActiveTab}
               unmappedCount={unmappedVariables.length}
               mappedCount={variableMappings.length}
               learnedCount={Object.keys(learnedMappings).length}
               selectedCount={selectedVariables.length}
+              isBulkSelected={selectedVariables.length === unmappedVariables.length && unmappedVariables.length > 0}
               allUnmappedCount={unmappedVariables.length}
               onShowHelp={() => setShowHelp(true)}
+              onToggleSelectAll={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
               onCreateMapping={handleCreateMapping}
               onCreateIndividualMappings={handleMapIndividually}
-              onClearAllMappings={handleClearAllMappings}
+              onCreateGroupedMapping={handleCreateMapping}
               onApplyAllLearnedMappings={() => {
                 console.log('Apply all learned variable mappings');
               }}
@@ -204,20 +206,19 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                   console.log('Clear all learned variable mappings');
                 }
               }}
-            />
-
-            {/* Select All button for unmapped tab */}
-            {activeTab === 'unmapped' && (
-              <div className="flex justify-end mb-4">
+            >
+              {/* Mapped tab actions */}
+              {activeTab === 'mapped' && (
                 <button
-                  onClick={selectedVariables.length === 0 ? selectAllVariables : deselectAllVariables}
-                  disabled={unmappedVariables.length === 0}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleClearAllMappings}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                  title="Delete all variable mappings (this action cannot be undone)"
                 >
-                  {selectedVariables.length === 0 ? 'Select All' : 'Deselect All'}
+                  <DeleteSweepIcon className="h-4 w-4 mr-2" />
+                  Clear All
                 </button>
-              </div>
-            )}
+              )}
+            </BaseMappingHeader>
 
             {/* Error Display */}
             {error && (
@@ -237,8 +238,8 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
 
 
 
-            {/* Tab Content - Simple and instant */}
-            <div className="min-h-[400px]">
+            {/* Content Component - Tab Content */}
+            <BaseMappingContent activeTab={activeTab}>
               {activeTab === 'unmapped' && (
                 filteredUnmapped.length > 0 ? (
                   <UnmappedVariables
@@ -279,102 +280,76 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
               )}
               {activeTab === 'learned' && (
                 <LearnedVariableMappings
-                  learnedMappings={learnedMappings}
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  onRemoveMapping={removeLearnedMapping}
+                  learnedMappings={filteredLearned}
+                  searchTerm={mappedSearchTerm}
+                  onSearchChange={setMappedSearchTerm}
+                  onRemoveMapping={handleRemoveLearnedMapping}
                   onApplyAllMappings={() => {
                     // Apply all learned mappings
                     console.log('Apply all learned variable mappings');
                   }}
                 />
               )}
-            </div>
+            </BaseMappingContent>
           </div>
 
 
 
 
-          {/* Help Modal */}
-          {showHelp && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-              {/* Backdrop */}
-              <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => setShowHelp(false)} />
+          {/* Help Modal Component */}
+          <HelpModal
+            isOpen={showHelp}
+            onClose={() => setShowHelp(false)}
+            title="Survey Field Mapping Help"
+            subtitle="Learn how to use survey field mapping effectively"
+          >
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">What is Survey Field Mapping?</h3>
+                <p className="text-gray-600">
+                  Survey Field Mapping standardizes field names across different survey sources. 
+                  This ensures that similar data (like TCC, wRVUs, CFs, base pay) from different surveys 
+                  are properly combined for analysis.
+                </p>
+              </div>
               
-              {/* Modal */}
-              <div className="flex min-h-full items-center justify-center p-4">
-                <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-200">
-                  {/* Header */}
-                  <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-10 h-10 bg-indigo-100 rounded-lg">
-                        <LightBulbIcon className="h-6 w-6 text-indigo-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">Survey Field Mapping Help</h2>
-                        <p className="text-sm text-gray-500">Learn how to use survey field mapping effectively</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShowHelp(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-                      title="Close help"
-                    >
-                      <XMarkIcon className="h-6 w-6 text-gray-400" />
-                    </button>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">How it Works</h3>
+                <div className="space-y-2 text-gray-600">
+                  <p><strong>Example:</strong> "Total Cash Compensation" from MGMA maps to "TCC" from SullivanCotter, 
+                  both creating the standardized field "tcc".</p>
+                  <p><strong>Manual Mapping:</strong> Create precise mappings with full control over field matching.</p>
+                  <p><strong>Manual Override:</strong> You can edit any mapping to change how fields are joined.</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Common Field Types</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">Compensation Fields</h4>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Total Cash Compensation (TCC)</li>
+                      <li>• Work RVUs (wRVUs)</li>
+                      <li>• Conversion Factors (CF)</li>
+                      <li>• Base Pay</li>
+                      <li>• Bonuses & Incentives</li>
+                    </ul>
                   </div>
-
-                  {/* Content */}
-                  <div className="p-6 space-y-4">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">What is Survey Field Mapping?</h3>
-                      <p className="text-gray-600">
-                        Survey Field Mapping standardizes field names across different survey sources. 
-                        This ensures that similar data (like TCC, wRVUs, CFs, base pay) from different surveys 
-                        are properly combined for analysis.
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">How it Works</h3>
-                      <div className="space-y-2 text-gray-600">
-                        <p><strong>Example:</strong> "Total Cash Compensation" from MGMA maps to "TCC" from SullivanCotter, 
-                        both creating the standardized field "tcc".</p>
-                        <p><strong>Manual Mapping:</strong> Create precise mappings with full control over field matching.</p>
-                        <p><strong>Manual Override:</strong> You can edit any mapping to change how fields are joined.</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Common Field Types</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-blue-900 mb-2">Compensation Fields</h4>
-                          <ul className="text-sm text-blue-800 space-y-1">
-                            <li>• Total Cash Compensation (TCC)</li>
-                            <li>• Work RVUs (wRVUs)</li>
-                            <li>• Conversion Factors (CF)</li>
-                            <li>• Base Pay</li>
-                            <li>• Bonuses & Incentives</li>
-                          </ul>
-                        </div>
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-green-900 mb-2">Categorical Fields</h4>
-                          <ul className="text-sm text-green-800 space-y-1">
-                            <li>• Geographic Regions</li>
-                            <li>• Provider Types</li>
-                            <li>• Practice Settings</li>
-                            <li>• Years of Experience</li>
-                            <li>• Specialty Categories</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-green-900 mb-2">Categorical Fields</h4>
+                    <ul className="text-sm text-green-800 space-y-1">
+                      <li>• Geographic Regions</li>
+                      <li>• Provider Types</li>
+                      <li>• Practice Settings</li>
+                      <li>• Years of Experience</li>
+                      <li>• Specialty Categories</li>
+                    </ul>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          </HelpModal>
         </div>
       </div>
     </>

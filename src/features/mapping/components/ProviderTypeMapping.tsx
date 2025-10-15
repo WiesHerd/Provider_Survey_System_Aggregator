@@ -15,6 +15,7 @@ import { useProviderTypeMappingData } from '../hooks/useProviderTypeMappingData'
 import { UnmappedProviderTypes } from './UnmappedProviderTypes';
 import { MappedProviderTypes } from './MappedProviderTypes';
 import { LearnedProviderTypeMappings } from './LearnedProviderTypeMappings';
+import { BaseMappingHeader, BaseMappingContent, HelpModal } from './shared';
 import { AnalysisProgressBar } from '../../../shared/components';
 
 /**
@@ -80,9 +81,9 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
   };
 
   // Handle remove learned mapping
-  const handleRemoveLearnedMapping = (original: string) => {
+  const handleRemoveLearnedMapping = async (original: string) => {
     if (window.confirm('Remove this learned mapping?')) {
-      removeLearnedMapping(original);
+      await removeLearnedMapping(original);
     }
   };
 
@@ -148,119 +149,43 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
 
           {/* Main Mapping Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            {/* Tabs with Action Buttons */}
-            <div className="border-b border-gray-200 mb-4 flex items-center justify-between">
-              <div className="flex items-center">
-                <button
-                  onClick={() => setShowHelp(true)}
-                  className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-all duration-200"
-                  aria-label="Show help"
-                >
-                  <LightBulbIcon className="h-5 w-5 text-indigo-600" />
-                </button>
-                <nav className="-mb-px flex space-x-8">
-                  {[
-                    { key: 'unmapped', label: `Unmapped Provider Types (${unmappedProviderTypes.length})` },
-                    { key: 'mapped', label: `Mapped Provider Types (${mappings.length})` },
-                    { key: 'learned', label: `Learned Mappings (${Object.keys(learnedMappings).length})` }
-                  ].map((tab) => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActiveTab(tab.key as 'unmapped' | 'mapped' | 'learned')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                        activeTab === tab.key
-                          ? 'border-indigo-500 text-indigo-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  {activeTab === 'unmapped' && selectedProviderTypes.length > 0 && (
-                    <>
-                      <button
-                        onClick={handleCreateMapping}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 border border-green-600"
-                        title="Map selected provider types as a group"
-                      >
-                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        Map as Group ({selectedProviderTypes.length})
-                      </button>
-                      <button
-                        onClick={handleMapIndividually}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 border border-purple-600"
-                        title="Map each selected provider type individually"
-                      >
-                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Map Individually ({selectedProviderTypes.length})
-                      </button>
-                    </>
-                  )}
-                  {activeTab === 'learned' && (
-                    <>
-                      <button
-                        onClick={() => {
-                          // Apply all learned mappings
-                          console.log('Apply all learned provider type mappings');
-                        }}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 border border-indigo-600"
-                        title="Convert all learned mappings to permanent mappings"
-                      >
-                        <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
-                        Apply All ({Object.keys(learnedMappings).length})
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm('Are you sure you want to clear all learned mappings?')) {
-                            console.log('Clear all learned provider type mappings');
-                          }
-                        }}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
-                        title="Delete all learned mappings (this action cannot be undone)"
-                      >
-                        <TrashIcon className="h-4 w-4 mr-2" />
-                        Clear All
-                      </button>
-                    </>
-                  )}
-                </div>
-                
-                {/* Select All button - positioned on the right for stable layout */}
-                {activeTab === 'unmapped' && (
-                  <button
-                    onClick={selectedProviderTypes.length === 0 ? selectAllProviderTypes : deselectAllProviderTypes}
-                    disabled={unmappedProviderTypes.length === 0}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {selectedProviderTypes.length === 0 ? 'Select All' : 'Deselect All'}
-                  </button>
-                )}
-              </div>
-              
+            {/* Header Component - Tabs and Actions */}
+            <BaseMappingHeader
+              entityName="Provider Type"
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              unmappedCount={unmappedProviderTypes.length}
+              mappedCount={mappings.length}
+              learnedCount={Object.keys(learnedMappings).length}
+              selectedCount={selectedProviderTypes.length}
+              isBulkSelected={selectedProviderTypes.length === unmappedProviderTypes.length && unmappedProviderTypes.length > 0}
+              allUnmappedCount={unmappedProviderTypes.length}
+              onShowHelp={() => setShowHelp(true)}
+              onToggleSelectAll={selectedProviderTypes.length === 0 ? selectAllProviderTypes : deselectAllProviderTypes}
+              onCreateMapping={handleCreateMapping}
+              onCreateIndividualMappings={handleMapIndividually}
+              onCreateGroupedMapping={handleCreateMapping}
+              onApplyAllLearnedMappings={() => {
+                console.log('Apply all learned provider type mappings');
+              }}
+              onClearAllLearnedMappings={() => {
+                if (window.confirm('Are you sure you want to clear all learned mappings?')) {
+                  console.log('Clear all learned provider type mappings');
+                }
+              }}
+            >
               {/* Mapped tab actions */}
               {activeTab === 'mapped' && (
-                <div className="flex items-center justify-end mb-4">
-                  <button
-                    onClick={handleClearAllMappings}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
-                    title="Delete all provider type mappings (this action cannot be undone)"
-                  >
-                    <DeleteSweepIcon className="h-4 w-4 mr-2" />
-                    Clear All
-                  </button>
-                </div>
+                <button
+                  onClick={handleClearAllMappings}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                  title="Delete all provider type mappings (this action cannot be undone)"
+                >
+                  <DeleteSweepIcon className="h-4 w-4 mr-2" />
+                  Clear All
+                </button>
               )}
-            </div>
+            </BaseMappingHeader>
 
             {/* Error Display */}
             {error && (
@@ -280,8 +205,8 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
 
 
 
-            {/* Tab Content - Simple and instant */}
-            <div className="min-h-[400px]">
+            {/* Content Component - Tab Content */}
+            <BaseMappingContent activeTab={activeTab}>
               {activeTab === 'unmapped' && (
                 filteredUnmapped.length > 0 ? (
                   <UnmappedProviderTypes
@@ -332,72 +257,46 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                   }}
                 />
               )}
-            </div>
+            </BaseMappingContent>
           </div>
 
 
-          {/* Help Modal */}
-          {showHelp && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-              {/* Backdrop */}
-              <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => setShowHelp(false)} />
+          {/* Help Modal Component */}
+          <HelpModal
+            isOpen={showHelp}
+            onClose={() => setShowHelp(false)}
+            title="Provider Type Mapping Help"
+            subtitle="Learn how to use provider type mapping effectively"
+          >
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">What is Provider Type Mapping?</h3>
+                <p className="text-gray-600">
+                  Provider Type Mapping helps you standardize provider type names across different survey sources. 
+                  This ensures that data for MDs, NPs, PAs, and other provider types are properly aligned for accurate analytics.
+                </p>
+              </div>
               
-              {/* Modal */}
-              <div className="flex min-h-full items-center justify-center p-4">
-                <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-200">
-                  {/* Header */}
-                  <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-10 h-10 bg-indigo-100 rounded-lg">
-                        <LightBulbIcon className="h-6 w-6 text-indigo-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">Provider Type Mapping Help</h2>
-                        <p className="text-sm text-gray-500">Learn how to use provider type mapping effectively</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShowHelp(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-                      title="Close help"
-                    >
-                      <XMarkIcon className="h-5 w-5 text-gray-400" />
-                    </button>
-                  </div>
-                  
-                  {/* Content */}
-                  <div className="p-6 space-y-4">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">What is Provider Type Mapping?</h3>
-                      <p className="text-gray-600">
-                        Provider Type Mapping helps you standardize provider type names across different survey sources. 
-                        This ensures that data for MDs, NPs, PAs, and other provider types are properly aligned for accurate analytics.
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">How to Use</h3>
-                      <ul className="list-disc list-inside space-y-2 text-gray-600">
-                        <li><strong>Map as Singles:</strong> Create individual mappings for selected provider types</li>
-                        <li><strong>Map Selected:</strong> Group selected provider types into a single standardized mapping</li>
-                        <li><strong>Manual Mapping:</strong> Click on individual provider types to create custom mappings</li>
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Examples</h3>
-                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                        <p className="text-sm text-gray-600"><strong>MD:</strong> "Physician", "Doctor", "MD", "Medical Doctor"</p>
-                        <p className="text-sm text-gray-600"><strong>NP:</strong> "Nurse Practitioner", "NP", "APRN"</p>
-                        <p className="text-sm text-gray-600"><strong>PA:</strong> "Physician Assistant", "PA", "PA-C"</p>
-                        <p className="text-sm text-gray-600"><strong>CNM:</strong> "Certified Nurse Midwife", "CNM", "Midwife"</p>
-                      </div>
-                    </div>
-                  </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">How to Use</h3>
+                <ul className="list-disc list-inside space-y-2 text-gray-600">
+                  <li><strong>Map as Singles:</strong> Create individual mappings for selected provider types</li>
+                  <li><strong>Map Selected:</strong> Group selected provider types into a single standardized mapping</li>
+                  <li><strong>Manual Mapping:</strong> Click on individual provider types to create custom mappings</li>
+                </ul>
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Examples</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <p className="text-sm text-gray-600"><strong>MD:</strong> "Physician", "Doctor", "MD", "Medical Doctor"</p>
+                  <p className="text-sm text-gray-600"><strong>NP:</strong> "Nurse Practitioner", "NP", "APRN"</p>
+                  <p className="text-sm text-gray-600"><strong>PA:</strong> "Physician Assistant", "PA", "PA-C"</p>
+                  <p className="text-sm text-gray-600"><strong>CNM:</strong> "Certified Nurse Midwife", "CNM", "Midwife"</p>
                 </div>
               </div>
             </div>
-          )}
+          </HelpModal>
         </div>
       </div>
     </>

@@ -11,7 +11,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Paper
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
@@ -210,50 +211,102 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
         </div>
       </div>
 
-      {/* Mappings List */}
-      <div className="space-y-3">
-        {mappingEntries.map(([original, standardized]) => (
-          <div key={original} className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md rounded-lg">
-            <div className="flex justify-between items-center">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3">
-                  <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-                    {original}
-                  </Typography>
-                  <Typography variant="body2" className="text-gray-500 text-sm">
-                    →
-                  </Typography>
-                  <Typography variant="subtitle1" className="font-medium text-indigo-600 text-sm">
-                    {standardized}
-                  </Typography>
+      {/* Learned Mappings List - Grouped by Standardized Name (Like Specialty Mapping) */}
+      <div className="space-y-4">
+        {learnedMappingsList.map((mapping) => (
+          <div key={mapping.id} className="flex items-start space-x-3">
+            {/* Bulk Selection Checkbox */}
+            {isBulkMode && (
+              <Checkbox
+                checked={selectedMappings.has(mapping.id)}
+                onChange={() => handleSelectMapping(mapping.id)}
+                size="small"
+                sx={{ 
+                  padding: '4px',
+                  '&.Mui-checked': {
+                    color: '#3b82f6'
+                  }
+                }}
+              />
+            )}
+            
+            {/* Mapping Item - Use same pattern as Specialty Mapping */}
+            <div className="flex-1">
+              <Paper className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
+                {/* Header with standardized name and actions */}
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+                      {mapping.standardizedName}
+                    </Typography>
+                    <Typography variant="caption" className="text-gray-500 text-xs">
+                      Last updated: {mapping.updatedAt.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </Typography>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        // Remove all source variables for this standardized name
+                        mapping.sourceVariables.forEach(source => {
+                          onRemoveMapping(source.variable);
+                        });
+                      }}
+                      className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
+                      title="Remove learned mapping"
+                    >
+                      <DeleteIcon className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <Typography variant="caption" className="text-gray-500 text-xs">
-                  Automatically learned mapping
-                </Typography>
-              </div>
-              <div className="flex items-center space-x-2">
-                {isBulkMode && (
-                  <Checkbox
-                    checked={selectedMappings.has(standardized)}
-                    onChange={() => handleSelectMapping(standardized)}
-                    size="small"
-                  />
-                )}
-                <button
-                  onClick={() => onRemoveMapping(original)}
-                  className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
-                  title="Remove learned mapping"
-                >
-                  <DeleteIcon className="h-4 w-4" />
-                </button>
-              </div>
+
+                {/* Connected variables display */}
+                <div className="relative mt-2">
+                  {/* Source variables in horizontal layout */}
+                  <div className="flex flex-wrap gap-2 ml-6">
+                    {mapping.sourceVariables.map((source, index) => (
+                      <div key={index} className="relative">
+                        {/* Connector line to main variable */}
+                        {index > 0 && (
+                          <div className="absolute -left-1 top-1/2 h-0.5 w-2 bg-gray-200" />
+                        )}
+                        
+                        {/* Variable card */}
+                        <div 
+                          className="p-2 rounded border border-gray-200 min-w-0 bg-white hover:bg-gray-50 transition-colors duration-150 shadow-sm hover:shadow-md"
+                          style={{ 
+                            borderLeftColor: '#9CA3AF', // Learned color
+                            borderLeftWidth: '3px' 
+                          }}
+                        >
+                          <div className="flex justify-between items-center gap-2">
+                            <Typography className="font-medium text-sm truncate">
+                              {source.variable}
+                            </Typography>
+                            <Typography 
+                              variant="caption" 
+                              style={{ color: '#9CA3AF' }} 
+                              className="text-xs font-medium whitespace-nowrap"
+                            >
+                              {source.surveySource}
+                            </Typography>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Paper>
             </div>
           </div>
         ))}
       </div>
       
       {/* Empty State - Consistent enterprise pattern */}
-      {mappingEntries.length === 0 && (
+      {learnedMappingsList.length === 0 && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
