@@ -35,6 +35,8 @@ import {
   ShareIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
+import { EmptyState } from '../../mapping/components/shared/EmptyState';
+import { BoltIcon } from '@heroicons/react/24/outline';
 // Using HTML5 drag and drop API instead of react-beautiful-dnd
 
 interface ReportSection {
@@ -286,31 +288,16 @@ export const ReportBuilder: React.FC<ReportBuilderProps> = ({
             >
                     {sections.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
-                        <div className="text-center">
-                          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                            <PlusIcon className="w-8 h-8 text-gray-400" />
-                          </div>
-                          <Typography variant="h6" className="text-gray-500 mb-2">
-                            Start Building Your Report
-                          </Typography>
-                          <Typography variant="body2" className="text-gray-400 mb-4">
-                            Drag components from the left panel to get started
-                          </Typography>
-                          <div className="flex flex-wrap gap-2 justify-center">
-                            {availableComponents.map(component => (
-                              <Button
-                                key={component.id}
-                                variant="outlined"
-                                size="small"
-                                startIcon={<span>{component.icon}</span>}
-                                onClick={() => addSection(component.id)}
-                                className="text-xs"
-                              >
-                                {component.name}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
+                        <EmptyState
+                          icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+                          title="Start Building Your Report"
+                          message="Drag components from the left panel to get started, or use the quick add buttons below."
+                          action={{
+                            label: "Add Chart",
+                            onClick: () => addSection('chart'),
+                            icon: <PlusIcon className="h-4 w-4" />
+                          }}
+                        />
                       </div>
                     ) : (
                       sections.map((section, index) => (
