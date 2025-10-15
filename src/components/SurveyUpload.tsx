@@ -865,9 +865,13 @@ const SurveyUpload: React.FC = () => {
                         </svg>
                         <span className="text-sm font-medium">{files[0].name}</span>
                       </div>
-                      {surveyType && surveyYear && (
+                      {surveyType && surveyYear ? (
                         <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                           {isCustom ? customSurveyType : surveyType} • {surveyYear}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                          ⚠️ Select Provider Type and Survey Type to continue
                         </span>
                       )}
                     </div>
@@ -937,14 +941,21 @@ const SurveyUpload: React.FC = () => {
                     title="No Surveys Uploaded Yet"
                     message="Upload your first survey to get started with data analysis and mapping."
                     action={{
-                      label: "Upload Survey",
+                      label: "Browse Files",
                       onClick: () => {
-                        // Scroll to upload section and expand it
+                        // Expand upload section and trigger file picker
                         setIsUploadSectionCollapsed(false);
                         const uploadSection = document.querySelector('[data-upload-section]');
                         if (uploadSection) {
                           uploadSection.scrollIntoView({ behavior: 'smooth' });
                         }
+                        // Trigger the file input after a short delay
+                        setTimeout(() => {
+                          const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+                          if (fileInput) {
+                            fileInput.click();
+                          }
+                        }, 300);
                       },
                       icon: <CloudArrowUpIcon className="h-4 w-4" />
                     }}

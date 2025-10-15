@@ -40,7 +40,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         {action && (
           <button
             onClick={action.onClick}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 shadow-lg hover:shadow-xl"
           >
             {action.icon && <span className="mr-2">{action.icon}</span>}
             {action.label}
