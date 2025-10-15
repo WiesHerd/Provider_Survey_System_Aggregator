@@ -14,6 +14,8 @@ import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
+import { EmptyState } from '../features/mapping/components/shared/EmptyState';
+import { BoltIcon } from '@heroicons/react/24/outline';
 
 
 // Provider type categories for survey selection
@@ -652,7 +654,7 @@ const SurveyUpload: React.FC = () => {
 
 
           {/* Upload Form Section */}
-          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-upload-section>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <button
@@ -930,9 +932,23 @@ const SurveyUpload: React.FC = () => {
                     showProgress={uploadedSurveys.length > 0}
                   />
                 ) : uploadedSurveys.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">No surveys uploaded yet (Count: {uploadedSurveys.length})</p>
-                  </div>
+                  <EmptyState
+                    icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+                    title="No Surveys Uploaded Yet"
+                    message="Upload your first survey to get started with data analysis and mapping."
+                    action={{
+                      label: "Upload Survey",
+                      onClick: () => {
+                        // Scroll to upload section and expand it
+                        setIsUploadSectionCollapsed(false);
+                        const uploadSection = document.querySelector('[data-upload-section]');
+                        if (uploadSection) {
+                          uploadSection.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      },
+                      icon: <CloudArrowUpIcon className="h-4 w-4" />
+                    }}
+                  />
                 ) : (
                   <>
         
