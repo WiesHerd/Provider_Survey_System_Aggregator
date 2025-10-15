@@ -18,6 +18,8 @@ import { SelectChangeEvent } from '@mui/material/Select';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { SpecialtyItem } from '../types/blending';
 import { BlendingResults } from './BlendingResults';
+import { EmptyState } from '../../mapping/components/shared/EmptyState';
+import { BoltIcon } from '@heroicons/react/24/outline';
 import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
@@ -1323,19 +1325,13 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                    showProgress={true}
                  />
                ) : filteredSurveyData.length === 0 ? (
-                 <div className="p-8 text-center text-gray-500 bg-white rounded-b-xl">
-                    <div className="mb-4">
-                      <div className="text-lg font-medium text-gray-900 mb-2">No survey data found</div>
-                      <div className="text-sm text-gray-600 mb-4">
-                        Try adjusting your filters or check if data is loaded
-                      </div>
-                      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
-                        <div>Total data available: {allData.length} records</div>
-                        <div>Filters: Survey={selectedSurvey || 'Any'}, Year={selectedYear || 'Any'}, Region={selectedRegion || 'Any'}, Provider={selectedProviderType || 'Any'}</div>
-                        {specialtySearch && <div>Search: "{specialtySearch}"</div>}
-                      </div>
-                    </div>
-                  </div>
+                 <div className="bg-white rounded-b-xl">
+                   <EmptyState
+                     icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+                     title="No Survey Data Found"
+                     message="Try adjusting your filters or check if data is loaded. Upload surveys first to create blends."
+                   />
+                 </div>
                 ) : (
                  <div className="bg-white rounded-b-xl">
                    <div className="overflow-x-auto max-w-full">
