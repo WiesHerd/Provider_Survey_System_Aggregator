@@ -58,7 +58,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             }}
           >
             <MenuItem value="All Years">All Years</MenuItem>
-            {uniqueValues.years.map(option => (
+            {(uniqueValues.years || []).map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>
@@ -68,7 +68,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
           <Autocomplete
             value={filters.specialty}
             onChange={(_: any, newValue: string | null) => handleFilterChange('specialty', newValue || '')}
-            options={uniqueValues.specialties}
+            options={uniqueValues.specialties || []}
             getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
             renderInput={(params: any) => (
               <TextField
@@ -128,7 +128,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             }}
           >
             <MenuItem value="All Types">All Types</MenuItem>
-            {uniqueValues.providerTypes.map(option => (
+            {(uniqueValues.providerTypes || []).map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>
@@ -161,7 +161,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             }}
           >
             <MenuItem value="All Regions">All Regions</MenuItem>
-            {uniqueValues.regions.map(option => (
+            {(uniqueValues.regions || []).map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>
@@ -194,7 +194,7 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             }}
           >
             <MenuItem value="All Sources">All Sources</MenuItem>
-            {uniqueValues.surveySources.map(option => (
+            {(uniqueValues.surveySources || []).map(option => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>

@@ -3,9 +3,10 @@ import {
   Button,
   Tooltip
 } from '@mui/material';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, BoltIcon } from '@heroicons/react/24/outline';
 import { ResultsPanelProps, AggregationMethod } from '../types/fmv';
 import { formatFMVValue } from '../utils/fmvCalculations';
+import { EmptyState } from '../../mapping/components/shared/EmptyState';
 
 /**
  * Results Panel component for displaying market comparison results
@@ -129,38 +130,16 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
       </div>
       
       {noMarketData ? (
-        <div className="text-center py-12">
-          <div className="text-gray-500 mb-4">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          <div className="text-gray-900 font-medium mb-2">
-            No market data available
-          </div>
-          <div className="text-gray-600 mb-6">
-            Try adjusting your filters to find matching market data.
-          </div>
-          {onResetFilters && (
-            <Button 
-              onClick={onResetFilters}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-              sx={{
-                textTransform: 'none',
-                borderRadius: '8px',
-                fontWeight: 600,
-                px: 4,
-                py: 2,
-                color: 'white !important',
-                '&:hover': {
-                  color: 'white !important'
-                }
-              }}
-            >
-              Reset Filters
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+          title="No Market Data Available"
+          message="Try adjusting your filters to find matching market data."
+          action={onResetFilters ? {
+            label: "Reset Filters",
+            onClick: onResetFilters,
+            icon: <ArrowPathIcon className="h-4 w-4" />
+          } : undefined}
+        />
       ) : (
         <>
           {/* Single Survey Notice */}
