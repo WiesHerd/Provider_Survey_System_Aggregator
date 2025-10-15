@@ -940,25 +940,6 @@ const SurveyUpload: React.FC = () => {
                     icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
                     title="No Surveys Uploaded Yet"
                     message="Upload your first survey to get started with data analysis and mapping."
-                    action={{
-                      label: "Browse Files",
-                      onClick: () => {
-                        // Expand upload section and trigger file picker
-                        setIsUploadSectionCollapsed(false);
-                        const uploadSection = document.querySelector('[data-upload-section]');
-                        if (uploadSection) {
-                          uploadSection.scrollIntoView({ behavior: 'smooth' });
-                        }
-                        // Trigger the file input after a short delay
-                        setTimeout(() => {
-                          const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                          if (fileInput) {
-                            fileInput.click();
-                          }
-                        }, 300);
-                      },
-                      icon: <CloudArrowUpIcon className="h-4 w-4" />
-                    }}
                   />
                 ) : (
                   <>
