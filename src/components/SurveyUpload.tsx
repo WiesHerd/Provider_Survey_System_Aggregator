@@ -344,7 +344,7 @@ const SurveyUpload: React.FC = () => {
   };
 
   const confirmDeleteSurvey = async () => {
-    if (!surveyToDelete) return;
+    if (!surveyToDelete || isDeleting) return; // Prevent multiple clicks
     
     try {
       setIsDeleting(true);
@@ -358,15 +358,21 @@ const SurveyUpload: React.FC = () => {
       }
       
       completeProgress(); // Complete progress animation
+      
+      // Close modal immediately after successful deletion
+      setShowDeleteConfirmation(false);
+      setSurveyToDelete(null);
     } catch (error) {
       console.error('Error removing survey:', error);
       handleError('Error removing survey');
       completeProgress(); // Complete progress even on error
+      
+      // Close modal even on error
+      setShowDeleteConfirmation(false);
+      setSurveyToDelete(null);
     } finally {
       setTimeout(() => {
         setIsDeleting(false);
-        setShowDeleteConfirmation(false);
-        setSurveyToDelete(null);
       }, 600);
     }
   };
@@ -1020,9 +1026,10 @@ const SurveyUpload: React.FC = () => {
               <button
                 type="button"
                 onClick={confirmDeleteSurvey}
-                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl"
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
