@@ -106,7 +106,12 @@ export class PerformanceOptimizedDataService {
     const cacheKey = `specialty_mapping_${providerType || 'all'}`;
     
     // Check cache first
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<{
+      mappings: ISpecialtyMapping[];
+      unmapped: IUnmappedSpecialty[];
+      learned: Record<string, string>;
+      learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
+    }>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for specialty mapping data`);
       return cached;
@@ -165,7 +170,7 @@ export class PerformanceOptimizedDataService {
   ): Promise<ISpecialtyMapping[]> {
     const cacheKey = `all_specialty_mappings_${providerType || 'all'}`;
     
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<ISpecialtyMapping[]>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for specialty mappings`);
       return cached;
@@ -195,7 +200,7 @@ export class PerformanceOptimizedDataService {
   ): Promise<IUnmappedSpecialty[]> {
     const cacheKey = `unmapped_specialties_${providerType || 'all'}`;
     
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<IUnmappedSpecialty[]>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for unmapped specialties`);
       return cached;
@@ -226,7 +231,12 @@ export class PerformanceOptimizedDataService {
   }> {
     const cacheKey = `provider_type_mapping_${providerType || 'all'}`;
     
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<{
+      mappings: any[];
+      unmapped: any[];
+      learned: Record<string, string>;
+      learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
+    }>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for provider type mapping data`);
       return cached;
@@ -269,7 +279,12 @@ export class PerformanceOptimizedDataService {
   }> {
     const cacheKey = `region_mapping_${providerType || 'all'}`;
     
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<{
+      mappings: any[];
+      unmapped: any[];
+      learned: Record<string, string>;
+      learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
+    }>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for region mapping data`);
       return cached;
@@ -312,7 +327,12 @@ export class PerformanceOptimizedDataService {
   }> {
     const cacheKey = `variable_mapping_${providerType || 'all'}`;
     
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<{
+      mappings: any[];
+      unmapped: any[];
+      learned: Record<string, string>;
+      learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
+    }>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for variable mapping data`);
       return cached;
@@ -355,7 +375,12 @@ export class PerformanceOptimizedDataService {
   }> {
     const cacheKey = `column_mapping_${providerType || 'all'}`;
     
-    const cached = this.getCached(cacheKey);
+    const cached = this.getCached<{
+      mappings: any[];
+      unmapped: any[];
+      learned: Record<string, string>;
+      learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
+    }>(cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for column mapping data`);
       return cached;

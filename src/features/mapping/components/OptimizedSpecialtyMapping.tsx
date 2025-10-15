@@ -160,14 +160,14 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
               onClick={handleLoadData}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
-              <RefreshIcon className="h-4 w-4 mr-2" />
+              <ArrowPathIcon className="h-4 w-4 mr-2" />
               Retry
             </button>
             <button
               onClick={clearCache}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
             >
-              <CachedIcon className="h-4 w-4 mr-2" />
+              <CpuChipIcon className="h-4 w-4 mr-2" />
               Clear Cache
             </button>
           </Box>
