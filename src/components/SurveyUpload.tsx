@@ -359,21 +359,25 @@ const SurveyUpload: React.FC = () => {
       
       completeProgress(); // Complete progress animation
       
-      // Close modal immediately after successful deletion
-      setShowDeleteConfirmation(false);
-      setSurveyToDelete(null);
+      // Close modal after a delay to show progress
+      setTimeout(() => {
+        setShowDeleteConfirmation(false);
+        setSurveyToDelete(null);
+      }, 1000);
     } catch (error) {
       console.error('Error removing survey:', error);
       handleError('Error removing survey');
       completeProgress(); // Complete progress even on error
       
-      // Close modal even on error
-      setShowDeleteConfirmation(false);
-      setSurveyToDelete(null);
+      // Close modal after a delay even on error
+      setTimeout(() => {
+        setShowDeleteConfirmation(false);
+        setSurveyToDelete(null);
+      }, 1000);
     } finally {
       setTimeout(() => {
         setIsDeleting(false);
-      }, 600);
+      }, 1200);
     }
   };
 
@@ -568,20 +572,27 @@ const SurveyUpload: React.FC = () => {
       
       // Complete progress and show success message
       completeProgress();
+      
+      // Close modal after showing progress
       setTimeout(() => {
+        setShowClearAllConfirmation(false);
         alert('✅ All data cleared successfully! The page will reload to ensure a clean state.');
         window.location.reload();
-      }, 1000);
+      }, 1500);
       
     } catch (error) {
       console.error('Error clearing all data:', error);
       handleError('Error clearing data');
       completeProgress(); // Complete progress even on error
+      
+      // Close modal after showing progress even on error
+      setTimeout(() => {
+        setShowClearAllConfirmation(false);
+      }, 1500);
     } finally {
       setTimeout(() => {
         setIsDeleting(false);
-        setShowClearAllConfirmation(false);
-      }, 600);
+      }, 1800);
     }
   };
 
