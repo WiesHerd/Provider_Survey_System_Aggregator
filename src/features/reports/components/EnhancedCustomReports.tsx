@@ -38,6 +38,7 @@ import {
 import { ReportBuilder, ReportTemplates, VisualFilterBuilder } from '../index';
 import { getDataService } from '../../../services/DataService';
 import { useYear } from '../../../contexts/YearContext';
+import { AnalysisProgressBar } from '../../../shared/components/AnalysisProgressBar';
 
 interface EnhancedCustomReportsProps {
   data?: any[];
@@ -226,6 +227,17 @@ export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({
         return null;
     }
   };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <AnalysisProgressBar
+        message="Loading custom reports..."
+        progress={100}
+        recordCount={0}
+      />
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
