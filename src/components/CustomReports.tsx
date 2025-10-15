@@ -427,7 +427,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   useEffect(() => {
     setAvailableOptions(prev => ({
       ...prev,
-      ...calculateCascadingOptions
+      ...(calculateCascadingOptions || {})
     }));
   }, [calculateCascadingOptions]);
 
@@ -1436,7 +1436,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 multiple
                 value={currentConfig.filters.years}
                 onChange={(event: any, newValue: string[]) => handleFilterChange('years', newValue)}
-                options={availableOptions.years}
+                options={availableOptions.years || []}
                 getOptionLabel={(option: string) => option}
                 renderInput={(params: any) => (
                   <TextField
@@ -1542,7 +1542,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             {/* Specialty Filter */}
             <FormControl size="small" sx={{ width: '100%', maxWidth: '100%' }}>
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-                Specialties ({availableOptions.specialties.length} available)
+                Specialties ({(availableOptions.specialties || []).length} available)
               </Typography>
               <Autocomplete
                 multiple
@@ -1551,11 +1551,11 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   console.log('AUTOCOMPLETE onChange - newValue:', newValue);
                   handleFilterChange('specialties', newValue);
                 }}
-                options={availableOptions.specialties}
+                options={availableOptions.specialties || []}
                 getOptionKey={(option: string) => option}
                 onOpen={() => {
-                  console.log('🚨 AUTOCOMPLETE OPENED - Available options:', availableOptions.specialties);
-                  console.log('🚨 AUTOCOMPLETE OPENED - Options length:', availableOptions.specialties.length);
+                  console.log('🚨 AUTOCOMPLETE OPENED - Available options:', availableOptions.specialties || []);
+                  console.log('🚨 AUTOCOMPLETE OPENED - Options length:', (availableOptions.specialties || []).length);
                 }}
                 getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
                 renderInput={(params: any) => (
@@ -1636,7 +1636,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 multiple
                 value={currentConfig.filters.regions}
                 onChange={(event: any, newValue: string[]) => handleFilterChange('regions', newValue)}
-                options={availableOptions.regions}
+                options={availableOptions.regions || []}
                 getOptionLabel={(option: string) => option}
                 renderInput={(params: any) => (
                   <TextField
@@ -1719,7 +1719,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 multiple
                 value={currentConfig.filters.surveySources}
                 onChange={(event: any, newValue: string[]) => handleFilterChange('surveySources', newValue)}
-                options={availableOptions.surveySources}
+                options={availableOptions.surveySources || []}
                 getOptionLabel={(option: string) => option}
                 renderInput={(params: any) => (
                   <TextField
@@ -1802,7 +1802,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 multiple
                 value={currentConfig.filters.providerTypes}
                 onChange={(event: any, newValue: string[]) => handleFilterChange('providerTypes', newValue)}
-                options={availableOptions.providerTypes}
+                options={availableOptions.providerTypes || []}
                 getOptionLabel={(option: string) => option}
                 renderInput={(params: any) => (
                   <TextField
