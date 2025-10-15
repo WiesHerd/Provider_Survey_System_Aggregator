@@ -12,14 +12,12 @@ interface LoadingSpinnerProps {
 }
 
 /**
- * STANDARDIZED Loading Spinner - Microsoft/Google Style
+ * DEPRECATED: Use UnifiedLoadingSpinner instead
  * 
- * CRITICAL: Same exact spinner everywhere in the app
- * - Always 32x32px (w-8 h-8)
- * - Always centered
- * - Same animation (1s linear)
- * - Same colors (gray-200 background, indigo-600 accent)
- * - Professional, consistent UX
+ * This component is deprecated in favor of UnifiedLoadingSpinner.
+ * All new implementations should use UnifiedLoadingSpinner for consistency.
+ * 
+ * @deprecated Use UnifiedLoadingSpinner from './UnifiedLoadingSpinner' instead
  */
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
   message = 'Loading...', 

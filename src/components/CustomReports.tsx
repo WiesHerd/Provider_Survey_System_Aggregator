@@ -19,7 +19,8 @@ import {
   TableRow,
   Paper
 } from '@mui/material';
-import { LoadingContainer } from '../shared/components/LoadingContainer';
+import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { 
   LineChart, 
@@ -88,6 +89,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   data: propData, 
   title = 'Custom Reports' 
 }) => {
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
   console.log('🔄 CustomReports component rendering...');
   
   // Year context
@@ -1123,50 +1130,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     );
   };
 
+  // Start progress animation when loading begins
+  React.useEffect(() => {
+    if (loading) {
+      startProgress();
+    } else {
+      completeProgress();
+    }
+  }, [loading, startProgress, completeProgress]);
+
   if (loading) {
     return (
-      <LoadingContainer
-        loading={true}
-        variant="page"
+      <UnifiedLoadingSpinner
         message="Loading analytics data..."
-        fallback={
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
-              <div className="text-center">
-                {/* Purple/Indigo Arc Spinner - LARGER SIZE TO MATCH ANALYTICS */}
-                <div className="w-12 h-12 mx-auto mb-4">
-                  <div 
-                    className="w-12 h-12 rounded-full animate-spin"
-                    style={{
-                      background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
-                      animationDuration: '1s',
-                      animationTimingFunction: 'linear',
-                      mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
-                      WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
-                    }}
-                  />
-                </div>
-                
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Loading analytics data...</h3>
-                <p className="text-gray-600 mb-4">Processing 0 records for optimal performance...</p>
-                
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div 
-                    className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: '39.90%' }}
-                  />
-                </div>
-                
-                {/* Progress Percentage */}
-                <p className="text-sm text-gray-700 font-medium">39.90% complete</p>
-              </div>
-            </div>
-          </div>
-        }
-      >
-        <div />
-      </LoadingContainer>
+        recordCount={0}
+        progress={progress}
+        showProgress={true}
+      />
     );
   }
 

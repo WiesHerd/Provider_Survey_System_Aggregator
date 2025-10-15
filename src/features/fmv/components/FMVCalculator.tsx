@@ -9,7 +9,8 @@ import { ResultsPanel } from './ResultsPanel';
 import BlendedResultsPanel from './BlendedResultsPanel';
 import { SavedFMVManager } from './SavedFMVManager';
 import FairMarketValuePrintable from '../../../components/FairMarketValuePrintable';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
 
 /**
@@ -18,6 +19,12 @@ import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
  * @param onPrint - Optional callback for print functionality
  */
 export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
   const {
     // State
     filters,
@@ -120,13 +127,23 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     };
   };
 
+  // Start progress animation when loading begins
+  React.useEffect(() => {
+    if (loading) {
+      startProgress();
+    } else {
+      completeProgress();
+    }
+  }, [loading, startProgress, completeProgress]);
+
   // Show loading state
   if (loading) {
     return (
-      <AnalysisProgressBar
+      <UnifiedLoadingSpinner
         message="Loading Fair Market Value data..."
-        progress={100}
         recordCount={0}
+        progress={progress}
+        showProgress={true}
       />
     );
   }

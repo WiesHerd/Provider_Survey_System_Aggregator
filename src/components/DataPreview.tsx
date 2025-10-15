@@ -11,7 +11,8 @@ import {
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
-import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
+import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import AgGridWrapper from './AgGridWrapper';
 
 // Custom header component for pinning columns
@@ -76,6 +77,13 @@ interface FileStats {
 
 const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange }) => {
   const dataService = getDataService();
+  
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
   const [previewData, setPreviewData] = useState<string[][]>([]);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [originalData, setOriginalData] = useState<any[]>([]);
@@ -726,10 +734,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Subtle refreshing overlay */}
         {isRefreshing && (
           <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
-            <AnalysisProgressBar
+            <UnifiedLoadingSpinner
               message="Updating data..."
-              progress={100}
               recordCount={0}
+              progress={progress}
+              showProgress={true}
             />
           </div>
         )}

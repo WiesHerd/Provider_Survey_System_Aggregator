@@ -5,7 +5,8 @@ import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/mat
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
 import { ISurveyRow, ISurveyMetadata } from '../types/survey';
-import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
+import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
@@ -94,6 +95,13 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 const SurveyUpload: React.FC = () => {
   const dataService = getDataService();
   const { currentYear } = useYear();
+
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
   const { selectedProviderType, refreshProviderTypeDetection } = useProviderContext();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
@@ -108,9 +116,7 @@ const SurveyUpload: React.FC = () => {
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteProgress, setDeleteProgress] = useState(0);
   const [justUploaded, setJustUploaded] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
@@ -342,7 +348,7 @@ const SurveyUpload: React.FC = () => {
     
     try {
       setIsDeleting(true);
-      setDeleteProgress(10);
+      startProgress(); // Start smooth progress animation
       
       await dataService.deleteSurvey(surveyToDelete.id);
       setUploadedSurveys(prev => prev.filter(s => s.id !== surveyToDelete.id));
@@ -351,15 +357,14 @@ const SurveyUpload: React.FC = () => {
         setSelectedSurvey(null);
       }
       
-      setDeleteProgress(90);
+      completeProgress(); // Complete progress animation
     } catch (error) {
       console.error('Error removing survey:', error);
       handleError('Error removing survey');
+      completeProgress(); // Complete progress even on error
     } finally {
-      setDeleteProgress(100);
       setTimeout(() => {
         setIsDeleting(false);
-        setDeleteProgress(0);
         setShowDeleteConfirmation(false);
         setSurveyToDelete(null);
       }, 600);
@@ -376,7 +381,7 @@ const SurveyUpload: React.FC = () => {
     }
 
     setIsUploading(true);
-    setUploadProgress(0);
+    startProgress(); // Start progress animation
 
     try {
       // Read the CSV file
@@ -393,11 +398,11 @@ const SurveyUpload: React.FC = () => {
       if (!validation.isValid) {
         setError('File has missing required columns. Please check the validation details below.');
         setIsUploading(false);
-        setUploadProgress(0);
+        completeProgress(); // Complete progress even on validation error
         return;
       }
 
-      setUploadProgress(30);
+      // Progress is handled by useSmoothProgress hook
 
       // Parse CSV data
       const parsedRows = dataRows.map(row => {
@@ -409,7 +414,7 @@ const SurveyUpload: React.FC = () => {
         return rowData;
       });
 
-      setUploadProgress(60);
+      // Progress is handled by useSmoothProgress hook
 
       // Create survey object
       const surveyId = crypto.randomUUID();
@@ -460,7 +465,7 @@ const SurveyUpload: React.FC = () => {
       setSelectedSurvey(surveyId);
       setRefreshTrigger(prev => prev + 1);
 
-      setUploadProgress(80);
+      // Progress is handled by useSmoothProgress hook
 
       // Save survey and data to IndexedDB
       console.log('Saving survey to data service:', survey);
@@ -468,7 +473,7 @@ const SurveyUpload: React.FC = () => {
       console.log('Saving survey data to data service:', surveyId);
       await dataService.saveSurveyData(surveyId, parsedRows);
 
-      setUploadProgress(100);
+      // Progress is handled by useSmoothProgress hook
 
       console.log('Survey uploaded successfully:', {
         surveyId: surveyId,
@@ -500,8 +505,8 @@ const SurveyUpload: React.FC = () => {
       setIsCustom(false);
 
       // Show success message
+      completeProgress(); // Complete progress animation
       setTimeout(() => {
-        setUploadProgress(0);
         setIsUploading(false);
       }, 1000);
 
@@ -509,7 +514,7 @@ const SurveyUpload: React.FC = () => {
       console.error('Error uploading survey:', error);
       handleError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsUploading(false);
-      setUploadProgress(0);
+      completeProgress(); // Complete progress animation
     }
   };
 
@@ -522,15 +527,13 @@ const SurveyUpload: React.FC = () => {
   const confirmClearAll = async () => {
     try {
       setIsDeleting(true);
-      setDeleteProgress(10);
+      startProgress(); // Start smooth progress animation
       
       // Clear all surveys first
       await dataService.deleteAllSurveys();
-      setDeleteProgress(20);
       
       // Clear both possible IndexedDB databases
       await clearStorage.clearIndexedDB(); // SurveyAggregatorDB
-      setDeleteProgress(40);
       
       // Also clear the old survey-data database if it exists
       try {
@@ -548,21 +551,17 @@ const SurveyUpload: React.FC = () => {
       } catch (error) {
         console.log('ℹ️ Could not clear old survey-data database:', error);
       }
-      setDeleteProgress(60);
       
       // Clear localStorage as well
       clearStorage.clearLocalStorage();
-      setDeleteProgress(80);
-      
-      // Force reload the page to ensure all data is cleared
-      setDeleteProgress(90);
       
       setUploadedSurveys([]);
       setSelectedSurvey(null);
       
       console.log('✅ All data cleared successfully - ready for fresh upload with fixed CSV parser');
       
-      // Show success message and reload page
+      // Complete progress and show success message
+      completeProgress();
       setTimeout(() => {
         alert('✅ All data cleared successfully! The page will reload to ensure a clean state.');
         window.location.reload();
@@ -571,11 +570,10 @@ const SurveyUpload: React.FC = () => {
     } catch (error) {
       console.error('Error clearing all data:', error);
       handleError('Error clearing data');
+      completeProgress(); // Complete progress even on error
     } finally {
-      setDeleteProgress(100);
       setTimeout(() => {
         setIsDeleting(false);
-        setDeleteProgress(0);
         setShowClearAllConfirmation(false);
       }, 600);
     }
@@ -889,10 +887,11 @@ const SurveyUpload: React.FC = () => {
               <>
                 
                 {isLoading ? (
-                  <AnalysisProgressBar
+                  <UnifiedLoadingSpinner
                     message="Loading surveys..."
-                    progress={100}
                     recordCount={uploadedSurveys.length}
+                    progress={progress}
+                    showProgress={true}
                   />
                 ) : uploadedSurveys.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-xl">
@@ -980,58 +979,23 @@ const SurveyUpload: React.FC = () => {
         })()}
       </div>
     </div>
-      {/* Upload Progress Modal */}
+      {/* Upload Progress Modal - Use Unified Spinner */}
       {isUploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-md p-6">
-            <div>
-              <h3 id="upload-modal-title" className="text-lg font-semibold text-gray-900">Uploading survey…</h3>
-              <p className="mt-1 text-sm text-gray-500">Please keep this tab open while we process your file.</p>
-            </div>
-            <div className="mt-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Progress</span>
-                <span className="text-sm text-gray-500">{uploadProgress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="h-2.5 rounded-full transition-all duration-300 ease-out bg-emerald-600" style={{ width: `${uploadProgress}%` }} />
-              </div>
-              <div className="mt-3 text-xs text-gray-500">
-                {uploadProgress < 100 ? 'Processing survey data…' : 'Upload complete! Finalizing…'}
-              </div>
-            </div>
-          </div>
-        </div>
+        <UnifiedLoadingSpinner
+          message="Uploading survey..."
+          recordCount={0}
+          progress={progress}
+          showProgress={true}
+        />
       )}
-      {/* Deleting Progress Modal */}
+      {/* Deleting Progress Modal - Use Unified Spinner */}
       {isDeleting && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-md p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900">Clearing surveys…</h3>
-                <p className="mt-1 text-sm text-gray-500">Clearing all data from local storage. This can take a few seconds.</p>
-              </div>
-              <AnalysisProgressBar
-                message="Clearing surveys..."
-                progress={100}
-                recordCount={0}
-              />
-            </div>
-            <div className="mt-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Progress</span>
-                <span className="text-sm text-gray-500">{deleteProgress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="h-2.5 rounded-full transition-all duration-300 ease-out bg-red-600" style={{ width: `${deleteProgress}%` }} />
-              </div>
-              <div className="mt-3 text-xs text-gray-500">
-                {deleteProgress < 100 ? 'Removing survey data…' : 'All surveys cleared.'}
-              </div>
-            </div>
-          </div>
-        </div>
+        <UnifiedLoadingSpinner
+          message="Clearing surveys..."
+          recordCount={0}
+          progress={progress}
+          showProgress={true}
+        />
       )}
 
       {/* Individual Survey Delete Confirmation Modal */}

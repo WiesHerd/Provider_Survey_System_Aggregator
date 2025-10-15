@@ -38,7 +38,8 @@ import {
 import { ReportBuilder, ReportTemplates, VisualFilterBuilder } from '../index';
 import { getDataService } from '../../../services/DataService';
 import { useYear } from '../../../contexts/YearContext';
-import { AnalysisProgressBar } from '../../../shared/components/AnalysisProgressBar';
+import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 
 interface EnhancedCustomReportsProps {
   data?: any[];
@@ -73,10 +74,16 @@ const REPORT_MODES: ReportMode[] = [
   }
 ];
 
-export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({
-  data: propData,
-  title = 'Enhanced Custom Reports'
+export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({ 
+  data: propData, 
+  title = 'Enhanced Custom Reports' 
 }) => {
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
   // State management
   const [currentMode, setCurrentMode] = useState<'builder' | 'templates' | 'filters'>('builder');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -103,6 +110,15 @@ export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({
     { id: 'cf_p50', name: 'CF 50th Percentile', type: 'number' as const },
     { id: 'surveyYear', name: 'Survey Year', type: 'date' as const }
   ], []);
+
+  // Start progress animation when loading begins
+  useEffect(() => {
+    if (loading) {
+      startProgress();
+    } else {
+      completeProgress();
+    }
+  }, [loading, startProgress, completeProgress]);
 
   // Load saved reports
   useEffect(() => {
@@ -231,10 +247,11 @@ export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({
   // Show loading state
   if (loading) {
     return (
-      <AnalysisProgressBar
+      <UnifiedLoadingSpinner
         message="Loading custom reports..."
-        progress={100}
         recordCount={0}
+        progress={progress}
+        showProgress={true}
       />
     );
   }

@@ -125,14 +125,48 @@ export class AnalysisToolsPerformanceService {
     const startTime = performance.now();
     
     const dataService = getDataService();
-    const analyticsDataService = new AnalyticsDataService();
     
-    // Batch all queries together
-    const [analyticsData, mappings, regionMappings] = await Promise.all([
-      analyticsDataService.getAnalyticsData(filters),
+    // Get all surveys and their data
+    const [surveys, mappings, regionMappings] = await Promise.all([
+      dataService.getAllSurveys(),
       dataService.getAllSpecialtyMappings(),
       dataService.getRegionMappings()
     ]);
+
+    // Get data from all surveys
+    const allSurveyData = [];
+    for (const survey of surveys) {
+      try {
+        const { rows } = await dataService.getSurveyData(survey.id);
+        allSurveyData.push(...rows);
+      } catch (error) {
+        console.warn(`Failed to load data for survey ${survey.id}:`, error);
+      }
+    }
+
+    // Simple data processing for Regional Analytics
+    const analyticsData = allSurveyData.map((row: any) => ({
+      id: row.id,
+      specialty: row.specialty,
+      providerType: row.providerType,
+      surveySource: row.surveySource,
+      surveyYear: row.surveyYear,
+      geographicRegion: row.geographicRegion,
+      tcc_p25: row.tcc_p25,
+      tcc_p50: row.tcc_p50,
+      tcc_p75: row.tcc_p75,
+      tcc_p90: row.tcc_p90,
+      wrvu_p25: row.wrvu_p25,
+      wrvu_p50: row.wrvu_p50,
+      wrvu_p75: row.wrvu_p75,
+      wrvu_p90: row.wrvu_p90,
+      cf_p25: row.cf_p25,
+      cf_p50: row.cf_p50,
+      cf_p75: row.cf_p75,
+      cf_p90: row.cf_p90,
+      n_orgs: row.n_orgs,
+      n_incumbents: row.n_incumbents
+    }));
 
     const duration = performance.now() - startTime;
     console.log(`✅ Regional analytics data loaded in ${duration.toFixed(2)}ms`);

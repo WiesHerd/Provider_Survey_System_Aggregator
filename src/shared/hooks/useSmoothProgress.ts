@@ -38,11 +38,15 @@ export const useSmoothProgress = (options: UseSmoothProgressOptions = {}) => {
   useEffect(() => {
     if (!isAnimating) return;
 
+    console.log('🔄 Starting smooth progress animation');
+    
     const interval = setInterval(() => {
       setProgress(prev => {
         if (prev >= maxProgress) return prev; // Stop at maxProgress until completion
-        const increment = Math.random() * 10; // Random increment for realistic feel
-        return Math.min(prev + increment, maxProgress);
+        const increment = Math.random() * 15 + 5; // Random increment between 5-20 for more realistic feel
+        const newProgress = Math.min(prev + increment, maxProgress);
+        console.log(`📊 Progress: ${newProgress.toFixed(1)}%`);
+        return newProgress;
       });
     }, intervalMs);
 

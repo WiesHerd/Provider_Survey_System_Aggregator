@@ -8,19 +8,37 @@ import { useToast } from "./ui/use-toast";
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useSurveyData } from '../hooks/useSurveyData';
 import { RegionalComparison } from '../features/regional';
-import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
+import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 
 const Analytics: React.FC = () => {
   const { data: analyticsData } = useAnalytics();
   const { loading, error } = useSurveyData();
   const { toast } = useToast();
 
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
+
+  // Start progress animation when loading begins
+  React.useEffect(() => {
+    if (loading) {
+      startProgress();
+    } else {
+      completeProgress();
+    }
+  }, [loading, startProgress, completeProgress]);
+
   if (loading) {
     return (
-      <AnalysisProgressBar
+      <UnifiedLoadingSpinner
         message="Loading analytics data..."
-        progress={39.90}
         recordCount={0}
+        progress={progress}
+        showProgress={true}
       />
     );
   }

@@ -1,14 +1,12 @@
 import React from 'react';
 
 /**
- * Standardized Loading Spinner - Microsoft/Google Style
+ * DEPRECATED: Use UnifiedLoadingSpinner instead
  * 
- * CRITICAL: This is the ONLY spinner used throughout the entire app
- * - Same exact size everywhere (32x32px)
- * - Always centered
- * - Same animation speed
- * - Same colors
- * - Professional, enterprise-grade design
+ * This component is deprecated in favor of UnifiedLoadingSpinner.
+ * All new implementations should use UnifiedLoadingSpinner for consistency.
+ * 
+ * @deprecated Use UnifiedLoadingSpinner from './UnifiedLoadingSpinner' instead
  */
 
 interface StandardSpinnerProps {

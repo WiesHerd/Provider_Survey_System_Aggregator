@@ -3,7 +3,8 @@ import { FormControl, Autocomplete, TextField } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
-import { AnalysisProgressBar } from '../shared/components';
+import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { AnalyticsDataService } from '../features/analytics/services/analyticsDataService';
@@ -13,6 +14,13 @@ import { AggregatedData } from '../features/analytics/types/analytics';
 const DEFAULT_REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
 
 export const RegionalAnalytics: React.FC = () => {
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
+  
   const [analyticsData, setAnalyticsData] = useState<AggregatedData[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [selectedProviderType, setSelectedProviderType] = useState<string>('');
@@ -316,10 +324,11 @@ export const RegionalAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <AnalysisProgressBar
+      <UnifiedLoadingSpinner
         message="Loading regional analytics..."
-        progress={100}
         recordCount={0}
+        progress={progress}
+        showProgress={true}
       />
     );
   }

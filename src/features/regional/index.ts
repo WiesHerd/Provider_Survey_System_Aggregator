@@ -1,5 +1,5 @@
 // Main component
-export { RegionalAnalytics } from './components/RegionalAnalytics';
+export { OptimizedRegionalAnalytics as RegionalAnalytics } from './components/OptimizedRegionalAnalytics';
 
 // Sub-components
 export { RegionalComparison } from './components/RegionalComparison';

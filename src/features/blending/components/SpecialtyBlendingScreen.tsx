@@ -22,7 +22,8 @@ import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
 import { ModernPagination } from '../../../shared/components/ModernPagination';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { BookmarkSlashIcon } from '@heroicons/react/24/outline';
 
 // Removed AG Grid - using HTML table instead
@@ -37,6 +38,13 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   onClose
 }) => {
   const { toast } = useToast();
+  
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
   const [blendName, setBlendName] = useState('');
   const [blendDescription, setBlendDescription] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -186,6 +194,15 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   useEffect(() => {
     setCurrentPage(1);
   }, [specialtySearch]);
+
+  // Start progress animation when loading begins
+  useEffect(() => {
+    if (isLoading) {
+      startProgress();
+    } else {
+      completeProgress();
+    }
+  }, [isLoading, startProgress, completeProgress]);
 
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
@@ -850,10 +867,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   // Show loading state while data is being fetched
   if (isLoading) {
     return (
-      <AnalysisProgressBar
+      <UnifiedLoadingSpinner
         message="Loading survey data..."
-        progress={100}
         recordCount={0}
+        progress={progress}
+        showProgress={true}
       />
     );
   }
@@ -1298,10 +1316,11 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
               </div>
               
                {isLoading ? (
-                 <AnalysisProgressBar
+                 <UnifiedLoadingSpinner
                    message="Loading survey data..."
-                   progress={100}
                    recordCount={allData.length}
+                   progress={progress}
+                   showProgress={true}
                  />
                ) : filteredSurveyData.length === 0 ? (
                  <div className="p-8 text-center text-gray-500 bg-white rounded-b-xl">

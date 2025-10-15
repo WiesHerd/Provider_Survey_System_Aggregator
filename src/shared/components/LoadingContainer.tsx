@@ -128,10 +128,12 @@ export const LoadingContainer: React.FC<LoadingContainerProps> = ({
 };
 
 /**
- * ENTERPRISE LOADING WRAPPER - OpenAI/Google Pattern
+ * DEPRECATED: Use UnifiedLoadingSpinner instead
  * 
- * Higher-order component that adds loading state to any component.
- * Used by companies like OpenAI for their API interfaces.
+ * This component is deprecated in favor of UnifiedLoadingSpinner.
+ * All new implementations should use UnifiedLoadingSpinner for consistency.
+ * 
+ * @deprecated Use UnifiedLoadingSpinner from './UnifiedLoadingSpinner' instead
  */
 export const withLoading = <P extends object>(
   Component: React.ComponentType<P>,

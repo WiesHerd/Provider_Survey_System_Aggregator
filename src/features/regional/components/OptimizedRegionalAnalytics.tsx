@@ -6,8 +6,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
   Box, 
-  CircularProgress, 
-  LinearProgress, 
   Typography, 
   Alert,
   Chip,
@@ -31,6 +29,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { useOptimizedRegionalData } from '../hooks/useOptimizedRegionalData';
 import { PerformanceDashboard } from '../../mapping/components/PerformanceDashboard';
+import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 
 /**
  * Performance-optimized regional analytics component with enterprise-grade caching
@@ -38,6 +38,13 @@ import { PerformanceDashboard } from '../../mapping/components/PerformanceDashbo
 export const OptimizedRegionalAnalytics: React.FC = () => {
   // Performance state
   const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
+  
+  // Use smooth progress for dynamic loading
+  const { progress, startProgress, completeProgress } = useSmoothProgress({
+    duration: 3000,
+    maxProgress: 90,
+    intervalMs: 100
+  });
 
   // Optimized data hook
   const {
@@ -107,31 +114,26 @@ export const OptimizedRegionalAnalytics: React.FC = () => {
     return indicators;
   }, [lastLoadTime, cacheStats, cacheHitRate]);
 
+  // Start progress animation when loading begins
+  React.useEffect(() => {
+    if (loading) {
+      console.log('🔄 Starting progress animation for Regional Analytics');
+      startProgress();
+    } else {
+      console.log('✅ Completing progress animation for Regional Analytics');
+      completeProgress();
+    }
+  }, [loading, startProgress, completeProgress]);
+
   // Loading state with progress
   if (loading) {
     return (
-      <Box className="p-6">
-        <Box className="flex items-center justify-center mb-4">
-          <CircularProgress size={40} className="mr-3" />
-          <Typography variant="h6" className="text-gray-700">
-            Loading Regional Analytics Data...
-          </Typography>
-        </Box>
-        
-        <LinearProgress className="mb-4" />
-        
-        <Box className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <Typography variant="body2" className="text-blue-800 mb-2">
-            🚀 Performance Optimizations Active
-          </Typography>
-          <Typography variant="body2" className="text-blue-600">
-            • Intelligent caching enabled<br/>
-            • Batch query processing<br/>
-            • Parallel data loading<br/>
-            • Memory optimization
-          </Typography>
-        </Box>
-      </Box>
+      <UnifiedLoadingSpinner
+        message="Loading regional analytics..."
+        recordCount={0}
+        progress={progress}
+        showProgress={true}
+      />
     );
   }
 

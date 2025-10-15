@@ -1,5 +1,12 @@
-// Loading components - STANDARDIZED Microsoft/Google style spinners
-// CRITICAL: Same exact spinner everywhere in the app
+// UNIFIED LOADING SPINNER - Single Source of Truth
+// This is the ONLY spinner component that should be used throughout the application
+export { 
+  UnifiedLoadingSpinner,
+  default as UnifiedLoadingSpinnerDefault
+} from './UnifiedLoadingSpinner';
+
+// DEPRECATED: Legacy spinner components - kept for backward compatibility
+// ⚠️ WARNING: These components are deprecated. Use UnifiedLoadingSpinner instead.
 export { 
   default as LoadingSpinner,
   ButtonSpinner,
@@ -37,7 +44,8 @@ export { AnalysisProgressBar } from './AnalysisProgressBar';
 // Pagination Components
 export { ModernPagination } from './ModernPagination';
 
-// Enterprise Loading Containers - Google/Microsoft/OpenAI Pattern
+// DEPRECATED: Legacy loading containers - kept for backward compatibility
+// ⚠️ WARNING: These components are deprecated. Use UnifiedLoadingSpinner instead.
 export { 
   LoadingContainer, 
   withLoading, 
