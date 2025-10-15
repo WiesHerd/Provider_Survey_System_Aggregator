@@ -1051,7 +1051,7 @@ const SurveyUpload: React.FC = () => {
                   <span className="text-sm font-medium text-red-800">Deleting survey...</span>
                 </div>
                 <div className="mt-2 w-full bg-red-200 rounded-full h-1.5">
-                  <div className="bg-red-600 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                  <div className="bg-red-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                 </div>
               </div>
             )}
@@ -1105,7 +1105,7 @@ const SurveyUpload: React.FC = () => {
                   <span className="text-sm font-medium text-red-800">Clearing all surveys...</span>
                 </div>
                 <div className="mt-2 w-full bg-red-200 rounded-full h-1.5">
-                  <div className="bg-red-600 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                  <div className="bg-red-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                 </div>
               </div>
             )}
