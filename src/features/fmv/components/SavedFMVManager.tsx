@@ -31,6 +31,7 @@ interface SavedFMVManagerProps {
   onLoadCalculation: (calculation: SavedFMVCalculation) => void;
   onSaveCalculation: (calculation: Omit<SavedFMVCalculation, 'id' | 'created' | 'lastModified'>) => void;
   onDeleteCalculation: (id: string) => void;
+  onCalculationsCountChange?: (count: number) => void;
   currentCalculation?: {
     providerName: string;
     filters: FMVFilters;
@@ -51,6 +52,7 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
   onLoadCalculation,
   onSaveCalculation,
   onDeleteCalculation,
+  onCalculationsCountChange,
   currentCalculation
 }) => {
   const [savedCalculations, setSavedCalculations] = useState<SavedFMVCalculation[]>([]);
@@ -84,6 +86,11 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
 
     loadSavedCalculations();
   }, []);
+
+  // Notify parent when calculations count changes
+  useEffect(() => {
+    onCalculationsCountChange?.(savedCalculations.length);
+  }, [savedCalculations.length, onCalculationsCountChange]);
 
   // Save calculations to localStorage
   const saveToStorage = (calculations: SavedFMVCalculation[]) => {

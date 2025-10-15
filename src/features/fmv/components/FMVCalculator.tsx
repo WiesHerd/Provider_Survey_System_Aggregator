@@ -56,6 +56,9 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
 
   // Track current provider name for printing
   const [currentProviderName, setCurrentProviderName] = useState<string>('');
+  
+  // Track saved calculations count for conditional rendering
+  const [savedCalculationsCount, setSavedCalculationsCount] = useState<number>(0);
 
   // Print functionality
   const printRef = useRef<HTMLDivElement>(null);
@@ -149,7 +152,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   }
 
   return (
-    <div className="w-full min-h-screen">
+    <div className="w-full min-h-screen pb-8">
       <div className="w-full flex flex-col gap-4">
         {/* Integrated Data Configuration */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -348,13 +351,16 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
           )}
         </div>
 
-        {/* Saved Calculations Manager */}
-        <SavedFMVManager
-          onLoadCalculation={handleLoadCalculation}
-          onSaveCalculation={handleSaveCalculation}
-          onDeleteCalculation={handleDeleteCalculation}
-          currentCalculation={getCurrentCalculationData()}
-        />
+        {/* Saved Calculations Manager - Hide when no calculations exist */}
+        <div className={`${savedCalculationsCount > 0 ? 'mt-8' : 'hidden'}`}>
+          <SavedFMVManager
+            onLoadCalculation={handleLoadCalculation}
+            onSaveCalculation={handleSaveCalculation}
+            onDeleteCalculation={handleDeleteCalculation}
+            onCalculationsCountChange={setSavedCalculationsCount}
+            currentCalculation={getCurrentCalculationData()}
+          />
+        </div>
 
         {/* Hidden printable component for react-to-print */}
         <div style={{ position: 'absolute', left: '-9999px', top: 0, visibility: 'hidden' }}>
