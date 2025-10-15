@@ -5,7 +5,7 @@ import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/mat
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
 import { ISurveyRow, ISurveyMetadata } from '../types/survey';
-import LoadingSpinner from './ui/loading-spinner';
+import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
 import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
@@ -889,7 +889,11 @@ const SurveyUpload: React.FC = () => {
               <>
                 
                 {isLoading ? (
-                  <LoadingSpinner message="Loading surveys..." size="lg" variant="primary" />
+                  <AnalysisProgressBar
+                    message="Loading surveys..."
+                    progress={100}
+                    recordCount={uploadedSurveys.length}
+                  />
                 ) : uploadedSurveys.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-xl">
                     <p className="text-gray-500">No surveys uploaded yet (Count: {uploadedSurveys.length})</p>
@@ -1008,7 +1012,11 @@ const SurveyUpload: React.FC = () => {
                 <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900">Clearing surveys…</h3>
                 <p className="mt-1 text-sm text-gray-500">Clearing all data from local storage. This can take a few seconds.</p>
               </div>
-              <LoadingSpinner size="sm" variant="primary" />
+              <AnalysisProgressBar
+                message="Clearing surveys..."
+                progress={100}
+                recordCount={0}
+              />
             </div>
             <div className="mt-5">
               <div className="flex items-center justify-between mb-2">

@@ -8,7 +8,7 @@ import { useToast } from "./ui/use-toast";
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useSurveyData } from '../hooks/useSurveyData';
 import { RegionalComparison } from '../features/regional';
-import LoadingSpinner from './ui/loading-spinner';
+import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
 
 const Analytics: React.FC = () => {
   const { data: analyticsData } = useAnalytics();
@@ -16,7 +16,13 @@ const Analytics: React.FC = () => {
   const { toast } = useToast();
 
   if (loading) {
-    return <LoadingSpinner message="Loading analytics data..." size="lg" />;
+    return (
+      <AnalysisProgressBar
+        message="Loading analytics data..."
+        progress={100}
+        recordCount={0}
+      />
+    );
   }
 
   if (error) {

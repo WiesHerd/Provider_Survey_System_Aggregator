@@ -25,7 +25,7 @@ import {
 import { getDataService } from '../services/DataService';
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, ISourceSpecialty } from '../types/specialty';
-import LoadingSpinner from './ui/loading-spinner';
+import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { formatSpecialtyForDisplay, formatRegionForDisplay } from '../shared/utils/formatters';
 import { fuzzyMatchSpecialty, filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
@@ -272,13 +272,11 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <LoadingSpinner 
-          message="Loading analytics data..." 
-          size="lg" 
-          variant="primary" 
-        />
-      </div>
+      <AnalysisProgressBar
+        message="Loading analytics data..."
+        progress={100}
+        recordCount={0}
+      />
     );
   }
 

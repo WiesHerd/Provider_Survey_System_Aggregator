@@ -90,7 +90,12 @@ export class AnalysisToolsPerformanceService {
     const cacheKey = `regional_analytics_${JSON.stringify(filters)}`;
     
     // Check cache first
-    const cached = this.getCached('regionalAnalytics', cacheKey);
+    const cached = this.getCached<{
+      analyticsData: any[];
+      mappings: any[];
+      regionMappings: any[];
+      loadingTime: number;
+    }>('regionalAnalytics', cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for regional analytics data`);
       return cached;
@@ -155,7 +160,11 @@ export class AnalysisToolsPerformanceService {
     const cacheKey = `custom_blending_${JSON.stringify(filters)}`;
     
     // Check cache first
-    const cached = this.getCached('customBlending', cacheKey);
+    const cached = this.getCached<{
+      allData: any[];
+      availableSpecialties: string[];
+      loadingTime: number;
+    }>('customBlending', cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for custom blending data`);
       return cached;
@@ -197,7 +206,7 @@ export class AnalysisToolsPerformanceService {
 
     // Extract available specialties
     const availableSpecialties = Array.from(new Set(
-      allSurveyData.map(row => row.specialty).filter(Boolean)
+      allSurveyData.map(row => (row as any).specialty).filter(Boolean)
     )).sort();
 
     const duration = performance.now() - startTime;
@@ -225,7 +234,10 @@ export class AnalysisToolsPerformanceService {
     const cacheKey = `custom_reports_${JSON.stringify(filters)}`;
     
     // Check cache first
-    const cached = this.getCached('customReports', cacheKey);
+    const cached = this.getCached<{
+      analyticsData: any[];
+      loadingTime: number;
+    }>('customReports', cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for custom reports data`);
       return cached;
@@ -285,7 +297,11 @@ export class AnalysisToolsPerformanceService {
     const cacheKey = `fmv_${JSON.stringify(filters)}`;
     
     // Check cache first
-    const cached = this.getCached('fmv', cacheKey);
+    const cached = this.getCached<{
+      marketData: any;
+      normalizedRows: any[];
+      loadingTime: number;
+    }>('fmv', cacheKey);
     if (cached) {
       console.log(`🎯 Cache hit for FMV data`);
       return cached;

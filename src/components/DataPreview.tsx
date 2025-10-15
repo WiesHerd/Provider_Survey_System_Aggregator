@@ -11,7 +11,7 @@ import {
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
-import LoadingSpinner from './ui/loading-spinner';
+import { AnalysisProgressBar } from '../shared/components/AnalysisProgressBar';
 import AgGridWrapper from './AgGridWrapper';
 
 // Custom header component for pinning columns
@@ -726,7 +726,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Subtle refreshing overlay */}
         {isRefreshing && (
           <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
-            <LoadingSpinner message="Updating data..." size="sm" variant="primary" />
+            <AnalysisProgressBar
+              message="Updating data..."
+              progress={100}
+              recordCount={0}
+            />
           </div>
         )}
         <AgGridWrapper
