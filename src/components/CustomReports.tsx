@@ -42,6 +42,8 @@ import {
   BookmarkIcon,
   BookmarkSlashIcon
 } from '@heroicons/react/24/outline';
+import { EmptyState } from '../features/mapping/components/shared/EmptyState';
+import { BoltIcon } from '@heroicons/react/24/outline';
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
@@ -988,12 +990,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   const renderChart = () => {
     if (chartData.length === 0) {
       return (
-        <div className="flex items-center justify-center h-96 text-gray-500">
-          <div className="text-center">
-            <ChartBarIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-lg font-medium">No data available</p>
-            <p className="text-sm">Try adjusting your filters or configuration</p>
-          </div>
+        <div className="flex items-center justify-center h-96">
+          <EmptyState
+            icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+            title="No Data Available"
+            message="Try adjusting your filters or configuration to see chart data."
+          />
         </div>
       );
     }
@@ -2052,20 +2054,16 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mt-8">
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <ChartBarIcon className="w-8 h-8 text-gray-400" />
-              </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
-                <p className="text-gray-500 mb-2">Try adjusting your filters or configuration</p>
-                {currentConfig.dimension === 'specialty' && currentConfig.filters.specialties.length === 0 && (
-                  <p className="text-sm text-orange-600 mt-2">
-                    Select at least one specialty to view data
-                  </p>
-                )}
-          </div>
-        </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-8">
+              <EmptyState
+                icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+                title="No Data Available"
+                message={currentConfig.dimension === 'specialty' && currentConfig.filters.specialties.length === 0 
+                  ? "Select at least one specialty to view data. Try adjusting your filters or configuration."
+                  : "Try adjusting your filters or configuration to see report data."
+                }
+              />
+            </div>
       )}
         </CardContent>
       </Card>
