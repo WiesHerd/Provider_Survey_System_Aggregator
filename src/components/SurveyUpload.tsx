@@ -198,8 +198,16 @@ const SurveyUpload: React.FC = () => {
         
         console.log('Loading surveys for year:', currentYear);
         
+        // Add timeout to prevent infinite loading
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Loading timeout')), 10000)
+        );
+        
         // Load surveys from DataService (which handles year filtering internally)
-        const surveys = await dataService.getAllSurveys();
+        const surveys = await Promise.race([
+          dataService.getAllSurveys(),
+          timeoutPromise
+        ]) as any[];
         console.log('Loaded surveys:', surveys);
         
         // Filter surveys by current year and provider type
@@ -273,7 +281,13 @@ const SurveyUpload: React.FC = () => {
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
-        handleError('Error loading saved surveys');
+        if (error instanceof Error && error.message === 'Loading timeout') {
+          console.log('Loading timeout - no surveys found or database issue');
+          setUploadedSurveys([]);
+          setSelectedSurvey(null);
+        } else {
+          handleError('Error loading saved surveys');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -913,7 +927,7 @@ const SurveyUpload: React.FC = () => {
                     message="Loading surveys..."
                     recordCount={uploadedSurveys.length}
                     progress={progress}
-                    showProgress={true}
+                    showProgress={uploadedSurveys.length > 0}
                   />
                 ) : uploadedSurveys.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-xl">
