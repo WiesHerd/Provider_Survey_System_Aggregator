@@ -19,7 +19,7 @@ const Analytics: React.FC = () => {
     return (
       <AnalysisProgressBar
         message="Loading analytics data..."
-        progress={100}
+        progress={39.90}
         recordCount={0}
       />
     );

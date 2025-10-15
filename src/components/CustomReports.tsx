@@ -1154,12 +1154,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                   <div 
                     className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: '84.79%' }}
+                    style={{ width: '39.90%' }}
                   />
                 </div>
                 
                 {/* Progress Percentage */}
-                <p className="text-sm text-gray-700 font-medium">84.79% complete</p>
+                <p className="text-sm text-gray-700 font-medium">39.90% complete</p>
               </div>
             </div>
           </div>
