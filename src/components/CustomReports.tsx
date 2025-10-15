@@ -1164,7 +1164,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             </div>
           </div>
         }
-      />
+      >
+        <div />
+      </LoadingContainer>
     );
   }
 
