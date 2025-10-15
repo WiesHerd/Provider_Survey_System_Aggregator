@@ -15,10 +15,10 @@ import {
   IconButton
 } from '@mui/material';
 import { 
-  RefreshIcon, 
-  CachedIcon, 
-  SpeedIcon,
-  MemoryIcon
+  ArrowPathIcon, 
+  CpuChipIcon, 
+  ChartBarIcon,
+  CpuChipIcon as MemoryIcon
 } from '@heroicons/react/24/outline';
 import { useOptimizedMappingData } from '../hooks/useOptimizedMappingData';
 import { SpecialtyMappingHeader } from './SpecialtyMappingHeader';
@@ -182,7 +182,7 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
       <Box className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
         <Box className="flex items-center space-x-4">
           <Box className="flex items-center space-x-2">
-            <SpeedIcon className="h-5 w-5 text-blue-600" />
+            <ChartBarIcon className="h-5 w-5 text-blue-600" />
             <Typography variant="h6" className="text-blue-800 font-semibold">
               Optimized Specialty Mapping
             </Typography>
@@ -209,7 +209,7 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
               size="small"
               className="text-blue-600 hover:text-blue-700"
             >
-              <RefreshIcon className="h-4 w-4" />
+              <ArrowPathIcon className="h-4 w-4" />
             </IconButton>
           </Tooltip>
           
@@ -219,7 +219,7 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
               size="small"
               className="text-gray-600 hover:text-gray-700"
             >
-              <CachedIcon className="h-4 w-4" />
+              <CpuChipIcon className="h-4 w-4" />
             </IconButton>
           </Tooltip>
           
@@ -249,13 +249,20 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
       <SpecialtyMappingHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        mappings={mappings}
-        unmappedSpecialties={unmappedSpecialties}
-        learnedMappings={learnedMappings}
-        learnedMappingsWithSource={learnedMappingsWithSource}
+        unmappedCount={unmappedSpecialties.length}
+        mappedCount={mappings.length}
+        learnedCount={Object.keys(learnedMappings).length}
+        selectedCount={selectedSpecialties.length}
+        isBulkSelected={selectedSpecialties.length > 0}
+        allUnmappedCount={unmappedSpecialties.length}
+        onShowHelp={() => {}}
+        onToggleSelectAll={() => {}}
+        onCreateMapping={createMapping}
+        onCreateIndividualMappings={createIndividualMappings}
+        onCreateGroupedMapping={createGroupedMapping}
+        onClearAllMappings={clearAllMappings}
         onApplyAllLearnedMappings={applyAllLearnedMappings}
         onClearAllLearnedMappings={clearAllLearnedMappings}
-        onClearAllMappings={clearAllMappings}
       />
 
       <SpecialtyMappingContent
@@ -263,28 +270,21 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
         mappings={mappings}
         unmappedSpecialties={unmappedSpecialties}
         selectedSpecialties={selectedSpecialties}
+        unmappedSearchTerm={searchTerm}
+        onUnmappedSearchChange={setSearchTerm}
+        onSpecialtySelect={selectSpecialty}
+        onSpecialtyDeselect={deselectSpecialty}
+        onClearSelection={clearSelectedSpecialties}
+        onRefresh={handleLoadData}
+        mappedSearchTerm={mappedSearchTerm}
+        onMappedSearchChange={setMappedSearchTerm}
+        onDeleteMapping={deleteMapping}
         learnedMappings={learnedMappings}
         learnedMappingsWithSource={learnedMappingsWithSource}
-        searchTerm={searchTerm}
-        mappedSearchTerm={mappedSearchTerm}
-        filteredUnmapped={filteredUnmapped}
-        specialtiesBySurvey={specialtiesBySurvey}
-        filteredMappings={filteredMappings}
-        filteredLearned={filteredLearned}
-        onSearchChange={setSearchTerm}
-        onMappedSearchChange={setMappedSearchTerm}
-        onSelectSpecialty={selectSpecialty}
-        onDeselectSpecialty={deselectSpecialty}
-        onClearSelectedSpecialties={clearSelectedSpecialties}
-        onSelectAllSpecialties={selectAllSpecialties}
-        onDeselectAllSpecialties={deselectAllSpecialties}
-        onSetSelectedSpecialties={setSelectedSpecialties}
-        onCreateMapping={createMapping}
-        onCreateIndividualMappings={createIndividualMappings}
-        onCreateGroupedMapping={createGroupedMapping}
-        onDeleteMapping={deleteMapping}
+        learnedSearchTerm={mappedSearchTerm}
+        onLearnedSearchChange={setMappedSearchTerm}
         onRemoveLearnedMapping={removeLearnedMapping}
-        onApplyAllMappings={applyAllLearnedMappings}
+        onApplyAllLearnedMappings={applyAllLearnedMappings}
       />
     </Box>
   );

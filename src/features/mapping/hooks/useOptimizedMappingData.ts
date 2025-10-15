@@ -115,7 +115,10 @@ export const useOptimizedMappingData = (): UseOptimizedMappingDataReturn => {
 
   // Computed values with memoization
   const filteredUnmapped = useMemo(() => {
-    return filterUnmappedSpecialties(unmappedSpecialties, searchTerm);
+    if (!searchTerm) return unmappedSpecialties;
+    return unmappedSpecialties.filter(specialty => 
+      specialty.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   }, [unmappedSpecialties, searchTerm]);
 
   const specialtiesBySurvey = useMemo(() => {

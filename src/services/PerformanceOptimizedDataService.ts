@@ -44,7 +44,7 @@ export class PerformanceOptimizedDataService {
       return null;
     }
     
-    return entry.data;
+    return entry.data as T;
   }
 
   private setCached<T>(key: string, data: T, ttl: number = this.CACHE_TTL): void {
@@ -240,8 +240,8 @@ export class PerformanceOptimizedDataService {
     const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
       dataService.getProviderTypeMappings(providerType),
       dataService.getUnmappedProviderTypes(providerType),
-      dataService.getLearnedMappings('provider-type', providerType),
-      dataService.getLearnedMappingsWithSource('provider-type', providerType)
+      dataService.getLearnedMappings('providerType', providerType),
+      dataService.getLearnedMappingsWithSource('providerType', providerType)
     ]);
 
     const duration = performance.now() - startTime;
@@ -367,7 +367,7 @@ export class PerformanceOptimizedDataService {
     const startTime = performance.now();
     
     const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
-      dataService.getColumnMappings(providerType),
+      dataService.getAllColumnMappings(providerType),
       dataService.getUnmappedColumns(providerType),
       dataService.getLearnedMappings('column', providerType),
       dataService.getLearnedMappingsWithSource('column', providerType)
