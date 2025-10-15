@@ -810,6 +810,13 @@ export class IndexedDBService {
     const mappings = await this.getAllColumnMappings(providerType);
     
     console.log('🔍 getUnmappedColumns: Getting unmapped columns for provider type:', providerType);
+    console.log('🔍 getUnmappedColumns: Found', surveys.length, 'surveys and', mappings.length, 'mappings');
+    
+    // ENTERPRISE FIX: Handle case when no surveys exist
+    if (surveys.length === 0) {
+      console.log('🔍 getUnmappedColumns: No surveys found - returning empty array');
+      return [];
+    }
     
     const mappedNames = new Set<string>();
     mappings.forEach(mapping => {
@@ -981,6 +988,12 @@ export class IndexedDBService {
     console.log(`🔍 getUnmappedSpecialties: Getting unmapped specialties for provider type: ${providerType}`);
     const surveys = await this.getAllSurveys();
     console.log(`🔍 getUnmappedSpecialties: All surveys:`, surveys.map(s => ({ id: s.id, name: s.name, type: s.type, providerType: s.providerType })));
+    
+    // ENTERPRISE FIX: Handle case when no surveys exist
+    if (surveys.length === 0) {
+      console.log('🔍 getUnmappedSpecialties: No surveys found - returning empty array');
+      return [];
+    }
     
     const mappings = await this.getAllSpecialtyMappings(providerType);
     console.log(`🔍 getUnmappedSpecialties: Found ${surveys.length} surveys and ${mappings.length} mappings`);
@@ -1160,6 +1173,13 @@ export class IndexedDBService {
   async getUnmappedVariables(providerType?: string): Promise<IUnmappedVariable[]> {
     try {
       const surveys = await this.getAllSurveys();
+      
+      // ENTERPRISE FIX: Handle case when no surveys exist
+      if (surveys.length === 0) {
+        console.log('🔍 getUnmappedVariables: No surveys found - returning empty array');
+        return [];
+      }
+      
       const mappings = await this.getVariableMappings(providerType);
       
       console.log('🔍 getUnmappedVariables: Getting unmapped variables for provider type:', providerType);
@@ -1426,6 +1446,13 @@ export class IndexedDBService {
   async getUnmappedProviderTypes(providerType?: string): Promise<any[]> {
     try {
       const surveys = await this.getAllSurveys();
+      
+      // ENTERPRISE FIX: Handle case when no surveys exist
+      if (surveys.length === 0) {
+        console.log('🔍 getUnmappedProviderTypes: No surveys found - returning empty array');
+        return [];
+      }
+      
       const mappings = await this.getProviderTypeMappings(providerType);
       
       console.log('🔍 getUnmappedProviderTypes: Getting unmapped provider types for provider type:', providerType);
@@ -1487,6 +1514,13 @@ export class IndexedDBService {
   async getUnmappedRegions(providerType?: string): Promise<any[]> {
     try {
       const surveys = await this.getAllSurveys();
+      
+      // ENTERPRISE FIX: Handle case when no surveys exist
+      if (surveys.length === 0) {
+        console.log('🔍 getUnmappedRegions: No surveys found - returning empty array');
+        return [];
+      }
+      
       const mappings = await this.getRegionMappings(providerType);
       
       console.log('🔍 getUnmappedRegions: Getting unmapped regions for provider type:', providerType);
