@@ -117,6 +117,7 @@ const SurveyUpload: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [justUploaded, setJustUploaded] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
@@ -348,6 +349,7 @@ const SurveyUpload: React.FC = () => {
     
     try {
       setIsDeleting(true);
+      setIsDeletingAll(false);
       startProgress(); // Start smooth progress animation
       
       await dataService.deleteSurvey(surveyToDelete.id);
@@ -377,6 +379,7 @@ const SurveyUpload: React.FC = () => {
     } finally {
       setTimeout(() => {
         setIsDeleting(false);
+        setIsDeletingAll(false);
       }, 1200);
     }
   };
@@ -537,6 +540,7 @@ const SurveyUpload: React.FC = () => {
   const confirmClearAll = async () => {
     try {
       setIsDeleting(true);
+      setIsDeletingAll(true);
       startProgress(); // Start smooth progress animation
       
       // Clear all surveys first
@@ -592,6 +596,7 @@ const SurveyUpload: React.FC = () => {
     } finally {
       setTimeout(() => {
         setIsDeleting(false);
+        setIsDeletingAll(false);
       }, 1800);
     }
   };
@@ -1008,7 +1013,7 @@ const SurveyUpload: React.FC = () => {
       {/* Deleting Progress Modal - Use Unified Spinner */}
       {isDeleting && (
         <UnifiedLoadingSpinner
-          message="Clearing surveys..."
+          message={isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
           recordCount={0}
           progress={progress}
           showProgress={true}
