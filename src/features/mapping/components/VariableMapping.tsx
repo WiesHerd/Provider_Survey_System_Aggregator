@@ -23,8 +23,7 @@ import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
 import { LearnedVariableMappings } from './LearnedVariableMappings';
-import { BaseMappingHeader, BaseMappingContent, HelpModal } from './shared';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from './shared';
 
 /**
  * VariableMapping component - Main orchestrator for variable mapping functionality
@@ -166,13 +165,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   }, [unmappedVariables, onUnmappedVariableChange]);
 
   if (loading) {
-    return (
-      <AnalysisProgressBar
-        message="Loading variable mappings..."
-        progress={100}
-        recordCount={0}
-      />
-    );
+    return <MappingLoadingSpinner entityName="Variable" />;
   }
 
   return (

@@ -15,8 +15,7 @@ import { useProviderTypeMappingData } from '../hooks/useProviderTypeMappingData'
 import { UnmappedProviderTypes } from './UnmappedProviderTypes';
 import { MappedProviderTypes } from './MappedProviderTypes';
 import { LearnedProviderTypeMappings } from './LearnedProviderTypeMappings';
-import { BaseMappingHeader, BaseMappingContent, HelpModal } from './shared';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from './shared';
 
 /**
  * ProviderTypeMapping component - Main orchestrator for provider type mapping functionality
@@ -133,13 +132,7 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
   }, [unmappedProviderTypes, onUnmappedChange]);
 
   if (loading) {
-    return (
-      <AnalysisProgressBar
-        message="Loading provider type mappings..."
-        progress={100}
-        recordCount={0}
-      />
-    );
+    return <MappingLoadingSpinner entityName="Provider Type" />;
   }
 
   return (

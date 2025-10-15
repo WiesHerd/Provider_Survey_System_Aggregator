@@ -1,7 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { AnalysisProgressBar } from '../shared/components';
 import { useColumnMappingData } from '../features/mapping/hooks/useColumnMappingData';
-import { BaseMappingHeader, BaseMappingContent, HelpModal } from '../features/mapping/components/shared';
+import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from '../features/mapping/components/shared';
 import { UnmappedColumns } from '../features/mapping/components/UnmappedColumns';
 
 // Lazy load components for better performance
@@ -131,13 +130,7 @@ const ColumnMapping: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <AnalysisProgressBar
-        message="Loading column mappings..."
-        progress={100}
-        recordCount={0}
-      />
-    );
+    return <MappingLoadingSpinner entityName="Column" />;
   }
 
   return (

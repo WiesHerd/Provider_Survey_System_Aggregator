@@ -4,3 +4,4 @@ export { BaseMappingContent } from './BaseMappingContent';
 export { UnmappedItemsGrid } from './UnmappedItemsGrid';
 export { EmptyState } from './EmptyState';
 export { HelpModal } from './HelpModal';
+export { MappingLoadingSpinner } from './MappingLoadingSpinner';

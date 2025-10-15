@@ -15,8 +15,7 @@ import { useRegionMappingData } from '../hooks/useRegionMappingData';
 import { UnmappedRegions } from './UnmappedRegions';
 import { MappedRegions } from './MappedRegions';
 import { LearnedRegionMappings } from './LearnedRegionMappings';
-import { BaseMappingHeader, BaseMappingContent, HelpModal } from './shared';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from './shared';
 
 /**
  * RegionMapping component - Main orchestrator for region mapping functionality
@@ -120,13 +119,7 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
   }, [unmappedRegions, onUnmappedChange]);
 
   if (loading) {
-    return (
-      <AnalysisProgressBar
-        message="Loading region mappings..."
-        progress={100}
-        recordCount={0}
-      />
-    );
+    return <MappingLoadingSpinner entityName="Region" />;
   }
 
   return (
