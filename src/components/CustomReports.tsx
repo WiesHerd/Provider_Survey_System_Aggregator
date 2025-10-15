@@ -1127,7 +1127,16 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <div 
+              className="w-8 h-8 rounded-full animate-spin mx-auto mb-4"
+              style={{
+                background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
+                animationDuration: '1s',
+                animationTimingFunction: 'linear',
+                mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
+                WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
+              }}
+            />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Custom Reports</h3>
             <p className="text-gray-600">Loading survey data and building reports...</p>
           </div>
