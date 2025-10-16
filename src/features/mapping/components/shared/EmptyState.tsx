@@ -50,5 +50,3 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     </div>
   );
 };
-
-export { EmptyState };
