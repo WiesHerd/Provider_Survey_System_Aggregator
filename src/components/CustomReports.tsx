@@ -1907,7 +1907,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
                   Data Table
                 </Typography>
-              <div className="rounded-lg border border-gray-200 overflow-x-auto">
+                <div className="rounded-lg border border-gray-200 overflow-x-auto">
                 <TableContainer component={Paper} sx={{ maxHeight: '600px', overflow: 'auto' }}>
                   <Table stickyHeader size="small">
                   <TableHead>
@@ -2043,7 +2043,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   </TableBody>
                 </Table>
               </TableContainer>
-              </div>
+                </div>
               </div>
             </>
           ) : (
