@@ -988,17 +988,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Render chart based on type
   const renderChart = () => {
-    if (chartData.length === 0) {
-      return (
-        <div className="flex items-center justify-center h-96">
-          <EmptyState
-            icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
-            title="No Data Available"
-            message="Try adjusting your filters or configuration to see chart data."
-          />
-        </div>
-      );
-    }
+    // Note: Empty state is handled at the parent level
 
     // For single metric charts (line/pie), determine the type
     const isCurrency = currentConfig.metric.includes('tcc') || currentConfig.metric.includes('cf');
@@ -1907,14 +1897,16 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             </div>
           </div>
 
-          {renderChart()}
-          
-          {/* Data Table */}
+          {/* Chart and Data Table - Show single empty state when no data */}
           {chartData.length > 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-8">
-              <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
-                Data Table
-              </Typography>
+            <>
+              {renderChart()}
+              
+              {/* Data Table */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-8">
+                <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
+                  Data Table
+                </Typography>
               <div className="rounded-lg border border-gray-200 overflow-x-auto">
                 <TableContainer component={Paper} sx={{ maxHeight: '600px', overflow: 'auto' }}>
                   <Table stickyHeader size="small">
@@ -2052,7 +2044,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 </Table>
               </TableContainer>
               </div>
-            </div>
+              </div>
+            </>
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-8">
               <EmptyState
@@ -2064,7 +2057,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 }
               />
             </div>
-      )}
+          )}
         </CardContent>
       </Card>
 
