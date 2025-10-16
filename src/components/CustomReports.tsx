@@ -780,8 +780,18 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         acc[key].value = item.value;
         acc[key].count = item.count;
         acc[key].originalName = item.originalName;
-        acc[key].metricValues = item.metricValues;
       }
+      
+      // CRITICAL FIX: Merge metric values instead of overwriting
+      // This ensures TCC and wRVU values are preserved separately
+      Object.entries(item.metricValues || {}).forEach(([metric, value]) => {
+        if (value > 0) {
+          // Use the highest value for each metric (percentile data)
+          if (value > (acc[key].metricValues[metric] || 0)) {
+            acc[key].metricValues[metric] = value;
+          }
+        }
+      });
       
       return acc;
     }, {} as Record<string, any>);
