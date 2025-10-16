@@ -119,7 +119,7 @@ const Dashboard: React.FC = () => {
           gradient: 'from-violet-500 to-violet-600',
         },
         {
-          title: 'Custom Reports',
+          title: 'Report Builder',
           description: 'Create custom reports and visualizations from your survey data',
           icon: DocumentChartBarIcon,
           path: '/custom-reports',
