@@ -37,7 +37,6 @@ import {
 } from 'recharts';
 import { EChartsBar, EChartsCF } from './charts';
 import { 
-  ChartBarIcon, 
   DocumentArrowDownIcon,
   BookmarkIcon,
   BookmarkSlashIcon
@@ -46,7 +45,6 @@ import { EmptyState } from '../features/mapping/components/shared/EmptyState';
 import { BoltIcon } from '@heroicons/react/24/outline';
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
-import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping } from '../types/specialty';
 import { useYear } from '../contexts/YearContext';
@@ -338,7 +336,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           console.log('🔍 DEBUG - Available provider types for filter:', providerTypes);
           
           // Extract available years from survey data
-          const years = [...new Set(surveyData.map(row => String(row.surveyYear || '')).filter(Boolean))].sort();
+          const years = [...new Set(allData.map((row: ISurveyRow) => String(row.surveyYear || '')).filter(Boolean))].sort();
           
           setAvailableOptions({
             dimensions: ['specialty', 'region', 'providerType'],
@@ -422,7 +420,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       regions: allAvailableOptions.regions, // Always use all available regions (no cascading)
       surveySources: Array.from(availableSurveySources).sort()
     };
-  }, [surveyData, currentConfig.filters.regions, currentConfig.filters.surveySources, specialtyMappings, allAvailableOptions.specialties, allAvailableOptions.regions, allAvailableOptions.surveySources]);
+  }, [surveyData, currentConfig.filters.regions, currentConfig.filters.surveySources, allAvailableOptions.specialties, allAvailableOptions.regions, allAvailableOptions.surveySources]);
 
   // Update available options when filters change
   useEffect(() => {
@@ -493,6 +491,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         return matches;
       });
       console.log(`🌍 Region filter: ${beforeRegionFilter} → ${filteredData.length} rows`);
+    } else {
+      console.log('🌍 No region filters applied - showing all regions');
     }
     
     if (currentConfig.filters.surveySources.length > 0) {
@@ -551,60 +551,53 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log(`📅 Year filter: ${beforeYearFilter} → ${filteredData.length} rows`);
     }
 
-    // CRITICAL: Add variable-based filtering to ensure correct metric selection
-    console.log('🎯 Applying variable-based filtering for metric:', primaryMetric);
+    // CRITICAL FIX: Handle multiple metrics by including ALL relevant data types
+    console.log('🎯 Applying variable-based filtering for metrics:', currentConfig.metrics);
     const beforeVariableFilter = filteredData.length;
     
-    if (primaryMetric.includes('tcc') && !primaryMetric.includes('cf')) {
-      // For TCC metrics, filter for TCC compensation rows (NOT TCC per RVU ratios)
-      console.log('🔍 DEBUG: Before TCC filtering, checking all variables:');
-      filteredData.slice(0, 10).forEach((row, index) => {
-        console.log(`  Row ${index}: variable="${(row as any).variable}", p50=${(row as any).p50 || row.tcc_p50}`);
-      });
-      
+    // Check if we have multiple metrics that require different data types
+    const hasTccMetrics = currentConfig.metrics.some(m => m.includes('tcc') && !m.includes('cf'));
+    const hasWrvuMetrics = currentConfig.metrics.some(m => m.includes('wrvu'));
+    const hasCfMetrics = currentConfig.metrics.some(m => m.includes('cf'));
+    
+    console.log('🔍 Metric analysis:', { hasTccMetrics, hasWrvuMetrics, hasCfMetrics });
+    
+    if (hasTccMetrics || hasWrvuMetrics || hasCfMetrics) {
+      // Include ALL relevant data types when multiple metrics are selected
       filteredData = filteredData.filter(row => {
         const variable = String((row as any).variable || '').toLowerCase();
         const p50Value = (row as any).p50 || row.tcc_p50 || 0;
         
-        // STRICT filtering: Only include pure TCC compensation, exclude any per-RVU ratios
-        const isTccCompensation = (variable === 'tcc' || variable === 'total cash compensation' || variable === 'compensation')
-                                 && !variable.includes('per') && !variable.includes('/') && !variable.includes('work rvu');
+        // Check if this row matches any of the required data types
+        const isTccData = hasTccMetrics && (variable === 'tcc' || variable === 'total cash compensation' || variable === 'compensation')
+                          && !variable.includes('per') && !variable.includes('/') && !variable.includes('work rvu');
         
-        console.log(`🎯 TCC filter - Row variable: "${variable}", p50: ${p50Value}, isTccCompensation: ${isTccCompensation}`);
+        const isWrvuData = hasWrvuMetrics && (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work'));
         
-        return isTccCompensation;
-      });
-      console.log(`🎯 TCC variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
-    } else if (primaryMetric.includes('cf')) {
-      // For CF metrics, filter for TCC per RVU ratio rows
-      filteredData = filteredData.filter(row => {
-        const variable = String((row as any).variable || '').toLowerCase();
-        const isCfRatio = variable.includes('per') || variable.includes('/') || 
-                          variable.includes('conversion') || variable.includes('factor');
+        const isCfData = hasCfMetrics && (variable.includes('per') || variable.includes('/') || 
+                        variable.includes('conversion') || variable.includes('factor'));
+        
+        const matches = isTccData || isWrvuData || isCfData;
         
         if (filteredData.indexOf(row) < 5) {
-          console.log(`🎯 CF filter - Row variable: "${variable}" - isCfRatio: ${isCfRatio}`);
+          console.log(`🎯 Multi-metric filter - Row variable: "${variable}", p50: ${p50Value}, matches: ${matches} (TCC:${isTccData}, wRVU:${isWrvuData}, CF:${isCfData})`);
         }
         
-        return isCfRatio;
+        return matches;
       });
-      console.log(`🎯 CF variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
-    } else if (primaryMetric.includes('wrvu')) {
-      // For wRVU metrics, filter for Work RVU rows
-      filteredData = filteredData.filter(row => {
-        const variable = String((row as any).variable || '').toLowerCase();
-        const isWrvu = variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work');
-        
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`🎯 wRVU filter - Row variable: "${variable}" - isWrvu: ${isWrvu}`);
-        }
-        
-        return isWrvu;
-      });
-      console.log(`🎯 wRVU variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
+      console.log(`🎯 Multi-metric variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
     }
 
     console.log('✅ After all filters:', filteredData.length, 'rows remaining');
+    
+    // Essential debug for region issue
+    if (currentConfig.secondaryDimension === 'region') {
+      const availableRegions = [...new Set(filteredData.map(row => 
+        String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '')
+      ))].filter(Boolean);
+      console.log('🌍 REGION DEBUG - Available regions:', availableRegions);
+      console.log('🌍 REGION DEBUG - Selected regions:', currentConfig.filters.regions);
+    }
 
     // Group by dimension and aggregate metric
     const grouped = filteredData.reduce((acc, row) => {
@@ -666,27 +659,43 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         };
       }
       
-      // Process each selected metric
+      // Process each selected metric with proper data type matching
       selectedMetrics.forEach(metric => {
-        const metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+        const variable = String((row as any).variable || '').toLowerCase();
+        let metricValue = 0;
+        
+        // Match the metric to the correct data type
+        if (metric.includes('tcc') && !metric.includes('cf')) {
+          // TCC metrics should only use TCC compensation data
+          if (variable === 'tcc' || variable === 'total cash compensation' || variable === 'compensation') {
+            metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+          }
+        } else if (metric.includes('wrvu')) {
+          // wRVU metrics should only use Work RVU data
+          if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+            metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+          }
+        } else if (metric.includes('cf')) {
+          // CF metrics should only use conversion factor data
+          if (variable.includes('per') || variable.includes('/') || variable.includes('conversion') || variable.includes('factor')) {
+            metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+          }
+        } else {
+          // Fallback to direct value
+          metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+        }
       
         if (metricValue > 0) {
-          // For percentile data (P25, P50, P75, P90), use the value directly
-          // Since we now use composite keys, each key is unique - no overwriting needed
           acc[dimensionValue].metricValues[metric] = metricValue;
           
-          // Debug logging for TCC values
-          if (metric.includes('tcc') && metricValue < 1000) {
-            console.log(`🔍 DEBUG: Low TCC value detected for ${metric}:`, {
-              metric,
-              rawValue: row[metric as keyof ISurveyRow],
-              numericValue: metricValue,
-              rowSpecialty: row.specialty,
-              rowSurveySource: (row as any).surveySource,
-              rowRegion: (row as any).geographic_region,
-              rowProviderType: (row as any).providerType
-            });
-          }
+          // Debug logging for metric matching
+          console.log(`🔍 DEBUG: Metric ${metric} matched to variable "${variable}":`, {
+            metric,
+            variable,
+            metricValue,
+            rowSpecialty: row.specialty,
+            rowSurveySource: (row as any).surveySource
+          });
         }
       });
       
@@ -704,21 +713,78 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     Object.entries(grouped).forEach(([key, value]) => {
       console.log(`  Key: "${key}"`);
       console.log(`    - metricValues:`, value.metricValues);
+      console.log(`    - tcc_p50:`, value.metricValues?.tcc_p50);
+      console.log(`    - wrvu_p50:`, value.metricValues?.wrvu_p50);
       console.log(`    - count: ${value.count}`);
     });
 
+    // CRITICAL FIX: Combine metrics from different data types while preserving secondary grouping
+    // First, group by specialty (and secondary dimension if present) to combine TCC and wRVU data
+    const combinedData = Object.values(grouped).reduce((acc, item) => {
+      // Extract specialty name and secondary dimension from the composite key
+      let groupKey = item.name;
+      let specialtyName = item.name;
+      
+      if (currentConfig.dimension === 'specialty' && item.name.includes('-')) {
+        const parts = item.name.split('-');
+        specialtyName = parts[0];
+        
+        // If secondary dimension is specified, include it in the group key
+        if (currentConfig.secondaryDimension && parts.length > 6) {
+          const secondaryValue = parts[6]; // Secondary dimension is after the variable
+          groupKey = `${specialtyName}-${secondaryValue}`;
+        } else {
+          groupKey = specialtyName;
+        }
+      }
+      
+      if (!acc[groupKey]) {
+        acc[groupKey] = {
+          name: groupKey,
+          metricValues: {},
+          count: 0,
+          originalName: item.name,
+          metrics: currentConfig.metrics.length > 0 ? currentConfig.metrics : [currentConfig.metric]
+        };
+      }
+      
+      // Combine metrics from different data types
+      Object.entries(item.metricValues || {}).forEach(([metric, value]) => {
+        if (value > 0) {
+          // Use the highest value for each metric
+          if (value > (acc[groupKey].metricValues[metric] || 0)) {
+            acc[groupKey].metricValues[metric] = value;
+          }
+        }
+      });
+      
+      acc[groupKey].count += item.count;
+      
+      return acc;
+    }, {} as Record<string, any>);
+
     // Calculate averages and format
-    const rawData = Object.values(grouped)
+    const rawData = Object.values(combinedData)
       .map((item: any) => {
         // Use primary metric value directly (percentile data)
         const primaryValue = item.metricValues[primaryMetric] || 0;
         
         // Use percentile values directly (no averaging needed)
         const metricValues: Record<string, number> = {};
-        item.metrics.forEach((metric: string) => {
+        item.metrics?.forEach((metric: string) => {
           // Use the direct percentile value from the data
           metricValues[metric] = item.metricValues[metric] || 0;
+          
+        // Minimal debug for metric processing
+        if (metric.includes('tcc') || metric.includes('wrvu')) {
+          console.log(`🔍 METRIC: ${metric} = ${item.metricValues[metric]}`);
+        }
         });
+        
+        // Essential debug for final values
+        if (metricValues.tcc_p50 || metricValues.wrvu_p50) {
+          console.log(`🔍 FINAL: ${item.name} - TCC: ${metricValues.tcc_p50}, wRVU: ${metricValues.wrvu_p50}`);
+        }
         
         // For specialty dimension with composite keys, extract just the specialty name for display
         let displayName = item.name;
@@ -760,13 +826,21 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       })
       .filter(item => item.value > 0);
 
-    // GOOGLE-STYLE AGGREGATION: Group by display name and aggregate values
+    // CRITICAL FIX: Proper aggregation that combines metrics from different data types
+    // Group by specialty name only (not composite key) to aggregate all metrics for each specialty
     const aggregatedData = rawData.reduce((acc, item) => {
-      const key = item.name; // Use display name as the aggregation key
+      // Extract just the specialty name from the composite key for grouping
+      let groupKey = item.name;
       
-      if (!acc[key]) {
-        acc[key] = {
-          name: item.name,
+      // For specialty dimension, extract just the specialty part for grouping
+      if (currentConfig.dimension === 'specialty' && item.originalName.includes('-')) {
+        const parts = item.originalName.split('-');
+        groupKey = parts[0]; // Use just the specialty name for grouping
+      }
+      
+      if (!acc[groupKey]) {
+        acc[groupKey] = {
+          name: groupKey,
           value: 0,
           count: 0,
           originalName: item.originalName,
@@ -775,24 +849,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         };
       }
       
-      // For TCC compensation data, we want the HIGHEST value (not average)
-      // This ensures we get the correct compensation amount, not a ratio
-      if (item.value > acc[key].value) {
-        acc[key].value = item.value;
-        acc[key].count = item.count;
-        acc[key].originalName = item.originalName;
-      }
-      
-      // CRITICAL FIX: Merge metric values instead of overwriting
-      // This ensures TCC and wRVU values are preserved separately
+      // CRITICAL: Process each metric separately to prevent mixing TCC/wRVU data
       Object.entries(item.metricValues || {}).forEach(([metric, value]) => {
         if (value > 0) {
-          // Use the highest value for each metric (percentile data)
-          if (value > (acc[key].metricValues[metric] || 0)) {
-            acc[key].metricValues[metric] = value;
+          // For each metric, use the highest value (percentile data)
+          if (value > (acc[groupKey].metricValues[metric] || 0)) {
+            acc[groupKey].metricValues[metric] = value;
           }
         }
       });
+      
+      // Set the primary value based on the first selected metric
+      const primaryMetric = currentConfig.metrics.length > 0 ? currentConfig.metrics[0] : currentConfig.metric;
+      const primaryValue = acc[groupKey].metricValues[primaryMetric] || 0;
+      if (primaryValue > acc[groupKey].value) {
+        acc[groupKey].value = primaryValue;
+        acc[groupKey].count = item.count;
+      }
       
       return acc;
     }, {} as Record<string, any>);
@@ -810,15 +883,28 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       metricValues: item.metricValues
     })));
     
-    // Debug TCC values specifically
+    // CRITICAL DEBUG: Log the aggregated data before final processing
+    console.log('🔍 AGGREGATED DATA DEBUG:');
+    Object.entries(aggregatedData).forEach(([key, value]) => {
+      console.log(`  ${key}:`, {
+        name: value.name,
+        metricValues: value.metricValues,
+        tcc_p50: value.metricValues?.tcc_p50,
+        wrvu_p50: value.metricValues?.wrvu_p50
+      });
+    });
+    
+    // Essential debug for final chart data
     allData.forEach(item => {
-      if (item.metricValues && Object.keys(item.metricValues).some(key => key.includes('tcc'))) {
-        console.log('🔍 DEBUG: TCC values in final data:', {
-          name: item.name,
-          value: item.value,
-          metricValues: item.metricValues,
-          originalName: item.originalName
-        });
+      if (item.metricValues && (item.metricValues.tcc_p50 || item.metricValues.wrvu_p50)) {
+        console.log(`🔍 CHART: ${item.name} - TCC: ${item.metricValues.tcc_p50}, wRVU: ${item.metricValues.wrvu_p50}`);
+      }
+    });
+    
+    // Minimal debug for TCC values
+    allData.forEach(item => {
+      if (item.metricValues?.tcc_p50) {
+        console.log(`🔍 TCC: ${item.name} = ${item.metricValues.tcc_p50}`);
       }
     });
     
@@ -835,7 +921,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log('📊 Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
-  }, [surveyData, currentConfig]);
+  }, [surveyData, currentConfig, specialtyMappings]);
 
   // Table sort: default to value desc for table-first clarity
   const [tableSortDesc, setTableSortDesc] = useState(true);
@@ -1046,10 +1132,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       
       return (
         <div className="w-full overflow-x-auto">
-          <div style={{ 
-            width: '100%',
-            minWidth: '100%'
-          }}>
+          <div className="w-full min-w-full">
             <ResponsiveContainer width="100%" height={chartHeight}>
               <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -1103,6 +1186,14 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         {/* Main Chart: TCC + wRVU */}
         {hasOtherMetrics && (
           <div className="w-full">
+            <div className="mb-4 text-center">
+              <Typography variant="h6" className="text-gray-900 font-semibold">
+                Compensation Analysis
+              </Typography>
+              <Typography variant="body2" className="text-gray-600">
+                Total Cash Compensation (TCC) and Work RVU metrics
+              </Typography>
+            </div>
             <EChartsBar 
               data={chartData}
               metrics={currentConfig.metrics}
@@ -1114,12 +1205,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         {/* Secondary Chart: Conversion Factor (separate scale) */}
         {hasCFMetrics && (
           <div className="w-full">
-            <div className="mb-3">
-              <Typography variant="subtitle1" className="text-gray-900 font-semibold">
+            <div className="mb-4 text-center">
+              <Typography variant="h6" className="text-gray-900 font-semibold">
                 Conversion Factor Analysis
               </Typography>
               <Typography variant="body2" className="text-gray-600">
-                CF values shown separately due to different scale ($40-$200 vs $100K-$400K)
+                Conversion Factor (CF) metrics shown separately due to different scale ($40-$200 vs $100K-$400K)
               </Typography>
             </div>
             <EChartsCF 
@@ -1230,7 +1321,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           </FormControl>
         )}
       </div>
-
+      
       {/* Report Builder - First, define what you want to build */}
       <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
         <CardContent className="p-6">
@@ -1559,6 +1650,25 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   console.log('🚨 AUTOCOMPLETE OPENED - Options length:', (availableOptions.specialties || []).length);
                 }}
                 getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+                disableListWrap={false}
+                disablePortal={false}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '300px',
+                    overflow: 'auto'
+                  }
+                }}
+                noOptionsText="No specialties found"
+                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                  const filtered = options.filter((option: string) =>
+                    formatSpecialtyForDisplay(option).toLowerCase().includes(inputValue.toLowerCase())
+                  );
+                  return filtered;
+                }}
+                freeSolo={false}
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
                 renderInput={(params: any) => (
                   <TextField
                     {...params}
@@ -1603,11 +1713,27 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     ))}
                   </Box>
                 )}
-                ListboxProps={{
-                  style: {
-                    maxHeight: '400px',
-                    overflow: 'auto'
+                componentsProps={{
+                  popper: {
+                    style: {
+                      maxHeight: '500px',
+                      overflow: 'auto'
+                    }
                   }
+                }}
+                slotProps={{
+                  popper: {
+                    modifiers: [
+                      {
+                        name: 'flip',
+                        enabled: false,
+                      },
+                    ],
+                    style: {
+                      maxHeight: '500px',
+                      zIndex: 1300,
+                    },
+                  },
                 }}
                 sx={{
                   '& .MuiAutocomplete-paper': {
@@ -1615,7 +1741,32 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
-                    maxHeight: '400px'
+                    maxHeight: '500px !important',
+                    overflow: 'auto !important'
+                  },
+                  '& .MuiAutocomplete-listbox': {
+                    maxHeight: '500px !important',
+                    overflow: 'auto !important',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#cbd5e1 #f1f5f9',
+                    scrollBehavior: 'smooth',
+                    '&::-webkit-scrollbar': {
+                      width: '12px !important',
+                      display: 'block !important'
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: '#f1f5f9 !important',
+                      borderRadius: '4px !important',
+                      display: 'block !important'
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: '#cbd5e1 !important',
+                      borderRadius: '4px !important',
+                      display: 'block !important',
+                      '&:hover': {
+                        background: '#94a3b8 !important'
+                      }
+                    }
                   },
                   '& .MuiAutocomplete-option': {
                     padding: '8px 12px',
@@ -1627,10 +1778,11 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }
                   }
                 }}
-                noOptionsText="No specialties found"
-                clearOnBlur={false}
-                disableCloseOnSelect={true}
-                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
+                renderOption={(props: any, option: string) => (
+                  <Box component="li" {...props} key={option}>
+                    {formatSpecialtyForDisplay(option)}
+                  </Box>
+                )}
               />
             </FormControl>
 
@@ -1645,6 +1797,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 onChange={(event: any, newValue: string[]) => handleFilterChange('regions', newValue)}
                 options={availableOptions.regions || []}
                 getOptionLabel={(option: string) => option}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '300px',
+                    overflow: 'auto'
+                  }
+                }}
+                noOptionsText="No regions found"
+                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                  const filtered = options.filter((option: string) =>
+                    option.toLowerCase().includes(inputValue.toLowerCase())
+                  );
+                  return filtered;
+                }}
+                freeSolo={false}
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
                 renderInput={(params: any) => (
                   <TextField
                     {...params}
@@ -1711,9 +1880,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }
                   }
                 }}
-                noOptionsText="No regions found"
-                clearOnBlur={false}
-                disableCloseOnSelect={true}
               />
             </FormControl>
 
@@ -1728,6 +1894,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 onChange={(event: any, newValue: string[]) => handleFilterChange('surveySources', newValue)}
                 options={availableOptions.surveySources || []}
                 getOptionLabel={(option: string) => option}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '300px',
+                    overflow: 'auto'
+                  }
+                }}
+                noOptionsText="No survey sources found"
+                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
+                  const filtered = options.filter((option: string) =>
+                    option.toLowerCase().includes(inputValue.toLowerCase())
+                  );
+                  return filtered;
+                }}
+                freeSolo={false}
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
                 renderInput={(params: any) => (
                   <TextField
                     {...params}
@@ -1794,9 +1977,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }
                   }
                 }}
-                noOptionsText="No survey sources found"
-                clearOnBlur={false}
-                disableCloseOnSelect={true}
               />
             </FormControl>
 

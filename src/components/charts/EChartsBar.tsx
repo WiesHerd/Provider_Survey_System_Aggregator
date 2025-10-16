@@ -34,6 +34,10 @@ export const EChartsBar: React.FC<EChartsBarProps> = ({
   metrics,
   chartHeight = 600 
 }) => {
+  // Debug logging for chart data
+  console.log('🔍 EChartsBar received data:', data);
+  console.log('🔍 EChartsBar received metrics:', metrics);
+  
   const option = useMemo(() => {
     const categories = data.map(item => item.name);
     
@@ -62,19 +66,45 @@ export const EChartsBar: React.FC<EChartsBarProps> = ({
     // Build series array (only for TCC and wRVU)
     const series = chartMetrics.map((metric, index) => {
       const isWRVU = metric.includes('wrvu');
+      const seriesData = data.map(item => item.metricValues?.[metric] || item.value || 0);
+      
+      // Debug logging for series data
+      console.log(`🔍 Series ${metric} data:`, seriesData);
+      console.log(`🔍 Series ${metric} isWRVU:`, isWRVU);
       
       return {
         name: METRIC_LABELS[metric] || metric,
         type: 'bar',
         yAxisIndex: isWRVU ? 1 : 0,
-        data: data.map(item => item.metricValues?.[metric] || item.value || 0),
+        data: seriesData,
         itemStyle: {
           color: COLORS[index % COLORS.length],
           borderRadius: [3, 3, 0, 0]
         },
         barMaxWidth: 60,
         label: {
-          show: false
+          show: true,
+          position: 'top',
+          formatter: (params: any) => {
+            const isWRVU = params.seriesName.includes('wRVU');
+            const value = params.value;
+            if (isWRVU) {
+              return value.toLocaleString();
+            } else {
+              return `$${(value / 1000).toFixed(0)}K`;
+            }
+          },
+          fontSize: 11,
+          fontWeight: '600',
+          color: '#1f2937',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderColor: '#e5e7eb',
+          borderWidth: 1,
+          borderRadius: 4,
+          padding: [4, 8, 4, 8],
+          shadowBlur: 2,
+          shadowColor: 'rgba(0, 0, 0, 0.1)',
+          shadowOffsetY: 1
         }
       };
     });

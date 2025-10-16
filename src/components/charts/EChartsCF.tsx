@@ -54,7 +54,23 @@ export const EChartsCF: React.FC<EChartsCFProps> = ({
         },
         barMaxWidth: 60,
         label: {
-          show: false
+          show: true,
+          position: 'top',
+          formatter: (params: any) => {
+            const value = params.value;
+            return `$${value.toLocaleString()}`;
+          },
+          fontSize: 11,
+          fontWeight: '600',
+          color: '#1f2937',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderColor: '#e5e7eb',
+          borderWidth: 1,
+          borderRadius: 4,
+          padding: [4, 8, 4, 8],
+          shadowBlur: 2,
+          shadowColor: 'rgba(0, 0, 0, 0.1)',
+          shadowOffsetY: 1
         }
       };
     });
