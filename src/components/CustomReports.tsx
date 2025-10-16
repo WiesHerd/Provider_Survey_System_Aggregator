@@ -259,7 +259,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     transformedRow.cf_p90 = p90;
                   }
                   // Check TCC patterns (less specific) - Raw TCC compensation
-                  else if (variable.includes('tcc') || variable.includes('total') || variable.includes('cash')) {
+                  else if (variable.toLowerCase().includes('tcc') || variable.toLowerCase().includes('total') || variable.toLowerCase().includes('cash')) {
                     console.log('🔍 Classified as TCC:', row.variable, 'P50:', p50);
                     transformedRow.tcc_p25 = p25;
                     transformedRow.tcc_p50 = p50;
@@ -267,7 +267,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     transformedRow.tcc_p90 = p90;
                   }
                   // Check wRVU patterns (less specific) - Work RVUs
-                  else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+                  else if (variable.toLowerCase().includes('wrvu') || variable.toLowerCase().includes('rvu') || variable.toLowerCase().includes('work')) {
+                    console.log('🔍 Classified as wRVU:', row.variable, 'P50:', p50);
                     transformedRow.wrvu_p25 = p25;
                     transformedRow.wrvu_p50 = p50;
                     transformedRow.wrvu_p75 = p75;
