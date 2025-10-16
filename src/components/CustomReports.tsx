@@ -234,45 +234,45 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   // This preserves the original row structure instead of flattening
                   
                   // Check CF patterns FIRST (most specific) - TCC per wRVU ratios
-                  if (variable.includes('conversion') || 
-                      variable.includes(' cf ') ||
-                      variable.includes('_cf_') ||
-                      variable.includes('factor') || 
-                      variable.includes('conversion factor') ||
-                      variable.includes('per rvu') || 
-                      variable.includes('per work rvu') || 
-                      variable.includes('per wrvu') ||
-                      variable.includes('/rvu') ||
-                      variable.includes('/ rvu') ||
-                      variable.includes('/wrvu') ||
-                      variable.includes('/ wrvu') ||
+                  if (variable.toLowerCase().includes('conversion') || 
+                      variable.toLowerCase().includes(' cf ') ||
+                      variable.toLowerCase().includes('_cf_') ||
+                      variable.toLowerCase().includes('factor') || 
+                      variable.toLowerCase().includes('conversion factor') ||
+                      variable.toLowerCase().includes('per rvu') || 
+                      variable.toLowerCase().includes('per work rvu') || 
+                      variable.toLowerCase().includes('per wrvu') ||
+                      variable.toLowerCase().includes('/rvu') ||
+                      variable.toLowerCase().includes('/ rvu') ||
+                      variable.toLowerCase().includes('/wrvu') ||
+                      variable.toLowerCase().includes('/ wrvu') ||
                       // CRITICAL: Catch TCC per wRVU patterns that were being misclassified
-                      (variable.includes('tcc') && (variable.includes('per') || variable.includes('/'))) ||
-                      variable.includes('tcc per') ||
-                      variable.includes('tcc/') ||
-                      variable.includes('compensation per') ||
-                      variable.includes('dollars per')) {
+                      (variable.toLowerCase().includes('tcc') && (variable.toLowerCase().includes('per') || variable.toLowerCase().includes('/'))) ||
+                      variable.toLowerCase().includes('tcc per') ||
+                      variable.toLowerCase().includes('tcc/') ||
+                      variable.toLowerCase().includes('compensation per') ||
+                      variable.toLowerCase().includes('dollars per')) {
                     console.log('🔍 Classified as CF:', row.variable, 'P50:', p50);
                     transformedRow.cf_p25 = p25;
                     transformedRow.cf_p50 = p50;
                     transformedRow.cf_p75 = p75;
                     transformedRow.cf_p90 = p90;
                   }
-                  // Check TCC patterns (less specific) - Raw TCC compensation
-                  else if (variable.toLowerCase().includes('tcc') || variable.toLowerCase().includes('total') || variable.toLowerCase().includes('cash')) {
-                    console.log('🔍 Classified as TCC:', row.variable, 'P50:', p50);
-                    transformedRow.tcc_p25 = p25;
-                    transformedRow.tcc_p50 = p50;
-                    transformedRow.tcc_p75 = p75;
-                    transformedRow.tcc_p90 = p90;
-                  }
-                  // Check wRVU patterns (less specific) - Work RVUs
+                  // Check wRVU patterns SECOND - Work RVUs (before TCC to avoid conflicts)
                   else if (variable.toLowerCase().includes('wrvu') || variable.toLowerCase().includes('rvu') || variable.toLowerCase().includes('work')) {
                     console.log('🔍 Classified as wRVU:', row.variable, 'P50:', p50);
                     transformedRow.wrvu_p25 = p25;
                     transformedRow.wrvu_p50 = p50;
                     transformedRow.wrvu_p75 = p75;
                     transformedRow.wrvu_p90 = p90;
+                  }
+                  // Check TCC patterns LAST (least specific) - Raw TCC compensation
+                  else if (variable.toLowerCase().includes('tcc') || variable.toLowerCase().includes('total') || variable.toLowerCase().includes('cash')) {
+                    console.log('🔍 Classified as TCC:', row.variable, 'P50:', p50);
+                    transformedRow.tcc_p25 = p25;
+                    transformedRow.tcc_p50 = p50;
+                    transformedRow.tcc_p75 = p75;
+                    transformedRow.tcc_p90 = p90;
                   }
                 }
 
@@ -1410,7 +1410,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
-                    maxHeight: '300px'
+                    maxHeight: '400px'
                   },
                   '& .MuiAutocomplete-option': {
                     padding: '8px 12px',
@@ -1489,7 +1489,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
-                    maxHeight: '300px'
+                    maxHeight: '400px'
                   },
                   '& .MuiAutocomplete-option': {
                     padding: '8px 12px',
@@ -1603,13 +1603,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     ))}
                   </Box>
                 )}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '400px',
+                    overflow: 'auto'
+                  }
+                }}
                 sx={{
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'white',
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
-                    maxHeight: '300px'
+                    maxHeight: '400px'
                   },
                   '& .MuiAutocomplete-option': {
                     padding: '8px 12px',
@@ -1691,7 +1697,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
-                    maxHeight: '300px',
+                    maxHeight: '400px',
                     marginTop: '4px'
                   },
                   '& .MuiAutocomplete-option': {
@@ -1774,7 +1780,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
-                    maxHeight: '300px',
+                    maxHeight: '400px',
                     marginTop: '4px'
                   },
                   '& .MuiAutocomplete-option': {
@@ -1857,7 +1863,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
-                    maxHeight: '300px',
+                    maxHeight: '400px',
                     marginTop: '4px'
                   },
                   '& .MuiAutocomplete-option': {
