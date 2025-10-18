@@ -35,8 +35,6 @@ export const EChartsBar: React.FC<EChartsBarProps> = ({
   chartHeight = 600 
 }) => {
   // Debug logging for chart data
-  console.log('🔍 EChartsBar received data:', data);
-  console.log('🔍 EChartsBar received metrics:', metrics);
   
   const option = useMemo(() => {
     const categories = data.map(item => item.name);
@@ -69,8 +67,6 @@ export const EChartsBar: React.FC<EChartsBarProps> = ({
       const seriesData = data.map(item => item.metricValues?.[metric] || item.value || 0);
       
       // Debug logging for series data
-      console.log(`🔍 Series ${metric} data:`, seriesData);
-      console.log(`🔍 Series ${metric} isWRVU:`, isWRVU);
       
       return {
         name: METRIC_LABELS[metric] || metric,

@@ -90,11 +90,9 @@ export const useMappingDataUnified = () => {
 
   // Load data on mount with safety timeout
   useEffect(() => {
-    console.log('🔄 useMappingDataUnified: Starting data load...');
     
     // Safety timeout to prevent infinite loading
     const safetyTimeout = setTimeout(() => {
-      console.log('⚠️ Safety timeout: Force stopping loading state');
       setLoadingState(false);
       setErrorState('Data loading timed out - please refresh the page');
     }, 15000); // 15 second safety timeout

@@ -133,12 +133,10 @@ export class IndexedDBService {
           learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
         } else if (oldVersion < 5) {
           // Migration: Recreate learned mappings store with new structure
-          console.log('🔄 Migrating learned mappings store to new structure...');
           db.deleteObjectStore('learnedSpecialtyMappings');
           const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
           learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
           learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
-          console.log('✅ Learned mappings store migrated successfully');
         }
 
         if (!db.objectStoreNames.contains('learnedColumnMappings')) {
@@ -163,12 +161,10 @@ export class IndexedDBService {
 
         // Create blend templates store
         if (!db.objectStoreNames.contains('blendTemplates')) {
-          console.log('🔄 Creating blendTemplates store...');
           const blendTemplatesStore = db.createObjectStore('blendTemplates', { keyPath: 'id' });
           blendTemplatesStore.createIndex('name', 'name', { unique: false });
           blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
           blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
-          console.log('✅ blendTemplates store created successfully');
         }
       };
     });
@@ -299,7 +295,6 @@ export class IndexedDBService {
 
         return { surveyId, rowCount: rows.length };
     } catch (error) {
-      console.error('Error uploading survey to IndexedDB:', error);
       throw error;
     }
   }
@@ -308,12 +303,9 @@ export class IndexedDBService {
     const lines = text.split('\n').filter(line => line.trim()); // Remove empty lines
     if (lines.length === 0) return [];
     
-    console.log('Total CSV lines:', lines.length);
-    console.log('First 3 lines:', lines.slice(0, 3));
     
     // Parse headers from first line using proper CSV parsing
     const headers = parseCSVLine(lines[0]);
-    console.log('CSV Headers:', headers);
     
     // Parse data rows - start from index 1 (skip header row)
     const rows = [];
@@ -331,10 +323,7 @@ export class IndexedDBService {
       rows.push(row);
     }
     
-    console.log('CSV Parsed Rows:', rows.length, 'rows');
     if (rows.length > 0) {
-      console.log('First parsed row:', rows[0]);
-      console.log('Last parsed row:', rows[rows.length - 1]);
     }
     
     return rows;
@@ -369,18 +358,11 @@ export class IndexedDBService {
         let filteredData = data;
         
         if (filters && Object.keys(filters).length > 0) {
-          console.log('Filtering data with filters:', filters);
-          console.log('Total data items before filtering:', data.length);
           
           filteredData = data.filter((item: SurveyData) => {
             // Filter by specialty - EXACT MATCH ONLY
             if (filters.specialty && filters.specialty.trim() !== '') {
               const itemSpecialty = item.specialty || item.data?.specialty || item.data?.Specialty || '';
-              console.log('Checking specialty:', { 
-                filterSpecialty: filters.specialty, 
-                itemSpecialty, 
-                matches: itemSpecialty.toLowerCase() === filters.specialty.toLowerCase() 
-              });
               if (itemSpecialty.toLowerCase() !== filters.specialty.toLowerCase()) {
                 return false;
               }
@@ -389,11 +371,7 @@ export class IndexedDBService {
             // Filter by provider type - EXACT MATCH ONLY
             if (filters.providerType && filters.providerType.trim() !== '') {
               const itemProviderType = item.providerType || item.data?.providerType || item.data?.['Provider Type'] || item.data?.provider_type || '';
-              console.log('Checking provider type:', { 
-                filterProviderType: filters.providerType, 
-                itemProviderType, 
-                matches: itemProviderType.toLowerCase() === filters.providerType.toLowerCase() 
-              });
+                // Provider type filter logging removed for performance
               if (itemProviderType.toLowerCase() !== filters.providerType.toLowerCase()) {
                 return false;
               }
@@ -410,11 +388,7 @@ export class IndexedDBService {
             // Filter by variable - EXACT MATCH ONLY
             if (filters.variable && filters.variable.trim() !== '') {
               const itemVariable = item.variable || item.data?.variable || '';
-              console.log('Checking variable:', { 
-                filterVariable: filters.variable, 
-                itemVariable, 
-                matches: itemVariable.toLowerCase() === filters.variable.toLowerCase() 
-              });
+                // Variable filter logging removed for performance
               if (itemVariable.toLowerCase() !== filters.variable.toLowerCase()) {
                 return false;
               }
@@ -423,26 +397,20 @@ export class IndexedDBService {
             return true;
           });
           
-          console.log('Filtered data items after filtering:', filteredData.length);
           
           // Debug: Show what specialties actually exist in the data
           if (data.length > 0) {
             const actualSpecialties = [...new Set(data.map(item => 
               item.specialty || item.data?.specialty || item.data?.Specialty || ''
             ))].filter(Boolean).sort();
-            console.log('Actual specialties in data:', actualSpecialties);
             
             const actualProviderTypes = [...new Set(data.map(item => 
               item.providerType || item.data?.providerType || item.data?.['Provider Type'] || item.data?.provider_type || ''
             ))].filter(Boolean).sort();
-            console.log('Actual provider types in data:', actualProviderTypes);
             
             // Debug: Show the actual data structure
             if (data.length > 0) {
-              console.log('Sample data item structure:', data[0]);
-              console.log('Sample data item keys:', Object.keys(data[0]));
               if (data[0].data) {
-                console.log('Sample data.data keys:', Object.keys(data[0].data));
               }
             }
           }
@@ -457,10 +425,7 @@ export class IndexedDBService {
           } as ISurveyRow;
         });
         
-        console.log('Raw rows from IndexedDB:', rows.length);
         if (rows.length > 0) {
-          console.log('First row from IndexedDB:', rows[0]);
-          console.log('First row values:', Object.values(rows[0]));
         }
         
         // Filter out any rows that look like headers
@@ -488,15 +453,12 @@ export class IndexedDBService {
           const isHeaderRow = headerMatches === values.length && values.length > 0;
           
           if (isHeaderRow) {
-            console.log('Filtering out header row:', values);
           }
           
           return !isHeaderRow;
         });
         
-        console.log('Filtered rows after header removal:', filteredRows.length);
         if (filteredRows.length > 0) {
-          console.log('First filtered row:', filteredRows[0]);
         }
         
         resolve({ rows: filteredRows });
@@ -506,9 +468,6 @@ export class IndexedDBService {
 
   async saveSurveyData(surveyId: string, rows: any[]): Promise<void> {
     const db = await this.ensureDB();
-    console.log('Saving survey data:', surveyId, 'with', rows.length, 'rows');
-    console.log('First row to save:', rows[0]);
-    console.log('Last row to save:', rows[rows.length - 1]);
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['surveyData'], 'readwrite');
@@ -579,17 +538,8 @@ export class IndexedDBService {
         });
 
         Promise.all(mappingPromises).then((results) => {
-          console.log(`🔍 getAllSpecialtyMappings: Processing ${results.length} mappings for provider type: ${providerType}`);
           
-          // ENTERPRISE DEBUG: Log all mappings before filtering
-          console.log(`🔍 getAllSpecialtyMappings: All mappings before filtering:`, results.map(m => ({
-            id: m.id,
-            standardizedName: m.standardizedName,
-            sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
-              specialty: s.specialty,
-              surveySource: s.surveySource
-            }))
-          })));
+          // ENTERPRISE DEBUG: Log all mappings before filtering - removed for performance
           
           // Filter by provider type if specified
           if (providerType) {
@@ -598,22 +548,7 @@ export class IndexedDBService {
               const surveysByProviderType = surveys.filter(survey => survey.providerType === providerType);
               const validSurveySources = new Set(surveysByProviderType.map(s => s.type || s.name));
               
-              console.log(`🔍 getAllSpecialtyMappings: Found ${surveysByProviderType.length} surveys for ${providerType}:`, 
-                surveysByProviderType.map(s => s.type || s.name));
-              console.log(`🔍 Valid survey sources for ${providerType}:`, Array.from(validSurveySources));
-              
-              // ENTERPRISE DEBUG: Log filtering details for each mapping
-              console.log(`🔍 getAllSpecialtyMappings: About to check ${results.length} mappings`);
-              results.forEach((mapping: any, index: number) => {
-                console.log(`🔍 getAllSpecialtyMappings: Checking mapping ${index + 1}:`, {
-                  standardizedName: mapping.standardizedName,
-                  sourceSpecialties: mapping.sourceSpecialties.map((s: any) => ({
-                    specialty: s.specialty,
-                    surveySource: s.surveySource,
-                    hasValidSource: validSurveySources.has(s.surveySource)
-                  }))
-                });
-              });
+              // ENTERPRISE DEBUG: Log filtering details for each mapping - removed for performance
               
               // Filter mappings based on which survey sources they belong to
               const filtered = results.filter((mapping: any) => {
@@ -628,34 +563,16 @@ export class IndexedDBService {
                 });
                 
                 if (hasMGMASource) {
-                  console.log(`🔍 getAllSpecialtyMappings: Found MGMA mapping "${mapping.standardizedName}":`, {
-                    hasValidSource,
-                    hasMGMASource,
-                    sourceSpecialties: mapping.sourceSpecialties.map((s: any) => ({
-                      specialty: s.specialty,
-                      surveySource: s.surveySource,
-                      isValid: validSurveySources.has(s.surveySource)
-                    }))
-                  });
+                    // Mapping filter logging removed for performance
                 }
                 
-                console.log(`🔍 getAllSpecialtyMappings: Mapping "${mapping.standardizedName}" - hasValidSource: ${hasValidSource}`);
                 return hasValidSource;
               });
               
-            console.log(`🔍 getAllSpecialtyMappings: Filtered to ${filtered.length} mappings for ${providerType}`);
-            console.log(`🔍 getAllSpecialtyMappings: Filtered mappings:`, filtered.map(m => ({
-              id: m.id,
-              standardizedName: m.standardizedName,
-              sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
-                specialty: s.specialty,
-                surveySource: s.surveySource
-              }))
-            })));
+              // Filtered mappings logging removed for performance
             resolve(filtered);
             }).catch(reject);
           } else {
-            console.log(`🔍 getAllSpecialtyMappings: No filtering applied, returning all ${results.length} mappings`);
             resolve(results);
           }
         }).catch(reject);
@@ -728,7 +645,6 @@ export class IndexedDBService {
         
         // Filter by provider type if specified
         if (providerType) {
-          console.log('🔍 getAllColumnMappings: Filtering mappings for provider type:', providerType);
           
           // Get all surveys to determine which survey sources belong to this provider type
           this.getAllSurveys().then(surveys => {
@@ -740,7 +656,6 @@ export class IndexedDBService {
               }
             });
             
-            console.log('🔍 getAllColumnMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
             
             // Filter mappings to only include those with source columns from valid survey sources
             const filteredMappings = mappings.filter(mapping => {
@@ -749,20 +664,16 @@ export class IndexedDBService {
               );
               
               if (!hasValidSource) {
-                console.log('🔍 getAllColumnMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
               }
               
               return hasValidSource;
             });
             
-            console.log('🔍 getAllColumnMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
             resolve(filteredMappings);
           }).catch(err => {
-            console.error('Error filtering column mappings:', err);
             resolve(mappings); // Fallback to all mappings
           });
         } else {
-          console.log('🔍 getAllColumnMappings: No provider type filter, returning all', mappings.length, 'mappings');
           resolve(mappings);
         }
       };
@@ -809,12 +720,9 @@ export class IndexedDBService {
     const surveys = await this.getAllSurveys();
     const mappings = await this.getAllColumnMappings(providerType);
     
-    console.log('🔍 getUnmappedColumns: Getting unmapped columns for provider type:', providerType);
-    console.log('🔍 getUnmappedColumns: Found', surveys.length, 'surveys and', mappings.length, 'mappings');
     
     // ENTERPRISE FIX: Handle case when no surveys exist
     if (surveys.length === 0) {
-      console.log('🔍 getUnmappedColumns: No surveys found - returning empty array');
       return [];
     }
     
@@ -832,11 +740,9 @@ export class IndexedDBService {
     for (const survey of surveys) {
       // Filter surveys by provider type if specified
       if (providerType && survey.providerType !== providerType) {
-        console.log(`🔍 getUnmappedColumns: Skipping survey ${survey.id} (${survey.name}) - providerType mismatch (${survey.providerType} !== ${providerType})`);
         continue;
       }
       
-      console.log(`🔍 getUnmappedColumns: Processing survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType}`);
       
       const { rows } = await this.getSurveyData(survey.id);
       
@@ -845,13 +751,11 @@ export class IndexedDBService {
         const surveySource = survey.type || survey.name || 'Unknown';
         
         // Debug: Log all columns in the first row
-        console.log(`🔍 Survey ${surveySource} columns:`, Object.keys(firstRow));
         
         // Check top-level columns
         Object.keys(firstRow).forEach(columnName => {
           // Debug: Check each column against compensation patterns
           const isCompensation = this.isCompensationOrTechnicalColumn(columnName);
-          console.log(`🔍 Column "${columnName}" - isCompensation: ${isCompensation}`);
           
           // Include compensation and technical columns, including percentile columns
           if (isCompensation) {
@@ -862,17 +766,14 @@ export class IndexedDBService {
             columnCounts.set(key, current);
             
             // Debug: Log compensation columns found
-            console.log(`✅ Found compensation column: ${columnName} in ${surveySource}`);
           }
         });
         
         // ALSO check nested data object for columns
         if (firstRow.data && typeof firstRow.data === 'object') {
-          console.log(`🔍 Checking nested data object for survey: ${surveySource}`);
           Object.keys(firstRow.data).forEach(columnName => {
             // Debug: Check each nested column against compensation patterns
             const isCompensation = this.isCompensationOrTechnicalColumn(columnName);
-            console.log(`🔍 Nested column "${columnName}" - isCompensation: ${isCompensation}`);
             
             // Include compensation and technical columns, including percentile columns
             if (isCompensation) {
@@ -883,7 +784,6 @@ export class IndexedDBService {
               columnCounts.set(key, current);
               
               // Debug: Log compensation columns found
-              console.log(`✅ Found nested compensation column: ${columnName} in ${surveySource}`);
             }
           });
         }
@@ -906,13 +806,10 @@ export class IndexedDBService {
             category: this.categorizeColumn(key)
           });
         } else {
-          console.log(`🚫 Skipping mapped column: ${key} from ${surveySource}`);
         }
       });
     });
 
-    console.log(`📊 Total unmapped columns found: ${unmapped.length}`);
-    console.log(`📋 Unmapped columns:`, unmapped.map(c => `${c.name} (${c.surveySource})`));
 
     return unmapped;
   }
@@ -985,23 +882,16 @@ export class IndexedDBService {
 
   // Utility Methods
   async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
-    console.log(`🔍 getUnmappedSpecialties: Getting unmapped specialties for provider type: ${providerType}`);
     const surveys = await this.getAllSurveys();
-    console.log(`🔍 getUnmappedSpecialties: All surveys:`, surveys.map(s => ({ id: s.id, name: s.name, type: s.type, providerType: s.providerType })));
     
     // ENTERPRISE FIX: Handle case when no surveys exist
     if (surveys.length === 0) {
-      console.log('🔍 getUnmappedSpecialties: No surveys found - returning empty array');
       return [];
     }
     
     const mappings = await this.getAllSpecialtyMappings(providerType);
-    console.log(`🔍 getUnmappedSpecialties: Found ${surveys.length} surveys and ${mappings.length} mappings`);
     
-    // ENTERPRISE DEBUG: Log provider type filtering details
-    console.log(`🔍 getUnmappedSpecialties: Provider type filtering - requested: "${providerType}", surveys:`, 
-      surveys.map(s => ({ name: s.name, providerType: s.providerType, willInclude: !providerType || !s.providerType || s.providerType === providerType }))
-    );
+    // ENTERPRISE DEBUG: Log provider type filtering details - removed for performance
     
     // ENTERPRISE FIX: Build survey-source specific mapped names
     const mappedNamesBySource = new Map<string, Set<string>>();
@@ -1015,43 +905,26 @@ export class IndexedDBService {
       });
     });
     
-    // ENTERPRISE DEBUG: Log mapped names by source
-    console.log(`🔍 Mapped Names by Source:`, Array.from(mappedNamesBySource.entries()).map(([source, names]) => ({
-      source,
-      count: names.size,
-      sample: Array.from(names).slice(0, 5)
-    })));
+    // ENTERPRISE DEBUG: Log mapped names by source - removed for performance
     
-    // ENTERPRISE DEBUG: Log all mappings details
-    console.log(`🔍 All Mappings Details:`, mappings.map(m => ({
-      id: m.id,
-      standardizedName: m.standardizedName,
-      sourceSpecialties: m.sourceSpecialties.map((s: any) => ({
-        specialty: s.specialty,
-        surveySource: s.surveySource
-      }))
-    })));
+    // ENTERPRISE DEBUG: Log all mappings details - removed for performance
     
     // ENTERPRISE DEBUG: Log total mapped names for reference
     const totalMappedNames = new Set<string>();
     mappedNamesBySource.forEach((names, source) => {
       names.forEach(name => totalMappedNames.add(name));
     });
-    console.log(`🔍 Total Mapped Names (${totalMappedNames.size}):`, Array.from(totalMappedNames).slice(0, 10), '...');
 
     const unmapped: IUnmappedSpecialty[] = [];
     const specialtyCounts = new Map<string, { count: number; sources: Set<string> }>();
 
     for (const survey of surveys) {
       // Filter surveys by provider type if specified
-      console.log(`🔍 getUnmappedSpecialties: Checking survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType} against filter: ${providerType}`);
       
       if (providerType && survey.providerType && survey.providerType !== providerType) {
-        console.log(`🔍 getUnmappedSpecialties: Skipping survey ${survey.id} - providerType mismatch (${survey.providerType} !== ${providerType})`);
         continue;
       }
       
-      console.log(`🔍 getUnmappedSpecialties: Processing survey ${survey.id} (${survey.name}) - INCLUDED`);
       
       const { rows } = await this.getSurveyData(survey.id);
       
@@ -1060,12 +933,10 @@ export class IndexedDBService {
       
       // ENTERPRISE DEBUG: Log survey source for MGMA
       if (survey.name.toLowerCase().includes('mgma') || survey.type.toLowerCase().includes('mgma')) {
-        console.log(`🔍 MGMA Survey Source: "${surveySource}" (from type: "${survey.type}", name: "${survey.name}")`);
       }
       
       // ENTERPRISE DEBUG: Log survey source for Gallagher
       if (survey.name.toLowerCase().includes('gallagher') || survey.type.toLowerCase().includes('gallagher')) {
-        console.log(`🔍 GALLAGHER Survey Source: "${surveySource}" (from type: "${survey.type}", name: "${survey.name}")`);
       }
       
       rows.forEach(row => {
@@ -1083,33 +954,10 @@ export class IndexedDBService {
         
         // ENTERPRISE DEBUG: Log specialty extraction details for MGMA
         if (surveySource.toLowerCase().includes('mgma')) {
-          console.log(`🔍 MGMA Row Analysis:`, {
-            specialty: specialty,
-            specialtyType: typeof specialty,
-            hasSpecialty: !!specialty,
-            isString: typeof specialty === 'string',
-            isMapped: isMappedForThisSource,
-            surveySource: surveySource,
-            hasMappingsForSource: mappedNamesBySource.has(surveySource),
-            mappingsForSource: mappedNamesBySource.has(surveySource) ? Array.from(mappedNamesBySource.get(surveySource)!).slice(0, 5) : [],
-            rowKeys: Object.keys(row)
-          });
+          // MGMA specialty extraction logging removed for performance
         }
         
-        // ENTERPRISE DEBUG: Log specialty extraction details for Gallagher
-        if (surveySource.toLowerCase().includes('gallagher')) {
-          console.log(`🔍 GALLAGHER Row Analysis:`, {
-            specialty: specialty,
-            specialtyType: typeof specialty,
-            hasSpecialty: !!specialty,
-            isString: typeof specialty === 'string',
-            isMapped: isMappedForThisSource,
-            surveySource: surveySource,
-            hasMappingsForSource: mappedNamesBySource.has(surveySource),
-            mappingsForSource: mappedNamesBySource.has(surveySource) ? Array.from(mappedNamesBySource.get(surveySource)!).slice(0, 5) : [],
-            rowKeys: Object.keys(row)
-          });
-        }
+        // ENTERPRISE DEBUG: Log specialty extraction details for Gallagher - removed for performance
         
         if (specialty && typeof specialty === 'string' && !isMappedForThisSource) {
           const key = specialty.toLowerCase();
@@ -1120,12 +968,10 @@ export class IndexedDBService {
           
           // ENTERPRISE DEBUG: Log specialty extraction for MGMA
           if (surveySource.toLowerCase().includes('mgma')) {
-            console.log(`🔍 MGMA Specialty Found: "${specialty}" (key: "${key}")`);
           }
           
           // ENTERPRISE DEBUG: Log specialty extraction for Gallagher
           if (surveySource.toLowerCase().includes('gallagher')) {
-            console.log(`🔍 GALLAGHER Specialty Found: "${specialty}" (key: "${key}")`);
           }
         }
       });
@@ -1144,28 +990,16 @@ export class IndexedDBService {
       });
     });
 
-    console.log(`🔍 getUnmappedSpecialties: Returning ${unmapped.length} unmapped specialties for ${providerType}`);
-    console.log(`🔍 getUnmappedSpecialties: Unmapped specialties:`, unmapped.map(s => ({ name: s.name, surveySource: s.surveySource, frequency: s.frequency })));
     
     // ENTERPRISE DEBUG: Show specialty counts for MGMA
     const mgmaSpecialties = Array.from(specialtyCounts.entries()).filter(([key, value]) => 
       Array.from(value.sources).some(source => source.toLowerCase().includes('mgma'))
     );
-    console.log(`🔍 MGMA Specialty Counts:`, mgmaSpecialties.map(([key, value]) => ({
-      specialty: key,
-      count: value.count,
-      sources: Array.from(value.sources)
-    })));
     
     // ENTERPRISE DEBUG: Show specialty counts for Gallagher
     const gallagherSpecialties = Array.from(specialtyCounts.entries()).filter(([key, value]) => 
       Array.from(value.sources).some(source => source.toLowerCase().includes('gallagher'))
     );
-    console.log(`🔍 GALLAGHER Specialty Counts:`, gallagherSpecialties.map(([key, value]) => ({
-      specialty: key,
-      count: value.count,
-      sources: Array.from(value.sources)
-    })));
     
     return unmapped;
   }
@@ -1176,13 +1010,11 @@ export class IndexedDBService {
       
       // ENTERPRISE FIX: Handle case when no surveys exist
       if (surveys.length === 0) {
-        console.log('🔍 getUnmappedVariables: No surveys found - returning empty array');
         return [];
       }
       
       const mappings = await this.getVariableMappings(providerType);
       
-      console.log('🔍 getUnmappedVariables: Getting unmapped variables for provider type:', providerType);
     
     const mappedNames = new Set<string>();
     mappings.forEach(mapping => {
@@ -1198,11 +1030,9 @@ export class IndexedDBService {
     for (const survey of surveys) {
       // Filter surveys by provider type if specified
       if (providerType && survey.providerType !== providerType) {
-        console.log(`🔍 getUnmappedVariables: Skipping survey ${survey.id} (${survey.name}) - providerType mismatch (${survey.providerType} !== ${providerType})`);
         continue;
       }
       
-      console.log(`🔍 getUnmappedVariables: Processing survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType}`);
       
       const { rows } = await this.getSurveyData(survey.id);
       
@@ -1241,7 +1071,6 @@ export class IndexedDBService {
 
       return unmapped;
     } catch (error) {
-      console.error('Error getting unmapped variables:', error);
       return [];
     }
   }
@@ -1276,7 +1105,6 @@ export class IndexedDBService {
         numbers2.some(n2 => n1 !== n2)
       );
       if (hasDifferentNumbers) {
-        console.log(`Different numbers detected: "${name1}" vs "${name2}" - returning 0.2 similarity`);
         return 0.2; // Very low similarity for different percentiles/metrics
       }
     }
@@ -1354,7 +1182,6 @@ export class IndexedDBService {
         
         // Filter by provider type if specified
         if (providerType) {
-          console.log('🔍 getVariableMappings: Filtering mappings for provider type:', providerType);
           
           // Get all surveys to determine which survey sources belong to this provider type
           this.getAllSurveys().then(surveys => {
@@ -1366,7 +1193,6 @@ export class IndexedDBService {
               }
             });
             
-            console.log('🔍 getVariableMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
             
             // Filter mappings to only include those with source variables from valid survey sources
             const filteredMappings = mappings.filter(mapping => {
@@ -1375,20 +1201,16 @@ export class IndexedDBService {
               );
               
               if (!hasValidSource) {
-                console.log('🔍 getVariableMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
               }
               
               return hasValidSource;
             });
             
-            console.log('🔍 getVariableMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
             resolve(filteredMappings);
           }).catch(err => {
-            console.error('Error filtering variable mappings:', err);
             resolve(mappings); // Fallback to all mappings
           });
         } else {
-          console.log('🔍 getVariableMappings: No provider type filter, returning all', mappings.length, 'mappings');
           resolve(mappings);
         }
       };
@@ -1449,13 +1271,11 @@ export class IndexedDBService {
       
       // ENTERPRISE FIX: Handle case when no surveys exist
       if (surveys.length === 0) {
-        console.log('🔍 getUnmappedProviderTypes: No surveys found - returning empty array');
         return [];
       }
       
       const mappings = await this.getProviderTypeMappings(providerType);
       
-      console.log('🔍 getUnmappedProviderTypes: Getting unmapped provider types for provider type:', providerType);
     
       const mappedNames = new Set<string>();
       mappings.forEach(mapping => {
@@ -1506,7 +1326,6 @@ export class IndexedDBService {
 
       return unmapped;
     } catch (error) {
-      console.error('Error getting unmapped provider types:', error);
       return [];
     }
   }
@@ -1517,13 +1336,11 @@ export class IndexedDBService {
       
       // ENTERPRISE FIX: Handle case when no surveys exist
       if (surveys.length === 0) {
-        console.log('🔍 getUnmappedRegions: No surveys found - returning empty array');
         return [];
       }
       
       const mappings = await this.getRegionMappings(providerType);
       
-      console.log('🔍 getUnmappedRegions: Getting unmapped regions for provider type:', providerType);
     
       const mappedNames = new Set<string>();
       mappings.forEach(mapping => {
@@ -1539,11 +1356,9 @@ export class IndexedDBService {
       for (const survey of surveys) {
         // Filter surveys by provider type if specified
         if (providerType && survey.providerType !== providerType) {
-          console.log(`🔍 getUnmappedRegions: Skipping survey ${survey.id} (${survey.name}) - providerType mismatch (${survey.providerType} !== ${providerType})`);
           continue;
         }
         
-        console.log(`🔍 getUnmappedRegions: Processing survey ${survey.id} (${survey.name}) with providerType: ${survey.providerType}`);
         
         const { rows } = await this.getSurveyData(survey.id);
         
@@ -1577,7 +1392,6 @@ export class IndexedDBService {
 
       return unmapped;
     } catch (error) {
-      console.error('Error getting unmapped regions:', error);
       return [];
     }
   }
@@ -1596,7 +1410,6 @@ export class IndexedDBService {
         
         // Filter by provider type if specified
         if (providerType) {
-          console.log('🔍 getProviderTypeMappings: Filtering mappings for provider type:', providerType);
           
           // Get all surveys to determine which survey sources belong to this provider type
           this.getAllSurveys().then(surveys => {
@@ -1608,7 +1421,6 @@ export class IndexedDBService {
               }
             });
             
-            console.log('🔍 getProviderTypeMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
             
             // Filter mappings to only include those with source provider types from valid survey sources
             const filteredMappings = mappings.filter(mapping => {
@@ -1617,20 +1429,16 @@ export class IndexedDBService {
               );
               
               if (!hasValidSource) {
-                console.log('🔍 getProviderTypeMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
               }
               
               return hasValidSource;
             });
             
-            console.log('🔍 getProviderTypeMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
             resolve(filteredMappings);
           }).catch(err => {
-            console.error('Error filtering provider type mappings:', err);
             resolve(mappings); // Fallback to all mappings
           });
         } else {
-          console.log('🔍 getProviderTypeMappings: No provider type filter, returning all', mappings.length, 'mappings');
           resolve(mappings);
         }
       };
@@ -1699,7 +1507,6 @@ export class IndexedDBService {
         
         // Filter by provider type if specified
         if (providerType) {
-          console.log('🔍 getRegionMappings: Filtering mappings for provider type:', providerType);
           
           // Get all surveys to determine which survey sources belong to this provider type
           this.getAllSurveys().then(surveys => {
@@ -1711,7 +1518,6 @@ export class IndexedDBService {
               }
             });
             
-            console.log('🔍 getRegionMappings: Valid survey sources for', providerType, ':', Array.from(validSurveySources));
             
             // Filter mappings to only include those with source regions from valid survey sources
             const filteredMappings = mappings.filter(mapping => {
@@ -1720,20 +1526,16 @@ export class IndexedDBService {
               );
               
               if (!hasValidSource) {
-                console.log('🔍 getRegionMappings: Filtering out mapping:', mapping.standardizedName, 'no valid sources');
               }
               
               return hasValidSource;
             });
             
-            console.log('🔍 getRegionMappings: Returning', filteredMappings.length, 'filtered mappings for', providerType);
             resolve(filteredMappings);
           }).catch(err => {
-            console.error('Error filtering region mappings:', err);
             resolve(mappings); // Fallback to all mappings
           });
         } else {
-          console.log('🔍 getRegionMappings: No provider type filter, returning all', mappings.length, 'mappings');
           resolve(mappings);
         }
       };
@@ -1876,7 +1678,6 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        console.log(`📖 Retrieved ${request.result.length} learned mappings from IndexedDB:`, request.result);
         const mappings: Record<string, string> = {};
         request.result.forEach((item: any) => {
           // Filter by provider type if specified
@@ -1889,7 +1690,6 @@ export class IndexedDBService {
             mappings[item.original] = item.corrected;
           }
         });
-        console.log(`📋 Processed learned mappings for provider type ${providerType || 'ALL'}:`, mappings);
         resolve(mappings);
       };
 
@@ -1910,7 +1710,6 @@ export class IndexedDBService {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        console.log(`📖 Retrieved ${request.result.length} learned mappings with source from IndexedDB:`, request.result);
         const mappings: Array<{original: string, corrected: string, surveySource: string}> = [];
         request.result.forEach((item: any) => {
           // Filter by provider type if specified
@@ -1922,7 +1721,6 @@ export class IndexedDBService {
             });
           }
         });
-        console.log(`📋 Processed learned mappings with source for provider type ${providerType || 'ALL'}:`, mappings);
         resolve(mappings);
       };
 
@@ -1937,7 +1735,6 @@ export class IndexedDBService {
     const db = await this.ensureDB();
     const storeName = `learned${type.charAt(0).toUpperCase() + type.slice(1)}Mappings`;
     
-    console.log(`💾 Saving learned mapping: "${original}" → "${corrected}" from survey: ${surveySource || 'Unknown'}`);
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([storeName], 'readwrite');
@@ -1952,7 +1749,6 @@ export class IndexedDBService {
       });
 
       request.onsuccess = () => {
-        console.log(`✅ Learned mapping saved successfully`);
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -1983,15 +1779,12 @@ export class IndexedDBService {
           
           if (recordToDelete) {
             const correctedName = recordToDelete.corrected;
-            console.log(`🗑️ Found learned mapping to delete:`, recordToDelete);
-            console.log(`🗑️ Will delete ALL learned mappings with corrected name: ${correctedName}`);
             
             // Find and delete ALL records with the same corrected name
             const recordsToDelete = records.filter((record: any) => 
               record.corrected && record.corrected.toLowerCase() === correctedName.toLowerCase()
             );
             
-            console.log(`🗑️ Found ${recordsToDelete.length} records to delete:`, recordsToDelete);
             
             // Delete all matching records
             let deleteCount = 0;

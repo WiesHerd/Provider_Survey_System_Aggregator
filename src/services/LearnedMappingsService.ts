@@ -30,7 +30,6 @@ export class LearnedMappingsService {
    * Apply learned specialty mappings to all existing survey data
    */
   async applyLearnedSpecialtyMappings(): Promise<LearnedMappingApplicationResult> {
-    console.log('🔍 LearnedMappingsService: Starting learned specialty mappings application...');
     
     const result: LearnedMappingApplicationResult = {
       totalRowsProcessed: 0,
@@ -42,16 +41,13 @@ export class LearnedMappingsService {
     try {
       // Get all learned specialty mappings
       const learnedMappings = await this.dataService.getLearnedMappings('specialty');
-      console.log('🔍 LearnedMappingsService: Found', Object.keys(learnedMappings).length, 'learned specialty mappings');
 
       if (Object.keys(learnedMappings).length === 0) {
-        console.log('🔍 LearnedMappingsService: No learned mappings found');
         return result;
       }
 
       // Get all surveys
       const surveys = await this.dataService.getAllSurveys();
-      console.log('🔍 LearnedMappingsService: Processing', surveys.length, 'surveys');
 
       for (const survey of surveys) {
         try {

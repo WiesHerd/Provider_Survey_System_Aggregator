@@ -371,11 +371,6 @@ const ResultsPanel: React.FC<{
   // Always show cards if percentileData exists (even if values are zero)
   const noMarketData = !percentileData;
 
-  // Debug logs
-  console.log('ResultsPanel compareType:', compareType);
-  console.log('ResultsPanel percentileData:', percentileData);
-  console.log('ResultsPanel marketData:', marketData);
-  console.log('ResultsPanel currentPercentile:', currentPercentile);
 
   return (
     <Paper sx={{ p: 2, mt: 3, border: '1.5px solid #b0b4bb', boxShadow: 'none' }}>
@@ -468,12 +463,6 @@ const DebugSurveyData: React.FC = () => {
   useEffect(() => {
     const storageService = new LocalStorageService();
     storageService.getSurveyData('ziimyk').then(data => {
-      if (data && data.rows && data.rows.length > 0) {
-        console.log('First row:', data.rows[0]);
-        console.log('All column names:', Object.keys(data.rows[0]));
-      } else {
-        console.log('No rows found for this survey.');
-      }
     });
   }, []);
   return null;
@@ -685,29 +674,13 @@ const FMVCalculator: React.FC = () => {
       const allMappings = await mappingService.getAllMappings();
       const uploadedSurveys = await dataService.getAllSurveys();
       let allRows: any[] = [];
-      console.log('🔍 FMV DEBUG - Loading data from', uploadedSurveys.length, 'surveys');
       for (const survey of uploadedSurveys) {
         const data = await dataService.getSurveyData(survey.id);
         if (data && data.rows) {
-          console.log(`🔍 FMV DEBUG - Survey ${survey.id} has ${data.rows.length} rows`);
           const cm = survey.metadata?.columnMappings || {};
           const normalizedRows = data.rows.map(row => normalizeSurveyRow(row, survey, cm));
-          console.log(`🔍 FMV DEBUG - First normalized row:`, {
-            originalRow: Object.keys(data.rows[0]).slice(0, 10),
-            normalizedRow: {
-              specialty: normalizedRows[0].specialty,
-              variable: normalizedRows[0].variable,
-              tcc_values: {
-                tcc_p25: normalizedRows[0].tcc_p25,
-                tcc_p50: normalizedRows[0].tcc_p50,
-                tcc_p75: normalizedRows[0].tcc_p75,
-                tcc_p90: normalizedRows[0].tcc_p90
-              }
-            }
-          });
           allRows = allRows.concat(normalizedRows);
         } else {
-          console.log(`🔍 FMV DEBUG - Survey ${survey.id} has no data`);
         }
       }
       // Use mapping service for robust specialty matching
@@ -724,38 +697,12 @@ const FMVCalculator: React.FC = () => {
         filteredRows = filteredRows.filter(r => mappedSpecs.includes(normalizeString(r.specialty)));
       }
       if (filters.providerType) {
-        console.log('Provider Types in data:', filteredRows.map(r => r.providerType));
-        console.log('Filtering for providerType:', filters.providerType);
         filteredRows = filteredRows.filter(r => normalizeString(r.providerType) === normalizeString(filters.providerType));
       }
       if (filters.region) filteredRows = filteredRows.filter(r => normalizeString(r.geographicRegion) === normalizeString(filters.region));
       if (filters.surveySource) filteredRows = filteredRows.filter(r => normalizeString(r.surveySource) === normalizeString(filters.surveySource));
       if (filters.year) {
-        console.log('Year filter value:', filters.year);
-        console.log('Row years before filter:', filteredRows.map(r => r.year));
         filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
-        console.log('Row years after filter:', filteredRows.map(r => r.year));
-      }
-      console.log('🔍 FMV DEBUG - Filtered rows:', filteredRows.length);
-      if (filteredRows.length > 0) {
-        console.log('🔍 FMV DEBUG - Sample filtered row:', {
-          specialty: filteredRows[0].specialty,
-          geographicRegion: filteredRows[0].geographicRegion,
-          providerType: filteredRows[0].providerType,
-          surveySource: filteredRows[0].surveySource,
-          variable: filteredRows[0].variable,
-          compensationValues: {
-            tcc_p25: filteredRows[0].tcc_p25,
-            tcc_p50: filteredRows[0].tcc_p50,
-            tcc_p75: filteredRows[0].tcc_p75,
-            tcc_p90: filteredRows[0].tcc_p90,
-            wrvu_p25: filteredRows[0].wrvu_p25,
-            wrvu_p50: filteredRows[0].wrvu_p50,
-            cf_p25: filteredRows[0].cf_p25,
-            cf_p50: filteredRows[0].cf_p50
-          },
-          rawFields: Object.keys(filteredRows[0]).slice(0, 20)
-        });
       }
       // Aggregate percentiles for TCC, wRVUs, CF
       const tccs = filteredRows.flatMap(r => [r.tcc_p25, r.tcc_p50, r.tcc_p75, r.tcc_p90].filter(Boolean));

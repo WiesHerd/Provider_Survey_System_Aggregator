@@ -105,16 +105,7 @@ export class AdvancedErrorBoundary extends Component<
       retryCount: this.state.retryCount + 1,
     });
 
-    // Log error with context
-    console.error(`🚨 Error Boundary caught error in ${componentName}:`, {
-      error: error.message,
-      stack: error.stack,
-      componentStack: errorInfo.componentStack,
-      retryCount: this.state.retryCount + 1,
-      circuitBreakerState: this.state.circuitBreakerState,
-      errorHistory: this.errorHistory.length,
-      timestamp: new Date().toISOString(),
-    });
+    // Log error with context - logging removed for performance
 
     // Check circuit breaker
     this.updateCircuitBreakerState(circuitBreakerThreshold, circuitBreakerTimeout);
@@ -141,13 +132,11 @@ export class AdvancedErrorBoundary extends Component<
 
     // Check if we should open the circuit breaker
     if (circuitBreakerState === 'CLOSED' && recentErrors.length >= threshold) {
-      console.warn(`🔴 Circuit breaker OPENED for ${this.props.componentName} - too many errors`);
       
       this.setState({ circuitBreakerState: 'OPEN' });
       
       // Set timeout to attempt half-open
       this.circuitBreakerTimeoutId = setTimeout(() => {
-        console.log(`🟡 Circuit breaker HALF-OPEN for ${this.props.componentName} - attempting recovery`);
         this.setState({ circuitBreakerState: 'HALF_OPEN' });
       }, timeout);
     }
@@ -184,7 +173,6 @@ export class AdvancedErrorBoundary extends Component<
         body: JSON.stringify(errorReport),
       });
     } catch (reportingError) {
-      console.error('Failed to report error:', reportingError);
     }
   }
 
@@ -206,16 +194,13 @@ export class AdvancedErrorBoundary extends Component<
     const { retryCount, circuitBreakerState } = this.state;
 
     if (retryCount >= maxRetries) {
-      console.error(`❌ Max retries (${maxRetries}) exceeded for ${this.props.componentName}`);
       return;
     }
 
     if (circuitBreakerState === 'OPEN') {
-      console.log(`⏳ Circuit breaker is OPEN - skipping recovery attempt`);
       return;
     }
 
-    console.log(`🔄 Attempting recovery for ${this.props.componentName} (attempt ${retryCount + 1}/${maxRetries})`);
 
     // Clear any existing retry timeout
     if (this.retryTimeoutId) {
@@ -235,7 +220,6 @@ export class AdvancedErrorBoundary extends Component<
 
       onRecovery?.(retryCount + 1);
       
-      console.log(`✅ Recovery attempt ${retryCount + 1} completed for ${this.props.componentName}`);
     }, retryDelay);
   }
 
@@ -265,7 +249,6 @@ export class AdvancedErrorBoundary extends Component<
     // Clear error history
     this.errorHistory = [];
     
-    console.log(`🔄 Error boundary reset for ${this.props.componentName}`);
   };
 
   componentWillUnmount() {

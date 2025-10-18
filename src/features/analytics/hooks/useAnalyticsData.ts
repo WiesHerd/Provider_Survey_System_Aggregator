@@ -49,11 +49,9 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setError(null);
       startProgress(); // Start smooth progress animation
 
-      console.log('🔍 useAnalyticsData: Starting data fetch...');
 
       // Use singleton AnalyticsDataService instance (Google-style)
       const analyticsDataService = new AnalyticsDataService();
-      console.log('🔍 useAnalyticsData: Using AnalyticsDataService instance');
       
       // Clear cache to force recalculation with fixed percentile logic and provider type normalization
       analyticsDataService.clearCache();
@@ -64,14 +62,6 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
         geographicRegion: '',
         providerType: '',
         year: ''
-      });
-
-      console.log('🔍 useAnalyticsData: Fetched all data -', allData.length, 'records');
-      console.log('🔍 useAnalyticsData: Sample data:', allData[0]);
-      console.log('🔍 useAnalyticsData: Sample data wRVU/CF values:', {
-        tcc_p50: allData[0]?.tcc_p50,
-        wrvu_p50: allData[0]?.wrvu_p50,
-        cf_p50: allData[0]?.cf_p50
       });
       
       // Also fetch mappings for filter options
@@ -90,12 +80,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       // Complete progress animation
       completeProgress();
     } catch (err) {
-      console.error('🔍 useAnalyticsData: Error fetching analytics data:', err);
-      console.error('🔍 useAnalyticsData: Error details:', {
-        message: err instanceof Error ? err.message : 'Unknown error',
-        stack: err instanceof Error ? err.stack : 'No stack trace',
-        error: err
-      });
+      // Error logging removed for performance
       setError(err instanceof Error ? err.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);

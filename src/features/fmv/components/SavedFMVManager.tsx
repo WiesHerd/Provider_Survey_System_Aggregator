@@ -79,7 +79,6 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
           setSavedCalculations(calculations);
         }
       } catch (error) {
-        console.error('Error loading saved FMV calculations:', error);
         setError('Failed to load saved calculations');
       }
     };
@@ -97,7 +96,6 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(calculations));
     } catch (error) {
-      console.error('Error saving FMV calculations:', error);
       setError('Failed to save calculations');
     }
   };

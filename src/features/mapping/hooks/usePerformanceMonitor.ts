@@ -39,7 +39,6 @@ export const usePerformanceMonitor = (componentName: string): UsePerformanceMoni
     timings.current.delete(label);
     
     if (duration > 16) { // More than one frame
-      console.warn(`🐌 Slow operation: ${label} took ${duration.toFixed(2)}ms`);
     }
     
     return duration;
@@ -54,7 +53,6 @@ export const usePerformanceMonitor = (componentName: string): UsePerformanceMoni
     
     if (renderTime > 16) {
       setIsSlowRender(true);
-      console.warn(`🐌 Slow render in ${componentName}: ${renderTime.toFixed(2)}ms`);
     } else {
       setIsSlowRender(false);
     }
@@ -74,7 +72,6 @@ export const usePerformanceMonitor = (componentName: string): UsePerformanceMoni
   }, []);
 
   const logPerformance = useCallback((label: string, metrics: any) => {
-    console.log(`📊 ${componentName} - ${label}:`, metrics);
   }, [componentName]);
 
   const debounce = useCallback(<T extends (...args: any[]) => any>(fn: T, delay: number): T => {

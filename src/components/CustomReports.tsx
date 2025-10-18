@@ -95,7 +95,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     maxProgress: 90,
     intervalMs: 100
   });
-  console.log('🔄 CustomReports component rendering...');
   
   // Year context
   const { currentYear } = useYear();
@@ -157,11 +156,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         
         // Load specialty mappings first
         const mappings = await dataService.getAllSpecialtyMappings();
-        console.log('🗺️ Loaded specialty mappings:', mappings.length, 'mappings');
-        console.log('📋 Sample mappings:', mappings.slice(0, 3).map(mapping => ({
-          standardizedName: mapping.standardizedName,
-          sourceSpecialties: mapping.sourceSpecialties.map(src => src.specialty)
-        })));
         setSpecialtyMappings(mappings);
         
         // Get all surveys first
@@ -220,12 +214,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   
                   // Debug variable classification
                   if (Math.random() < 0.1) { // Log 10% of rows for debugging
-                    console.log('🔍 Variable classification debug:', {
-                      variable: row.variable,
-                      variableLower: variable,
-                      p50: p50,
-                      specialty: row.specialty
-                    });
+                    // Debug logging removed for performance
                   }
                   
                   // For variable-based data, populate the appropriate fields based on variable type
@@ -250,7 +239,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                       variable.toLowerCase().includes('tcc/') ||
                       variable.toLowerCase().includes('compensation per') ||
                       variable.toLowerCase().includes('dollars per')) {
-                    console.log('🔍 Classified as CF:', row.variable, 'P50:', p50);
                     transformedRow.cf_p25 = p25;
                     transformedRow.cf_p50 = p50;
                     transformedRow.cf_p75 = p75;
@@ -258,7 +246,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   }
                   // Check wRVU patterns SECOND - Work RVUs (before TCC to avoid conflicts)
                   else if (variable.toLowerCase().includes('wrvu') || variable.toLowerCase().includes('rvu') || variable.toLowerCase().includes('work')) {
-                    console.log('🔍 Classified as wRVU:', row.variable, 'P50:', p50);
                     transformedRow.wrvu_p25 = p25;
                     transformedRow.wrvu_p50 = p50;
                     transformedRow.wrvu_p75 = p75;
@@ -266,7 +253,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   }
                   // Check TCC patterns LAST (least specific) - Raw TCC compensation
                   else if (variable.toLowerCase().includes('tcc') || variable.toLowerCase().includes('total') || variable.toLowerCase().includes('cash')) {
-                    console.log('🔍 Classified as TCC:', row.variable, 'P50:', p50);
                     transformedRow.tcc_p25 = p25;
                     transformedRow.tcc_p50 = p50;
                     transformedRow.tcc_p75 = p75;
@@ -280,19 +266,10 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               allData.push(...transformedRows);
             }
           } catch (error) {
-            console.warn(`Failed to load data for survey ${survey.id}:`, error);
           }
         }
         
         if (allData.length > 0) {
-          console.log('📊 Loaded survey data:', allData.length, 'total rows');
-          console.log('📋 Sample data rows:', allData.slice(0, 3).map(row => ({
-            specialty: row.specialty,
-            normalizedSpecialty: row.normalizedSpecialty,
-            surveySource: (row as any).surveySource,
-            region: (row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion,
-            tcc_p50: row.tcc_p50
-          })));
           
           setSurveyData(allData);
           
@@ -303,9 +280,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             .filter(Boolean)
           )].sort();
 
-          console.log(`📊 Specialty filtering summary:`);
-          console.log(`   - Raw unmapped specialties from data: ${specialties.length}`);
-          console.log(`   - Using raw specialty names (NO mapping applied)`);
           
           const regions = [...new Set(allData.map((row: ISurveyRow) => String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '')).filter(Boolean))] as string[];
           
@@ -317,10 +291,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           // Extract provider types from data
           const providerTypes = [...new Set(allData.map((row: ISurveyRow) => String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '')).filter(Boolean))] as string[];
           
-          console.log(`📊 Data summary:`);
-          console.log(`   - Regions with data: ${regions.length}`);
-          console.log(`   - Survey sources with data: ${surveySources.length}`);
-          console.log(`   - Provider types with data: ${providerTypes.length}`);
           
           // Store all available options
           setAllAvailableOptions({
@@ -330,10 +300,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
             providerTypes
           });
 
-          console.log('🔍 DEBUG - Available specialties for filter:', specialties);
-          console.log('🔍 DEBUG - Available regions for filter:', regions);
-          console.log('🔍 DEBUG - Available survey sources for filter:', surveySources);
-          console.log('🔍 DEBUG - Available provider types for filter:', providerTypes);
           
           // Extract available years from survey data
           const years = [...new Set(allData.map((row: ISurveyRow) => String(row.surveyYear || '')).filter(Boolean))].sort();
@@ -349,7 +315,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           });
         }
       } catch (error) {
-        console.error('Error loading survey data:', error);
       } finally {
         setLoading(false);
       }
@@ -365,7 +330,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       try {
         setSavedReports(JSON.parse(saved));
       } catch (error) {
-        console.error('Error loading saved reports:', error);
       }
     }
   }, []);
@@ -432,34 +396,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Generate chart data based on current configuration
   const chartData = useMemo((): ChartDataItem[] => {
-    console.log('🔄 Generating chart data...');
-    console.log('📊 Total survey data rows:', surveyData.length);
-    console.log('🎯 Current config:', currentConfig);
-    console.log('🗺️ Specialty mappings count:', specialtyMappings.length);
     
     if (!surveyData.length) {
-      console.log('❌ No survey data available');
       return [];
     }
 
     // Check if we have metrics selected
     if (!currentConfig.metrics.length && !currentConfig.metric) {
-      console.log('❌ No metrics selected');
       return [];
     }
 
     // Use the first metric for chart display, but collect all metrics for table
     const primaryMetric = currentConfig.metrics.length > 0 ? currentConfig.metrics[0] : currentConfig.metric;
-    console.log('🎯 Primary metric for chart:', primaryMetric);
-    console.log('📊 All selected metrics:', currentConfig.metrics);
 
     // Apply filters
     let filteredData = surveyData;
-    console.log('🔍 Starting with', filteredData.length, 'rows');
     
     if (currentConfig.filters.specialties.length > 0) {
-      console.log('🎯 Filtering by raw specialties:', currentConfig.filters.specialties);
-      
       const beforeSpecialtyFilter = filteredData.length;
       
       // Direct raw specialty filtering (NO mapping)
@@ -467,92 +420,60 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '');
         const matches = currentConfig.filters.specialties.includes(rowSpecialty);
         
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`🔍 Row specialty: "${rowSpecialty}" - matches: ${matches}`);
-        }
         
         return matches;
       });
-      console.log(`🎯 Specialty filter: ${beforeSpecialtyFilter} → ${filteredData.length} rows`);
     }
     
     if (currentConfig.filters.regions.length > 0) {
-      console.log('🌍 Filtering by regions:', currentConfig.filters.regions);
       const beforeRegionFilter = filteredData.length;
       filteredData = filteredData.filter(row => {
         const region = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
         const matches = currentConfig.filters.regions.includes(region);
         
-        // Debug first few rows
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`🌍 Row region: "${region}" - matches: ${matches}`);
-        }
         
         return matches;
       });
-      console.log(`🌍 Region filter: ${beforeRegionFilter} → ${filteredData.length} rows`);
-    } else {
-      console.log('🌍 No region filters applied - showing all regions');
     }
     
     if (currentConfig.filters.surveySources.length > 0) {
-      console.log('📋 Filtering by survey sources:', currentConfig.filters.surveySources);
       const beforeSourceFilter = filteredData.length;
       filteredData = filteredData.filter(row => {
         const surveySource = String((row as any).surveySource || '');
         const matches = currentConfig.filters.surveySources.includes(surveySource);
         
-        // Debug first few rows
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`📋 Row survey source: "${surveySource}" - matches: ${matches}`);
-        }
         
         return matches;
       });
-      console.log(`📋 Survey source filter: ${beforeSourceFilter} → ${filteredData.length} rows`);
     }
     
     if (currentConfig.filters.providerTypes.length > 0) {
-      console.log('👨‍⚕️ Filtering by provider types:', currentConfig.filters.providerTypes);
       const beforeProviderTypeFilter = filteredData.length;
       filteredData = filteredData.filter(row => {
         const providerType = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
         const matches = currentConfig.filters.providerTypes.includes(providerType);
         
-        // Debug first few rows
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`👨‍⚕️ Row provider type: "${providerType}" - matches: ${matches}`);
-        }
         
         return matches;
       });
-      console.log(`👨‍⚕️ Provider type filter: ${beforeProviderTypeFilter} → ${filteredData.length} rows`);
     }
     
     if (currentConfig.filters.years.length > 0) {
-      console.log('📅 Filtering by years:', currentConfig.filters.years);
       const beforeYearFilter = filteredData.length;
       filteredData = filteredData.filter(row => {
         const year = String(row.surveyYear || '');
         // If year is empty, include it (don't filter out data without year info)
         if (!year || year === '') {
-          console.log(`📅 Row year: "${year}" - including (no year data)`);
           return true;
         }
         const matches = currentConfig.filters.years.includes(year);
         
-        // Debug first few rows
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`📅 Row year: "${year}" - matches: ${matches}`);
-        }
         
         return matches;
       });
-      console.log(`📅 Year filter: ${beforeYearFilter} → ${filteredData.length} rows`);
     }
 
     // CRITICAL FIX: Handle multiple metrics by including ALL relevant data types
-    console.log('🎯 Applying variable-based filtering for metrics:', currentConfig.metrics);
     const beforeVariableFilter = filteredData.length;
     
     // Check if we have multiple metrics that require different data types
@@ -560,7 +481,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     const hasWrvuMetrics = currentConfig.metrics.some(m => m.includes('wrvu'));
     const hasCfMetrics = currentConfig.metrics.some(m => m.includes('cf'));
     
-    console.log('🔍 Metric analysis:', { hasTccMetrics, hasWrvuMetrics, hasCfMetrics });
     
     if (hasTccMetrics || hasWrvuMetrics || hasCfMetrics) {
       // Include ALL relevant data types when multiple metrics are selected
@@ -579,25 +499,12 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         
         const matches = isTccData || isWrvuData || isCfData;
         
-        if (filteredData.indexOf(row) < 5) {
-          console.log(`🎯 Multi-metric filter - Row variable: "${variable}", p50: ${p50Value}, matches: ${matches} (TCC:${isTccData}, wRVU:${isWrvuData}, CF:${isCfData})`);
-        }
         
         return matches;
       });
-      console.log(`🎯 Multi-metric variable filter: ${beforeVariableFilter} → ${filteredData.length} rows`);
     }
 
-    console.log('✅ After all filters:', filteredData.length, 'rows remaining');
     
-    // Essential debug for region issue
-    if (currentConfig.secondaryDimension === 'region') {
-      const availableRegions = [...new Set(filteredData.map(row => 
-        String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '')
-      ))].filter(Boolean);
-      console.log('🌍 REGION DEBUG - Available regions:', availableRegions);
-      console.log('🌍 REGION DEBUG - Selected regions:', currentConfig.filters.regions);
-    }
 
     // Group by dimension and aggregate metric
     const grouped = filteredData.reduce((acc, row) => {
@@ -688,14 +595,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         if (metricValue > 0) {
           acc[dimensionValue].metricValues[metric] = metricValue;
           
-          // Debug logging for metric matching
-          console.log(`🔍 DEBUG: Metric ${metric} matched to variable "${variable}":`, {
-            metric,
-            variable,
-            metricValue,
-            rowSpecialty: row.specialty,
-            rowSurveySource: (row as any).surveySource
-          });
+          // Debug logging for metric matching - removed for performance
         }
       });
       
@@ -708,15 +608,6 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       return acc;
     }, {} as Record<string, { name: string; value: number; count: number; total: number; metrics: string[]; metricValues: Record<string, number>; metricTotals: Record<string, number>; metricCounts: Record<string, number> }>);
 
-    console.log('📊 Grouped data keys:', Object.keys(grouped));
-    console.log('🔍 DEBUG: Grouped data details:');
-    Object.entries(grouped).forEach(([key, value]) => {
-      console.log(`  Key: "${key}"`);
-      console.log(`    - metricValues:`, value.metricValues);
-      console.log(`    - tcc_p50:`, value.metricValues?.tcc_p50);
-      console.log(`    - wrvu_p50:`, value.metricValues?.wrvu_p50);
-      console.log(`    - count: ${value.count}`);
-    });
 
     // CRITICAL FIX: Combine metrics from different data types while preserving secondary grouping
     // First, group by specialty (and secondary dimension if present) to combine TCC and wRVU data
@@ -776,15 +667,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           metricValues[metric] = item.metricValues[metric] || 0;
           
         // Minimal debug for metric processing
-        if (metric.includes('tcc') || metric.includes('wrvu')) {
-          console.log(`🔍 METRIC: ${metric} = ${item.metricValues[metric]}`);
-        }
         });
         
-        // Essential debug for final values
-        if (metricValues.tcc_p50 || metricValues.wrvu_p50) {
-          console.log(`🔍 FINAL: ${item.name} - TCC: ${metricValues.tcc_p50}, wRVU: ${metricValues.wrvu_p50}`);
-        }
         
         // For specialty dimension with composite keys, extract just the specialty name for display
         let displayName = item.name;
@@ -873,52 +757,18 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     const allData = Object.values(aggregatedData)
       .sort((a, b) => b.value - a.value);
     
-    console.log('📈 Final chart data:', allData.length, 'items');
-    console.log('📊 Sample chart data:', allData.slice(0, 3));
-    console.log('🔍 Debug - Chart data details:', allData.map(item => ({
-      name: item.name,
-      value: item.value,
-      count: item.count,
-      metrics: item.metrics,
-      metricValues: item.metricValues
-    })));
     
-    // CRITICAL DEBUG: Log the aggregated data before final processing
-    console.log('🔍 AGGREGATED DATA DEBUG:');
-    Object.entries(aggregatedData).forEach(([key, value]) => {
-      console.log(`  ${key}:`, {
-        name: value.name,
-        metricValues: value.metricValues,
-        tcc_p50: value.metricValues?.tcc_p50,
-        wrvu_p50: value.metricValues?.wrvu_p50
-      });
-    });
     
-    // Essential debug for final chart data
-    allData.forEach(item => {
-      if (item.metricValues && (item.metricValues.tcc_p50 || item.metricValues.wrvu_p50)) {
-        console.log(`🔍 CHART: ${item.name} - TCC: ${item.metricValues.tcc_p50}, wRVU: ${item.metricValues.wrvu_p50}`);
-      }
-    });
     
-    // Minimal debug for TCC values
-    allData.forEach(item => {
-      if (item.metricValues?.tcc_p50) {
-        console.log(`🔍 TCC: ${item.name} = ${item.metricValues.tcc_p50}`);
-      }
-    });
     
     // For specialty dimension, require at least one specialty to be selected
     if (currentConfig.dimension === 'specialty') {
       if (currentConfig.filters.specialties.length === 0) {
-        console.log('❌ Specialty dimension with no filters - returning empty data');
         return []; // Return empty data when no specialty filter is applied
       } else {
-        console.log('✅ Specialty dimension with filters - returning filtered data:', allData.length, 'items');
         return allData; // Show filtered specialties
       }
     } else {
-      console.log('📊 Non-specialty dimension - limiting to top 20');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
   }, [surveyData, currentConfig, specialtyMappings]);
@@ -1640,14 +1490,11 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 multiple
                 value={currentConfig.filters.specialties}
                 onChange={(event: any, newValue: string[]) => {
-                  console.log('AUTOCOMPLETE onChange - newValue:', newValue);
                   handleFilterChange('specialties', newValue);
                 }}
                 options={availableOptions.specialties || []}
                 getOptionKey={(option: string) => option}
                 onOpen={() => {
-                  console.log('🚨 AUTOCOMPLETE OPENED - Available options:', availableOptions.specialties || []);
-                  console.log('🚨 AUTOCOMPLETE OPENED - Options length:', (availableOptions.specialties || []).length);
                 }}
                 getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
                 disableListWrap={false}

@@ -74,14 +74,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
   const methodInfo = getMethodInfo();
 
-  // Debug logging
-  console.log('🔍 ResultsPanel Debug:', {
-    noMarketData,
-    hasOnAggregationMethodChange: !!onAggregationMethodChange,
-    isFilteringSpecificSurvey,
-    shouldShowButton: !noMarketData && onAggregationMethodChange && !isFilteringSpecificSurvey,
-    aggregationMethod
-  });
 
   return (
     <div className="space-y-6">

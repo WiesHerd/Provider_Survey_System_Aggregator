@@ -80,7 +80,6 @@ export const applyFMVFilters = (
   filters: FMVFilters,
   mappedSpecialties: string[] = []
 ): NormalizedSurveyRow[] => {
-  console.log('🔍 applyFMVFilters: Filtering', rows.length, 'records with filters:', filters);
   
   const filteredRows = rows.filter(row => {
     // Specialty filter - use fuzzy matching for specialty names (like Analytics screen)
@@ -124,7 +123,6 @@ export const applyFMVFilters = (
     return true;
   });
   
-  console.log('🔍 applyFMVFilters: Filtered to', filteredRows.length, 'records');
   return filteredRows;
 };
 
@@ -136,8 +134,6 @@ export const applyFMVFilters = (
  * @returns Market data with percentiles
  */
 export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggregationMethod: AggregationMethod = 'simple'): MarketData => {
-  console.log('🔍 calculateMarketData: Processing', filteredRows.length, 'filtered rows with', aggregationMethod, 'aggregation');
-  console.log('🔍 calculateMarketData: Sample row data:', filteredRows[0]);
   
   if (filteredRows.length === 0) {
     return {
@@ -224,10 +220,8 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
           p90: row.cf_p90 || 0,
         },
       };
-      console.log('🔍 calculateMarketData: Using pure survey data from:', row.surveySource, 'TCC P50:', result.tcc.p50);
     } else {
       // Multiple surveys - use the first one and warn user
-      console.warn('🔍 calculateMarketData: Pure survey selected but multiple surveys found. Using first survey:', filteredRows[0].surveySource);
       const row = filteredRows[0];
       result = {
         tcc: {
@@ -255,9 +249,6 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
     result = aggregationMethod === 'simple' ? simpleResult : weightedResult;
   }
   
-  console.log('🔍 calculateMarketData: Calculated methods - Simple:', simpleResult.tcc.p50, 'Weighted:', weightedResult.tcc.p50);
-  console.log('🔍 calculateMarketData: Using', aggregationMethod, 'method:', result.tcc.p50);
-  console.log('🔍 calculateMarketData: Weight totals - TCC:', totalTccIncumbents, 'wRVU:', totalWrvuIncumbents, 'CF:', totalCfIncumbents);
   
   return result;
 };

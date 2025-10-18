@@ -90,9 +90,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
 
   // Generate cascading filter options based on current filter state and provider type
   const filterOptions = useMemo(() => {
-    console.log('🔍 SurveyAnalytics: Generating cascading filter options from', allData.length, 'all data records');
-    console.log('🔍 SurveyAnalytics: Current filters:', filters);
-    console.log('🔍 SurveyAnalytics: Provider type filter:', providerTypeFilter);
     
     // Start with all data
     let filteredData = allData;
@@ -103,7 +100,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         const category = categorizeProviderType(row.providerType || '');
         return category === effectiveProviderType;
       });
-      console.log('🔍 SurveyAnalytics: Filtered by provider type', effectiveProviderType, 'to', filteredData.length, 'records');
     }
     
     // Apply cascading filters - each filter affects the available options for others
@@ -112,25 +108,21 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     // If year is selected, filter by year first
     if (filters.year) {
       cascadingData = cascadingData.filter(row => row.surveyYear === filters.year);
-      console.log('🔍 SurveyAnalytics: Filtered by year', filters.year, 'to', cascadingData.length, 'records');
     }
     
     // If specialty is selected, filter by specialty
     if (filters.specialty) {
       cascadingData = cascadingData.filter(row => row.standardizedName === filters.specialty);
-      console.log('🔍 SurveyAnalytics: Filtered by specialty', filters.specialty, 'to', cascadingData.length, 'records');
     }
     
     // If survey source is selected, filter by survey source
     if (filters.surveySource) {
       cascadingData = cascadingData.filter(row => row.surveySource === filters.surveySource);
-      console.log('🔍 SurveyAnalytics: Filtered by survey source', filters.surveySource, 'to', cascadingData.length, 'records');
     }
     
     // If region is selected, filter by region
     if (filters.geographicRegion) {
       cascadingData = cascadingData.filter(row => row.geographicRegion === filters.geographicRegion);
-      console.log('🔍 SurveyAnalytics: Filtered by region', filters.geographicRegion, 'to', cascadingData.length, 'records');
     }
     
     // Generate options from the cascading-filtered dataset
@@ -140,7 +132,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     const availableProviderTypes = [...new Set(cascadingData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
     const availableYears = [...new Set(cascadingData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
 
-    console.log('🔍 SurveyAnalytics: Cascading filter options - specialties:', availableSpecialties.length, 'sources:', availableSources.length, 'regions:', availableRegions.length, 'providerTypes:', availableProviderTypes.length, 'years:', availableYears.length);
 
     return {
       specialties: availableSpecialties,

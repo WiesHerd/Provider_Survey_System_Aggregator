@@ -62,7 +62,6 @@ const ColumnMapping: React.FC = () => {
       clearSelectedColumns();
       setActiveTab('mapped');
     } catch (error) {
-      console.error('Failed to create column mapping:', error);
     }
   };
 
@@ -83,7 +82,6 @@ const ColumnMapping: React.FC = () => {
       clearSelectedColumns();
       setActiveTab('mapped');
     } catch (error) {
-      console.error('Failed to create individual column mappings:', error);
     }
   };
 
@@ -99,9 +97,7 @@ const ColumnMapping: React.FC = () => {
         // Reload data to refresh the display
         await loadData();
         
-        console.log('✅ All column mappings cleared successfully');
       } catch (error) {
-        console.error('❌ Failed to clear column mappings:', error);
       }
     }
   };
@@ -117,7 +113,6 @@ const ColumnMapping: React.FC = () => {
   const handleApplyAllLearnedMappings = () => {
     if (window.confirm('Apply all learned mappings to create permanent mappings?')) {
       // TODO: Implement apply all learned mappings
-      console.log('Apply all learned column mappings');
     }
   };
 
@@ -125,7 +120,6 @@ const ColumnMapping: React.FC = () => {
   const handleClearAllLearnedMappings = () => {
     if (window.confirm('Are you sure you want to clear all learned mappings?')) {
       // TODO: Implement clear all learned mappings
-      console.log('Clear all learned column mappings');
     }
   };
 

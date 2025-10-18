@@ -97,18 +97,12 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
   }, [showConfirmation, clearAllMappings]);
 
   const handleRemoveLearnedMapping = useCallback((original: string) => {
-    console.log('🔍 handleRemoveLearnedMapping called with:', original);
-    console.log('🔍 removeLearnedMapping function exists:', !!removeLearnedMapping);
-    console.log('🔍 removeLearnedMapping function type:', typeof removeLearnedMapping);
     
     if (!removeLearnedMapping) {
-      console.error('❌ removeLearnedMapping function is undefined!');
       return;
     }
     
-    console.log('🔍 Calling removeLearnedMapping directly with:', original);
     removeLearnedMapping(original);
-    console.log('🔍 removeLearnedMapping call completed');
   }, [removeLearnedMapping]);
 
   const handleClearAllLearnedMappings = useCallback(async () => {
@@ -127,9 +121,7 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
           // Reload data to refresh the UI
           await loadData();
           
-          console.log('✅ Successfully cleared all learned mappings');
         } catch (err) {
-          console.error('Error clearing learned mappings:', err);
         }
       },
       { type: 'danger', confirmText: 'Clear All' }

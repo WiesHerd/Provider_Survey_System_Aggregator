@@ -344,14 +344,10 @@ function App() {
         const needsMigration = await migrationService.checkMigrationNeeded();
         
         if (needsMigration) {
-          console.log('🔧 Running survey migration to fix provider type tags...');
           await migrationService.migrateSurveys();
-          console.log('✅ Survey migration completed successfully');
-        } else {
-          console.log('✅ No survey migration needed');
         }
       } catch (error) {
-        console.error('❌ Survey migration failed:', error);
+        // Migration failed silently - app will continue to function
       }
     };
 

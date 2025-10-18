@@ -71,11 +71,6 @@ export const useRegionMappingData = () => {
       // Convert UI provider type to data service provider type
       const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
       
-      console.log('🔍 useRegionMappingData: Loading data with provider type:', { 
-        selectedProviderType, 
-        dataProviderType 
-      });
-      
       // Load region mappings (persisted) with provider type filtering
       const regionMappings = await dataService.getRegionMappings(dataProviderType);
       setMappings(regionMappings || []);
@@ -89,7 +84,6 @@ export const useRegionMappingData = () => {
       setLearnedMappings(learnedData);
       
     } catch (err) {
-      console.error('Failed to load region mapping data:', err);
       setError('Failed to load region mapping data');
     } finally {
       setLoading(false);
@@ -99,25 +93,19 @@ export const useRegionMappingData = () => {
   // Detect unmapped regions from survey data
   const detectUnmappedRegions = useCallback(async (): Promise<IUnmappedRegion[]> => {
     try {
-      console.log('🔍 Starting detectUnmappedRegions...');
       const surveys = await dataService.getAllSurveys();
-      console.log('📊 Found surveys:', surveys.length, surveys);
       
       const unmappedRegions: IUnmappedRegion[] = [];
       const regionMap = new Map<string, IUnmappedRegion>();
 
       for (const survey of surveys) {
-        console.log('🔍 Processing survey:', survey);
         const surveyDataResult = await dataService.getSurveyData(survey.id);
-        console.log('📊 Survey data result:', surveyDataResult);
         
         if (!surveyDataResult || !surveyDataResult.rows || !Array.isArray(surveyDataResult.rows)) {
-          console.log('⚠️ No survey data found for survey:', survey.id);
           continue;
         }
 
         const surveyData = surveyDataResult.rows;
-        console.log('📊 Survey data rows:', surveyData.length, 'rows');
 
         // Look for geographic region data
         const regionCounts = new Map<string, number>();
@@ -132,7 +120,6 @@ export const useRegionMappingData = () => {
           }
         });
 
-        console.log('📊 Region counts:', Array.from(regionCounts.entries()));
 
         // Create unmapped regions for each unique region
         regionCounts.forEach((frequency, regionName) => {

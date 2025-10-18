@@ -229,7 +229,6 @@ export class AnalyticsDataService {
     // Check global cache first
     const cachedMappings = this.globalCache.getCachedMappings();
     if (cachedMappings.specialtyMappings && cachedMappings.columnMappings) {
-      console.log('🔍 AnalyticsDataService: Using global cached mappings');
       return {
         specialtyMappings: cachedMappings.specialtyMappings,
         columnMappings: cachedMappings.columnMappings,
@@ -242,7 +241,6 @@ export class AnalyticsDataService {
     }
     
     // Fetch fresh mappings and learned mappings
-    console.log('🔍 AnalyticsDataService: Fetching fresh mappings and learned mappings');
     const [
       specialtyMappings, 
       columnMappings,
@@ -294,16 +292,13 @@ export class AnalyticsDataService {
     year: ''
   }): Promise<AggregatedData[]> {
     try {
-      console.log('🔍 AnalyticsDataService: Starting data retrieval with filters:', filters);
       
       // Google-style caching: Check if we have fresh data first
       if (this.globalCache.hasFreshData()) {
-        console.log('🔍 AnalyticsDataService: Using fresh cached data (Google-style)');
         const cachedData = this.globalCache.getCachedData();
         if (cachedData) {
           // Trigger background refresh if data is getting stale
           if (this.globalCache.hasStaleData()) {
-            console.log('🔍 AnalyticsDataService: Data is stale, triggering background refresh');
             this.refreshDataInBackground();
           }
           return cachedData;
@@ -311,7 +306,6 @@ export class AnalyticsDataService {
       }
       
       // If no fresh data, fetch it
-      console.log('🔍 AnalyticsDataService: No fresh data, fetching from database');
       
       // Get all surveys and cached mappings (including learned mappings)
       const [surveys, { 
@@ -327,27 +321,22 @@ export class AnalyticsDataService {
         this.getCachedMappings()
       ]);
       
-      console.log(`🔍 AnalyticsDataService: Found ${surveys.length} surveys, ${specialtyMappings.length} specialty mappings, ${columnMappings.length} column mappings`);
       
       if (surveys.length === 0) {
-        console.log('🔍 AnalyticsDataService: No surveys found, returning empty array');
         return [];
       }
       
       // Process surveys in parallel for better performance
       const allNormalizedRows: NormalizedRow[] = [];
       
-      console.log(`🔍 AnalyticsDataService: Processing ${surveys.length} surveys in parallel...`);
       
       // Limit concurrent surveys to avoid overwhelming IndexedDB
       const maxConcurrent = Math.min(3, surveys.length);
       const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
-        console.log(`🔍 AnalyticsDataService: Processing survey: ${survey.name} (${survey.type})`);
         
         try {
           // Get survey data with pagination to limit memory usage (reduced for faster loading)
           const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
-          console.log(`🔍 AnalyticsDataService: Survey ${survey.name} returned ${surveyData.rows.length} rows`);
           
           if (surveyData.rows.length === 0) {
             return [];
@@ -379,7 +368,6 @@ export class AnalyticsDataService {
           return normalizedRows;
           
         } catch (error) {
-          console.error(`🔍 AnalyticsDataService: Error processing survey ${survey.name}:`, error);
           return [];
         }
       });
@@ -392,10 +380,8 @@ export class AnalyticsDataService {
         allNormalizedRows.push(...normalizedRows);
       });
       
-      console.log(`🔍 AnalyticsDataService: Total normalized rows: ${allNormalizedRows.length}`);
       
       if (allNormalizedRows.length === 0) {
-        console.log('🔍 AnalyticsDataService: No normalized rows found, returning empty array');
         return [];
       }
       
@@ -405,11 +391,9 @@ export class AnalyticsDataService {
       // Cache the results (Google-style)
       this.globalCache.setCachedData(aggregatedData);
       
-      console.log(`🔍 AnalyticsDataService: Final aggregated records: ${aggregatedData.length}`);
       return aggregatedData;
       
     } catch (error) {
-      console.error('🔍 AnalyticsDataService: Error in getAnalyticsData:', error);
       throw error;
     }
   }
@@ -418,7 +402,6 @@ export class AnalyticsDataService {
    * Invalidate cache (call this when data changes)
    */
   invalidateCache(): void {
-    console.log('🔍 AnalyticsDataService: Invalidating cache');
     this.globalCache.markAsStale();
   }
 
@@ -426,7 +409,6 @@ export class AnalyticsDataService {
    * Force refresh cache (call this when data structure changes)
    */
   forceRefreshCache(): void {
-    console.log('🔍 AnalyticsDataService: Force refreshing cache due to data structure changes');
     this.globalCache.clearCache();
   }
 
@@ -434,7 +416,6 @@ export class AnalyticsDataService {
    * Clear cache completely (call this when data structure changes)
    */
   clearCache(): void {
-    console.log('🔍 AnalyticsDataService: Clearing cache completely');
     this.globalCache.clearCache();
   }
 
@@ -444,7 +425,6 @@ export class AnalyticsDataService {
    */
   private async refreshDataInBackground(): Promise<void> {
     try {
-      console.log('🔍 AnalyticsDataService: Starting background refresh');
       
       // Get fresh data without affecting current cache (including learned mappings)
       const [surveys, { 
@@ -495,7 +475,6 @@ export class AnalyticsDataService {
           
           return normalizedRows;
         } catch (error) {
-          console.error(`🔍 AnalyticsDataService: Error in background refresh for survey ${survey.name}:`, error);
           return [];
         }
       });
@@ -508,11 +487,9 @@ export class AnalyticsDataService {
       if (allNormalizedRows.length > 0) {
         const aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
         this.globalCache.setCachedData(aggregatedData);
-        console.log('🔍 AnalyticsDataService: Background refresh completed');
       }
       
     } catch (error) {
-      console.error('🔍 AnalyticsDataService: Error in background refresh:', error);
     }
   }
 
@@ -536,16 +513,6 @@ export class AnalyticsDataService {
     // The row might be a SurveyData object with the actual data in the 'data' property
     const actualRowData = row.data || row;
     
-    console.log('🔍 AnalyticsDataService: Processing row:', {
-      hasDataProperty: !!row.data,
-      actualRowDataKeys: Object.keys(actualRowData),
-      sampleData: {
-        specialty: actualRowData.specialty,
-        tcc_p50: actualRowData.tcc_p50,
-        wrvu_p50: actualRowData.wrvu_p50,
-        cf_p50: actualRowData.cf_p50
-      }
-    });
     
     // Extract specialty - check multiple possible locations and formats
     const rawSpecialty = actualRowData.specialty || actualRowData.Specialty || 
@@ -617,7 +584,6 @@ export class AnalyticsDataService {
       const p75 = this.extractNumber(actualRowData.p75);
       const p90 = this.extractNumber(actualRowData.p90);
       
-      console.log('🔍 AnalyticsDataService: Processing LONG format data - variable:', actualRowData.variable, 'values:', { p25, p50, p75, p90 });
       
       // Set the appropriate metrics based on the variable type
       // IMPORTANT: Order matters - check most specific patterns first
@@ -627,14 +593,12 @@ export class AnalyticsDataService {
         normalizedMetrics.cf_p50 = p50;
         normalizedMetrics.cf_p75 = p75;
         normalizedMetrics.cf_p90 = p90;
-        console.log('🔍 AnalyticsDataService: Set CF metrics (TCC per Work RVU):', { p25, p50, p75, p90 });
       } else if (variable === 'tcc' || variable.includes('total cash compensation')) {
         // This is total cash compensation
         normalizedMetrics.tcc_p25 = p25;
         normalizedMetrics.tcc_p50 = p50;
         normalizedMetrics.tcc_p75 = p75;
         normalizedMetrics.tcc_p90 = p90;
-        console.log('🔍 AnalyticsDataService: Set TCC metrics:', { p25, p50, p75, p90 });
       } else if (variable.includes('work rvu') || variable.includes('wrvu')) {
         // This is work RVUs (but NOT if it contains "per" or "conversion")
         if (!variable.includes('per') && !variable.includes('conversion')) {
@@ -645,14 +609,12 @@ export class AnalyticsDataService {
             normalizedMetrics.wrvu_p50 = p50;
             normalizedMetrics.wrvu_p75 = p75;
             normalizedMetrics.wrvu_p90 = p90;
-            console.log('🔍 AnalyticsDataService: Set wRVU metrics (large values):', { p25, p50, p75, p90 });
           } else {
             // Small values in wRVU field are likely conversion factors
             normalizedMetrics.cf_p25 = p25;
             normalizedMetrics.cf_p50 = p50;
             normalizedMetrics.cf_p75 = p75;
             normalizedMetrics.cf_p90 = p90;
-            console.log('🔍 AnalyticsDataService: Set CF metrics (small values in wRVU field):', { p25, p50, p75, p90 });
           }
         } else {
           // This is actually a conversion factor disguised as wRVU
@@ -660,7 +622,6 @@ export class AnalyticsDataService {
           normalizedMetrics.cf_p50 = p50;
           normalizedMetrics.cf_p75 = p75;
           normalizedMetrics.cf_p90 = p90;
-          console.log('🔍 AnalyticsDataService: Set CF metrics (disguised as wRVU):', { p25, p50, p75, p90 });
         }
       } else if (variable.includes('cf') || variable.includes('conversion')) {
         // This is a conversion factor
@@ -668,32 +629,10 @@ export class AnalyticsDataService {
         normalizedMetrics.cf_p50 = p50;
         normalizedMetrics.cf_p75 = p75;
         normalizedMetrics.cf_p90 = p90;
-        console.log('🔍 AnalyticsDataService: Set CF metrics:', { p25, p50, p75, p90 });
       } else {
-        console.log('🔍 AnalyticsDataService: Unknown variable type:', variable, 'values:', { p25, p50, p75, p90 });
       }
     } else {
       // WIDE FORMAT: Data has separate columns for each metric
-      console.log('🔍 AnalyticsDataService: Processing WIDE format data');
-      console.log('🔍 AnalyticsDataService: Available columns:', Object.keys(actualRowData));
-      console.log('🔍 AnalyticsDataService: Sample wRVU values:', {
-        wrvu_p25: actualRowData.wrvu_p25,
-        wrvu_p50: actualRowData.wrvu_p50,
-        wrvu_p75: actualRowData.wrvu_p75,
-        wrvu_p90: actualRowData.wrvu_p90
-      });
-      console.log('🔍 AnalyticsDataService: Sample CF values:', {
-        cf_p25: actualRowData.cf_p25,
-        cf_p50: actualRowData.cf_p50,
-        cf_p75: actualRowData.cf_p75,
-        cf_p90: actualRowData.cf_p90
-      });
-      console.log('🔍 AnalyticsDataService: Sample TCC values:', {
-        tcc_p25: actualRowData.tcc_p25,
-        tcc_p50: actualRowData.tcc_p50,
-        tcc_p75: actualRowData.tcc_p75,
-        tcc_p90: actualRowData.tcc_p90
-      });
       
       // Extract TCC metrics with fallback column names
       normalizedMetrics.tcc_p25 = this.extractNumber(
@@ -739,7 +678,6 @@ export class AnalyticsDataService {
       
       // If we still don't have wRVU or CF data, try intelligent column matching
       if (normalizedMetrics.wrvu_p50 === 0 || normalizedMetrics.cf_p50 === 0) {
-        console.log('🔍 AnalyticsDataService: Attempting intelligent column matching for missing data');
         
         // Try to find wRVU columns using pattern matching
         for (const [key, value] of Object.entries(actualRowData)) {
@@ -771,13 +709,7 @@ export class AnalyticsDataService {
         }
       }
       
-      console.log('🔍 AnalyticsDataService: After extraction:', {
-        tcc_p50: normalizedMetrics.tcc_p50,
-        wrvu_p50: normalizedMetrics.wrvu_p50,
-        cf_p50: normalizedMetrics.cf_p50
-      });
       
-      console.log('🔍 AnalyticsDataService: Extracted metrics:', normalizedMetrics);
     }
     
     return {
@@ -821,7 +753,6 @@ export class AnalyticsDataService {
     
     // First, try learned mappings (highest priority for enterprise scalability)
     if (learnedMappings && learnedMappings[specialty.toLowerCase()]) {
-      console.log('🔍 AnalyticsDataService: Found learned specialty mapping:', specialty, '->', learnedMappings[specialty.toLowerCase()]);
       return learnedMappings[specialty.toLowerCase()];
     }
     
@@ -833,7 +764,6 @@ export class AnalyticsDataService {
       );
       
       if (hasSourceSpecialty) {
-        console.log('🔍 AnalyticsDataService: Found exact specialty mapping:', specialty, '->', mapping.standardizedName);
         return mapping.standardizedName;
       }
     }
@@ -848,13 +778,11 @@ export class AnalyticsDataService {
       });
       
       if (hasSourceSpecialty) {
-        console.log('🔍 AnalyticsDataService: Found fuzzy specialty mapping:', specialty, '->', mapping.standardizedName);
         return mapping.standardizedName;
       }
     }
     
     // If still no mapping found, return normalized version
-    console.log('🔍 AnalyticsDataService: No specialty mapping found for:', specialty, 'returning normalized version');
     return normalizedSpecialty;
   }
 
@@ -879,7 +807,6 @@ export class AnalyticsDataService {
     
     // First, try learned mappings (highest priority for enterprise scalability)
     if (learnedMappings && learnedMappings[providerType.toLowerCase()]) {
-      console.log('🔍 AnalyticsDataService: Found learned provider type mapping:', providerType, '->', learnedMappings[providerType.toLowerCase()]);
       return learnedMappings[providerType.toLowerCase()];
     }
     
@@ -911,7 +838,6 @@ export class AnalyticsDataService {
     
     // First, try learned mappings (highest priority for enterprise scalability)
     if (learnedMappings && learnedMappings[region.toLowerCase()]) {
-      console.log('🔍 AnalyticsDataService: Found learned region mapping:', region, '->', learnedMappings[region.toLowerCase()]);
       return learnedMappings[region.toLowerCase()];
     }
     
@@ -939,8 +865,6 @@ export class AnalyticsDataService {
   private async stackAndAggregateDataOptimized(
     normalizedRows: NormalizedRow[]
   ): Promise<AggregatedData[]> {
-    console.log('🔍 AnalyticsDataService: Starting optimized data stacking and aggregation');
-    console.log('🔍 AnalyticsDataService: Total normalized rows to process:', normalizedRows.length);
     
     // Process data in chunks to avoid blocking the main thread
     const chunkSize = 1000;
@@ -966,7 +890,6 @@ export class AnalyticsDataService {
       }
     }
     
-    console.log(`🔍 AnalyticsDataService: Grouped data into ${groupedData.size} groups`);
     
     // Convert grouped data to aggregated format
     const aggregatedData: AggregatedData[] = [];
@@ -978,7 +901,6 @@ export class AnalyticsDataService {
       aggregatedData.push(aggregatedRecord);
     }
     
-    console.log(`🔍 AnalyticsDataService: Created ${aggregatedData.length} aggregated records`);
     
     return aggregatedData;
   }
@@ -1074,15 +996,6 @@ export class AnalyticsDataService {
       }
     }
     
-    console.log('🔍 AnalyticsDataService: Created aggregated record from raw data:', {
-      specialty: aggregatedRecord.standardizedName,
-      surveySource: aggregatedRecord.surveySource,
-      tcc_p50: aggregatedRecord.tcc_p50,
-      wrvu_p50: aggregatedRecord.wrvu_p50,
-      cf_p50: aggregatedRecord.cf_p50,
-      n_orgs: aggregatedRecord.tcc_n_orgs,
-      n_incumbents: aggregatedRecord.tcc_n_incumbents
-    });
     
     return aggregatedRecord;
   }
@@ -1103,8 +1016,6 @@ export class AnalyticsDataService {
   private stackAndAggregateData(
     normalizedRows: NormalizedRow[]
   ): AggregatedData[] {
-    console.log('🔍 AnalyticsDataService: Starting data stacking and aggregation');
-    console.log('🔍 AnalyticsDataService: Total normalized rows to process:', normalizedRows.length);
     
     // Group rows by specialty, provider type, region, and survey source
     const groupedData = new Map<string, NormalizedRow[]>();
@@ -1120,7 +1031,6 @@ export class AnalyticsDataService {
       groupedData.get(key)!.push(row);
     });
     
-    console.log(`🔍 AnalyticsDataService: Grouped data into ${groupedData.size} groups`);
     
     // Convert grouped data to aggregated format
     const aggregatedData: AggregatedData[] = [];
@@ -1128,7 +1038,6 @@ export class AnalyticsDataService {
     groupedData.forEach((rows, key) => {
       if (rows.length === 0) return;
       
-      console.log('🔍 AnalyticsDataService: Processing group:', key, 'with', rows.length, 'rows');
       
       // For long format data, we need to combine multiple rows (one for each variable type)
       // For wide format data, each row contains all metrics
@@ -1142,7 +1051,6 @@ export class AnalyticsDataService {
       const wrvuRow = rows.find(r => r.wrvu_p50 > 0);
       const cfRow = rows.find(r => r.cf_p50 > 0);
       
-      console.log('🔍 AnalyticsDataService: Found metric rows - TCC:', !!tccRow, 'wRVU:', !!wrvuRow, 'CF:', !!cfRow);
       
       // Extract original specialty name from raw data
       const originalSpecialty = representativeRow.rawData?.specialty || 
@@ -1191,20 +1099,10 @@ export class AnalyticsDataService {
         cf_p90: cfRow ? cfRow.cf_p90 || 0 : 0
       };
       
-      console.log('🔍 AnalyticsDataService: Final aggregated record:', {
-        specialty: aggregatedRecord.standardizedName,
-        tcc_p50: aggregatedRecord.tcc_p50,
-        wrvu_p50: aggregatedRecord.wrvu_p50,
-        cf_p50: aggregatedRecord.cf_p50,
-        tcc_n_orgs: aggregatedRecord.tcc_n_orgs,
-        wrvu_n_orgs: aggregatedRecord.wrvu_n_orgs,
-        cf_n_orgs: aggregatedRecord.cf_n_orgs
-      });
       
       aggregatedData.push(aggregatedRecord);
     });
     
-    console.log(`🔍 AnalyticsDataService: Created ${aggregatedData.length} aggregated records`);
     
     return aggregatedData;
   }

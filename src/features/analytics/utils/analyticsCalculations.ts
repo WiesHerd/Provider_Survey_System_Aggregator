@@ -167,13 +167,10 @@ export const transformSurveyData = (
     return [];
   }
 
-  console.log('🔍 transformSurveyData: Processing', surveys.length, 'surveys');
-  console.log('🔍 transformSurveyData: Mappings available - specialty:', mappings.length, 'column:', columnMappings.length, 'region:', regionMappings.length);
 
   const transformedData: AggregatedData[] = [];
 
   surveys.forEach((survey: any) => {
-    console.log(`🔍 transformSurveyData: Processing survey ${survey.name} (${survey.type})`);
     
     // For now, create realistic data based on survey metadata
     // This will be replaced with actual data aggregation once we have real survey data
@@ -214,7 +211,6 @@ export const transformSurveyData = (
     });
   });
 
-  console.log('🔍 transformSurveyData: Generated', transformedData.length, 'aggregated records');
   return transformedData;
 };
 
@@ -239,7 +235,6 @@ const normalizeSpecialtyName = (specialty: string): string => {
 };
 
 export const filterAnalyticsData = (data: AggregatedData[], filters: any): AggregatedData[] => {
-  console.log('🔍 filterAnalyticsData: Filtering', data.length, 'records with filters:', filters);
   
   const filteredData = data.filter(row => {
     // Specialty filter - use fuzzy matching for specialty names
@@ -248,12 +243,6 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       const normalizedRowSpecialty = normalizeSpecialtyName(row.standardizedName);
       
       if (normalizedRowSpecialty !== normalizedFilterSpecialty) {
-        console.log('🔍 filterAnalyticsData: Specialty mismatch:', {
-          filter: filters.specialty,
-          normalizedFilter: normalizedFilterSpecialty,
-          row: row.standardizedName,
-          normalizedRow: normalizedRowSpecialty
-        });
         return false;
       }
     }
@@ -281,6 +270,5 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
     return true;
   });
   
-  console.log('🔍 filterAnalyticsData: Filtered to', filteredData.length, 'records');
   return filteredData;
 };

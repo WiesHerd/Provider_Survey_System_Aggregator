@@ -30,7 +30,6 @@ export const useColumnMappingData = () => {
   // Load data function
   const loadData = useCallback(async () => {
     if (isLoadingData) {
-      console.log('Data load already in progress, skipping...');
       return;
     }
 
@@ -41,22 +40,12 @@ export const useColumnMappingData = () => {
       
       const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
       
-      console.log('🔍 ColumnMapping: Loading data with provider type:', { 
-        selectedProviderType, 
-        dataProviderType 
-      });
-      
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getAllColumnMappings(dataProviderType),
         dataService.getUnmappedColumns(dataProviderType),
         dataService.getLearnedMappings('column')
       ]);
       
-      console.log('Data load completed:', { 
-        mappings: mappingsData.length, 
-        unmapped: unmappedData.length,
-        learned: Object.keys(learnedData).length
-      });
       
       setMappings(mappingsData);
       setUnmappedColumns(unmappedData);
@@ -64,7 +53,6 @@ export const useColumnMappingData = () => {
       setSelectedColumns([]);
       
     } catch (err) {
-      console.error('Failed to load column mapping data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
@@ -138,7 +126,6 @@ export const useColumnMappingData = () => {
       await dataService.createColumnMapping(mapping);
       await loadData();
     } catch (err) {
-      console.error('Failed to create column mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to create mapping');
     }
   }, [dataService, loadData]);
@@ -155,7 +142,6 @@ export const useColumnMappingData = () => {
       await dataService.createColumnMapping(mapping);
       await loadData();
     } catch (err) {
-      console.error('Failed to create grouped column mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to create mapping');
     }
   }, [dataService, loadData]);
@@ -165,7 +151,6 @@ export const useColumnMappingData = () => {
       await dataService.deleteColumnMapping(mappingId);
       await loadData();
     } catch (err) {
-      console.error('Failed to delete column mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete mapping');
     }
   }, [dataService, loadData]);
@@ -175,7 +160,6 @@ export const useColumnMappingData = () => {
       await dataService.removeLearnedMapping('column', original);
       await loadData();
     } catch (err) {
-      console.error('Failed to remove learned mapping:', err);
       setError(err instanceof Error ? err.message : 'Failed to remove learned mapping');
     }
   }, [dataService, loadData]);

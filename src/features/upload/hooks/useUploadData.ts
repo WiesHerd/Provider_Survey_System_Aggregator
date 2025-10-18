@@ -281,7 +281,6 @@ export const useUploadData = (
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load surveys';
       setError(errorMessage);
-      console.error('Error loading surveys:', err);
     } finally {
       setIsLoading(false);
     }
@@ -352,15 +351,12 @@ export const useUploadData = (
       // Invalidate analytics cache since new data was added (Google-style)
       const analyticsService = new AnalyticsDataService();
       analyticsService.invalidateCache();
-      console.log('🔍 Upload: Invalidated analytics cache due to new survey data');
       
       // Refresh provider type detection to auto-switch to the uploaded data type
       try {
         const { useProviderContext } = await import('../../../contexts/ProviderContext');
         // Note: This will be handled by the component that uses this hook
-        console.log('🔄 Upload: Provider type detection refresh will be triggered by component');
       } catch (error) {
-        console.warn('Could not trigger provider type refresh:', error);
       }
       
       // Call callback
@@ -369,7 +365,6 @@ export const useUploadData = (
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload files';
       setError(errorMessage);
-      console.error('Error uploading files:', err);
     } finally {
       setIsUploading(false);
       setUploadProgress({
@@ -406,14 +401,12 @@ export const useUploadData = (
       // Invalidate analytics cache since data was removed (Google-style)
       const analyticsService = new AnalyticsDataService();
       analyticsService.invalidateCache();
-      console.log('🔍 Upload: Invalidated analytics cache due to survey deletion');
       
       onSurveyDelete?.(surveyId);
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete survey';
       setError(errorMessage);
-      console.error('Error deleting survey:', err);
     } finally {
       setIsDeleting(false);
       setDeleteProgress({

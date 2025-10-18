@@ -37,27 +37,23 @@ export const useMappingOperations = (
       setLoadingState(true);
       setErrorState(null);
       
-      console.log('🚀 Starting data load...');
       
       // Add aggressive timeout and individual service testing
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Data loading timeout after 5 seconds')), 5000)
       );
       
-      console.log('🔄 Testing individual data services...');
       
       // Test each service individually with timeout
       const testService = async (serviceName: string, serviceCall: () => Promise<any>) => {
-        console.log(`Testing ${serviceName}...`);
         const result = await Promise.race([serviceCall(), timeoutPromise]);
-        console.log(`✅ ${serviceName} loaded:`, Array.isArray(result) ? result.length : Object.keys(result || {}).length);
         return result;
       };
       
       // Convert UI provider type to data service provider type
       const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
       
-      console.log('🔍 useMappingOperations: Loading data with provider type:', { 
+      console.log('🔍 Loading mapping data:', {
         selectedProviderType, 
         dataProviderType 
       });
@@ -69,7 +65,7 @@ export const useMappingOperations = (
         testService('learnedWithSource', () => dataService.getLearnedMappingsWithSource('specialty'))
       ]);
       
-      console.log('✅ All data loaded successfully:', { 
+      console.log('🔍 Data loaded successfully:', {
         mappings: mappingsData.length, 
         unmapped: unmappedData.length, 
         learned: Object.keys(learnedData || {}).length,
@@ -82,17 +78,14 @@ export const useMappingOperations = (
       updateLearnedMappingsWithSource(learnedDataWithSource || []);
       
     } catch (err) {
-      console.error('❌ Error loading data:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setErrorState(`Failed to load mapping data: ${errorMessage}`);
       
       // Emergency fallback: set empty data to stop loading
-      console.log('🆘 Emergency fallback: setting empty data');
       updateMappings([]);
       updateUnmappedSpecialties([]);
       updateLearnedMappings({});
     } finally {
-      console.log('🏁 Setting loading to false');
       setLoadingState(false);
     }
   }, [updateMappings, updateUnmappedSpecialties, updateLearnedMappings, setLoadingState, setErrorState, dataService, selectedProviderType]);

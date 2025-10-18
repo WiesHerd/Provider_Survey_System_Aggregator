@@ -35,15 +35,9 @@ export class YearManagementService {
       // Combine both sources and remove duplicates
       const allYears = [...new Set([...configYears, ...Array.from(surveyYears)])];
       
-      console.log('🔍 YearManagementService: Available years detected:', {
-        fromConfigs: configYears,
-        fromSurveys: Array.from(surveyYears),
-        combined: allYears
-      });
       
       return allYears.sort((a, b) => b.localeCompare(a));
     } catch (error) {
-      console.error('Error getting available years:', error);
       return [];
     }
   }
@@ -77,7 +71,6 @@ export class YearManagementService {
       await this.saveYearConfigs([defaultConfig]);
       return [defaultConfig];
     } catch (error) {
-      console.error('Error getting year configs:', error);
       return [];
     }
   }
@@ -94,39 +87,18 @@ export class YearManagementService {
       // Get all surveys to see what years exist
       const surveys = await dataService.getAllSurveys();
       
-      console.log('🔍 YearManagementService: detectActualYear - Found surveys:', surveys.length);
-      console.log('🔍 YearManagementService: detectActualYear - Survey details:', surveys.map(s => ({
-        id: s.id,
-        name: (s as any).name,
-        year: (s as any).year,
-        surveyYear: (s as any).surveyYear,
-        type: (s as any).type,
-        surveyType: (s as any).surveyType,
-        filename: (s as any).filename,
-        surveyProvider: (s as any).surveyProvider,
-        keys: Object.keys(s)
-      })));
       
       if (surveys && surveys.length > 0) {
         // Look for year information in survey metadata
         for (const survey of surveys) {
           const surveyAny = survey as any;
-          console.log('🔍 YearManagementService: Checking survey for year:', {
-            id: surveyAny.id,
-            name: surveyAny.name,
-            year: surveyAny.year,
-            surveyYear: surveyAny.surveyYear,
-            type: surveyAny.type,
-            surveyType: surveyAny.surveyType
-          });
+          // Survey metadata logging removed for performance
           
           // IndexedDB uses 'year' field, BackendService uses 'surveyYear' field
           if (surveyAny.year) {
-            console.log('🔍 YearManagementService: Found year from survey.year:', surveyAny.year);
             return surveyAny.year;
           }
           if (surveyAny.surveyYear) {
-            console.log('🔍 YearManagementService: Found year from survey.surveyYear:', surveyAny.surveyYear);
             return surveyAny.surveyYear;
           }
         }
@@ -137,7 +109,6 @@ export class YearManagementService {
           const surveyName = surveyAny.surveyProvider || surveyAny.name || '';
           const yearMatch = surveyName.match(/\b(20\d{2})\b/);
           if (yearMatch) {
-            console.log('🔍 YearManagementService: Found year from survey name pattern:', yearMatch[1]);
             return yearMatch[1];
           }
         }

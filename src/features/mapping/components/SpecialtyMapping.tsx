@@ -74,7 +74,6 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
   useEffect(() => {
     if (loading) {
       const timeout = setTimeout(() => {
-        console.log('🚨 Emergency timeout triggered - loading taking too long');
         setEmergencyTimeout(true);
       }, 20000); // 20 second emergency timeout
       

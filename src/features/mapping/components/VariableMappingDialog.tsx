@@ -71,7 +71,6 @@ export const VariableMappingDialog: React.FC<VariableMappingDialogProps> = ({
         sourceVariables
       });
     } catch (error) {
-      console.error('Failed to save variable mapping:', error);
     } finally {
       setLoading(false);
     }

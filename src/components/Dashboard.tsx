@@ -184,7 +184,6 @@ const Dashboard: React.FC = () => {
                   alt="BenchPoint Logo" 
                   className="w-16 h-16 object-contain transition-transform duration-300 hover:scale-110 hover:rotate-12 cursor-pointer"
                   onError={(e) => {
-                    console.log('Dashboard logo failed to load:', (e.target as HTMLImageElement).src);
                     // Replace with inline SVG fallback
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
@@ -291,12 +290,10 @@ const Dashboard: React.FC = () => {
                               transition: 'transform 0.3s ease, box-shadow 0.3s ease'
                             }}
                             onMouseEnter={(e) => {
-                              console.log('Icon hover enter!'); // Debug log
                               e.currentTarget.style.transform = 'scale(1.15) rotate(8deg)';
                               e.currentTarget.style.boxShadow = '0 10px 25px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)';
                             }}
                             onMouseLeave={(e) => {
-                              console.log('Icon hover leave!'); // Debug log
                               e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
                               e.currentTarget.style.boxShadow = '';
                             }}

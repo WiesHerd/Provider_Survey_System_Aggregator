@@ -117,11 +117,9 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       setUnmappedProviderTypes(unmappedData);
       setLearnedMappings(learnedData || {});
       
-      console.log('🔍 Loaded provider type learned mappings:', learnedData);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load provider type mapping data. Please ensure you have uploaded survey data first.');
-      console.error('Error loading provider type mapping data:', err);
     } finally {
       setLoading(false);
     }
@@ -193,7 +191,6 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       // Save learned mappings for each provider type
       for (const providerType of providerTypes) {
         try {
-          console.log('💾 Saving learned provider type mapping:', providerType.name, '->', standardizedName, 'from survey:', providerType.surveySource);
           await dataService.saveLearnedMapping(
             'providerType', 
             providerType.name, 
@@ -202,7 +199,6 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
             providerType.surveySource // Pass survey source
           );
         } catch (learnedError) {
-          console.warn('Failed to save learned mapping for', providerType.name, learnedError);
         }
       }
       

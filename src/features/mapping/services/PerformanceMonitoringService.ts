@@ -126,7 +126,6 @@ class PerformanceMonitoringService {
     this.setupMemoryMonitoring();
 
     this.isInitialized = true;
-    console.log('🚀 Performance Monitoring Service initialized');
   }
 
   private generateSessionId(): string {
@@ -254,7 +253,6 @@ class PerformanceMonitoringService {
     this.alerts.push(fullAlert);
 
     // Log alert
-    console.warn(`🚨 Performance Alert: ${fullAlert.message}`, fullAlert);
 
     // Send alert if endpoint is configured
     if (this.config.alertingEndpoint) {
@@ -325,7 +323,6 @@ class PerformanceMonitoringService {
       // Clear sent events
       this.globalEvents = this.globalEvents.slice(-this.config.maxEventsPerReport);
     } catch (error) {
-      console.error('Failed to generate performance report:', error);
     }
   }
 
@@ -385,7 +382,6 @@ class PerformanceMonitoringService {
         body: JSON.stringify(report),
       });
     } catch (error) {
-      console.error('Failed to send performance report:', error);
     }
   }
 
@@ -401,7 +397,6 @@ class PerformanceMonitoringService {
         body: JSON.stringify(alert),
       });
     } catch (error) {
-      console.error('Failed to send performance alert:', error);
     }
   }
 
@@ -437,7 +432,6 @@ class PerformanceMonitoringService {
       clearInterval(this.reportingInterval);
     }
     this.isInitialized = false;
-    console.log('🛑 Performance Monitoring Service destroyed');
   }
 }
 

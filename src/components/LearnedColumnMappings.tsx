@@ -261,16 +261,11 @@ export const LearnedColumnMappings: React.FC<LearnedColumnMappingsProps> = ({
                     <Tooltip title="Delete mapping">
                       <IconButton 
                         onClick={() => {
-                          console.log('🗑️ TRASH ICON CLICKED - Starting delete process');
-                          console.log('🗑️ Mapping to delete:', mapping);
-                          console.log('🗑️ Source columns:', mapping.sourceColumns);
                           
                           // Show confirmation dialog first
                           if (window.confirm('Remove this learned mapping?')) {
-                            console.log('🗑️ User confirmed deletion');
                             onRemoveMapping(mapping.standardizedName);
                           } else {
-                            console.log('🗑️ User cancelled deletion');
                           }
                         }}
                         size="small"

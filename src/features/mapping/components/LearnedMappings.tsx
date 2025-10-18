@@ -279,16 +279,11 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
               <MappedSpecialtyItem
                 mapping={mapping}
                 onDelete={() => {
-                  console.log('🗑️ TRASH ICON CLICKED - Starting delete process');
-                  console.log('🗑️ Mapping to delete:', mapping);
-                  console.log('🗑️ Source specialties:', mapping.sourceSpecialties);
                   
                   // Show confirmation dialog first
                   if (window.confirm('Remove this learned mapping?')) {
-                    console.log('🗑️ User confirmed deletion');
                     onRemoveLearnedMapping(mapping.standardizedName);
                   } else {
-                    console.log('🗑️ User cancelled deletion');
                   }
                 }}
               />

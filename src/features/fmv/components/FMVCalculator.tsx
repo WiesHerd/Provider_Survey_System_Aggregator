@@ -77,7 +77,6 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   // Handle saving a calculation
   const handleSaveCalculation = (calculation: Omit<SavedFMVCalculation, 'id' | 'created' | 'lastModified'>) => {
     // This will be handled by the SavedFMVManager component
-    console.log('Saving FMV calculation:', calculation);
   };
 
   // Handle loading a saved calculation
@@ -96,12 +95,11 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     // Set provider name for printing
     setCurrentProviderName(calculation.providerName);
     
-    console.log('Loaded FMV calculation:', calculation);
   };
 
   // Handle deleting a saved calculation
   const handleDeleteCalculation = (id: string) => {
-    console.log('Deleting FMV calculation:', id);
+    // Delete calculation logic
   };
 
   // Get current calculation data for saving

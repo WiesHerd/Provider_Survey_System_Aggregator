@@ -106,11 +106,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const handleFilterChange = (
     event: React.ChangeEvent<{ name?: string; value: unknown }> | any
   ) => {
-    console.log('Filter change:', {
-      name: event.target.name,
-      value: event.target.value,
-      currentFilters: globalFilters
-    });
+    // Filter change logging removed for performance
     
     // Simple filter change - no cascading reset for now
     // This ensures basic filtering works without interference

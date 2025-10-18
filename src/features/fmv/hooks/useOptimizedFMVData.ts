@@ -61,7 +61,6 @@ export const useOptimizedFMVData = (): UseOptimizedFMVDataReturn => {
       setLoading(true);
       setError(null);
       
-      console.log('🚀 Starting optimized FMV data load...');
       const startTime = performance.now();
       
       const data = await performanceService.getFMVData(filters);
@@ -70,13 +69,11 @@ export const useOptimizedFMVData = (): UseOptimizedFMVDataReturn => {
       setLastLoadTime(duration);
       setCacheHitRate(duration < 1000 ? 95 : 60); // Estimate cache hit rate based on load time
       
-      console.log(`✅ FMV data loaded in ${duration.toFixed(2)}ms`);
       
       setMarketData(data.marketData);
       setNormalizedRows(data.normalizedRows);
       
     } catch (err) {
-      console.error('Error loading optimized FMV data:', err);
       setError('Failed to load FMV data');
     } finally {
       setLoading(false);
@@ -85,14 +82,12 @@ export const useOptimizedFMVData = (): UseOptimizedFMVDataReturn => {
 
   // Performance operations
   const refreshData = useCallback(async () => {
-    console.log('🔄 Refreshing FMV data...');
     performanceService.clearCache('fmv');
     await loadData();
   }, [performanceService, loadData]);
 
   const clearCache = useCallback(() => {
     performanceService.clearCache();
-    console.log('🗑️ Cache cleared');
   }, [performanceService]);
 
   const getCacheStats = useCallback(() => {

@@ -75,7 +75,7 @@ export class MappingErrorBoundary extends Component<MappingErrorBoundaryProps, E
     });
 
     // Log error for debugging
-    console.error(`🚨 ${componentName} Error Boundary caught an error:`, {
+    console.log('🔍 Mapping Error Boundary caught error:', {
       error: error.message,
       stack: error.stack,
       componentStack: errorInfo.componentStack,
@@ -111,7 +111,6 @@ export class MappingErrorBoundary extends Component<MappingErrorBoundaryProps, E
     };
 
     // Simulate error reporting
-    console.log('📊 Error Report:', errorReport);
     
     // In production, you would send this to your error service:
     // errorReportingService.captureException(error, { extra: errorReport });

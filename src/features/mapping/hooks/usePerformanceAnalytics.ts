@@ -94,11 +94,15 @@ export const usePerformanceAnalytics = (
     const renderTime = performance.now() - renderStartTimeRef.current;
     metricsRef.current.renderTime = renderTime;
 
-    // Log slow renders
-    if (renderTime > fullConfig.performanceThresholds.renderTime) {
-      console.warn(`🐌 Slow render detected in ${componentName}: ${renderTime.toFixed(2)}ms`);
-      
-      // Add performance event
+      // Log slow renders
+      if (renderTime > fullConfig.performanceThresholds.renderTime) {
+        console.log('⚠️ Slow render detected:', {
+          component: componentName,
+          renderTime: `${renderTime.toFixed(2)}ms`,
+          threshold: `${fullConfig.performanceThresholds.renderTime}ms`
+        });
+        
+        // Add performance event
       addEvent({
         type: 'render',
         duration: renderTime,
@@ -122,7 +126,6 @@ export const usePerformanceAnalytics = (
       
       // Log slow data loads
       if (duration > 1000) { // 1 second threshold
-        console.warn(`🐌 Slow data load in ${componentName}: ${duration.toFixed(2)}ms for ${operationName}`);
         
         addEvent({
           type: 'data_load',
@@ -167,7 +170,6 @@ export const usePerformanceAnalytics = (
       
       // Log slow searches
       if (duration > fullConfig.performanceThresholds.searchResponseTime) {
-        console.warn(`🐌 Slow search in ${componentName}: ${duration.toFixed(2)}ms for "${searchTerm}"`);
         
         addEvent({
           type: 'search',
@@ -212,7 +214,6 @@ export const usePerformanceAnalytics = (
       
       // Log slow mapping operations
       if (duration > 2000) { // 2 second threshold
-        console.warn(`🐌 Slow mapping operation in ${componentName}: ${duration.toFixed(2)}ms for ${operationType}`);
         
         addEvent({
           type: 'mapping',
@@ -290,7 +291,6 @@ export const usePerformanceAnalytics = (
       
       // Log high memory usage
       if (memoryUsageMB > fullConfig.performanceThresholds.memoryUsage) {
-        console.warn(`🧠 High memory usage in ${componentName}: ${memoryUsageMB.toFixed(2)}MB`);
         
         addEvent({
           type: 'render',
@@ -334,7 +334,7 @@ export const usePerformanceAnalytics = (
       // Log performance summary every 30 seconds
       if (Date.now() % 30000 < fullConfig.reportingInterval) {
         const metrics = metricsRef.current;
-        console.log(`📊 Performance Summary for ${componentName}:`, {
+        console.log('📊 Performance Summary:', {
           renderTime: `${metrics.renderTime.toFixed(2)}ms`,
           memoryUsage: `${metrics.memoryUsage.toFixed(2)}MB`,
           searchResponseTime: `${metrics.searchResponseTime.toFixed(2)}ms`,
@@ -353,7 +353,7 @@ export const usePerformanceAnalytics = (
     return () => {
       // Final performance report
       const metrics = metricsRef.current;
-      console.log(`🏁 Final Performance Report for ${componentName}:`, {
+      console.log('📊 Final Performance Report:', {
         totalEvents: eventsRef.current.length,
         averageRenderTime: `${metrics.renderTime.toFixed(2)}ms`,
         peakMemoryUsage: `${metrics.memoryUsage.toFixed(2)}MB`,

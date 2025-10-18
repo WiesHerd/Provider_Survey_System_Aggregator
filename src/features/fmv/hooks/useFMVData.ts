@@ -75,8 +75,6 @@ export const useFMVData = () => {
    * This allows users to easily change any filter at any time without being locked into cascading behavior
    */
   const calculateFilterValues = useCallback(async () => {
-    console.log('🔍 FMV: Generating all available options for enterprise-grade UX');
-    
     try {
       // Use the same AnalyticsDataService as the Analytics screen
       const analyticsDataService = new AnalyticsDataService();
@@ -88,7 +86,6 @@ export const useFMVData = () => {
         year: ''
       });
 
-      console.log('🔍 FMV: Fetched', allData.length, 'records for filter options');
       
       const specialtySet = new Set<string>();
       const providerTypeSet = new Set<string>();
@@ -150,17 +147,9 @@ export const useFMVData = () => {
         years: Array.from(yearSet).sort()
       };
       
-      console.log('🔍 FMV: Generated filter options:', {
-        specialties: result.specialties.length,
-        providerTypes: result.providerTypes.length,
-        regions: result.regions.length,
-        surveySources: result.surveySources.length,
-        years: result.years.length
-      });
       
       return result;
     } catch (error) {
-      console.error('Error calculating filter values:', error);
       // Return empty values on error
       return {
         specialties: [],
@@ -177,15 +166,10 @@ export const useFMVData = () => {
    */
   const fetchUniqueValues = useCallback(async () => {
     try {
-      console.log('🔍 FMV: Fetching unique values using AnalyticsDataService');
-      
       // Generate filter options from the normalized data
       const filterValues = await calculateFilterValues();
       setUniqueValues(filterValues);
-
-      console.log('🔍 FMV: Set unique values:', filterValues);
     } catch (err) {
-      console.error('Error fetching unique values:', err);
       setError('Failed to load filter options');
     }
   }, [calculateFilterValues]);
@@ -198,8 +182,6 @@ export const useFMVData = () => {
     setError(null);
 
     try {
-      console.log('🔍 FMV: Fetching market data with filters:', filters);
-      
       // Use the same approach as Analytics screen: fetch ALL data first, then filter client-side
       const analyticsDataService = new AnalyticsDataService();
       const allData = await analyticsDataService.getAnalyticsData({
@@ -209,11 +191,8 @@ export const useFMVData = () => {
         providerType: '',
         year: ''
       });
-
-      console.log('🔍 FMV: Fetched', allData.length, 'total records from AnalyticsDataService');
       
       if (allData.length === 0) {
-        console.log('🔍 FMV: No data found');
         setMarketData(null);
         setPercentiles({ tcc: null, wrvu: null, cf: null });
         return;
@@ -227,7 +206,6 @@ export const useFMVData = () => {
           row.surveySource.includes(' - Simple Average') || 
           row.surveySource.includes(' - Weighted Average')
         )) {
-          console.log('🔍 FMV: Excluding summary row:', row.surveySource);
           return false;
         }
         
@@ -261,15 +239,9 @@ export const useFMVData = () => {
         return true;
       });
 
-      console.log('🔍 FMV: All data before filtering:', allData.length, 'records');
-      console.log('🔍 FMV: Sample all data:', allData[0]);
-      console.log('🔍 FMV: Applied filters:', filters);
-
-      console.log('🔍 FMV: Filtered to', filteredData.length, 'records matching filters');
       setSurveyCount(filteredData.length);
 
       if (filteredData.length === 0) {
-        console.log('🔍 FMV: No data matches the current filters');
         setMarketData(null);
         setPercentiles({ tcc: null, wrvu: null, cf: null });
         setSurveyCount(0);
@@ -308,12 +280,9 @@ export const useFMVData = () => {
         cf_p90: row.cf_p90 || 0,
       }));
 
-      console.log('🔍 FMV: Converted to', normalizedRows.length, 'normalized rows');
-      console.log('🔍 FMV: Sample normalized row:', normalizedRows[0]);
 
       // Handle specialty blending if enabled
       if (filters.useSpecialtyBlending && filters.specialtyBlending) {
-        console.log('🔍 FMV: Using specialty blending:', filters.specialtyBlending);
         
         // Import blending calculation utilities
         const { calculateBlendedMarketData } = await import('../utils/specialtyBlendingCalculations');
@@ -370,7 +339,6 @@ export const useFMVData = () => {
         setBlendedData(null);
         
         // Calculate market data using the normalized rows with the selected aggregation method
-        console.log('🔍 FMV: Using aggregation method:', filters.aggregationMethod);
         const calculatedMarketData = calculateMarketData(normalizedRows, filters.aggregationMethod);
 
         // Calculate user percentiles
@@ -385,7 +353,6 @@ export const useFMVData = () => {
         setPercentiles(calculatedPercentiles);
       }
     } catch (err) {
-      console.error('Error fetching market data:', err);
       setError('Failed to load market data');
     } finally {
       setLoading(false);
@@ -399,7 +366,6 @@ export const useFMVData = () => {
     setFilters(prev => {
       const updatedFilters = { ...prev, ...newFilters };
       
-      console.log('FMV Debug - Updating filters:', updatedFilters);
       
       return updatedFilters;
     });

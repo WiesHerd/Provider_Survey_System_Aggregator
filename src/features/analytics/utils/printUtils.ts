@@ -19,7 +19,6 @@ export const generateAnalyticsPDF = (
   options: PrintOptions = {}
 ) => {
   // Temporarily return null until jspdf issues are resolved
-  console.warn('PDF generation temporarily disabled');
   return null;
 };
 
@@ -31,7 +30,6 @@ export const downloadAnalyticsPDF = (
   filters: AnalyticsFilters,
   options: PrintOptions = {}
 ) => {
-  console.warn('PDF download temporarily disabled');
 };
 
 /**

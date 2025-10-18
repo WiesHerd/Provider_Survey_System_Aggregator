@@ -134,7 +134,6 @@ export const BulkMappingCreator: React.FC<BulkMappingCreatorProps> = ({
       await onSave(validMappings);
       onClose();
     } catch (error) {
-      console.error('Error saving mappings:', error);
       alert('Failed to save mappings');
     } finally {
       setSaving(false);

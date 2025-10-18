@@ -192,7 +192,6 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 								className="w-12 h-12 object-contain" 
 								onError={(e) => {
 									const target = e.target as HTMLImageElement;
-									console.log('Image failed to load:', target.src);
 									// Show fallback icon if image fails
 									target.style.display = 'none';
 									const parent = target.parentElement;
@@ -244,7 +243,6 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 							className="w-12 h-12 object-contain" 
 							onError={(e) => {
 								const target = e.target as HTMLImageElement;
-								console.log('Image failed to load:', target.src);
 								// Show fallback icon if image fails
 								target.style.display = 'none';
 								const parent = target.parentElement;

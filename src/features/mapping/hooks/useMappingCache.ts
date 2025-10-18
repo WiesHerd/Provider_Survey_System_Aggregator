@@ -150,14 +150,18 @@ export const useMappingCache = (): UseMappingCacheReturn => {
 
   // Smart data loading with cache - stable function
   const loadDataWithCache = useCallback(async () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 Loading data with intelligent caching...');
-    }
-    
     // Try to get cached data first
     const cachedMappings = getCachedData<ISpecialtyMapping[]>('mappings');
     const cachedUnmapped = getCachedData<IUnmappedSpecialty[]>('unmappedSpecialties');
     const cachedLearned = getCachedData<Record<string, string>>('learnedMappings');
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Cache loading status:', {
+        mappings: cachedMappings ? '✅ cached' : '❌ needs load',
+        unmapped: cachedUnmapped ? '✅ cached' : '❌ needs load',
+        learned: cachedLearned ? '✅ cached' : '❌ needs load',
+      });
+    }
 
     // Determine what needs to be loaded
     const needsMappings = !cachedMappings;
@@ -165,7 +169,7 @@ export const useMappingCache = (): UseMappingCacheReturn => {
     const needsLearned = !cachedLearned;
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('📊 Cache status:', {
+      console.log('🔍 Cache loading status:', {
         mappings: cachedMappings ? '✅ cached' : '❌ needs load',
         unmapped: cachedUnmapped ? '✅ cached' : '❌ needs load',
         learned: cachedLearned ? '✅ cached' : '❌ needs load',
@@ -213,7 +217,7 @@ export const useMappingCache = (): UseMappingCacheReturn => {
     };
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('✅ Data loaded:', {
+      console.log('🔍 Cache results:', {
         mappings: result.mappings.length,
         unmapped: result.unmappedSpecialties.length,
         learned: Object.keys(result.learnedMappings).length,

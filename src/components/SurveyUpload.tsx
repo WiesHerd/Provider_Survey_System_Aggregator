@@ -183,14 +183,12 @@ const SurveyUpload: React.FC = () => {
   useEffect(() => {
     // Skip loading if we just uploaded a survey to prevent overriding the state
     if (justUploaded) {
-      console.log('🔄 Skipping survey load - just uploaded a survey');
       setJustUploaded(false);
       return;
     }
 
     // Skip if we're currently uploading
     if (isUploading) {
-      console.log('🔄 Skipping survey load - currently uploading');
       return;
     }
 
@@ -198,7 +196,6 @@ const SurveyUpload: React.FC = () => {
       try {
         setIsLoading(true);
         
-        console.log('Loading surveys for year:', currentYear);
         
         // Add timeout to prevent infinite loading
         const timeoutPromise = new Promise((_, reject) => 
@@ -210,7 +207,6 @@ const SurveyUpload: React.FC = () => {
           dataService.getAllSurveys(),
           timeoutPromise
         ]) as any[];
-        console.log('Loaded surveys:', surveys);
         
         // Filter surveys by current year and provider type
         const surveysAny = surveys as any[];
@@ -219,24 +215,16 @@ const SurveyUpload: React.FC = () => {
           return surveyYear === currentYear;
         });
         
-        console.log(`Filtered surveys for year ${currentYear}:`, yearFilteredSurveys);
         
         // Filter by provider type based on Data View selection
         let providerFilteredSurveys = yearFilteredSurveys;
         if (selectedProviderType !== 'BOTH') {
           providerFilteredSurveys = yearFilteredSurveys.filter((survey: any) => {
             const surveyProviderType = survey.providerType || 'PHYSICIAN'; // Default to PHYSICIAN for legacy surveys
-            console.log('🔍 Survey provider type check:', {
-              surveyName: survey.name,
-              surveyProviderType,
-              selectedProviderType,
-              matches: surveyProviderType === selectedProviderType
-            });
             return surveyProviderType === selectedProviderType;
           });
         }
         
-        console.log(`Filtered surveys for provider type ${selectedProviderType}:`, providerFilteredSurveys);
         
         const allSurveys = providerFilteredSurveys;
         
@@ -269,7 +257,6 @@ const SurveyUpload: React.FC = () => {
         
         const processedSurveys = Array.from(surveyMap.values());
 
-        console.log('Processed surveys:', processedSurveys);
         setUploadedSurveys(processedSurveys);
         // Auto-select first survey if none selected, or if current selection is no longer available
         if (processedSurveys.length > 0) {
@@ -282,9 +269,7 @@ const SurveyUpload: React.FC = () => {
           setSelectedSurvey('');
         }
       } catch (error) {
-        console.error('Error loading surveys:', error);
         if (error instanceof Error && error.message === 'Loading timeout') {
-          console.log('Loading timeout - no surveys found or database issue');
           setUploadedSurveys([]);
           setSelectedSurvey(null);
         } else {
@@ -383,7 +368,6 @@ const SurveyUpload: React.FC = () => {
         setSurveyToDelete(null);
       }, 1000);
     } catch (error) {
-      console.error('Error removing survey:', error);
       handleError('Error removing survey');
       completeProgress(); // Complete progress even on error
       
@@ -489,7 +473,6 @@ const SurveyUpload: React.FC = () => {
         columnMappings: {}
       };
 
-      console.log('🔄 Adding survey to state immediately:', immediateSurvey.fileName);
       setUploadedSurveys(prev => [...prev, immediateSurvey]);
       setSelectedSurvey(surveyId);
       setRefreshTrigger(prev => prev + 1);
@@ -497,24 +480,15 @@ const SurveyUpload: React.FC = () => {
       // Progress is handled by useSmoothProgress hook
 
       // Save survey and data to IndexedDB
-      console.log('Saving survey to data service:', survey);
       await dataService.createSurvey(survey);
-      console.log('Saving survey data to data service:', surveyId);
       await dataService.saveSurveyData(surveyId, parsedRows);
 
       // Progress is handled by useSmoothProgress hook
 
-      console.log('Survey uploaded successfully:', {
-        surveyId: surveyId,
-        rowCount: parsedRows.length
-      });
-
       // Refresh provider type detection to auto-switch to the uploaded data type
       try {
         await refreshProviderTypeDetection();
-        console.log('🔄 Provider type detection refreshed after upload');
       } catch (error) {
-        console.warn('Could not refresh provider type detection:', error);
       }
 
       // State already updated above, just set the flag to prevent useEffect override
@@ -522,7 +496,6 @@ const SurveyUpload: React.FC = () => {
       
       // Additional force refresh after a short delay
       setTimeout(() => {
-        console.log('🔄 Force refresh triggered');
         setRefreshTrigger(prev => prev + 1);
       }, 50);
 
@@ -540,7 +513,6 @@ const SurveyUpload: React.FC = () => {
       }, 1000);
 
     } catch (error) {
-      console.error('Error uploading survey:', error);
       handleError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsUploading(false);
       completeProgress(); // Complete progress animation
@@ -570,16 +542,13 @@ const SurveyUpload: React.FC = () => {
         const oldDbRequest = indexedDB.deleteDatabase('survey-data');
         await new Promise((resolve, reject) => {
           oldDbRequest.onsuccess = () => {
-            console.log('✅ Cleared old survey-data database');
             resolve(true);
           };
           oldDbRequest.onerror = () => {
-            console.log('ℹ️ Old survey-data database not found (this is normal)');
             resolve(true); // Not an error if it doesn't exist
           };
         });
       } catch (error) {
-        console.log('ℹ️ Could not clear old survey-data database:', error);
       }
       
       // Clear localStorage as well
@@ -588,7 +557,6 @@ const SurveyUpload: React.FC = () => {
       setUploadedSurveys([]);
       setSelectedSurvey(null);
       
-      console.log('✅ All data cleared successfully - ready for fresh upload with fixed CSV parser');
       
       // Complete progress and show success message
       completeProgress();
@@ -601,7 +569,6 @@ const SurveyUpload: React.FC = () => {
       }, 1500);
       
     } catch (error) {
-      console.error('Error clearing all data:', error);
       handleError('Error clearing data');
       completeProgress(); // Complete progress even on error
       
@@ -676,7 +643,6 @@ const SurveyUpload: React.FC = () => {
                     try {
                       await downloadSampleFile();
                     } catch (error) {
-                      console.error('Download failed:', error);
                     }
                   }}
                   className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 border border-gray-300"

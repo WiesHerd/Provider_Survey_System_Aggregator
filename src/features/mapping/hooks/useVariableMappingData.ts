@@ -75,30 +75,18 @@ export const useVariableMappingData = () => {
       // Convert UI provider type to data service provider type
       const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
       
-      console.log('🔍 useVariableMappingData: Loading data with provider type:', { 
-        selectedProviderType, 
-        dataProviderType 
-      });
-      
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getVariableMappings(dataProviderType),
         dataService.getUnmappedVariables(dataProviderType),
         dataService.getLearnedMappings('variable', selectedProviderType)
       ]);
       
-      console.log('Loaded data:', { 
-        mappings: mappingsData?.length || 0, 
-        unmapped: unmappedData?.length || 0,
-        learned: Object.keys(learnedData || {}).length
-      });
       
       setVariableMappings(mappingsData || []);
       setUnmappedVariables(unmappedData || []);
       setLearnedMappings(learnedData || {});
       
-      console.log('🔍 Loaded variable learned mappings:', learnedData);
     } catch (err) {
-      console.error('Error loading data:', err);
       setError('Failed to load variable mapping data');
     } finally {
       setLoading(false);
@@ -108,12 +96,9 @@ export const useVariableMappingData = () => {
   // Detect unmapped variables from survey data
   const detectUnmappedVariables = useCallback(async (): Promise<IUnmappedVariable[]> => {
     try {
-      console.log('🔍 Starting detectUnmappedVariables...');
       const surveys = await dataService.getAllSurveys();
-      console.log('📊 Found surveys:', surveys.length, surveys);
       
       if (!surveys || surveys.length === 0) {
-        console.log('⚠️ No surveys found');
         return [];
       }
       
@@ -121,9 +106,7 @@ export const useVariableMappingData = () => {
       const variableMap = new Map<string, IUnmappedVariable>();
 
       for (const survey of surveys) {
-        console.log('🔍 Processing survey:', survey);
         const surveyDataResult = await dataService.getSurveyData(survey.id);
-        console.log('📊 Survey data result:', surveyDataResult);
         
         if (!surveyDataResult || !surveyDataResult.rows || !Array.isArray(surveyDataResult.rows)) {
           console.log('⚠️ No survey data found for survey:', survey.id);

@@ -44,7 +44,7 @@ export const useMappingSelection = (
       const validSelected = selectedSpecialties.filter(s => filteredIds.has(s.id));
       
       if (validSelected.length !== selectedSpecialties.length) {
-        console.log('Cleaning up selected specialties:', {
+        console.log('🔍 Cleaning up invalid selections:', {
           original: selectedSpecialties.length,
           valid: validSelected.length,
           removed: selectedSpecialties.length - validSelected.length
