@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SpecialtyItem, SpecialtyBlend, SpecialtyBlendTemplate, BlendedResult, BlendingState, BlendingActions } from '../types/blending';
-import { validateBlend, normalizeWeights, calculateBlendedMetrics, calculateConfidence, generateBlendId } from '../utils/blendingCalculations';
+import { validateBlend, normalizeWeights, normalizeSpecialtyWeights, calculateBlendedMetrics, calculateConfidence, generateBlendId } from '../utils/blendingCalculations';
 
 // Global cache that persists across component mounts
 class GlobalBlendingCache {
@@ -256,7 +256,7 @@ export const useSpecialtyBlending = ({
       }
       
       // Normalize weights
-      const normalizedSpecialties = normalizeWeights(selectedSpecialties);
+      const normalizedSpecialties = normalizeSpecialtyWeights(selectedSpecialties);
       
       // Create blend
       const blend: SpecialtyBlend = {
@@ -275,13 +275,32 @@ export const useSpecialtyBlending = ({
       const specialtyData = await fetchSpecialtyData(normalizedSpecialties);
       const blendedData = calculateBlendedMetrics(normalizedSpecialties, specialtyData);
       const confidence = calculateConfidence(normalizedSpecialties, specialtyData);
-      const sampleSize = blendedData.n_incumbents;
+      const sampleSize = blendedData?.totalRecords || 0;
       
+      if (!blendedData) {
+        throw new Error('Failed to calculate blended metrics');
+      }
+
       const result: BlendedResult = {
         id: generateBlendId(),
         blendName: name,
         specialties: normalizedSpecialties,
-        blendedData,
+        blendedData: {
+          tcc_p25: blendedData.tcc_p25,
+          tcc_p50: blendedData.tcc_p50,
+          tcc_p75: blendedData.tcc_p75,
+          tcc_p90: blendedData.tcc_p90,
+          wrvu_p25: blendedData.wrvu_p25,
+          wrvu_p50: blendedData.wrvu_p50,
+          wrvu_p75: blendedData.wrvu_p75,
+          wrvu_p90: blendedData.wrvu_p90,
+          cf_p25: blendedData.cf_p25,
+          cf_p50: blendedData.cf_p50,
+          cf_p75: blendedData.cf_p75,
+          cf_p90: blendedData.cf_p90,
+          n_orgs: blendedData.totalRecords,
+          n_incumbents: blendedData.totalRecords
+        },
         confidence,
         sampleSize,
         createdAt: new Date()

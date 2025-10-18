@@ -1320,7 +1320,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                {isLoading ? (
                  <UnifiedLoadingSpinner
                    message="Loading survey data..."
-                   recordCount={allData.length}
+                   recordCount={filteredSurveyData.length}
                    progress={progress}
                    showProgress={true}
                  />

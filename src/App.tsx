@@ -77,7 +77,7 @@ const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
-const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreen').then(module => ({ default: module.SpecialtyBlendingScreen })));
+const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 
 // Loading component for Suspense fallback
 const AppLoadingSpinner = () => (
