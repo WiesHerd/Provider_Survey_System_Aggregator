@@ -176,11 +176,87 @@ export const getVariableLightBackgroundColor = (variableName: string, index: num
  * Normalize variable name for internal use
  */
 export const normalizeVariableName = (variableName: string): string => {
-  return variableName
+  const normalized = variableName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '_') // Replace non-alphanumeric with underscore
     .replace(/_+/g, '_') // Replace multiple underscores with single
     .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+  
+  // Apply intelligent mapping to standardize variations
+  return mapVariableNameToStandard(normalized);
+};
+
+/**
+ * Map variable name variations to standard names
+ * Handles different naming conventions across surveys
+ */
+export const mapVariableNameToStandard = (normalizedName: string): string => {
+  // Comprehensive mapping of variable name variations to standard names
+  const variableMapping: Record<string, string> = {
+    // TCC variations
+    'total_cash_compensation': 'tcc',
+    'total_compensation': 'tcc',
+    'total_cash_comp': 'tcc',
+    'cash_compensation': 'tcc',
+    'total_comp': 'tcc',
+    
+    // Work RVU variations
+    'work_rvus': 'work_rvus',
+    'work_rvu': 'work_rvus',
+    'wrvu': 'work_rvus',
+    'wrvus': 'work_rvus',
+    'work_relative_value_units': 'work_rvus',
+    
+    // TCC per Work RVU variations (Conversion Factor)
+    'tcc_per_work_rvu': 'tcc_per_work_rvu',
+    'tcc_per_work_rvus': 'tcc_per_work_rvu',
+    'tcc_per_wrvu': 'tcc_per_work_rvu',
+    'conversion_factor': 'tcc_per_work_rvu',
+    'cf': 'tcc_per_work_rvu',
+    'comp_per_wrvu': 'tcc_per_work_rvu',
+    'compensation_per_wrvu': 'tcc_per_work_rvu',
+    
+    // Base Salary variations
+    'base_salary': 'base_salary',
+    'base_compensation': 'base_salary',
+    'base_comp': 'base_salary',
+    'salary': 'base_salary',
+    
+    // ASA Units variations
+    'asa_units': 'asa_units',
+    'asa': 'asa_units',
+    'asa_unit': 'asa_units',
+    
+    // Panel Size variations
+    'panel_size': 'panel_size',
+    'panel': 'panel_size',
+    'patient_panel': 'panel_size',
+    'patient_panel_size': 'panel_size',
+    
+    // Encounters variations
+    'total_encounters': 'total_encounters',
+    'encounters': 'total_encounters',
+    'patient_encounters': 'total_encounters',
+    'total_visits': 'total_encounters',
+    
+    // TCC per Encounter variations
+    'tcc_per_encounter': 'tcc_per_encounter',
+    'comp_per_encounter': 'tcc_per_encounter',
+    'compensation_per_encounter': 'tcc_per_encounter',
+    
+    // TCC to Collections variations
+    'tcc_to_net_collections': 'tcc_to_net_collections',
+    'tcc_to_collections': 'tcc_to_net_collections',
+    'comp_to_collections': 'tcc_to_net_collections',
+    
+    // TCC per ASA Unit variations
+    'tcc_per_asa_unit': 'tcc_per_asa_unit',
+    'tcc_per_asa': 'tcc_per_asa_unit',
+    'comp_per_asa': 'tcc_per_asa_unit'
+  };
+  
+  // Return mapped name if exists, otherwise return original normalized name
+  return variableMapping[normalizedName] || normalizedName;
 };
 
 /**

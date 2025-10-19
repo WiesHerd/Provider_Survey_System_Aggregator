@@ -14,7 +14,8 @@ import {
 } from '../types/variables';
 import { 
   normalizeVariableName, 
-  detectVariableCategory 
+  detectVariableCategory,
+  mapVariableNameToStandard 
 } from '../utils/variableFormatters';
 
 /**
@@ -252,7 +253,10 @@ export class VariableDiscoveryService {
    * Format display name from normalized name
    */
   private formatDisplayName(normalizedName: string): string {
-    // Handle common patterns
+    // First, ensure we have the standardized name
+    const standardizedName = mapVariableNameToStandard(normalizedName);
+    
+    // Handle common patterns with standardized names
     const displayMap: Record<string, string> = {
       'tcc': 'TCC',
       'work_rvus': 'Work RVUs',
@@ -266,12 +270,12 @@ export class VariableDiscoveryService {
       'total_encounters': 'Total Encounters'
     };
     
-    if (displayMap[normalizedName]) {
-      return displayMap[normalizedName];
+    if (displayMap[standardizedName]) {
+      return displayMap[standardizedName];
     }
     
     // Pattern-based formatting
-    return normalizedName
+    return standardizedName
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
