@@ -694,13 +694,19 @@ export class AnalyticsDataService {
       
       // Set the appropriate metrics based on the variable type
       // IMPORTANT: Order matters - check most specific patterns first
+      
+      
       if (variable.includes('tcc per work rvu') || variable.includes('conversion factor')) {
         // This is definitely a conversion factor
         normalizedMetrics.cf_p25 = p25;
         normalizedMetrics.cf_p50 = p50;
         normalizedMetrics.cf_p75 = p75;
         normalizedMetrics.cf_p90 = p90;
-      } else if (variable === 'tcc' || variable.includes('total cash compensation')) {
+      } else if (variable === 'tcc' || 
+                 variable.includes('total cash compensation') || 
+                 variable.includes('total compensation') ||
+                 variable.includes('cash compensation') ||
+                 variable.includes('total comp')) {
         // This is total cash compensation
         normalizedMetrics.tcc_p25 = p25;
         normalizedMetrics.tcc_p50 = p50;
@@ -708,6 +714,7 @@ export class AnalyticsDataService {
         normalizedMetrics.tcc_p90 = p90;
       } else if (variable.includes('work rvu') || variable.includes('wrvu')) {
         // This is work RVUs (but NOT if it contains "per" or "conversion")
+        console.log('🔍 Processing wRVU variable:', variable);
         if (!variable.includes('per') && !variable.includes('conversion')) {
           // Additional check: wRVU values are typically much larger than CF values
           // If the values are small (< 1000), they're likely conversion factors
@@ -718,6 +725,7 @@ export class AnalyticsDataService {
             normalizedMetrics.wrvu_p90 = p90;
           } else {
             // Small values in wRVU field are likely conversion factors
+            console.log('✅ Detected CF variable (small wRVU values):', variable);
             normalizedMetrics.cf_p25 = p25;
             normalizedMetrics.cf_p50 = p50;
             normalizedMetrics.cf_p75 = p75;
@@ -725,6 +733,7 @@ export class AnalyticsDataService {
           }
         } else {
           // This is actually a conversion factor disguised as wRVU
+          console.log('✅ Detected CF variable (wRVU with per/conversion):', variable);
           normalizedMetrics.cf_p25 = p25;
           normalizedMetrics.cf_p50 = p50;
           normalizedMetrics.cf_p75 = p75;
@@ -732,28 +741,43 @@ export class AnalyticsDataService {
         }
       } else if (variable.includes('cf') || variable.includes('conversion')) {
         // This is a conversion factor
+        console.log('✅ Detected CF variable:', variable);
         normalizedMetrics.cf_p25 = p25;
         normalizedMetrics.cf_p50 = p50;
         normalizedMetrics.cf_p75 = p75;
         normalizedMetrics.cf_p90 = p90;
-      } else {
       }
     } else {
       // WIDE FORMAT: Data has separate columns for each metric
+      // Debug logging for WIDE format (temporarily enabled for debugging)
+      const hasTccColumns = Object.keys(actualRowData).some(key => 
+        key.toLowerCase().includes('tcc') || 
+        (key.toLowerCase().includes('total') && key.toLowerCase().includes('comp'))
+      );
+      if (hasTccColumns) {
+        console.log('🔍 Processing WIDE format data with TCC columns. Available columns:', Object.keys(actualRowData));
+      }
       
       // Extract TCC metrics with fallback column names
-      normalizedMetrics.tcc_p25 = this.extractNumber(
+      const tcc_p25 = this.extractNumber(
         actualRowData.tcc_p25 || actualRowData['TCC P25'] || actualRowData['tcc_p25'] || actualRowData['TCC_p25']
       );
-      normalizedMetrics.tcc_p50 = this.extractNumber(
+      const tcc_p50 = this.extractNumber(
         actualRowData.tcc_p50 || actualRowData['TCC P50'] || actualRowData['tcc_p50'] || actualRowData['TCC_p50'] || actualRowData['TCC Median']
       );
-      normalizedMetrics.tcc_p75 = this.extractNumber(
+      const tcc_p75 = this.extractNumber(
         actualRowData.tcc_p75 || actualRowData['TCC P75'] || actualRowData['tcc_p75'] || actualRowData['TCC_p75']
       );
-      normalizedMetrics.tcc_p90 = this.extractNumber(
+      const tcc_p90 = this.extractNumber(
         actualRowData.tcc_p90 || actualRowData['TCC P90'] || actualRowData['tcc_p90'] || actualRowData['TCC_p90']
       );
+      
+      console.log('💰 TCC values extracted:', { tcc_p25, tcc_p50, tcc_p75, tcc_p90 });
+      
+      normalizedMetrics.tcc_p25 = tcc_p25;
+      normalizedMetrics.tcc_p50 = tcc_p50;
+      normalizedMetrics.tcc_p75 = tcc_p75;
+      normalizedMetrics.tcc_p90 = tcc_p90;
       
       // Extract wRVU metrics with fallback column names
       normalizedMetrics.wrvu_p25 = this.extractNumber(
@@ -951,13 +975,13 @@ export class AnalyticsDataService {
     const lower = region.toLowerCase();
     
     if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne')) {
-      return 'Northeastern';
+      return 'Northeast';
     } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se')) {
-      return 'Southern';
+      return 'South';
     } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('north central') || lower.includes('nc')) {
-      return 'Midwestern';
+      return 'Midwest';
     } else if (lower.includes('west') || lower.includes('western')) {
-      return 'Western';
+      return 'West';
     } else if (lower.includes('national')) {
       return 'National';
     }

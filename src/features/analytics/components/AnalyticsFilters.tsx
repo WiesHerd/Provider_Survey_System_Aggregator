@@ -38,6 +38,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   availableSpecialties,
   availableSources,
   availableRegions,
+  regionMapping,
   availableProviderTypes,
   availableYears,
   // NEW: Variable selection props
@@ -47,8 +48,14 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
 }) => {
   // Handler for standard filter changes (specialty, region, etc.)
   const handleFilterChange = useCallback((field: keyof typeof filters, value: string) => {
-    onFiltersChange({ ...filters, [field]: value });
-  }, [filters, onFiltersChange]);
+    // For geographic region, convert formatted display value back to original value
+    if (field === 'geographicRegion' && regionMapping && value) {
+      const originalValue = regionMapping.get(value) || value;
+      onFiltersChange({ ...filters, [field]: originalValue });
+    } else {
+      onFiltersChange({ ...filters, [field]: value });
+    }
+  }, [filters, onFiltersChange, regionMapping]);
   
   // Clear all filters
   const clearAllFilters = useCallback(() => {
@@ -137,7 +144,9 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
 
         {/* Geographic Region Filter */}
         <StandardDropdown
-          value={filters.geographicRegion}
+          value={regionMapping && filters.geographicRegion ? 
+            Array.from(regionMapping.entries()).find(([_, original]) => original === filters.geographicRegion)?.[0] || filters.geographicRegion
+            : filters.geographicRegion}
           onChange={(value) => handleFilterChange('geographicRegion', value)}
           options={availableRegions}
           label="Geographic Region"
@@ -225,7 +234,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
                 />
               ))
             }
-            limitTags={3}
+            limitTags={-1}
             disableCloseOnSelect
             noOptionsText="No variables found"
             loadingText="Loading variables..."

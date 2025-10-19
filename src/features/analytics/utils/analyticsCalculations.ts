@@ -288,8 +288,11 @@ export const calculateDynamicSummaryRows = (
   const weighted: Record<string, any> = {};
   
   selectedVariables.forEach(varName => {
-    // Collect all values for this variable
-    const allValues: number[] = [];
+    // Collect all percentile values and weights for this variable
+    const p25Values: number[] = [];
+    const p50Values: number[] = [];
+    const p75Values: number[] = [];
+    const p90Values: number[] = [];
     const allWeights: number[] = [];
     let totalOrgs = 0;
     let totalIncumbents = 0;
@@ -297,38 +300,47 @@ export const calculateDynamicSummaryRows = (
     rows.forEach(row => {
       const metrics = row.variables?.[varName];
       if (metrics && metrics.p50 > 0) {
-        // For simple average: collect all individual values
-        allValues.push(metrics.p50);
+        // Collect all percentile values
+        p25Values.push(metrics.p25 || 0);
+        p50Values.push(metrics.p50 || 0);
+        p75Values.push(metrics.p75 || 0);
+        p90Values.push(metrics.p90 || 0);
         allWeights.push(metrics.n_incumbents || 1);
         totalOrgs += metrics.n_orgs || 0;
         totalIncumbents += metrics.n_incumbents || 0;
       }
     });
     
-    if (allValues.length > 0) {
+    if (p50Values.length > 0) {
       // SIMPLE AVERAGE: Mean of all values (unweighted)
       simple[varName] = {
-        n_orgs: Math.round(totalOrgs / allValues.length),
-        n_incumbents: Math.round(totalIncumbents / allValues.length),
-        p25: allValues.reduce((sum, val) => sum + val, 0) / allValues.length,
-        p50: allValues.reduce((sum, val) => sum + val, 0) / allValues.length,
-        p75: allValues.reduce((sum, val) => sum + val, 0) / allValues.length,
-        p90: allValues.reduce((sum, val) => sum + val, 0) / allValues.length
+        n_orgs: Math.round(totalOrgs / p50Values.length),
+        n_incumbents: Math.round(totalIncumbents / p50Values.length),
+        p25: p25Values.reduce((sum, val) => sum + val, 0) / p25Values.length,
+        p50: p50Values.reduce((sum, val) => sum + val, 0) / p50Values.length,
+        p75: p75Values.reduce((sum, val) => sum + val, 0) / p75Values.length,
+        p90: p90Values.reduce((sum, val) => sum + val, 0) / p90Values.length
       };
       
-      // WEIGHTED AVERAGE: Weighted by number of incumbents
+      // WEIGHTED AVERAGE: Weighted by number of incumbents for each percentile
       const totalWeight = allWeights.reduce((sum, weight) => sum + weight, 0);
       if (totalWeight > 0) {
-        const weightedP50 = allValues.reduce((sum, val, index) => 
+        const weightedP25 = p25Values.reduce((sum, val, index) => 
+          sum + (val * allWeights[index]), 0) / totalWeight;
+        const weightedP50 = p50Values.reduce((sum, val, index) => 
+          sum + (val * allWeights[index]), 0) / totalWeight;
+        const weightedP75 = p75Values.reduce((sum, val, index) => 
+          sum + (val * allWeights[index]), 0) / totalWeight;
+        const weightedP90 = p90Values.reduce((sum, val, index) => 
           sum + (val * allWeights[index]), 0) / totalWeight;
         
         weighted[varName] = {
           n_orgs: totalOrgs,
           n_incumbents: totalIncumbents,
-          p25: weightedP50, // Use weighted average for all percentiles
+          p25: weightedP25,
           p50: weightedP50,
-          p75: weightedP50,
-          p90: weightedP50
+          p75: weightedP75,
+          p90: weightedP90
         };
       } else {
         weighted[varName] = simple[varName];

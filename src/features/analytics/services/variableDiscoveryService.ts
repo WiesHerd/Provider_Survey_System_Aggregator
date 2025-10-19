@@ -54,6 +54,7 @@ export class VariableDiscoveryService {
     
     try {
       const surveys = await this.dataService.getAllSurveys();
+      console.log('🔍 VariableDiscoveryService: Found', surveys.length, 'surveys');
       const variableMap = new Map<string, DiscoveredVariable>();
       
       // Process surveys in parallel for better performance

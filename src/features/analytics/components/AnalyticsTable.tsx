@@ -31,6 +31,29 @@ import { AnalysisProgressBar, ModernPagination } from '../../../shared/component
 import { EmptyState } from '../../mapping/components/shared/EmptyState';
 import { BoltIcon } from '@heroicons/react/24/outline';
 
+/**
+ * Format region name for display in proper case
+ */
+const formatRegionForDisplay = (region: string): string => {
+  if (!region) return 'Unknown';
+  
+  const lower = region.toLowerCase();
+  
+  if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne')) {
+    return 'Northeast';
+  } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se')) {
+    return 'South';
+  } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('north central') || lower.includes('nc')) {
+    return 'Midwest';
+  } else if (lower.includes('west') || lower.includes('western')) {
+    return 'West';
+  } else if (lower.includes('national')) {
+    return 'National';
+  }
+  
+  // Default: capitalize first letter
+  return region.charAt(0).toUpperCase() + region.slice(1).toLowerCase();
+};
 
 /**
  * AnalyticsTable component for displaying analytics data
@@ -174,14 +197,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       </div>
 
       {/* Table with horizontal scrolling */}
-      <div className="rounded-lg border border-gray-200 overflow-x-auto">
+      <div className="overflow-x-auto">
         <TableContainer 
           component={Paper} 
           sx={{ 
             maxHeight: '600px',
             overflow: 'auto',
+            borderRadius: '12px', // Add rounded corners to container
+            border: '1px solid #e5e7eb', // Add border to the container
             '& .MuiTable-root': {
-              minWidth: '1200px' // Ensure table has minimum width for all columns
+              minWidth: '1200px', // Ensure table has minimum width for all columns
+              borderRadius: '12px', // Add rounded corners to table
+              overflow: 'hidden' // Ensure content respects rounded corners
             }
           }}
         >
@@ -352,7 +379,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                       backgroundColor: 'white',
                       borderRight: '1px solid #e0e0e0',
                       zIndex: 1
-                    }}>{row.geographicRegion}</TableCell>
+                    }}>{formatRegionForDisplay(row.geographicRegion)}</TableCell>
                     
                     {/* DYNAMIC: Render data for selected variables */}
                     {isDynamicData && selectedVariables.map((varName, varIndex) => {

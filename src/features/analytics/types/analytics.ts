@@ -144,6 +144,7 @@ export interface AnalyticsFiltersProps {
   availableSpecialties: string[];
   availableSources: string[];
   availableRegions: string[];
+  regionMapping?: Map<string, string>;
   availableProviderTypes: string[];
   availableYears: string[];
   // NEW: Variable selection props

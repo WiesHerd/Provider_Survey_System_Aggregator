@@ -164,7 +164,35 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     // Generate options from the cascading-filtered dataset
     const availableSpecialties = [...new Set(cascadingData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
     const availableSources = [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
-    const availableRegions = [...new Set(cascadingData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
+    
+    // Get unique regions and create formatted display options
+    const uniqueRegions = [...new Set(cascadingData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
+    
+    // Create region mapping for display vs. actual values
+    const regionMapping = new Map<string, string>();
+    const availableRegions = uniqueRegions.map(region => {
+      const lower = region.toLowerCase();
+      let formattedRegion: string;
+      
+      if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne')) {
+        formattedRegion = 'Northeast';
+      } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se')) {
+        formattedRegion = 'South';
+      } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('north central') || lower.includes('nc')) {
+        formattedRegion = 'Midwest';
+      } else if (lower.includes('west') || lower.includes('western')) {
+        formattedRegion = 'West';
+      } else if (lower.includes('national')) {
+        formattedRegion = 'National';
+      } else {
+        formattedRegion = region.charAt(0).toUpperCase() + region.slice(1).toLowerCase();
+      }
+      
+      // Map formatted display name to original region value
+      regionMapping.set(formattedRegion, region);
+      return formattedRegion;
+    });
+    
     const availableProviderTypes = [...new Set(cascadingData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
     const availableYears = [...new Set(cascadingData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
 
@@ -173,6 +201,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       specialties: availableSpecialties,
       sources: availableSources,
       regions: availableRegions,
+      regionMapping: regionMapping,
       providerTypes: availableProviderTypes,
       years: availableYears
     };
@@ -188,6 +217,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
           availableSpecialties={filterOptions.specialties}
           availableSources={filterOptions.sources}
           availableRegions={filterOptions.regions}
+          regionMapping={filterOptions.regionMapping}
           availableProviderTypes={filterOptions.providerTypes}
           availableYears={filterOptions.years}
           selectedVariables={selectedVariables}
