@@ -5,6 +5,8 @@
  * Following enterprise patterns for type safety and maintainability.
  */
 
+import { DynamicAggregatedData } from './variables';
+
 /**
  * Variable mapping interface for analytics data
  */
@@ -122,11 +124,13 @@ export interface SummaryCalculation {
  * Analytics component props
  */
 export interface AnalyticsTableProps {
-  data: AggregatedData[];
+  data: AggregatedData[] | DynamicAggregatedData[]; // Support both old and new data formats
   loading: boolean;
   loadingProgress?: number;
   error: string | null;
   onExport: () => void;
+  // NEW: Dynamic variable support
+  selectedVariables?: string[]; // For dynamic table generation
 }
 
 export interface AnalyticsSummaryProps {
@@ -142,6 +146,10 @@ export interface AnalyticsFiltersProps {
   availableRegions: string[];
   availableProviderTypes: string[];
   availableYears: string[];
+  // NEW: Variable selection props
+  selectedVariables: string[];
+  availableVariables: string[];
+  onVariablesChange: (variables: string[]) => void;
 }
 
 

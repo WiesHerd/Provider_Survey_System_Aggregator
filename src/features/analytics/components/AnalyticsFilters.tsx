@@ -6,9 +6,20 @@
  */
 
 import React, { memo, useCallback } from 'react';
+import { 
+  FormControl,
+  Autocomplete,
+  TextField,
+  Chip
+} from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { StandardDropdown } from '../../../shared/components';
+import { 
+  formatVariableDisplayName, 
+  getVariableColor,
+  validateVariableSelection 
+} from '../utils/variableFormatters';
 
 /**
  * AnalyticsFilters component for filtering analytics data
@@ -28,7 +39,11 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   availableSources,
   availableRegions,
   availableProviderTypes,
-  availableYears
+  availableYears,
+  // NEW: Variable selection props
+  selectedVariables,
+  availableVariables,
+  onVariablesChange
 }) => {
   // Handler for standard filter changes (specialty, region, etc.)
   const handleFilterChange = useCallback((field: keyof typeof filters, value: string) => {
@@ -45,6 +60,15 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
       year: ''
     });
   }, [onFiltersChange]);
+  
+  // NEW: Variable selection handler
+  const handleVariableChange = useCallback((event: any, newValue: string[]) => {
+    // Validate selection (max 5 variables)
+    const validation = validateVariableSelection(newValue);
+    if (validation.isValid) {
+      onVariablesChange(newValue);
+    }
+  }, [onVariablesChange]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -134,6 +158,80 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         />
       </div>
 
+      {/* NEW ROW: Variable Selection (Multi-select) */}
+      <div className="border-t border-gray-200 pt-4">
+        <FormControl fullWidth size="small">
+          <Autocomplete
+            multiple
+            value={selectedVariables}
+            onChange={handleVariableChange}
+            options={availableVariables}
+            getOptionLabel={(option: string) => formatVariableDisplayName(option)}
+            renderInput={(params: any) => (
+              <TextField
+                {...params}
+                label="Display Variables (Select 1-5)"
+                placeholder="Choose variables to display..."
+                size="small"
+                helperText={`${selectedVariables.length}/5 selected`}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    height: '40px',
+                    border: '1px solid #d1d5db !important',
+                    '&:hover': { 
+                      borderColor: '#9ca3af !important',
+                      borderWidth: '1px !important'
+                    },
+                    '&.Mui-focused': { 
+                      boxShadow: 'none', 
+                      borderColor: '#3b82f6 !important',
+                      borderWidth: '1px !important'
+                    },
+                    '& fieldset': {
+                      border: 'none !important'
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                    '&.MuiInputLabel-shrink': {
+                      transform: 'translate(14px, -9px) scale(0.75)',
+                      backgroundColor: 'white',
+                      padding: '0 6px',
+                      zIndex: 1,
+                    }
+                  }
+                }}
+              />
+            )}
+            renderTags={(value: string[], getTagProps: any) =>
+              value.map((option: string, index: number) => (
+                <Chip
+                  key={option}
+                  label={formatVariableDisplayName(option)}
+                  {...getTagProps({ index })}
+                  size="small"
+                  sx={{
+                    backgroundColor: getVariableColor(option, index),
+                    color: 'white',
+                    fontWeight: 500,
+                    '& .MuiChip-deleteIcon': {
+                      color: 'white'
+                    }
+                  }}
+                />
+              ))
+            }
+            limitTags={3}
+            disableCloseOnSelect
+            noOptionsText="No variables found"
+            loadingText="Loading variables..."
+          />
+        </FormControl>
+      </div>
 
     </div>
   );

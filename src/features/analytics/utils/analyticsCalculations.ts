@@ -272,3 +272,73 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   
   return filteredData;
 };
+
+/**
+ * Calculate summary rows for dynamic variables
+ * NEW: Handles DynamicAggregatedData with selected variables
+ */
+export const calculateDynamicSummaryRows = (
+  rows: any[], // DynamicAggregatedData[]
+  selectedVariables: string[]
+): {
+  simple: Record<string, any>;
+  weighted: Record<string, any>;
+} => {
+  const simple: Record<string, any> = {};
+  const weighted: Record<string, any> = {};
+  
+  selectedVariables.forEach(varName => {
+    // Collect all values for this variable
+    const values: number[] = [];
+    const weights: number[] = [];
+    let totalOrgs = 0;
+    let totalIncumbents = 0;
+    
+    rows.forEach(row => {
+      const metrics = row.variables?.[varName];
+      if (metrics && metrics.p50 > 0) {
+        values.push(metrics.p50);
+        weights.push(metrics.n_incumbents || 1);
+        totalOrgs += metrics.n_orgs || 0;
+        totalIncumbents += metrics.n_incumbents || 0;
+      }
+    });
+    
+    if (values.length > 0) {
+      // Simple average (unweighted)
+      const simpleAvg = values.reduce((sum, val) => sum + val, 0) / values.length;
+      simple[varName] = {
+        n_orgs: totalOrgs,
+        n_incumbents: totalIncumbents,
+        p25: calculatePercentile(values, 25),
+        p50: calculatePercentile(values, 50),
+        p75: calculatePercentile(values, 75),
+        p90: calculatePercentile(values, 90)
+      };
+      
+      // Weighted average (by incumbents)
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      if (totalWeight > 0) {
+        const weightedAvg = values.reduce((sum, val, index) => 
+          sum + (val * weights[index]), 0) / totalWeight;
+        
+        weighted[varName] = {
+          n_orgs: totalOrgs,
+          n_incumbents: totalIncumbents,
+          p25: calculatePercentile(values, 25),
+          p50: calculatePercentile(values, 50),
+          p75: calculatePercentile(values, 75),
+          p90: calculatePercentile(values, 90)
+        };
+      } else {
+        weighted[varName] = simple[varName];
+      }
+    } else {
+      // No data available
+      simple[varName] = null;
+      weighted[varName] = null;
+    }
+  });
+  
+  return { simple, weighted };
+};

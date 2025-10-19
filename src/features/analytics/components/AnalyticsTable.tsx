@@ -18,8 +18,15 @@ import {
 } from '@mui/material';
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
-import { groupBySpecialty, calculateSummaryRows } from '../utils/analyticsCalculations';
+import { groupBySpecialty, calculateSummaryRows, calculateDynamicSummaryRows } from '../utils/analyticsCalculations';
 import { formatCurrency, formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { 
+  formatVariableDisplayName, 
+  formatVariableValue, 
+  getVariableColor,
+  getVariableLightBackgroundColor 
+} from '../utils/variableFormatters';
+import { DynamicAggregatedData } from '../types/variables';
 import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
 import { EmptyState } from '../../mapping/components/shared/EmptyState';
 import { BoltIcon } from '@heroicons/react/24/outline';
@@ -38,14 +45,53 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   loading,
   loadingProgress,
   error,
-  onExport
+  onExport,
+  selectedVariables = [] // Default to empty array for backward compatibility
 }) => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   
+  // Detect if we're using dynamic data format
+  const isDynamicData = useMemo(() => {
+    return data.length > 0 && 'variables' in data[0];
+  }, [data]);
+  
+  // Generate column groups for dynamic variables
+  const columnGroups = useMemo(() => {
+    if (!isDynamicData || selectedVariables.length === 0) {
+      return [];
+    }
+    
+    return selectedVariables.map((varName, index) => ({
+      normalizedName: varName,
+      displayName: formatVariableDisplayName(varName),
+      color: getVariableColor(varName, index),
+      category: varName.includes('per') ? 'ratio' : 
+                varName.includes('salary') || varName.includes('tcc') ? 'compensation' :
+                varName.includes('rvu') || varName.includes('units') ? 'productivity' : 'other'
+    }));
+  }, [isDynamicData, selectedVariables]);
+  
   // Memoize grouped data to avoid recalculation
-  const groupedData = useMemo(() => groupBySpecialty(data), [data]);
+  const groupedData = useMemo(() => {
+    if (isDynamicData) {
+      // For dynamic data, create a simple grouping by specialty
+      const dynamicData = data as DynamicAggregatedData[];
+      const grouped: Record<string, DynamicAggregatedData[]> = {};
+      
+      dynamicData.forEach(row => {
+        const key = row.surveySpecialty || row.standardizedName || 'Unknown';
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(row);
+      });
+      
+      return grouped;
+    }
+    return groupBySpecialty(data as any[]);
+  }, [data, isDynamicData]);
   
   // Pagination calculations
   const totalSpecialties = Object.keys(groupedData).length;
@@ -156,7 +202,25 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                  Survey Data
                </TableCell>
               
-              {/* TCC Section Header */}
+              {/* DYNAMIC: Generate headers for selected variables */}
+              {isDynamicData && columnGroups.map((group, index) => (
+                <TableCell 
+                  key={group.normalizedName}
+                  sx={{
+                    fontWeight: 'bold',
+                    backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                    textAlign: 'center',
+                    borderRight: '1px solid #E0E0E0'
+                  }}
+                  colSpan={6}
+                >
+                  {group.displayName}
+                </TableCell>
+              ))}
+              
+              {/* FALLBACK: Original hardcoded headers for backward compatibility */}
+              {!isDynamicData && (
+                <>
               <TableCell sx={{ 
                 fontWeight: 'bold', 
                 backgroundColor: '#E3F2FD', 
@@ -167,7 +231,6 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                 Total Cash Compensation
               </TableCell>
               
-              {/* wRVU Section Header */}
               <TableCell sx={{ 
                 fontWeight: 'bold', 
                 backgroundColor: '#E8F5E8', 
@@ -178,7 +241,6 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                 Productivity - wRVUs
               </TableCell>
               
-              {/* CF Section Header */}
               <TableCell sx={{ 
                 fontWeight: 'bold',
                 backgroundColor: '#FFF3E0', 
@@ -187,6 +249,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               }} colSpan={6}>
                 Conversion Factors
                 </TableCell>
+                </>
+              )}
             </TableRow>
             
              {/* Sub-header row with column names */}
@@ -218,6 +282,21 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                  borderRight: '1px solid #E0E0E0'
                }}>Region</TableCell>
                
+               {/* DYNAMIC: Generate sub-headers for selected variables */}
+               {isDynamicData && columnGroups.map((group, index) => (
+                 <React.Fragment key={group.normalizedName}>
+                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right"># Orgs</TableCell>
+                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right"># Inc</TableCell>
+                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right">P25</TableCell>
+                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right">P50</TableCell>
+                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right">P75</TableCell>
+                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index), borderRight: '1px solid #E0E0E0' }} align="right">P90</TableCell>
+                 </React.Fragment>
+               ))}
+               
+               {/* FALLBACK: Original hardcoded sub-headers for backward compatibility */}
+               {!isDynamicData && (
+                 <>
                {/* TCC Sub-headers */}
                <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Orgs</TableCell>
                <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Incumbents</TableCell>
@@ -241,6 +320,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P50</TableCell>
                <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P75</TableCell>
                <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P90</TableCell>
+                 </>
+               )}
              </TableRow>
           </TableHead>
           <TableBody>
@@ -273,35 +354,203 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                       zIndex: 1
                     }}>{row.geographicRegion}</TableCell>
                     
-                    {/* TCC Section */}
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{row.tcc_n_orgs.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{row.tcc_n_incumbents.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(row.tcc_p25, 2)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(row.tcc_p50, 2)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(row.tcc_p75, 2)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">{formatCurrency(row.tcc_p90, 2)}</TableCell>
+                    {/* DYNAMIC: Render data for selected variables */}
+                    {isDynamicData && selectedVariables.map((varName, varIndex) => {
+                      const dynamicRow = row as unknown as DynamicAggregatedData;
+                      const metrics = dynamicRow.variables?.[varName];
+                      const lightColor = getVariableLightBackgroundColor(varName, varIndex);
+                      
+                      return metrics ? (
+                        <React.Fragment key={varName}>
+                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_orgs.toLocaleString()}</TableCell>
+                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_incumbents.toLocaleString()}</TableCell>
+                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p25, varName)}</TableCell>
+                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p50, varName)}</TableCell>
+                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p75, varName)}</TableCell>
+                          <TableCell sx={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0' }} align="right">{formatVariableValue(metrics.p90, varName)}</TableCell>
+                        </React.Fragment>
+                      ) : (
+                        // Handle missing data gracefully
+                        <React.Fragment key={varName}>
+                          <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                            N/A
+                          </TableCell>
+                        </React.Fragment>
+                      );
+                    })}
+                    
+                    {/* FALLBACK: Original hardcoded sections for backward compatibility */}
+                    {!isDynamicData && (() => {
+                      const legacyRow = row as any; // Cast to any for legacy data
+                      return (
+                        <>
+                          {/* TCC Section */}
+                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{legacyRow.tcc_n_orgs?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{legacyRow.tcc_n_incumbents?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(legacyRow.tcc_p25 || 0, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(legacyRow.tcc_p50 || 0, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(legacyRow.tcc_p75 || 0, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">{formatCurrency(legacyRow.tcc_p90 || 0, 2)}</TableCell>
                     
                     {/* wRVU Section */}
-                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_n_orgs.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_n_incumbents.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_p25.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_p50.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{row.wrvu_p75.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }} align="right">{row.wrvu_p90.toLocaleString()}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_n_orgs?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_n_incumbents?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_p25?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_p50?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_p75?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }} align="right">{legacyRow.wrvu_p90?.toLocaleString() || '0'}</TableCell>
                     
                     {/* CF Section */}
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{row.cf_n_orgs.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{row.cf_n_incumbents.toLocaleString()}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p25, 2)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p50, 2)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p75, 2)}</TableCell>
-                    <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(row.cf_p90, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{legacyRow.cf_n_orgs?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{legacyRow.cf_n_incumbents?.toLocaleString() || '0'}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p25 || 0, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p50 || 0, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p75 || 0, 2)}</TableCell>
+                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p90 || 0, 2)}</TableCell>
+                        </>
+                      );
+                    })()}
                   </TableRow>
                 ))}
 
                 {/* Summary Rows - Memoized for performance */}
                 {(() => {
-                  const { simple, weighted } = calculateSummaryRows(rows);
+                  if (isDynamicData) {
+                    // For dynamic data, calculate summary rows for selected variables
+                    const dynamicRows = rows as DynamicAggregatedData[];
+                    const summaryData = calculateDynamicSummaryRows(dynamicRows, selectedVariables);
+                    return (
+                      <>
+                        {/* Simple Average Row */}
+                        <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                          <TableCell sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            left: 0,
+                            backgroundColor: 'grey.50',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1
+                          }}>
+                            {formatSpecialtyForDisplay(specialty)} - Simple Average
+                          </TableCell>
+                          <TableCell sx={{ 
+                            position: 'sticky',
+                            left: '140px',
+                            backgroundColor: 'grey.50',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1
+                          }}></TableCell>
+                          <TableCell sx={{ 
+                            position: 'sticky',
+                            left: '320px',
+                            backgroundColor: 'grey.50',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1
+                          }}></TableCell>
+                          
+                          {/* Dynamic variable summary data */}
+                          {selectedVariables.map((varName, varIndex) => {
+                            const summary = summaryData.simple[varName];
+                            const lightColor = getVariableLightBackgroundColor(varName, varIndex);
+                            
+                            return summary ? (
+                              <React.Fragment key={varName}>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {summary.n_orgs.toLocaleString()}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {summary.n_incumbents.toLocaleString()}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {formatVariableValue(summary.p25, varName)}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {formatVariableValue(summary.p50, varName)}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {formatVariableValue(summary.p75, varName)}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0' }} align="right">
+                                  {formatVariableValue(summary.p90, varName)}
+                                </TableCell>
+                              </React.Fragment>
+                            ) : (
+                              <React.Fragment key={varName}>
+                                <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                                  N/A
+                                </TableCell>
+                              </React.Fragment>
+                            );
+                          })}
+                        </TableRow>
+                        
+                        {/* Weighted Average Row */}
+                        <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                          <TableCell sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            left: 0,
+                            backgroundColor: 'grey.100',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1
+                          }}>
+                            {formatSpecialtyForDisplay(specialty)} - Weighted Average
+                          </TableCell>
+                          <TableCell sx={{ 
+                            position: 'sticky',
+                            left: '140px',
+                            backgroundColor: 'grey.100',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1
+                          }}></TableCell>
+                          <TableCell sx={{ 
+                            position: 'sticky',
+                            left: '320px',
+                            backgroundColor: 'grey.100',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1
+                          }}></TableCell>
+                          
+                          {/* Dynamic variable weighted summary data */}
+                          {selectedVariables.map((varName, varIndex) => {
+                            const summary = summaryData.weighted[varName];
+                            const lightColor = getVariableLightBackgroundColor(varName, varIndex);
+                            
+                            return summary ? (
+                              <React.Fragment key={varName}>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {summary.n_orgs.toLocaleString()}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {summary.n_incumbents.toLocaleString()}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {formatVariableValue(summary.p25, varName)}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {formatVariableValue(summary.p50, varName)}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                  {formatVariableValue(summary.p75, varName)}
+                                </TableCell>
+                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0' }} align="right">
+                                  {formatVariableValue(summary.p90, varName)}
+                                </TableCell>
+                              </React.Fragment>
+                            ) : (
+                              <React.Fragment key={varName}>
+                                <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                                  N/A
+                                </TableCell>
+                              </React.Fragment>
+                            );
+                          })}
+                        </TableRow>
+                      </>
+                    );
+                  }
+                  
+                  const { simple, weighted } = calculateSummaryRows(rows as any[]);
                   return (
                     <>
                       <TableRow sx={{ backgroundColor: 'grey.50' }}>

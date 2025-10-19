@@ -7,6 +7,12 @@ import { getDataService } from '../../../services/DataService';
 import { ISpecialtyMapping } from '../../../types/specialty';
 import { IColumnMapping } from '../../../types/column';
 import { AggregatedData, AnalyticsFilters } from '../types/analytics';
+import { 
+  DynamicAggregatedData, 
+  DynamicNormalizedRow, 
+  VariableMetrics 
+} from '../types/variables';
+import { normalizeVariableName } from '../utils/variableFormatters';
 
 export interface RawSurveyRow {
   [key: string]: any;
@@ -394,6 +400,107 @@ export class AnalyticsDataService {
       return aggregatedData;
       
     } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get analytics data for selected variables (DYNAMIC)
+   * NEW METHOD: Fetch data for any combination of variables
+   */
+  async getAnalyticsDataByVariables(
+    filters: AnalyticsFilters,
+    selectedVariables: string[] // e.g., ["tcc", "base_salary", "work_rvus"]
+  ): Promise<DynamicAggregatedData[]> {
+    try {
+      console.log('🔍 AnalyticsDataService: Fetching data for variables:', selectedVariables);
+      
+      // Get all surveys and cached mappings
+      const [surveys, { 
+        specialtyMappings, 
+        columnMappings,
+        learnedSpecialtyMappings,
+        learnedColumnMappings,
+        learnedRegionMappings,
+        learnedVariableMappings,
+        learnedProviderTypeMappings
+      }] = await Promise.all([
+        this.dataService.getAllSurveys(),
+        this.getCachedMappings()
+      ]);
+      
+      if (surveys.length === 0) {
+        return [];
+      }
+      
+      // Process surveys in parallel for better performance
+      const allNormalizedRows: DynamicNormalizedRow[] = [];
+      
+      // Limit concurrent surveys to avoid overwhelming IndexedDB
+      const maxConcurrent = Math.min(3, surveys.length);
+      const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
+        try {
+          // Get survey data with pagination to limit memory usage
+          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
+          
+          if (surveyData.rows.length === 0) {
+            return [];
+          }
+          
+          // Normalize rows dynamically based on selected variables
+          const normalizedRows: DynamicNormalizedRow[] = [];
+          const batchSize = 50;
+          
+          for (let i = 0; i < surveyData.rows.length; i += batchSize) {
+            const batch = surveyData.rows.slice(i, i + batchSize);
+            const batchNormalized = batch.map(row => 
+              this.normalizeRowDynamic(row, survey, selectedVariables, {
+                specialtyMappings,
+                columnMappings,
+                learnedSpecialtyMappings,
+                learnedColumnMappings,
+                learnedRegionMappings,
+                learnedVariableMappings,
+                learnedProviderTypeMappings
+              })
+            );
+            normalizedRows.push(...batchNormalized);
+            
+            // Yield control to allow UI updates
+            if (i + batchSize < surveyData.rows.length) {
+              await new Promise(resolve => setTimeout(resolve, 0));
+            }
+          }
+          
+          return normalizedRows;
+          
+        } catch (error) {
+          console.warn(`⚠️ AnalyticsDataService: Failed to process survey ${survey.id}:`, error);
+          return [];
+        }
+      });
+      
+      // Wait for all surveys to complete
+      const surveyResults = await Promise.all(surveyPromises);
+      
+      // Flatten results
+      surveyResults.forEach(normalizedRows => {
+        allNormalizedRows.push(...normalizedRows);
+      });
+      
+      if (allNormalizedRows.length === 0) {
+        return [];
+      }
+      
+      // Aggregate the normalized data dynamically
+      const aggregatedData = await this.aggregateByVariables(allNormalizedRows);
+      
+      console.log(`✅ AnalyticsDataService: Aggregated ${aggregatedData.length} records for ${selectedVariables.length} variables`);
+      
+      return aggregatedData;
+      
+    } catch (error) {
+      console.error('❌ AnalyticsDataService: Error fetching dynamic data:', error);
       throw error;
     }
   }
@@ -998,6 +1105,220 @@ export class AnalyticsDataService {
     
     
     return aggregatedRecord;
+  }
+
+  /**
+   * NEW: Dynamic row normalization for any variables
+   */
+  private normalizeRowDynamic(
+    row: any,
+    survey: any,
+    selectedVariables: string[],
+    mappings: {
+      specialtyMappings: any[];
+      columnMappings: any[];
+      learnedSpecialtyMappings: Record<string, string>;
+      learnedColumnMappings: Record<string, string>;
+      learnedRegionMappings: Record<string, string>;
+      learnedVariableMappings: Record<string, string>;
+      learnedProviderTypeMappings: Record<string, string>;
+    }
+  ): DynamicNormalizedRow {
+    const actualRowData = row.data || row;
+    const variables: Record<string, VariableMetrics> = {};
+    
+    // Extract specialty, provider type, region (same as existing logic)
+    const rawSpecialty = actualRowData.specialty || actualRowData.Specialty || 
+                        actualRowData.normalizedSpecialty || actualRowData['Provider Type'] ||
+                        row.specialty || 'Unknown';
+    
+    const normalizedSpecialty = this.normalizeSpecialty(
+      rawSpecialty,
+      mappings.specialtyMappings,
+      survey.type,
+      mappings.learnedSpecialtyMappings
+    );
+    
+    const rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
+                           actualRowData.provider_type || row.providerType || 'Physician';
+    
+    const normalizedProviderType = this.normalizeProviderType(rawProviderType, mappings.learnedProviderTypeMappings);
+    
+    const rawRegion = actualRowData.geographicRegion || actualRowData.region || 
+                     actualRowData.Region || actualRowData.geographic_region ||
+                     row.region || 'National';
+    
+    const normalizedRegion = this.normalizeRegion(rawRegion, mappings.learnedRegionMappings);
+    
+    // Extract organizational data
+    const extractOrgNumber = (value: any): number => {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const parsed = parseInt(value.replace(/[,$]/g, ''));
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+    
+    const n_orgs = extractOrgNumber(
+      actualRowData.n_orgs || actualRowData.N_orgs || actualRowData.n_org || actualRowData.N_org || 
+      actualRowData['# Orgs'] || actualRowData['# Organizations'] || actualRowData['Number of Organizations'] ||
+      actualRowData['N Orgs'] || actualRowData['N Organizations'] || 
+      row.n_orgs || 0
+    );
+    
+    const n_incumbents = extractOrgNumber(
+      actualRowData.n_incumbents || actualRowData.N_incumbents || actualRowData.n_incumbent || actualRowData.N_incumbent ||
+      actualRowData['# Incumbents'] || actualRowData['Number of Incumbents'] || actualRowData['Incumbents'] ||
+      actualRowData['N Incumbents'] || actualRowData['N Incumbent'] ||
+      row.n_incumbents || 0
+    );
+    
+    // Handle both LONG format (variable field) and WIDE format (separate columns)
+    const hasVariableField = actualRowData.variable !== undefined;
+    
+    if (hasVariableField) {
+      // LONG FORMAT: Data has a 'variable' field
+      const variable = String(actualRowData.variable).toLowerCase();
+      const normalizedVarName = normalizeVariableName(actualRowData.variable);
+      
+      if (selectedVariables.includes(normalizedVarName)) {
+        variables[normalizedVarName] = {
+          variableName: actualRowData.variable,
+          n_orgs,
+          n_incumbents,
+          p25: this.extractNumber(actualRowData.p25),
+          p50: this.extractNumber(actualRowData.p50),
+          p75: this.extractNumber(actualRowData.p75),
+          p90: this.extractNumber(actualRowData.p90)
+        };
+      }
+    } else {
+      // WIDE FORMAT: Data has separate columns for each variable
+      selectedVariables.forEach(varName => {
+        const p50Value = this.extractNumber(actualRowData[`${varName}_p50`]);
+        if (p50Value > 0) {
+          variables[varName] = {
+            variableName: this.formatVariableDisplayName(varName),
+            n_orgs,
+            n_incumbents,
+            p25: this.extractNumber(actualRowData[`${varName}_p25`]),
+            p50: p50Value,
+            p75: this.extractNumber(actualRowData[`${varName}_p75`]),
+            p90: this.extractNumber(actualRowData[`${varName}_p90`])
+          };
+        }
+      });
+    }
+    
+    return {
+      specialty: normalizedSpecialty,
+      providerType: normalizedProviderType,
+      region: normalizedRegion,
+      surveySource: survey.type || survey.name || 'Unknown',
+      surveyYear: survey.year?.toString() || 'Unknown',
+      variables
+    };
+  }
+  
+  /**
+   * NEW: Aggregate normalized rows by variables
+   */
+  private async aggregateByVariables(
+    normalizedRows: DynamicNormalizedRow[]
+  ): Promise<DynamicAggregatedData[]> {
+    // Group rows by specialty, provider type, region, and survey source
+    const groupedData = new Map<string, DynamicNormalizedRow[]>();
+    
+    normalizedRows.forEach(row => {
+      const key = `${row.specialty}_${row.providerType}_${row.region}_${row.surveySource}`;
+      
+      if (!groupedData.has(key)) {
+        groupedData.set(key, []);
+      }
+      
+      groupedData.get(key)!.push(row);
+    });
+    
+    // Convert grouped data to aggregated format
+    const aggregatedData: DynamicAggregatedData[] = [];
+    
+    for (const [key, rows] of groupedData) {
+      if (rows.length === 0) continue;
+      
+      const firstRow = rows[0];
+      
+      // Extract original specialty name from raw data
+      const originalSpecialty = firstRow.specialty || 'Unknown';
+      
+      // Initialize aggregated record
+      const aggregatedRecord: DynamicAggregatedData = {
+        standardizedName: firstRow.specialty,
+        surveySource: firstRow.surveySource,
+        surveySpecialty: firstRow.specialty,
+        originalSpecialty: originalSpecialty,
+        geographicRegion: firstRow.region,
+        providerType: firstRow.providerType,
+        surveyYear: firstRow.surveyYear,
+        variables: {}
+      };
+      
+      // Aggregate variables from all rows
+      const variableMap = new Map<string, VariableMetrics[]>();
+      
+      rows.forEach(row => {
+        Object.entries(row.variables).forEach(([varName, metrics]) => {
+          if (!variableMap.has(varName)) {
+            variableMap.set(varName, []);
+          }
+          variableMap.get(varName)!.push(metrics);
+        });
+      });
+      
+      // Create aggregated metrics for each variable
+      variableMap.forEach((metricsList, varName) => {
+        if (metricsList.length > 0) {
+          // Use the first metrics as base (they should all be the same for same variable)
+          const baseMetrics = metricsList[0];
+          aggregatedRecord.variables[varName] = {
+            variableName: baseMetrics.variableName,
+            n_orgs: baseMetrics.n_orgs,
+            n_incumbents: baseMetrics.n_incumbents,
+            p25: baseMetrics.p25,
+            p50: baseMetrics.p50,
+            p75: baseMetrics.p75,
+            p90: baseMetrics.p90
+          };
+        }
+      });
+      
+      aggregatedData.push(aggregatedRecord);
+    }
+    
+    return aggregatedData;
+  }
+  
+  /**
+   * Format variable display name (helper method)
+   */
+  private formatVariableDisplayName(normalizedName: string): string {
+    const displayMap: Record<string, string> = {
+      'tcc': 'TCC',
+      'work_rvus': 'Work RVUs',
+      'work_rvu': 'Work RVUs',
+      'wrvu': 'Work RVUs',
+      'tcc_per_work_rvu': 'TCC per Work RVU',
+      'cf': 'Conversion Factor',
+      'base_salary': 'Base Salary',
+      'asa_units': 'ASA Units',
+      'panel_size': 'Panel Size',
+      'total_encounters': 'Total Encounters'
+    };
+    
+    return displayMap[normalizedName] || normalizedName
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
   /**

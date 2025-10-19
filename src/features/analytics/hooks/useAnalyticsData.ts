@@ -18,15 +18,18 @@ import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
  * @param initialFilters - Initial filter values
  * @returns Object containing data, loading state, error, and actions
  */
-const useAnalyticsData = (initialFilters: AnalyticsFilters = {
-  specialty: '',
-  surveySource: '',
-  geographicRegion: '',
-  providerType: '',
-  year: ''
-}): UseAnalyticsReturn => {
+const useAnalyticsData = (
+  initialFilters: AnalyticsFilters = {
+    specialty: '',
+    surveySource: '',
+    geographicRegion: '',
+    providerType: '',
+    year: ''
+  },
+  selectedVariables: string[] = [] // NEW: Support for dynamic variables
+): UseAnalyticsReturn => {
   // State declarations
-  const [data, setData] = useState<AggregatedData[]>([]);
+  const [data, setData] = useState<any[]>([]); // Support both AggregatedData and DynamicAggregatedData
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<AnalyticsFilters>(initialFilters);
@@ -56,13 +59,22 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       // Clear cache to force recalculation with fixed percentile logic and provider type normalization
       analyticsDataService.clearCache();
       
-      const allData = await analyticsDataService.getAnalyticsData({
-        specialty: '',
-        surveySource: '',
-        geographicRegion: '',
-        providerType: '',
-        year: ''
-      });
+      // NEW: Use dynamic data fetching if variables are selected
+      const allData = selectedVariables.length > 0 
+        ? await analyticsDataService.getAnalyticsDataByVariables({
+            specialty: '',
+            surveySource: '',
+            geographicRegion: '',
+            providerType: '',
+            year: ''
+          }, selectedVariables)
+        : await analyticsDataService.getAnalyticsData({
+            specialty: '',
+            surveySource: '',
+            geographicRegion: '',
+            providerType: '',
+            year: ''
+          });
       
       // Also fetch mappings for filter options
       const dataService = getDataService();
@@ -86,7 +98,7 @@ const useAnalyticsData = (initialFilters: AnalyticsFilters = {
       setLoading(false);
       resetProgress();
     }
-  }, []); // Remove filters dependency - fetch all data once
+  }, [selectedVariables]); // Re-fetch when selected variables change
 
   // Export functions
   const exportToExcel = useCallback(() => {

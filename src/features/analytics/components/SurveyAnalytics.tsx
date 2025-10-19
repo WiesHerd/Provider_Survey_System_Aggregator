@@ -5,13 +5,15 @@
  * Following enterprise patterns for component composition and separation of concerns.
  */
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState, useEffect } from 'react';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { AnalyticsTable } from './AnalyticsTable';
 import { AnalyticsFilters } from './AnalyticsFilters';
 import { useYear } from '../../../contexts/YearContext';
 import { useProviderContext } from '../../../contexts/ProviderContext';
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
+import { VariableDiscoveryService } from '../services/variableDiscoveryService';
+import { DEFAULT_VARIABLES } from '../types/variables';
 
 interface SurveyAnalyticsProps {
   providerTypeFilter?: 'PHYSICIAN' | 'APP';
@@ -30,8 +32,42 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   const { currentYear } = useYear();
   const { selectedProviderType } = useProviderContext();
   
+  // NEW: Variable selection state
+  const [selectedVariables, setSelectedVariables] = useState<string[]>(() => {
+    // Load from localStorage or use defaults
+    const saved = localStorage.getItem('analytics_selected_variables');
+    return saved ? JSON.parse(saved) : [...DEFAULT_VARIABLES];
+  });
+  
+  const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  const [isDiscoveringVariables, setIsDiscoveringVariables] = useState(false);
+  
   // Use the provider type from context (sidebar selection) or fallback to prop
   const effectiveProviderType = selectedProviderType || providerTypeFilter;
+  
+  // NEW: Discover variables on mount
+  useEffect(() => {
+    const discoverVariables = async () => {
+      try {
+        setIsDiscoveringVariables(true);
+        const service = VariableDiscoveryService.getInstance();
+        const discovered = await service.discoverAllVariables();
+        setAvailableVariables(discovered.map(v => v.normalizedName));
+      } catch (error) {
+        console.error('Failed to discover variables:', error);
+        setAvailableVariables([]);
+      } finally {
+        setIsDiscoveringVariables(false);
+      }
+    };
+    
+    discoverVariables();
+  }, []);
+  
+  // Save to localStorage when variables change
+  useEffect(() => {
+    localStorage.setItem('analytics_selected_variables', JSON.stringify(selectedVariables));
+  }, [selectedVariables]);
   
   // Helper function to categorize provider types into PHYSICIAN/APP categories
   const categorizeProviderType = (providerType: string): 'PHYSICIAN' | 'APP' | 'OTHER' => {
@@ -71,7 +107,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     geographicRegion: '',
     providerType: '', // Don't pre-select provider type in filters
     year: ''
-  });
+  }, selectedVariables); // NEW: Pass selected variables to hook
 
   // Apply provider type filtering behind the scenes, then apply UI filters
   const data = useMemo(() => {
@@ -154,6 +190,9 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
           availableRegions={filterOptions.regions}
           availableProviderTypes={filterOptions.providerTypes}
           availableYears={filterOptions.years}
+          selectedVariables={selectedVariables}
+          availableVariables={availableVariables}
+          onVariablesChange={setSelectedVariables}
         />
       </div>
 
@@ -165,6 +204,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
           loadingProgress={loadingProgress}
           error={error}
           onExport={exportToExcel}
+          selectedVariables={selectedVariables}
         />
       </div>
     </div>
