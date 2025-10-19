@@ -94,9 +94,41 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       align: 'right' as const
     },
     {
+      key: 'tcc_p25' as const,
+      label: 'TCC P25',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
       key: 'tcc_p50' as const,
       label: 'TCC P50',
       type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'tcc_p75' as const,
+      label: 'TCC P75',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'tcc_p90' as const,
+      label: 'TCC P90',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'wrvu_p25' as const,
+      label: 'WRVU P25',
+      type: 'number' as const,
       sortable: true,
       width: 120,
       align: 'right' as const
@@ -110,8 +142,48 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       align: 'right' as const
     },
     {
+      key: 'wrvu_p75' as const,
+      label: 'WRVU P75',
+      type: 'number' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'wrvu_p90' as const,
+      label: 'WRVU P90',
+      type: 'number' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'cf_p25' as const,
+      label: 'CF P25',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
       key: 'cf_p50' as const,
       label: 'CF P50',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'cf_p75' as const,
+      label: 'CF P75',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'cf_p90' as const,
+      label: 'CF P90',
       type: 'currency' as const,
       sortable: true,
       width: 120,
@@ -140,7 +212,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     
     switch (type) {
       case 'currency':
-        return formatCurrency(value);
+        // Format currency without dollar sign, with comma separators and decimals
+        return formatNumber(value, 0);
       case 'number':
         return formatNumber(value);
       case 'percentage':
