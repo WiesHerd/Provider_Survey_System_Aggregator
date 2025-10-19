@@ -30,6 +30,7 @@ import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { useYear } from '../contexts/YearContext';
 import { performanceMonitor } from '../shared/utils/performance';
+import TCCDataDiagnostic from './TCCDataDiagnostic';
 const SHOW_DEBUG = false; // Set to false for production performance
 
 interface AggregatedData {
@@ -491,7 +492,10 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
         surveySources: [...new Set(allData.map(row => row.surveySource))].slice(0, 5),
         sampleRow: allData[0],
         // Debug: Show heart-related specialties
-        heartSpecialties: [...new Set(allData.map(row => row.specialty))].filter(s => s && s.toLowerCase().includes('heart')).slice(0, 10)
+        heartSpecialties: [...new Set(allData.map(row => row.specialty))].filter(s => s && s.toLowerCase().includes('heart')).slice(0, 10),
+        // Debug: TCC data availability
+        tccDataAvailable: allData.filter(row => row.tcc_p25 > 0 || row.tcc_p50 > 0 || row.tcc_p75 > 0 || row.tcc_p90 > 0).length,
+        sampleTccData: allData.filter(row => row.tcc_p25 > 0 || row.tcc_p50 > 0 || row.tcc_p75 > 0 || row.tcc_p90 > 0).slice(0, 3)
       });
       
       setProcessedData(allData);
@@ -794,6 +798,21 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
     });
 
     console.log('Generated rows for filtered specialty:', rows.length);
+    
+    // Debug: Check TCC data in aggregated results
+    const tccRows = rows.filter(row => row.tcc_p25 > 0 || row.tcc_p50 > 0 || row.tcc_p75 > 0 || row.tcc_p90 > 0);
+    console.log('TCC data availability in aggregated results:', {
+      totalRows: rows.length,
+      tccRowsCount: tccRows.length,
+      sampleTccRow: tccRows[0],
+      tccColumns: tccRows.length > 0 ? {
+        tcc_p25: tccRows[0]?.tcc_p25,
+        tcc_p50: tccRows[0]?.tcc_p50,
+        tcc_p75: tccRows[0]?.tcc_p75,
+        tcc_p90: tccRows[0]?.tcc_p90
+      } : null
+    });
+    
     return rows;
   }, [filters, mappings, processedData]);
 
@@ -1207,6 +1226,12 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
             <p className="text-gray-500">Try adjusting your filters to see results</p>
           </div>
         ) : (
+          <>
+            {/* TCC Data Diagnostic Panel */}
+            <TCCDataDiagnostic 
+              data={filteredData} 
+              title="Total Cash Compensation (TCC) Data Analysis"
+            />
           <div>
             <TableContainer 
               sx={{ 
