@@ -94,8 +94,32 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       align: 'right' as const
     },
     {
+      key: 'tcc_p25' as const,
+      label: 'TCC P25',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
       key: 'tcc_p50' as const,
       label: 'TCC P50',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'tcc_p75' as const,
+      label: 'TCC P75',
+      type: 'currency' as const,
+      sortable: true,
+      width: 120,
+      align: 'right' as const
+    },
+    {
+      key: 'tcc_p90' as const,
+      label: 'TCC P90',
       type: 'currency' as const,
       sortable: true,
       width: 120,
