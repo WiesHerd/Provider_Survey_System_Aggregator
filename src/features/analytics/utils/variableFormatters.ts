@@ -100,19 +100,25 @@ export const formatVariableValue = (
   // Determine if this is a currency variable
   const isCurrency = isCurrencyVariable(variableName);
   
+  // Determine if this is a ratio variable (like TCC per Work RVU) that needs 2 decimals
+  const isRatio = isRatioVariable(variableName);
+  
+  // Use 2 decimals for ratio variables, otherwise use provided decimals
+  const actualDecimals = isRatio ? 2 : showDecimals;
+  
   if (isCurrency || showCurrency) {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: showDecimals,
-      maximumFractionDigits: showDecimals,
+      minimumFractionDigits: actualDecimals,
+      maximumFractionDigits: actualDecimals,
     }).format(value);
   }
   
   // Format as number with appropriate decimals
   return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: showDecimals,
-    maximumFractionDigits: showDecimals,
+    minimumFractionDigits: actualDecimals,
+    maximumFractionDigits: actualDecimals,
   }).format(value);
 };
 
@@ -134,6 +140,27 @@ const isCurrencyVariable = (variableName: string): boolean => {
   ];
   
   return currencyPatterns.some(pattern => pattern.test(lower));
+};
+
+/**
+ * Check if a variable represents ratio values (needs 2 decimal places)
+ */
+const isRatioVariable = (variableName: string): boolean => {
+  const lower = variableName.toLowerCase();
+  
+  // Ratio-related patterns
+  const ratioPatterns = [
+    /per.*work.*rvu/,
+    /tcc.*per.*work.*rvu/,
+    /conversion.*factor/,
+    /cf$/,
+    /per.*encounter/,
+    /per.*asa/,
+    /rate/,
+    /ratio/
+  ];
+  
+  return ratioPatterns.some(pattern => pattern.test(lower));
 };
 
 /**

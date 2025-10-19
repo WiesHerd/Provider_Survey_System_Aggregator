@@ -289,46 +289,46 @@ export const calculateDynamicSummaryRows = (
   
   selectedVariables.forEach(varName => {
     // Collect all values for this variable
-    const values: number[] = [];
-    const weights: number[] = [];
+    const allValues: number[] = [];
+    const allWeights: number[] = [];
     let totalOrgs = 0;
     let totalIncumbents = 0;
     
     rows.forEach(row => {
       const metrics = row.variables?.[varName];
       if (metrics && metrics.p50 > 0) {
-        values.push(metrics.p50);
-        weights.push(metrics.n_incumbents || 1);
+        // For simple average: collect all individual values
+        allValues.push(metrics.p50);
+        allWeights.push(metrics.n_incumbents || 1);
         totalOrgs += metrics.n_orgs || 0;
         totalIncumbents += metrics.n_incumbents || 0;
       }
     });
     
-    if (values.length > 0) {
-      // Simple average (unweighted)
-      const simpleAvg = values.reduce((sum, val) => sum + val, 0) / values.length;
+    if (allValues.length > 0) {
+      // SIMPLE AVERAGE: Mean of all values (unweighted)
       simple[varName] = {
-        n_orgs: totalOrgs,
-        n_incumbents: totalIncumbents,
-        p25: calculatePercentile(values, 25),
-        p50: calculatePercentile(values, 50),
-        p75: calculatePercentile(values, 75),
-        p90: calculatePercentile(values, 90)
+        n_orgs: Math.round(totalOrgs / allValues.length),
+        n_incumbents: Math.round(totalIncumbents / allValues.length),
+        p25: allValues.reduce((sum, val) => sum + val, 0) / allValues.length,
+        p50: allValues.reduce((sum, val) => sum + val, 0) / allValues.length,
+        p75: allValues.reduce((sum, val) => sum + val, 0) / allValues.length,
+        p90: allValues.reduce((sum, val) => sum + val, 0) / allValues.length
       };
       
-      // Weighted average (by incumbents)
-      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      // WEIGHTED AVERAGE: Weighted by number of incumbents
+      const totalWeight = allWeights.reduce((sum, weight) => sum + weight, 0);
       if (totalWeight > 0) {
-        const weightedAvg = values.reduce((sum, val, index) => 
-          sum + (val * weights[index]), 0) / totalWeight;
+        const weightedP50 = allValues.reduce((sum, val, index) => 
+          sum + (val * allWeights[index]), 0) / totalWeight;
         
         weighted[varName] = {
           n_orgs: totalOrgs,
           n_incumbents: totalIncumbents,
-          p25: calculatePercentile(values, 25),
-          p50: calculatePercentile(values, 50),
-          p75: calculatePercentile(values, 75),
-          p90: calculatePercentile(values, 90)
+          p25: weightedP50, // Use weighted average for all percentiles
+          p50: weightedP50,
+          p75: weightedP50,
+          p90: weightedP50
         };
       } else {
         weighted[varName] = simple[varName];
