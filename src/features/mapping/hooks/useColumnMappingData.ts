@@ -46,7 +46,6 @@ export const useColumnMappingData = () => {
         dataService.getLearnedMappings('column')
       ]);
       
-      
       setMappings(mappingsData);
       setUnmappedColumns(unmappedData);
       setLearnedMappings(learnedData);
@@ -65,8 +64,8 @@ export const useColumnMappingData = () => {
     if (!searchTerm) return unmappedColumns;
     const searchLower = searchTerm.toLowerCase();
     return unmappedColumns.filter(column => 
-      column.name.toLowerCase().includes(searchLower) ||
-      column.surveySource.toLowerCase().includes(searchLower)
+      (column.name && column.name.toLowerCase().includes(searchLower)) ||
+      (column.surveySource && column.surveySource.toLowerCase().includes(searchLower))
     );
   }, [unmappedColumns, searchTerm]);
 
@@ -74,8 +73,8 @@ export const useColumnMappingData = () => {
     if (!mappedSearchTerm) return mappings;
     const searchLower = mappedSearchTerm.toLowerCase();
     return mappings.filter(mapping => 
-      mapping.standardizedName.toLowerCase().includes(searchLower) ||
-      mapping.sourceColumns.some(col => col.name.toLowerCase().includes(searchLower))
+      (mapping.standardizedName && mapping.standardizedName.toLowerCase().includes(searchLower)) ||
+      mapping.sourceColumns.some(col => col.name && col.name.toLowerCase().includes(searchLower))
     );
   }, [mappings, mappedSearchTerm]);
 
@@ -84,7 +83,8 @@ export const useColumnMappingData = () => {
     const searchLower = mappedSearchTerm.toLowerCase();
     const filtered: Record<string, string> = {};
     Object.entries(learnedMappings).forEach(([original, corrected]) => {
-      if (original.toLowerCase().includes(searchLower) || corrected.toLowerCase().includes(searchLower)) {
+      if ((original && original.toLowerCase().includes(searchLower)) || 
+          (corrected && corrected.toLowerCase().includes(searchLower))) {
         filtered[original] = corrected;
       }
     });
@@ -167,7 +167,7 @@ export const useColumnMappingData = () => {
   // Load data on mount and when provider type changes
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, [selectedProviderType]);
 
   return {
     // Data

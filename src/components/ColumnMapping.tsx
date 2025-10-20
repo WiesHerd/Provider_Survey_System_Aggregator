@@ -1,7 +1,9 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { useColumnMappingData } from '../features/mapping/hooks/useColumnMappingData';
+import { useOptimizedColumnMappingData } from '../features/mapping/hooks/useOptimizedColumnMappingData';
 import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from '../features/mapping/components/shared';
 import { UnmappedColumns } from '../features/mapping/components/UnmappedColumns';
+import { useProviderContext } from '../contexts/ProviderContext';
+import { useToast } from './ui/use-toast'; // Added toast import
 
 // Lazy load components for better performance
 const MappedColumns = lazy(() => import('./MappedColumns').then(module => ({ default: module.default })));
@@ -15,13 +17,13 @@ const LearnedColumnMappings = lazy(() => import('./LearnedColumnMappings').then(
  */
 const ColumnMapping: React.FC = () => {
   const [showHelp, setShowHelp] = useState(false);
+  const { toast } = useToast(); // Added toast hook
 
   // Custom hook for data management
   const {
     // Data
     mappings,
     unmappedColumns,
-    selectedColumns,
     learnedMappings,
     loading,
     error,
@@ -34,54 +36,179 @@ const ColumnMapping: React.FC = () => {
     
     // Actions
     setActiveTab,
-    selectColumn,
-    clearSelectedColumns,
-    selectAllColumns,
-    deselectAllColumns,
     setSearchTerm,
     setMappedSearchTerm,
-    createMapping,
-    createGroupedMapping,
-    deleteMapping,
-    removeLearnedMapping,
     loadData,
     clearError
-  } = useColumnMappingData();
+  } = useOptimizedColumnMappingData();
+
+  // Get provider type from context
+  const { selectedProviderType } = useProviderContext();
+
+  // Local state for selection (since optimized hook doesn't have this yet)
+  const [selectedColumns, setSelectedColumns] = useState<any[]>([]);
+  const [isCreatingMapping, setIsCreatingMapping] = useState(false);
+
+  // Selection handlers
+  const selectColumn = (column: any) => {
+    setSelectedColumns(prev => {
+      if (prev.some(c => c.id === column.id)) {
+        return prev.filter(c => c.id !== column.id);
+      }
+      return [...prev, column];
+    });
+  };
+
+  const clearSelectedColumns = () => {
+    setSelectedColumns([]);
+  };
+
+  const selectAllColumns = () => {
+    setSelectedColumns([...filteredUnmapped]);
+  };
+
+  const deselectAllColumns = () => {
+    setSelectedColumns([]);
+  };
 
   // Handle create mapping (auto-join - no modal)
   const handleCreateMapping = async () => {
-    if (selectedColumns.length === 0) return;
+    if (selectedColumns.length === 0 || isCreatingMapping) return;
 
     try {
+      setIsCreatingMapping(true);
+      console.log('🔄 Creating group mapping...');
+      
       // Auto-generate standardized name from first column
       const standardizedName = selectedColumns[0].name.toLowerCase().replace(/\s+/g, '_');
       
-      await createGroupedMapping(standardizedName, selectedColumns);
+      // Create the mapping using DataService directly
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
       
-      // Clear selections and switch to mapped tab
-      clearSelectedColumns();
-      setActiveTab('mapped');
+      const mapping = {
+        id: `mapping_${Date.now()}`,
+        standardizedName,
+        sourceColumns: selectedColumns,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      await dataService.createColumnMapping(mapping);
+      console.log('✅ Mapping created successfully');
+      
+      // Create learned mappings for each source column
+      for (const column of selectedColumns) {
+        await dataService.saveLearnedMapping(
+          'column',
+          column.name,
+          standardizedName,
+          selectedProviderType,
+          column.surveySource
+        );
+      }
+      console.log('✅ Learned mappings created successfully');
+      
+      // Clear selections and force data reload
+      setSelectedColumns([]);
+      
+      // Force clear cache and reload data
+      const { getPerformanceOptimizedDataService } = await import('../services/PerformanceOptimizedDataService');
+      const performanceService = getPerformanceOptimizedDataService();
+      performanceService.clearCache('column_mapping');
+      
+      await loadData();
+      console.log('✅ Data reloaded, switching to learned tab');
+      
+      setActiveTab('learned'); // Switch to learned tab to show the new learned mappings
+      
+      // Show success toast
+      toast({
+        title: 'Mapping Created Successfully',
+        description: `Group mapping "${standardizedName}" has been created with ${selectedColumns.length} columns.`,
+      });
+      
     } catch (error) {
+      console.error('❌ Error creating mapping:', error);
+      
+      // Show error toast
+      toast({
+        title: 'Failed to Create Mapping',
+        description: 'An error occurred while creating the mapping. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCreatingMapping(false);
     }
   };
 
   // Handle map individually (create separate mappings for each)
   const handleMapIndividually = async () => {
-    if (selectedColumns.length === 0) return;
+    if (selectedColumns.length === 0 || isCreatingMapping) return;
 
     try {
+      setIsCreatingMapping(true);
+      console.log('🔄 Creating individual mappings...');
+      
       // Create individual mappings for each selected column
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
+      
       for (const column of selectedColumns) {
-        await createGroupedMapping(
-          column.name.toLowerCase().replace(/\s+/g, '_'),
-          [column]
+        const standardizedName = column.name.toLowerCase().replace(/\s+/g, '_');
+        
+        const mapping = {
+          id: `mapping_${Date.now()}_${Math.random()}`,
+          standardizedName,
+          sourceColumns: [column],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        await dataService.createColumnMapping(mapping);
+        
+        // Create learned mapping for this column
+        await dataService.saveLearnedMapping(
+          'column',
+          column.name,
+          standardizedName,
+          selectedProviderType,
+          column.surveySource
         );
       }
       
-      // Clear selections and switch to mapped tab
-      clearSelectedColumns();
-      setActiveTab('mapped');
+      console.log('✅ Individual mappings created successfully');
+      
+      // Clear selections and force data reload
+      setSelectedColumns([]);
+      
+      // Force clear cache and reload data
+      const { getPerformanceOptimizedDataService } = await import('../services/PerformanceOptimizedDataService');
+      const performanceService = getPerformanceOptimizedDataService();
+      performanceService.clearCache('column_mapping');
+      
+      await loadData();
+      console.log('✅ Data reloaded, switching to learned tab');
+      
+      setActiveTab('learned'); // Switch to learned tab to show the new learned mappings
+      
+      // Show success toast
+      toast({
+        title: 'Individual Mappings Created',
+        description: `${selectedColumns.length} individual mappings have been created successfully.`,
+      });
+      
     } catch (error) {
+      console.error('❌ Error creating individual mappings:', error);
+      
+      // Show error toast
+      toast({
+        title: 'Failed to Create Individual Mappings',
+        description: 'An error occurred while creating the individual mappings. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCreatingMapping(false);
     }
   };
 
@@ -97,15 +224,119 @@ const ColumnMapping: React.FC = () => {
         // Reload data to refresh the display
         await loadData();
         
+        // Show success toast
+        toast({
+          title: 'All Mappings Cleared',
+          description: 'All column mappings have been successfully removed.',
+        });
+        
       } catch (error) {
+        console.error('Error clearing mappings:', error);
+        
+        // Show error toast
+        toast({
+          title: 'Failed to Clear Mappings',
+          description: 'An error occurred while clearing the mappings. Please try again.',
+          variant: 'destructive'
+        });
       }
     }
   };
 
   // Handle remove learned mapping
   const handleRemoveLearnedMapping = async (original: string) => {
+    if (!original) return;
     if (window.confirm('Remove this learned mapping?')) {
       await removeLearnedMapping(original);
+    }
+  };
+
+  // Mapping operations using DataService directly
+  const createMapping = async (standardizedName: string, columns: any[]) => {
+    const { getDataService } = await import('../services/DataService');
+    const dataService = getDataService();
+    
+    const mapping = {
+      id: `mapping_${Date.now()}`,
+      standardizedName,
+      sourceColumns: columns,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    await dataService.createColumnMapping(mapping);
+    await loadData();
+  };
+
+  const createGroupedMapping = async (standardizedName: string, columns: any[]) => {
+    return createMapping(standardizedName, columns);
+  };
+
+  const deleteMapping = async (mappingId: string) => {
+    if (window.confirm('Are you sure you want to delete this column mapping? This action cannot be undone.')) {
+      try {
+        console.log('🗑️ Deleting mapping with ID:', mappingId);
+        
+        const { getDataService } = await import('../services/DataService');
+        const dataService = getDataService();
+        
+        await dataService.deleteColumnMapping(mappingId);
+        console.log('✅ Mapping deleted successfully');
+        
+        // Clear performance cache to ensure immediate UI update
+        const { getPerformanceOptimizedDataService } = await import('../services/PerformanceOptimizedDataService');
+        const performanceService = getPerformanceOptimizedDataService();
+        performanceService.clearCache('column_mapping');
+        
+        await loadData();
+        console.log('✅ Data reloaded after deletion');
+        
+        // Show success toast
+        toast({
+          title: 'Mapping Deleted',
+          description: 'Column mapping has been successfully removed.',
+        });
+        
+      } catch (error) {
+        console.error('❌ Error deleting mapping:', error);
+        
+        // Show error toast
+        toast({
+          title: 'Failed to Delete Mapping',
+          description: 'An error occurred while deleting the mapping. Please try again.',
+          variant: 'destructive'
+        });
+      }
+    }
+  };
+
+  const removeLearnedMapping = async (original: string) => {
+    try {
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
+      
+      await dataService.removeLearnedMapping('column', original);
+      // Clear optimized cache to reflect immediately
+      const { getPerformanceOptimizedDataService } = await import('../services/PerformanceOptimizedDataService');
+      const performanceService = getPerformanceOptimizedDataService();
+      performanceService.clearCache('column_mapping');
+      await loadData();
+      
+      // Show success toast
+      toast({
+        title: 'Learned Mapping Removed',
+        description: 'The learned mapping has been successfully removed.',
+      });
+      
+    } catch (error) {
+      console.error('❌ Error removing learned mapping:', error);
+      
+      // Show error toast
+      toast({
+        title: 'Failed to Remove Learned Mapping',
+        description: 'An error occurred while removing the learned mapping. Please try again.',
+        variant: 'destructive'
+      });
     }
   };
 

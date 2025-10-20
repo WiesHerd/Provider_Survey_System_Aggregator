@@ -143,7 +143,7 @@ export const useOptimizedVariableMappingData = (): UseOptimizedVariableMappingDa
   // Reload data when provider type changes
   useEffect(() => {
     loadData();
-  }, [selectedProviderType, loadData]);
+  }, [selectedProviderType]);
 
   // Data operations
   const removeLearnedMapping = useCallback(async (original: string) => {

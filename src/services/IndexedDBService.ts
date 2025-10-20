@@ -728,9 +728,13 @@ export class IndexedDBService {
     
     const mappedNames = new Set<string>();
     mappings.forEach(mapping => {
-      mappedNames.add(mapping.standardizedName.toLowerCase());
+      if (mapping.standardizedName) {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+      }
       mapping.sourceColumns.forEach((source: any) => {
-        mappedNames.add(source.column.toLowerCase());
+        if (source.name) {
+          mappedNames.add(source.name.toLowerCase());
+        }
       });
     });
 
@@ -754,6 +758,11 @@ export class IndexedDBService {
         
         // Check top-level columns
         Object.keys(firstRow).forEach(columnName => {
+          // ENTERPRISE FIX: Add null/undefined checks
+          if (!columnName || typeof columnName !== 'string') {
+            return;
+          }
+          
           // Debug: Check each column against compensation patterns
           const isCompensation = this.isCompensationOrTechnicalColumn(columnName);
           
@@ -772,6 +781,11 @@ export class IndexedDBService {
         // ALSO check nested data object for columns
         if (firstRow.data && typeof firstRow.data === 'object') {
           Object.keys(firstRow.data).forEach(columnName => {
+            // ENTERPRISE FIX: Add null/undefined checks
+            if (!columnName || typeof columnName !== 'string') {
+              return;
+            }
+            
             // Debug: Check each nested column against compensation patterns
             const isCompensation = this.isCompensationOrTechnicalColumn(columnName);
             
@@ -819,6 +833,11 @@ export class IndexedDBService {
    * Excludes specialty, provider type, region, and variable name columns (handled by dedicated mappers)
    */
   private isCompensationOrTechnicalColumn(columnName: string): boolean {
+    // ENTERPRISE FIX: Add null/undefined checks
+    if (!columnName || typeof columnName !== 'string') {
+      return false;
+    }
+    
     const name = columnName.toLowerCase();
     
     // Exclude columns handled by dedicated mappers
@@ -869,6 +888,11 @@ export class IndexedDBService {
    * Categorizes compensation columns for better organization
    */
   private categorizeColumn(columnName: string): string {
+    // ENTERPRISE FIX: Add null/undefined checks
+    if (!columnName || typeof columnName !== 'string') {
+      return 'Other Compensation';
+    }
+    
     const name = columnName.toLowerCase();
     
     if (/tcc|total.*cash|total.*comp/i.test(name)) return 'Total Cash Compensation';

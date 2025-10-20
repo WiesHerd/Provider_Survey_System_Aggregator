@@ -193,7 +193,7 @@ export const useOptimizedMappingData = (): UseOptimizedMappingDataReturn => {
   // Reload data when provider type changes
   useEffect(() => {
     loadData();
-  }, [selectedProviderType, loadData]);
+  }, [selectedProviderType]);
 
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {
