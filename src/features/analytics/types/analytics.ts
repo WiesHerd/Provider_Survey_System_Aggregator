@@ -166,6 +166,7 @@ export interface UseAnalyticsReturn {
   filters: AnalyticsFilters;
   setFilters: (filters: AnalyticsFilters) => void;
   refetch: () => Promise<void>;
+  forceRefresh: () => Promise<void>; // New: Force refresh on-demand
   exportToExcel: () => void;
   exportToCSV: () => void;
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paper, Typography, IconButton, Tooltip } from '@mui/material';
+import { Paper, Typography, IconButton, Tooltip, Checkbox } from '@mui/material';
 import { 
   PencilIcon as EditIcon, 
   TrashIcon as DeleteIcon 
@@ -11,6 +11,10 @@ interface MappedProviderTypeItemProps {
   mapping: IProviderTypeMapping;
   onEdit?: () => void;
   onDelete?: () => void;
+  // Bulk selection props
+  isBulkMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (mappingId: string) => void;
 }
 
 /**
@@ -24,19 +28,31 @@ interface MappedProviderTypeItemProps {
 export const MappedProviderTypeItem: React.FC<MappedProviderTypeItemProps> = ({ 
   mapping, 
   onEdit, 
-  onDelete 
+  onDelete,
+  isBulkMode = false,
+  isSelected = false,
+  onSelect
 }) => {
   return (
     <Paper className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
       {/* Header with standardized name and actions */}
       <div className="flex justify-between items-center mb-2">
-        <div>
-          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-            {mapping.standardizedName}
-          </Typography>
-          <Typography variant="caption" className="text-gray-500 text-xs">
-            Last updated: {formatMappingDate(mapping.updatedAt)}
-          </Typography>
+        <div className="flex items-center space-x-3">
+          {isBulkMode && (
+            <Checkbox
+              checked={isSelected}
+              onChange={() => onSelect?.(mapping.id)}
+              size="small"
+            />
+          )}
+          <div>
+            <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+              {mapping.standardizedName}
+            </Typography>
+            <Typography variant="caption" className="text-gray-500 text-xs">
+              Last updated: {formatMappingDate(mapping.updatedAt)}
+            </Typography>
+          </div>
         </div>
         <div className="flex space-x-1">
           {onEdit && (

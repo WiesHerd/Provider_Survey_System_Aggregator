@@ -81,7 +81,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Analytics Filters</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Benchmarking Filters</h3>
         </div>
         
         {/* Clear Filters Button */}

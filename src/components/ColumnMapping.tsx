@@ -1,13 +1,21 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, Suspense, lazy, useEffect } from 'react';
 import { useOptimizedColumnMappingData } from '../features/mapping/hooks/useOptimizedColumnMappingData';
 import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from '../features/mapping/components/shared';
 import { UnmappedColumns } from '../features/mapping/components/UnmappedColumns';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useToast } from './ui/use-toast'; // Added toast import
+import { AdvancedErrorBoundary } from '../features/mapping/components/AdvancedErrorBoundary';
+import { AnalysisProgressBar } from '../shared/components';
+import { ConfirmationDialog } from '../shared';
 
 // Lazy load components for better performance
 const MappedColumns = lazy(() => import('./MappedColumns').then(module => ({ default: module.default })));
 const LearnedColumnMappings = lazy(() => import('./LearnedColumnMappings').then(module => ({ default: module.default })));
+
+interface ColumnMappingProps {
+  onMappingChange?: (mappings: any[]) => void;
+  onUnmappedChange?: (unmappedColumns: any[]) => void;
+}
 
 /**
  * ColumnMapping component - Main orchestrator for column mapping functionality
@@ -15,9 +23,26 @@ const LearnedColumnMappings = lazy(() => import('./LearnedColumnMappings').then(
  * 
  * Maps raw CSV column headers to standardized fields across surveys
  */
-const ColumnMapping: React.FC = () => {
+const ColumnMapping: React.FC<ColumnMappingProps> = ({
+  onMappingChange,
+  onUnmappedChange
+}) => {
   const [showHelp, setShowHelp] = useState(false);
   const { toast } = useToast(); // Added toast hook
+  
+  // Emergency timeout state
+  const [emergencyTimeout, setEmergencyTimeout] = useState(false);
+  
+  // Confirmation dialog state
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    onConfirm: () => {},
+    onCancel: () => {}
+  });
 
   // Custom hook for data management
   const {
@@ -49,6 +74,28 @@ const ColumnMapping: React.FC = () => {
   const [selectedColumns, setSelectedColumns] = useState<any[]>([]);
   const [isCreatingMapping, setIsCreatingMapping] = useState(false);
 
+  // Emergency timeout effect
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        setEmergencyTimeout(true);
+      }, 20000); // 20 second emergency timeout
+      
+      return () => clearTimeout(timeout);
+    } else {
+      setEmergencyTimeout(false);
+    }
+  }, [loading]);
+
+  // Parent callback effects
+  useEffect(() => {
+    onMappingChange?.(mappings);
+  }, [mappings, onMappingChange]);
+
+  useEffect(() => {
+    onUnmappedChange?.(unmappedColumns);
+  }, [unmappedColumns, onUnmappedChange]);
+
   // Selection handlers
   const selectColumn = (column: any) => {
     setSelectedColumns(prev => {
@@ -69,6 +116,32 @@ const ColumnMapping: React.FC = () => {
 
   const deselectAllColumns = () => {
     setSelectedColumns([]);
+  };
+
+  // Confirmation dialog handlers
+  const showConfirmationDialog = (title: string, message: string, onConfirm: () => void, confirmText = 'Confirm', cancelText = 'Cancel') => {
+    setDialogState({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm: () => {
+        setDialogState(prev => ({ ...prev, isOpen: false }));
+        onConfirm();
+      },
+      onCancel: () => {
+        setDialogState(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleConfirm = () => {
+    dialogState.onConfirm();
+  };
+
+  const handleCancel = () => {
+    dialogState.onCancel();
   };
 
   // Handle create mapping (auto-join - no modal)
@@ -214,41 +287,53 @@ const ColumnMapping: React.FC = () => {
 
   // Handle clear all mappings
   const handleClearAllMappings = async () => {
-    if (window.confirm('Are you sure you want to clear all column mappings? This cannot be undone.')) {
-      try {
-        // Clear all column mappings
-        const { getDataService } = await import('../services/DataService');
-        const dataService = getDataService();
-        await dataService.clearAllColumnMappings();
-        
-        // Reload data to refresh the display
-        await loadData();
-        
-        // Show success toast
-        toast({
-          title: 'All Mappings Cleared',
-          description: 'All column mappings have been successfully removed.',
-        });
-        
-      } catch (error) {
-        console.error('Error clearing mappings:', error);
-        
-        // Show error toast
-        toast({
-          title: 'Failed to Clear Mappings',
-          description: 'An error occurred while clearing the mappings. Please try again.',
-          variant: 'destructive'
-        });
-      }
-    }
+    showConfirmationDialog(
+      'Clear All Mappings',
+      'Are you sure you want to clear all column mappings? This action cannot be undone.',
+      async () => {
+        try {
+          // Clear all column mappings
+          const { getDataService } = await import('../services/DataService');
+          const dataService = getDataService();
+          await dataService.clearAllColumnMappings();
+          
+          // Reload data to refresh the display
+          await loadData();
+          
+          // Show success toast
+          toast({
+            title: 'All Mappings Cleared',
+            description: 'All column mappings have been successfully removed.',
+          });
+          
+        } catch (error) {
+          console.error('Error clearing mappings:', error);
+          
+          // Show error toast
+          toast({
+            title: 'Failed to Clear Mappings',
+            description: 'An error occurred while clearing the mappings. Please try again.',
+            variant: 'destructive'
+          });
+        }
+      },
+      'Clear All',
+      'Cancel'
+    );
   };
 
   // Handle remove learned mapping
   const handleRemoveLearnedMapping = async (original: string) => {
     if (!original) return;
-    if (window.confirm('Remove this learned mapping?')) {
-      await removeLearnedMapping(original);
-    }
+    showConfirmationDialog(
+      'Remove Learned Mapping',
+      'Are you sure you want to remove this learned mapping?',
+      async () => {
+        await removeLearnedMapping(original);
+      },
+      'Remove',
+      'Cancel'
+    );
   };
 
   // Mapping operations using DataService directly
@@ -273,41 +358,47 @@ const ColumnMapping: React.FC = () => {
   };
 
   const deleteMapping = async (mappingId: string) => {
-    if (window.confirm('Are you sure you want to delete this column mapping? This action cannot be undone.')) {
-      try {
-        console.log('🗑️ Deleting mapping with ID:', mappingId);
-        
-        const { getDataService } = await import('../services/DataService');
-        const dataService = getDataService();
-        
-        await dataService.deleteColumnMapping(mappingId);
-        console.log('✅ Mapping deleted successfully');
-        
-        // Clear performance cache to ensure immediate UI update
-        const { getPerformanceOptimizedDataService } = await import('../services/PerformanceOptimizedDataService');
-        const performanceService = getPerformanceOptimizedDataService();
-        performanceService.clearCache('column_mapping');
-        
-        await loadData();
-        console.log('✅ Data reloaded after deletion');
-        
-        // Show success toast
-        toast({
-          title: 'Mapping Deleted',
-          description: 'Column mapping has been successfully removed.',
-        });
-        
-      } catch (error) {
-        console.error('❌ Error deleting mapping:', error);
-        
-        // Show error toast
-        toast({
-          title: 'Failed to Delete Mapping',
-          description: 'An error occurred while deleting the mapping. Please try again.',
-          variant: 'destructive'
-        });
-      }
-    }
+    showConfirmationDialog(
+      'Delete Column Mapping',
+      'Are you sure you want to delete this column mapping? This action cannot be undone.',
+      async () => {
+        try {
+          console.log('🗑️ Deleting mapping with ID:', mappingId);
+          
+          const { getDataService } = await import('../services/DataService');
+          const dataService = getDataService();
+          
+          await dataService.deleteColumnMapping(mappingId);
+          console.log('✅ Mapping deleted successfully');
+          
+          // Clear performance cache to ensure immediate UI update
+          const { getPerformanceOptimizedDataService } = await import('../services/PerformanceOptimizedDataService');
+          const performanceService = getPerformanceOptimizedDataService();
+          performanceService.clearCache('column_mapping');
+          
+          await loadData();
+          console.log('✅ Data reloaded after deletion');
+          
+          // Show success toast
+          toast({
+            title: 'Mapping Deleted',
+            description: 'Column mapping has been successfully removed.',
+          });
+          
+        } catch (error) {
+          console.error('❌ Error deleting mapping:', error);
+          
+          // Show error toast
+          toast({
+            title: 'Failed to Delete Mapping',
+            description: 'An error occurred while deleting the mapping. Please try again.',
+            variant: 'destructive'
+          });
+        }
+      },
+      'Delete',
+      'Cancel'
+    );
   };
 
   const removeLearnedMapping = async (original: string) => {
@@ -354,13 +445,52 @@ const ColumnMapping: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return <MappingLoadingSpinner entityName="Column" />;
+  // Emergency timeout handling
+  if (loading && !emergencyTimeout) {
+    return (
+      <AnalysisProgressBar
+        message="Loading column mappings..."
+        progress={100}
+        recordCount={0}
+      />
+    );
+  }
+  
+  if (emergencyTimeout) {
+    return (
+      <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="text-center py-12">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+            <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Timeout</h3>
+          <p className="text-gray-600 mb-4">The column mapping data is taking too long to load. This might be due to a data service issue.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="w-full min-h-screen">
-      <div className="w-full flex flex-col gap-4">
+    <AdvancedErrorBoundary 
+      componentName="ColumnMapping"
+      enableAutoRecovery={true}
+      maxRetries={3}
+      circuitBreakerThreshold={5}
+      circuitBreakerTimeout={30000}
+    >
+      <div className="w-full min-h-screen">
+        <div className="w-full flex flex-col gap-4">
         {/* Main Mapping Section */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           {/* Header Component - Tabs and Actions */}
@@ -507,7 +637,19 @@ const ColumnMapping: React.FC = () => {
           </div>
         </div>
       </HelpModal>
+      
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={dialogState.isOpen}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        onConfirm={handleConfirm}
+        onClose={handleCancel}
+      />
     </div>
+    </AdvancedErrorBoundary>
   );
 };
 

@@ -224,7 +224,7 @@ const PageContent = () => {
         };
       case '/analytics':
         return {
-          title: 'Survey Analytics',
+          title: 'Benchmarking',
           description: 'Comprehensive analysis of your compensation data'
         };
       case '/regional-analytics':

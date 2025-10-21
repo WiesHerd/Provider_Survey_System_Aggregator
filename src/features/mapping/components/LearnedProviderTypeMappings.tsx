@@ -224,6 +224,9 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
           <MappedProviderTypeItem
             key={mapping.id}
             mapping={mapping}
+            isBulkMode={isBulkMode}
+            isSelected={selectedMappings.has(mapping.id)}
+            onSelect={handleSelectMapping}
             onDelete={() => {
               if (window.confirm('Remove this learned mapping?')) {
                 // Remove all source provider types for this standardized name

@@ -6,6 +6,7 @@
  */
 
 import { AggregatedData, SummaryCalculation } from '../types/analytics';
+import { analyticsComputationCache, cacheUtils } from '../services/analyticsComputationCache';
 
 /**
  * Calculates percentile value from an array of numbers
@@ -235,40 +236,119 @@ const normalizeSpecialtyName = (specialty: string): string => {
 };
 
 export const filterAnalyticsData = (data: AggregatedData[], filters: any): AggregatedData[] => {
+  // Early exit for empty data
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // Check if filters are empty (no filtering needed)
+  const hasActiveFilters = Object.values(filters).some(value => 
+    value !== undefined && value !== '' && value !== 'All Sources' && value !== 'All Types' && value !== 'All Years'
+  );
   
-  const filteredData = data.filter(row => {
-    // Specialty filter - use fuzzy matching for specialty names
-    if (filters.specialty && filters.specialty !== '') {
-      const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
-      const normalizedRowSpecialty = normalizeSpecialtyName(row.standardizedName);
-      
-      if (normalizedRowSpecialty !== normalizedFilterSpecialty) {
-        return false;
-      }
+  if (!hasActiveFilters) {
+    return data;
+  }
+
+  // Generate cache key for filtering
+  const dataHash = JSON.stringify(data.map(d => ({
+    surveySpecialty: d.surveySpecialty,
+    surveySource: d.surveySource,
+    geographicRegion: d.geographicRegion,
+    providerType: d.providerType,
+    surveyYear: d.surveyYear
+  })));
+  
+  const filterHash = JSON.stringify(filters);
+  const cacheKey = cacheUtils.filterKey(dataHash, filterHash);
+
+  // Check cache first
+  const cached = analyticsComputationCache.get<AggregatedData[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  // Create indexed lookups for faster filtering
+  const specialtyIndex = new Map<string, AggregatedData[]>();
+  const sourceIndex = new Map<string, AggregatedData[]>();
+  const regionIndex = new Map<string, AggregatedData[]>();
+  const providerTypeIndex = new Map<string, AggregatedData[]>();
+  const yearIndex = new Map<string, AggregatedData[]>();
+
+  // Build indexes
+  data.forEach(row => {
+    // Specialty index
+    const specialtyKey = normalizeSpecialtyName(row.standardizedName);
+    if (!specialtyIndex.has(specialtyKey)) {
+      specialtyIndex.set(specialtyKey, []);
     }
-    
-    // Survey source filter (exclude "All Sources")
-    if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources' && row.surveySource !== filters.surveySource) {
-      return false;
+    specialtyIndex.get(specialtyKey)!.push(row);
+
+    // Source index
+    if (!sourceIndex.has(row.surveySource)) {
+      sourceIndex.set(row.surveySource, []);
     }
-    
-    // Geographic region filter
-    if (filters.geographicRegion && filters.geographicRegion !== '' && row.geographicRegion !== filters.geographicRegion) {
-      return false;
+    sourceIndex.get(row.surveySource)!.push(row);
+
+    // Region index
+    if (!regionIndex.has(row.geographicRegion)) {
+      regionIndex.set(row.geographicRegion, []);
     }
-    
-    // Provider type filter (exclude "All Types")
-    if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types' && row.providerType !== filters.providerType) {
-      return false;
+    regionIndex.get(row.geographicRegion)!.push(row);
+
+    // Provider type index
+    if (row.providerType && !providerTypeIndex.has(row.providerType)) {
+      providerTypeIndex.set(row.providerType, []);
     }
-    
-    // Year filter (exclude "All Years")
-    if (filters.year && filters.year !== '' && filters.year !== 'All Years' && row.surveyYear !== filters.year) {
-      return false;
+    if (row.providerType) {
+      providerTypeIndex.get(row.providerType)!.push(row);
     }
-    
-    return true;
+
+    // Year index
+    if (row.surveyYear && !yearIndex.has(row.surveyYear)) {
+      yearIndex.set(row.surveyYear, []);
+    }
+    if (row.surveyYear) {
+      yearIndex.get(row.surveyYear)!.push(row);
+    }
   });
+
+  // Apply filters using indexes for faster lookup
+  let filteredData: AggregatedData[] = data;
+
+  // Specialty filter - use indexed lookup
+  if (filters.specialty && filters.specialty !== '') {
+    const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
+    const specialtyMatches = specialtyIndex.get(normalizedFilterSpecialty) || [];
+    filteredData = filteredData.filter(row => specialtyMatches.includes(row));
+  }
+
+  // Survey source filter
+  if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources') {
+    const sourceMatches = sourceIndex.get(filters.surveySource) || [];
+    filteredData = filteredData.filter(row => sourceMatches.includes(row));
+  }
+
+  // Geographic region filter
+  if (filters.geographicRegion && filters.geographicRegion !== '') {
+    const regionMatches = regionIndex.get(filters.geographicRegion) || [];
+    filteredData = filteredData.filter(row => regionMatches.includes(row));
+  }
+
+  // Provider type filter
+  if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types') {
+    const providerMatches = providerTypeIndex.get(filters.providerType) || [];
+    filteredData = filteredData.filter(row => providerMatches.includes(row));
+  }
+
+  // Year filter
+  if (filters.year && filters.year !== '' && filters.year !== 'All Years') {
+    const yearMatches = yearIndex.get(filters.year) || [];
+    filteredData = filteredData.filter(row => yearMatches.includes(row));
+  }
+
+  // Cache the result
+  analyticsComputationCache.set(cacheKey, filteredData);
   
   return filteredData;
 };

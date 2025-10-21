@@ -349,8 +349,8 @@ export const useUploadData = (
       clearFiles();
       
       // Invalidate analytics cache since new data was added (Google-style)
-      const analyticsService = new AnalyticsDataService();
-      analyticsService.invalidateCache();
+      const { cacheInvalidation } = await import('../../analytics/utils/cacheInvalidation');
+      cacheInvalidation.onNewSurvey();
       
       // Refresh provider type detection to auto-switch to the uploaded data type
       try {

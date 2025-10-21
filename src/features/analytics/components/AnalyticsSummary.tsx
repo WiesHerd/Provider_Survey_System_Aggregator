@@ -12,8 +12,9 @@ import {
   Chip,
   Divider
 } from '@mui/material';
-import { AnalyticsSummaryProps, AggregatedData } from '../types/analytics';
+import { AnalyticsSummaryProps } from '../types/analytics';
 import { formatCurrency, formatNumber } from '../../../shared/utils';
+import { useMemoizedSummary } from '../hooks/useMemoizedCalculations';
 
 /**
  * Analytics Summary component for displaying key statistics
@@ -25,32 +26,22 @@ export const AnalyticsSummary: React.FC<AnalyticsSummaryProps> = memo(({
   data,
   filters
 }) => {
-  // Calculate summary statistics
-  const totalRecords = data.length;
-  const totalTccOrganizations = data.reduce((sum: number, row: AggregatedData) => sum + row.tcc_n_orgs, 0);
-  const totalTccIncumbents = data.reduce((sum: number, row: AggregatedData) => sum + row.tcc_n_incumbents, 0);
-  const totalWrvuOrganizations = data.reduce((sum: number, row: AggregatedData) => sum + row.wrvu_n_orgs, 0);
-  const totalWrvuIncumbents = data.reduce((sum: number, row: AggregatedData) => sum + row.wrvu_n_incumbents, 0);
-  const totalCfOrganizations = data.reduce((sum: number, row: AggregatedData) => sum + row.cf_n_orgs, 0);
-  const totalCfIncumbents = data.reduce((sum: number, row: AggregatedData) => sum + row.cf_n_incumbents, 0);
-  
-  const tccP50Values = data.map((row: AggregatedData) => row.tcc_p50).filter((val: number) => val > 0);
-  const wrvuP50Values = data.map((row: AggregatedData) => row.wrvu_p50).filter((val: number) => val > 0);
-  const cfP50Values = data.map((row: AggregatedData) => row.cf_p50).filter((val: number) => val > 0);
-
-  const averageTccP50 = tccP50Values.length > 0 
-    ? tccP50Values.reduce((sum: number, val: number) => sum + val, 0) / tccP50Values.length 
-    : 0;
-  const averageWrvuP50 = wrvuP50Values.length > 0 
-    ? wrvuP50Values.reduce((sum: number, val: number) => sum + val, 0) / wrvuP50Values.length 
-    : 0;
-  const averageCfP50 = cfP50Values.length > 0 
-    ? cfP50Values.reduce((sum: number, val: number) => sum + val, 0) / cfP50Values.length 
-    : 0;
-
-  const uniqueSpecialties = new Set(data.map((row: AggregatedData) => row.surveySpecialty));
-  const uniqueSources = new Set(data.map((row: AggregatedData) => row.surveySource));
-  const uniqueRegions = new Set(data.map((row: AggregatedData) => row.geographicRegion));
+  // Use memoized summary calculations for all statistics
+  const {
+    totalRecords,
+    totalTccOrganizations,
+    totalTccIncumbents,
+    totalWrvuOrganizations,
+    totalWrvuIncumbents,
+    totalCfOrganizations,
+    totalCfIncumbents,
+    averageTccP50,
+    averageWrvuP50,
+    averageCfP50,
+    uniqueSpecialties,
+    uniqueSources,
+    uniqueRegions
+  } = useMemoizedSummary(data);
 
   const activeFiltersCount = Object.values(filters).filter(value => value !== undefined && value !== '').length;
 

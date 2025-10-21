@@ -13,6 +13,8 @@ import {
   VariableMetrics 
 } from '../types/variables';
 import { normalizeVariableName } from '../utils/variableFormatters';
+import { analyticsComputationCache, cacheUtils } from './analyticsComputationCache';
+import { cacheInvalidation } from '../utils/cacheInvalidation';
 
 export interface RawSurveyRow {
   [key: string]: any;
@@ -70,10 +72,12 @@ class GlobalAnalyticsCache {
     data: AggregatedData[] | null;
     lastFetch: number;
     isStale: boolean;
+    version: string; // Cache version for invalidation
   } = {
     data: null,
     lastFetch: 0,
-    isStale: false
+    isStale: false,
+    version: ''
   };
   
   private mappingsCache: {
@@ -85,6 +89,7 @@ class GlobalAnalyticsCache {
     learnedVariableMappings: Record<string, string> | null;
     learnedProviderTypeMappings: Record<string, string> | null;
     lastFetch: number;
+    version: string; // Cache version for invalidation
   } = {
     specialtyMappings: null,
     columnMappings: null,
@@ -93,7 +98,33 @@ class GlobalAnalyticsCache {
     learnedRegionMappings: null,
     learnedVariableMappings: null,
     learnedProviderTypeMappings: null,
-    lastFetch: 0
+    lastFetch: 0,
+    version: ''
+  };
+
+  // Intermediate result caches
+  private normalizedRowsCache: {
+    data: NormalizedRow[] | null;
+    surveyIds: string[];
+    lastFetch: number;
+    version: string;
+  } = {
+    data: null,
+    surveyIds: [],
+    lastFetch: 0,
+    version: ''
+  };
+
+  private aggregationCache: {
+    data: AggregatedData[] | null;
+    normalizedRowsHash: string;
+    lastFetch: number;
+    version: string;
+  } = {
+    data: null,
+    normalizedRowsHash: '',
+    lastFetch: 0,
+    version: ''
   };
   
   private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes (Google-style)
@@ -130,7 +161,8 @@ class GlobalAnalyticsCache {
     this.dataCache = {
       data,
       lastFetch: Date.now(),
-      isStale: false
+      isStale: false,
+      version: this.generateCacheVersion()
     };
   }
   
@@ -144,7 +176,8 @@ class GlobalAnalyticsCache {
     this.dataCache = {
       data: null,
       lastFetch: 0,
-      isStale: false
+      isStale: false,
+      version: ''
     };
     this.mappingsCache = {
       specialtyMappings: null,
@@ -154,8 +187,98 @@ class GlobalAnalyticsCache {
       learnedRegionMappings: null,
       learnedVariableMappings: null,
       learnedProviderTypeMappings: null,
-      lastFetch: 0
+      lastFetch: 0,
+      version: ''
     };
+    this.normalizedRowsCache = {
+      data: null,
+      surveyIds: [],
+      lastFetch: 0,
+      version: ''
+    };
+    this.aggregationCache = {
+      data: null,
+      normalizedRowsHash: '',
+      lastFetch: 0,
+      version: ''
+    };
+    
+    // Clear computation cache as well
+    analyticsComputationCache.clear();
+    
+    // Trigger cache invalidation event
+    cacheInvalidation.onDataCleared();
+  }
+
+  // Generate cache version based on current data state
+  private generateCacheVersion(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  // Check if normalized rows cache is valid
+  hasValidNormalizedRows(surveyIds: string[]): boolean {
+    const now = Date.now();
+    const isSameSurveys = JSON.stringify(surveyIds.sort()) === JSON.stringify(this.normalizedRowsCache.surveyIds.sort());
+    const isFresh = (now - this.normalizedRowsCache.lastFetch) < this.CACHE_DURATION;
+    return this.normalizedRowsCache.data !== null && isSameSurveys && isFresh;
+  }
+
+  // Get cached normalized rows
+  getCachedNormalizedRows(): NormalizedRow[] | null {
+    return this.normalizedRowsCache.data;
+  }
+
+  // Set cached normalized rows
+  setCachedNormalizedRows(data: NormalizedRow[], surveyIds: string[]): void {
+    this.normalizedRowsCache = {
+      data,
+      surveyIds: [...surveyIds],
+      lastFetch: Date.now(),
+      version: this.generateCacheVersion()
+    };
+  }
+
+  // Check if aggregation cache is valid
+  hasValidAggregation(normalizedRowsHash: string): boolean {
+    const now = Date.now();
+    const isSameHash = this.aggregationCache.normalizedRowsHash === normalizedRowsHash;
+    const isFresh = (now - this.aggregationCache.lastFetch) < this.CACHE_DURATION;
+    return this.aggregationCache.data !== null && isSameHash && isFresh;
+  }
+
+  // Get cached aggregation
+  getCachedAggregation(): AggregatedData[] | null {
+    return this.aggregationCache.data;
+  }
+
+  // Set cached aggregation
+  setCachedAggregation(data: AggregatedData[], normalizedRowsHash: string): void {
+    this.aggregationCache = {
+      data,
+      normalizedRowsHash,
+      lastFetch: Date.now(),
+      version: this.generateCacheVersion()
+    };
+  }
+
+  // Clear intermediate caches when data changes
+  clearIntermediateCaches(): void {
+    this.normalizedRowsCache = {
+      data: null,
+      surveyIds: [],
+      lastFetch: 0,
+      version: ''
+    };
+    this.aggregationCache = {
+      data: null,
+      normalizedRowsHash: '',
+      lastFetch: 0,
+      version: ''
+    };
+    
+    // Clear computation cache for intermediate results
+    cacheUtils.clearAggregation();
+    cacheUtils.clearGrouping();
   }
   
   // Get cached mappings
@@ -211,7 +334,8 @@ class GlobalAnalyticsCache {
       learnedRegionMappings: learnedRegionMappings || null,
       learnedVariableMappings: learnedVariableMappings || null,
       learnedProviderTypeMappings: learnedProviderTypeMappings || null,
-      lastFetch: Date.now()
+      lastFetch: Date.now(),
+      version: this.generateCacheVersion()
     };
   }
 }
@@ -219,6 +343,70 @@ class GlobalAnalyticsCache {
 export class AnalyticsDataService {
   private dataService = getDataService();
   private globalCache = GlobalAnalyticsCache.getInstance();
+  private lastDataHash: string | null = null;
+
+  /**
+   * Check if survey data has changed since last cache
+   */
+  private async hasDataChanged(): Promise<boolean> {
+    try {
+      const surveys = await this.dataService.getAllSurveys();
+      const currentHash = JSON.stringify(surveys.map(s => ({
+        id: s.id,
+        uploadDate: s.uploadDate,
+        rowCount: s.rowCount,
+        specialtyCount: s.specialtyCount
+      })));
+      
+      if (this.lastDataHash === null || this.lastDataHash !== currentHash) {
+        this.lastDataHash = currentHash;
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking data changes:', error);
+      return true; // Assume changed if we can't check
+    }
+  }
+
+  /**
+   * Smart cache invalidation - only clear when data actually changes
+   */
+  private async shouldInvalidateCache(): Promise<boolean> {
+    const dataChanged = await this.hasDataChanged();
+    
+    if (dataChanged) {
+      console.log('🔍 Data has changed, invalidating cache');
+      this.globalCache.clearCache();
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if we have cached data available
+   */
+  public hasCachedData(): boolean {
+    return this.globalCache.hasFreshData();
+  }
+
+  /**
+   * Get cached data without triggering a fetch
+   */
+  public getCachedData(): AggregatedData[] | null {
+    return this.globalCache.getCachedData();
+  }
+
+  /**
+   * Manually invalidate cache (call this when surveys are uploaded or mappings change)
+   */
+  public invalidateCache(): void {
+    console.log('🔍 Manually invalidating analytics cache');
+    this.globalCache.clearCache();
+    this.lastDataHash = null;
+  }
 
   /**
    * Get cached mappings or fetch fresh ones (including learned mappings)
@@ -298,11 +486,14 @@ export class AnalyticsDataService {
     year: ''
   }): Promise<AggregatedData[]> {
     try {
+      // Smart cache invalidation - only clear if data has actually changed
+      await this.shouldInvalidateCache();
       
       // Google-style caching: Check if we have fresh data first
       if (this.globalCache.hasFreshData()) {
         const cachedData = this.globalCache.getCachedData();
         if (cachedData) {
+          console.log('🚀 Using cached analytics data (fast!)');
           // Trigger background refresh if data is getting stale
           if (this.globalCache.hasStaleData()) {
             this.refreshDataInBackground();
@@ -332,13 +523,21 @@ export class AnalyticsDataService {
         return [];
       }
       
-      // Process surveys in parallel for better performance
-      const allNormalizedRows: NormalizedRow[] = [];
+      // Check for cached normalized rows first
+      const surveyIds = surveys.map(s => s.id);
+      let allNormalizedRows: NormalizedRow[] = [];
       
+      if (this.globalCache.hasValidNormalizedRows(surveyIds)) {
+        const cachedRows = this.globalCache.getCachedNormalizedRows();
+        if (cachedRows) {
+          allNormalizedRows = cachedRows;
+        }
+      }
       
-      // Limit concurrent surveys to avoid overwhelming IndexedDB
-      const maxConcurrent = Math.min(3, surveys.length);
-      const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
+      if (allNormalizedRows.length === 0) {
+        // Process surveys in parallel for better performance
+        const maxConcurrent = Math.min(3, surveys.length);
+        const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
         
         try {
           // Get survey data with pagination to limit memory usage (reduced for faster loading)
@@ -378,24 +577,51 @@ export class AnalyticsDataService {
         }
       });
       
-      // Wait for all surveys to complete
-      const surveyResults = await Promise.all(surveyPromises);
-      
-      // Flatten results
-      surveyResults.forEach(normalizedRows => {
-        allNormalizedRows.push(...normalizedRows);
-      });
-      
+        // Wait for all surveys to complete
+        const surveyResults = await Promise.all(surveyPromises);
+        
+        // Flatten results
+        surveyResults.forEach(normalizedRows => {
+          allNormalizedRows.push(...normalizedRows);
+        });
+        
+        // Cache normalized rows for future use
+        if (allNormalizedRows.length > 0) {
+          this.globalCache.setCachedNormalizedRows(allNormalizedRows, surveyIds);
+        }
+      }
       
       if (allNormalizedRows.length === 0) {
         return [];
       }
       
-      // Stack and aggregate the normalized data in chunks for better performance
-      const aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
+      // Check for cached aggregation
+      const normalizedRowsHash = JSON.stringify(allNormalizedRows.map(r => ({
+        specialty: r.specialty,
+        providerType: r.providerType,
+        region: r.region,
+        surveySource: r.surveySource,
+        surveyYear: r.surveyYear
+      })));
       
-      // Cache the results (Google-style)
-      this.globalCache.setCachedData(aggregatedData);
+      let aggregatedData: AggregatedData[];
+      
+      if (this.globalCache.hasValidAggregation(normalizedRowsHash)) {
+        const cachedAggregation = this.globalCache.getCachedAggregation();
+        if (cachedAggregation) {
+          aggregatedData = cachedAggregation;
+        } else {
+          aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
+          this.globalCache.setCachedAggregation(aggregatedData, normalizedRowsHash);
+        }
+      } else {
+        // Stack and aggregate the normalized data in chunks for better performance
+        aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
+        
+        // Cache both aggregation and final data
+        this.globalCache.setCachedAggregation(aggregatedData, normalizedRowsHash);
+        this.globalCache.setCachedData(aggregatedData);
+      }
       
       return aggregatedData;
       
@@ -505,12 +731,6 @@ export class AnalyticsDataService {
     }
   }
 
-  /**
-   * Invalidate cache (call this when data changes)
-   */
-  invalidateCache(): void {
-    this.globalCache.markAsStale();
-  }
 
   /**
    * Force refresh cache (call this when data structure changes)

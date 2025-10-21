@@ -37,8 +37,8 @@ const Dashboard: React.FC = () => {
 
   const cardSections: CardSection[] = [
     {
-      title: 'Data Management',
-      description: 'Upload and standardize your survey data for consistency',
+      title: 'Data Upload & Mappings',
+      description: 'Upload surveys and standardize your data for analysis',
       cards: [
         {
           title: 'New Survey',
@@ -91,8 +91,8 @@ const Dashboard: React.FC = () => {
       ]
     },
     {
-      title: 'Analytics & Reports',
-      description: 'Generate insights and reports from your survey data',
+      title: 'Benchmarking & Analytics',
+      description: 'Analyze and compare compensation data across surveys',
       cards: [
         {
           title: 'Benchmarking',
@@ -119,20 +119,20 @@ const Dashboard: React.FC = () => {
           gradient: 'from-violet-500 to-violet-600',
         },
         {
-          title: 'Report Builder',
-          description: 'Create custom reports and visualizations from your survey data',
-          icon: DocumentChartBarIcon,
-          path: '/custom-reports',
-          color: 'bg-teal-500',
-          gradient: 'from-teal-500 to-teal-600',
-        },
-        {
           title: 'Fair Market Value',
           description: 'Calculate and compare compensation with market data',
           icon: CurrencyDollarIcon,
           path: '/fair-market-value',
           color: 'bg-blue-600',
           gradient: 'from-blue-600 to-blue-700',
+        },
+        {
+          title: 'Report Builder',
+          description: 'Create custom reports and visualizations from your survey data',
+          icon: DocumentChartBarIcon,
+          path: '/custom-reports',
+          color: 'bg-teal-500',
+          gradient: 'from-teal-500 to-teal-600',
         },
       ]
     },
@@ -168,64 +168,62 @@ const Dashboard: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                  {/* BenchPoint Branding */}
+         {/* Top Navigation with Welcome and Logo */}
          <motion.div
            initial={{ opacity: 0, y: -20 }}
            animate={{ opacity: 1, y: 0 }}
            transition={{ duration: 0.6 }}
-           className="text-center mb-8"
+           className="flex items-center justify-end mb-8"
          >
-                     {/* Logo and Brand */}
-          <div className="flex items-center justify-center mb-6">
-            <div className="flex items-center space-x-4">
-              {/* Logo */}
-              <div className="relative">
-                <img 
-                  src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
-                  alt="BenchPoint Logo" 
-                  className="w-16 h-16 object-contain transition-transform duration-300 hover:scale-110 hover:rotate-12 cursor-pointer"
-                  onError={(e) => {
-                    // Replace with inline SVG fallback
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const parent = target.parentElement;
-                    if (parent) {
-                      parent.innerHTML = `
-                        <svg class="w-16 h-16 transition-transform duration-300 hover:scale-110 hover:rotate-12 cursor-pointer" fill="currentColor" viewBox="0 0 64 64">
-                          <defs>
-                            <linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-                              <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
-                            </linearGradient>
-                          </defs>
-                          <circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
-                          <circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
-                          <circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
-                          <circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
-                          <circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
-                          <circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
-                          <circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
-                          <line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
-                          <line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
-                          <line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
-                          <line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-                          <line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-                          <line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-                          <circle cx="32" cy="32" r="4" fill="white"/>
-                          <circle cx="32" cy="32" r="2" fill="#4F46E5"/>
-                        </svg>
-                      `;
-                    }
-                  }}
-                />
-              </div>
-              {/* Brand Name */}
-              <div className="text-3xl font-bold">
-                <span className="text-indigo-600">Bench</span>
-                <span className="text-purple-600">Point</span>
-              </div>
-            </div>
-          </div>
+           {/* Logo and Brand - Right Side */}
+           <div className="flex items-center space-x-3">
+             <div className="relative">
+               <img 
+                 src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
+                 alt="BenchPoint Logo" 
+                 className="w-12 h-12 object-contain transition-transform duration-300 hover:scale-110 cursor-pointer"
+                 onError={(e) => {
+                   // Replace with inline SVG fallback
+                   const target = e.target as HTMLImageElement;
+                   target.style.display = 'none';
+                   const parent = target.parentElement;
+                   if (parent) {
+                     parent.innerHTML = `
+                       <svg class="w-12 h-12 transition-transform duration-300 hover:scale-110 cursor-pointer" fill="currentColor" viewBox="0 0 64 64">
+                         <defs>
+                           <linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                             <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+                             <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+                           </linearGradient>
+                         </defs>
+                         <circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
+                         <circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+                         <circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+                         <circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+                         <circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+                         <circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+                         <circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+                         <line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
+                         <line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
+                         <line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
+                         <line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                         <line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                         <line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
+                         <circle cx="32" cy="32" r="4" fill="white"/>
+                         <circle cx="32" cy="32" r="2" fill="#4F46E5"/>
+                       </svg>
+                     `;
+                   }
+                 }}
+               />
+             </div>
+             <div className="text-2xl font-bold">
+               <span className="text-indigo-600">Bench</span>
+               <span className="text-purple-600">Point</span>
+             </div>
+           </div>
          </motion.div>
+
 
         {/* Sections */}
         <motion.div
@@ -263,7 +261,13 @@ const Dashboard: React.FC = () => {
                 section.cards.length === 5 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
                 "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
               )}>
-                {section.cards.map((card) => (
+                {section.cards.map((card) => {
+                  // Skip placeholder cards
+                  if (!card.title) {
+                    return <div key="placeholder" className="hidden" />;
+                  }
+                  
+                  return (
                   <motion.div
                     key={card.title}
                     variants={cardVariants}
@@ -321,7 +325,8 @@ const Dashboard: React.FC = () => {
                       </div>
                     </button>
                   </motion.div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Modern Section Divider */}

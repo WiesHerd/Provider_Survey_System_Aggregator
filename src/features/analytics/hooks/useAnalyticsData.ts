@@ -11,6 +11,7 @@ import { AggregatedData, AnalyticsFilters, UseAnalyticsReturn } from '../types/a
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
 import { AnalyticsDataService } from '../services/analyticsDataService';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
+import { cacheInvalidation, CacheInvalidationEvent } from '../utils/cacheInvalidation';
 
 /**
  * Custom hook for managing analytics data
@@ -48,16 +49,39 @@ const useAnalyticsData = (
   // Data fetching function - fetch ALL data without filters
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      startProgress(); // Start smooth progress animation
-
-
       // Use singleton AnalyticsDataService instance (Google-style)
       const analyticsDataService = new AnalyticsDataService();
       
-      // Clear cache to force recalculation with fixed percentile logic and provider type normalization
-      analyticsDataService.clearCache();
+      // Check if we have cached data first (professional app behavior)
+      if (analyticsDataService.hasCachedData()) {
+        console.log('🚀 Using cached analytics data - no loading spinner needed');
+        const cachedData = analyticsDataService.getCachedData();
+        if (cachedData) {
+          setData(cachedData);
+          setLoading(false);
+          
+          // Still fetch mappings in background (they're lightweight)
+          const dataService = getDataService();
+          Promise.all([
+            dataService.getAllSpecialtyMappings(),
+            dataService.getAllColumnMappings(),
+            dataService.getRegionMappings()
+          ]).then(([specialtyMappings, colMappings, regMappings]) => {
+            setMappings(specialtyMappings);
+            setColumnMappings(colMappings);
+            setRegionMappings(regMappings);
+          }).catch(err => {
+            console.warn('Failed to load mappings in background:', err);
+          });
+          
+          return; // Exit early with cached data
+        }
+      }
+      
+      // Only show loading if we actually need to fetch data
+      setLoading(true);
+      setError(null);
+      startProgress(); // Start smooth progress animation
       
       // NEW: Use dynamic data fetching if variables are selected
       const allData = selectedVariables.length > 0 
@@ -179,9 +203,53 @@ const useAnalyticsData = (
     setFilters(newFilters);
   }, []);
 
+  // Force refresh function (on-demand)
+  const forceRefresh = useCallback(async () => {
+    console.log('🔄 Force refreshing analytics data (on-demand)');
+    const analyticsDataService = new AnalyticsDataService();
+    analyticsDataService.invalidateCache();
+    await fetchData();
+  }, [fetchData]);
+
   // Initial data fetch and refetch when filters change
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const { cacheInvalidationManager, CacheInvalidationEvent } = require('../utils/cacheInvalidation');
+    
+    const unsubscribeMappingChanged = cacheInvalidationManager.onInvalidation(
+      CacheInvalidationEvent.MAPPING_CHANGED,
+      () => {
+        console.log('🔄 Mapping changed - refreshing analytics data');
+        fetchData();
+      }
+    );
+
+    const unsubscribeNewSurvey = cacheInvalidationManager.onInvalidation(
+      CacheInvalidationEvent.NEW_SURVEY_UPLOADED,
+      () => {
+        console.log('🔄 New survey uploaded - refreshing analytics data');
+        fetchData();
+      }
+    );
+
+    const unsubscribeDataCleared = cacheInvalidationManager.onInvalidation(
+      CacheInvalidationEvent.DATA_CLEARED,
+      () => {
+        console.log('🔄 Data cleared - refreshing analytics data');
+        fetchData();
+      }
+    );
+
+    // Cleanup listeners on unmount
+    return () => {
+      unsubscribeMappingChanged();
+      unsubscribeNewSurvey();
+      unsubscribeDataCleared();
+    };
   }, [fetchData]);
 
   // Return hook interface
@@ -194,6 +262,7 @@ const useAnalyticsData = (
     filters,
     setFilters: updateFilters,
     refetch: fetchData,
+    forceRefresh, // New: Force refresh on-demand
     exportToExcel,
     exportToCSV
   };

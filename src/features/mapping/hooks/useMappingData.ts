@@ -259,6 +259,11 @@ export const useMappingData = (): UseMappingDataReturn => {
       // Refresh learned mappings to show the new ones (provider-type specific)
       const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
       setLearnedMappings(learnedData);
+      
+      // Invalidate analytics cache since mappings changed
+      const { cacheInvalidation } = await import('../../analytics/utils/cacheInvalidation');
+      cacheInvalidation.onMappingChanged();
+      
       // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
       setError('Failed to create mappings');

@@ -18,18 +18,17 @@ import {
 } from '@mui/material';
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
-import { groupBySpecialty, calculateSummaryRows, calculateDynamicSummaryRows } from '../utils/analyticsCalculations';
+import { calculateSummaryRows, calculateDynamicSummaryRows } from '../utils/analyticsCalculations';
 import { formatCurrency, formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { 
-  formatVariableDisplayName, 
   formatVariableValue, 
-  getVariableColor,
   getVariableLightBackgroundColor 
 } from '../utils/variableFormatters';
 import { DynamicAggregatedData } from '../types/variables';
 import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
 import { EmptyState } from '../../mapping/components/shared/EmptyState';
 import { BoltIcon } from '@heroicons/react/24/outline';
+import { useMemoizedGrouping, useMemoizedColumnGroups } from '../hooks/useMemoizedCalculations';
 
 /**
  * Format region name for display in proper case
@@ -80,41 +79,11 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     return data.length > 0 && 'variables' in data[0];
   }, [data]);
   
-  // Generate column groups for dynamic variables
-  const columnGroups = useMemo(() => {
-    if (!isDynamicData || selectedVariables.length === 0) {
-      return [];
-    }
-    
-    return selectedVariables.map((varName, index) => ({
-      normalizedName: varName,
-      displayName: formatVariableDisplayName(varName),
-      color: getVariableColor(varName, index),
-      category: varName.includes('per') ? 'ratio' : 
-                varName.includes('salary') || varName.includes('tcc') ? 'compensation' :
-                varName.includes('rvu') || varName.includes('units') ? 'productivity' : 'other'
-    }));
-  }, [isDynamicData, selectedVariables]);
+  // Use memoized column groups for dynamic variables
+  const columnGroups = useMemoizedColumnGroups(selectedVariables, isDynamicData);
   
-  // Memoize grouped data to avoid recalculation
-  const groupedData = useMemo(() => {
-    if (isDynamicData) {
-      // For dynamic data, create a simple grouping by specialty
-      const dynamicData = data as DynamicAggregatedData[];
-      const grouped: Record<string, DynamicAggregatedData[]> = {};
-      
-      dynamicData.forEach(row => {
-        const key = row.surveySpecialty || row.standardizedName || 'Unknown';
-        if (!grouped[key]) {
-          grouped[key] = [];
-        }
-        grouped[key].push(row);
-      });
-      
-      return grouped;
-    }
-    return groupBySpecialty(data as any[]);
-  }, [data, isDynamicData]);
+  // Use memoized grouping to avoid recalculation
+  const groupedData = useMemoizedGrouping(data);
   
   // Pagination calculations
   const totalSpecialties = Object.keys(groupedData).length;
@@ -127,6 +96,26 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     const specialties = Object.keys(groupedData);
     return specialties.slice(startIndex, endIndex);
   }, [groupedData, startIndex, endIndex]);
+
+  // Pre-calculate summary rows for all specialties to avoid hook calls in render
+  const summaryRowsCache = useMemo(() => {
+    const cache: Record<string, any> = {};
+    Object.keys(groupedData).forEach(specialty => {
+      const rows = groupedData[specialty];
+      if (isDynamicData) {
+        // For dynamic data, use the calculation directly
+        cache[specialty] = calculateDynamicSummaryRows(rows as DynamicAggregatedData[], selectedVariables);
+      } else {
+        cache[specialty] = calculateSummaryRows(rows as any[]);
+      }
+    });
+    return cache;
+  }, [groupedData, isDynamicData, selectedVariables]);
+
+  // Helper function to get cached summary rows
+  const getSummaryRows = useCallback((specialty: string) => {
+    return summaryRowsCache[specialty] || { simple: {}, weighted: {} };
+  }, [summaryRowsCache]);
   
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
@@ -176,7 +165,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <EmptyState
           icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
-          title="No Analytics Data Available"
+          title="No Benchmarking Data Available"
           message="Try adjusting your filters to see results. Upload surveys and complete mappings to generate analytics data."
         />
       </div>
@@ -442,10 +431,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
 
                 {/* Summary Rows - Memoized for performance */}
                 {(() => {
+                  const summaryData = getSummaryRows(specialty);
                   if (isDynamicData) {
-                    // For dynamic data, calculate summary rows for selected variables
-                    const dynamicRows = rows as DynamicAggregatedData[];
-                    const summaryData = calculateDynamicSummaryRows(dynamicRows, selectedVariables);
                     return (
                       <>
                         {/* Simple Average Row */}
@@ -577,7 +564,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     );
                   }
                   
-                  const { simple, weighted } = calculateSummaryRows(rows as any[]);
+                  const { simple, weighted } = summaryData;
                   return (
                     <>
                       <TableRow sx={{ backgroundColor: 'grey.50' }}>
