@@ -4,7 +4,7 @@ import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUp
 import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
-import { ISurveyRow, ISurveyMetadata } from '../types/survey';
+import { ISurveyRow } from '../types/survey';
 import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
@@ -281,7 +281,7 @@ const SurveyUpload: React.FC = () => {
     };
 
     loadSurveys();
-  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType]);
+  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedSurvey]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => Object.assign(file, {
@@ -618,7 +618,31 @@ const SurveyUpload: React.FC = () => {
       <div className="w-full min-h-screen">
         <div className="w-full flex flex-col gap-4">
           
-
+          {/* Error Display */}
+          {error && (
+            <div className="w-full bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+                <div className="ml-auto pl-3">
+                  <button
+                    onClick={() => setError('')}
+                    className="text-red-400 hover:text-red-600"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Upload Form Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-upload-section>

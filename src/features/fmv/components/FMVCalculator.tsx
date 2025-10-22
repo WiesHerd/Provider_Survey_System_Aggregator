@@ -180,6 +180,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             onFiltersChange={updateFilters}
             uniqueValues={uniqueValues}
           />
+          
         </div>
 
 

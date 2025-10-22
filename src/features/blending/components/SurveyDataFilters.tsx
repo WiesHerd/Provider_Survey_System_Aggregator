@@ -74,6 +74,14 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
               '& .MuiOutlinedInput-notchedOutline': {
                 borderRadius: '8px !important'
               }
+            },
+            '& .MuiInputLabel-root': {
+              backgroundColor: 'white',
+              paddingLeft: '4px',
+              paddingRight: '4px',
+              '&.Mui-focused': {
+                color: '#3b82f6'
+              }
             }
           }}
         />

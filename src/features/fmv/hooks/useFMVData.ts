@@ -16,12 +16,112 @@ import {
   applyFTEAdjustment
 } from '../utils/fmvCalculations';
 
+// Enterprise-grade FMV cache
+class FMVCache {
+  private static instance: FMVCache;
+  private dataCache: {
+    data: any[] | null;
+    lastFetch: number;
+    isStale: boolean;
+    version: string;
+  } = {
+    data: null,
+    lastFetch: 0,
+    isStale: false,
+    version: ''
+  };
+  
+  private uniqueValuesCache: {
+    data: UniqueFilterValues | null;
+    lastFetch: number;
+    version: string;
+  } = {
+    data: null,
+    lastFetch: 0,
+    version: ''
+  };
+  
+  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+  private readonly STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+  
+  static getInstance(): FMVCache {
+    if (!FMVCache.instance) {
+      FMVCache.instance = new FMVCache();
+    }
+    return FMVCache.instance;
+  }
+  
+  hasFreshData(): boolean {
+    const now = Date.now();
+    return this.dataCache.data !== null && 
+           (now - this.dataCache.lastFetch) < this.CACHE_DURATION;
+  }
+  
+  hasStaleData(): boolean {
+    const now = Date.now();
+    return this.dataCache.data !== null && 
+           (now - this.dataCache.lastFetch) < this.STALE_THRESHOLD;
+  }
+  
+  getCachedData(): any[] | null {
+    return this.dataCache.data;
+  }
+  
+  setCachedData(data: any[]): void {
+    this.dataCache = {
+      data,
+      lastFetch: Date.now(),
+      isStale: false,
+      version: this.generateCacheVersion()
+    };
+  }
+  
+  hasFreshUniqueValues(): boolean {
+    const now = Date.now();
+    return this.uniqueValuesCache.data !== null && 
+           (now - this.uniqueValuesCache.lastFetch) < this.CACHE_DURATION;
+  }
+  
+  getCachedUniqueValues(): UniqueFilterValues | null {
+    return this.uniqueValuesCache.data;
+  }
+  
+  setCachedUniqueValues(data: UniqueFilterValues): void {
+    this.uniqueValuesCache = {
+      data,
+      lastFetch: Date.now(),
+      version: this.generateCacheVersion()
+    };
+  }
+  
+  clearCache(): void {
+    this.dataCache = {
+      data: null,
+      lastFetch: 0,
+      isStale: false,
+      version: ''
+    };
+    this.uniqueValuesCache = {
+      data: null,
+      lastFetch: 0,
+      version: ''
+    };
+  }
+  
+  private generateCacheVersion(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+}
+
 /**
  * Custom hook for managing FMV calculator data and state
  * 
  * @returns Object containing FMV state and actions
  */
 export const useFMVData = () => {
+  // Get cache instance
+  const fmvCache = FMVCache.getInstance();
+  
   // Core state
   const [filters, setFilters] = useState<FMVFilters>({
     specialty: '',
@@ -76,6 +176,15 @@ export const useFMVData = () => {
    */
   const calculateFilterValues = useCallback(async () => {
     try {
+      // Check cache first
+      if (fmvCache.hasFreshUniqueValues()) {
+        const cachedValues = fmvCache.getCachedUniqueValues();
+        if (cachedValues) {
+          console.log('🚀 Using cached FMV filter values (fast!)');
+          return cachedValues;
+        }
+      }
+      
       // Use the same AnalyticsDataService as the Analytics screen
       const analyticsDataService = new AnalyticsDataService();
       const allData = await analyticsDataService.getAnalyticsData({
@@ -147,6 +256,9 @@ export const useFMVData = () => {
         years: Array.from(yearSet).sort()
       };
       
+      // Cache the result
+      fmvCache.setCachedUniqueValues(result);
+      console.log('💾 Cached FMV filter values for future use');
       
       return result;
     } catch (error) {
@@ -175,6 +287,193 @@ export const useFMVData = () => {
   }, [calculateFilterValues]);
 
   /**
+   * Process market data with current filters (extracted for reuse)
+   */
+  const processMarketData = useCallback(async (allData: any[]) => {
+    if (allData.length === 0) {
+      setMarketData(null);
+      setPercentiles({ tcc: null, wrvu: null, cf: null });
+      return;
+    }
+
+    // Apply client-side filtering using the same logic as Analytics screen
+    const filteredData = allData.filter(row => {
+      // CRITICAL: Exclude summary rows that are created by AnalyticsTable
+      // These rows have surveySource like "Family Medicine - Simple Average" or "Family Medicine - Weighted Average"
+      if (row.surveySource && (
+        row.surveySource.includes(' - Simple Average') || 
+        row.surveySource.includes(' - Weighted Average')
+      )) {
+        return false;
+      }
+      
+      // Specialty filter - use exact matching like Analytics
+      if (filters.specialty && filters.specialty !== '') {
+        if (row.standardizedName !== filters.specialty) {
+          return false;
+        }
+      }
+      
+      // Survey source filter (exclude "All Sources")
+      if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources' && row.surveySource !== filters.surveySource) {
+        return false;
+      }
+      
+      // Geographic region filter
+      if (filters.region && filters.region !== '' && filters.region !== 'All Regions' && row.geographicRegion !== filters.region) {
+        return false;
+      }
+      
+      // Provider type filter (exclude "All Types")
+      if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types' && row.providerType !== filters.providerType) {
+        return false;
+      }
+      
+      // Year filter (exclude "All Years")
+      if (filters.year && filters.year !== '' && filters.year !== 'All Years' && row.surveyYear !== filters.year) {
+        return false;
+      }
+      
+      return true;
+    });
+
+    setSurveyCount(filteredData.length);
+
+    if (filteredData.length === 0) {
+      setMarketData(null);
+      setPercentiles({ tcc: null, wrvu: null, cf: null });
+      setSurveyCount(0);
+      return;
+    }
+
+    // Convert AnalyticsDataService format to FMV format
+    const normalizedRows: NormalizedSurveyRow[] = filteredData.map((row, index) => ({
+      id: `fmv-${index}`, // Generate a unique ID
+      providerType: row.providerType || '',
+      geographicRegion: row.geographicRegion || '',
+      specialty: row.surveySpecialty || '',
+      normalizedSpecialty: row.standardizedName || '',
+      surveySource: (row.surveySource as any) || 'Custom',
+      year: row.surveyYear || '',
+      // TCC metrics with organizational data
+      tcc_n_orgs: row.tcc_n_orgs || 0,
+      tcc_n_incumbents: row.tcc_n_incumbents || 0,
+      tcc_p25: row.tcc_p25 || 0,
+      tcc_p50: row.tcc_p50 || 0,
+      tcc_p75: row.tcc_p75 || 0,
+      tcc_p90: row.tcc_p90 || 0,
+      // wRVU metrics with organizational data
+      wrvu_n_orgs: row.wrvu_n_orgs || 0,
+      wrvu_n_incumbents: row.wrvu_n_incumbents || 0,
+      wrvu_p25: row.wrvu_p25 || 0,
+      wrvu_p50: row.wrvu_p50 || 0,
+      wrvu_p75: row.wrvu_p75 || 0,
+      wrvu_p90: row.wrvu_p90 || 0,
+      // CF metrics with organizational data
+      cf_n_orgs: row.cf_n_orgs || 0,
+      cf_n_incumbents: row.cf_n_incumbents || 0,
+      cf_p25: row.cf_p25 || 0,
+      cf_p50: row.cf_p50 || 0,
+      cf_p75: row.cf_p75 || 0,
+      cf_p90: row.cf_p90 || 0,
+    }));
+
+    // Handle specialty blending if enabled
+    if (filters.useSpecialtyBlending && filters.specialtyBlending) {
+      // Import blending calculation utilities
+      const { calculateBlendedMarketData } = await import('../utils/specialtyBlendingCalculations');
+      
+      // Group data by specialty for blending
+      const specialtyDataMap = new Map<string, NormalizedSurveyRow[]>();
+      normalizedRows.forEach(row => {
+        const specialty = row.normalizedSpecialty || row.specialty;
+        if (!specialtyDataMap.has(specialty)) {
+          specialtyDataMap.set(specialty, []);
+        }
+        specialtyDataMap.get(specialty)!.push(row);
+      });
+      
+      // Prepare specialty data for blending
+      const specialtyData = filters.specialtyBlending.specialties.map(blendItem => {
+        const specialtyRows = specialtyDataMap.get(blendItem.specialty) || [];
+        const specialtyMarketData = calculateMarketData(specialtyRows, filters.aggregationMethod);
+        
+        return {
+          specialty: blendItem.specialty,
+          data: specialtyMarketData,
+          percentage: blendItem.percentage,
+          weight: blendItem.weight,
+          sampleSize: specialtyRows.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0)
+        };
+      });
+      
+      // Calculate blended market data
+      const blendedMarketData = calculateBlendedMarketData(specialtyData, filters.specialtyBlending);
+      
+      // Store blended data for display
+      setBlendedData(blendedMarketData);
+      
+      // Use blended percentiles for user calculations
+      const calculatedMarketData = {
+        tcc: blendedMarketData.blendedPercentiles.tcc,
+        wrvu: blendedMarketData.blendedPercentiles.wrvu,
+        cf: blendedMarketData.blendedPercentiles.cf
+      };
+      
+      // Calculate user percentiles using blended data
+      const calculatedPercentiles = calculateUserPercentiles(
+        calculatedMarketData,
+        tccFTEAdjusted,
+        wrvusFTEAdjusted,
+        Number(cf)
+      );
+
+      setMarketData(calculatedMarketData);
+      setPercentiles(calculatedPercentiles);
+    } else {
+      // Clear blended data when not using blending
+      setBlendedData(null);
+      
+      // Calculate market data using the normalized rows with the selected aggregation method
+      const calculatedMarketData = calculateMarketData(normalizedRows, filters.aggregationMethod);
+
+      // Calculate user percentiles
+      const calculatedPercentiles = calculateUserPercentiles(
+        calculatedMarketData,
+        tccFTEAdjusted,
+        wrvusFTEAdjusted,
+        Number(cf)
+      );
+
+      setMarketData(calculatedMarketData);
+      setPercentiles(calculatedPercentiles);
+    }
+  }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf]);
+
+  /**
+   * Background refresh for stale data (Google-style)
+   */
+  const fetchMarketDataInBackground = useCallback(async () => {
+    try {
+      console.log('🔄 Background refreshing FMV data...');
+      const analyticsDataService = new AnalyticsDataService();
+      const allData = await analyticsDataService.getAnalyticsData({
+        specialty: '',
+        surveySource: '',
+        geographicRegion: '',
+        providerType: '',
+        year: ''
+      });
+      
+      // Update cache with fresh data
+      fmvCache.setCachedData(allData);
+      console.log('✅ Background refresh completed');
+    } catch (error) {
+      console.warn('⚠️ Background refresh failed:', error);
+    }
+  }, []);
+
+  /**
    * Fetches and calculates market data based on current filters
    */
   const fetchMarketData = useCallback(async () => {
@@ -182,6 +481,24 @@ export const useFMVData = () => {
     setError(null);
 
     try {
+      // Check cache first for all data
+      if (fmvCache.hasFreshData()) {
+        const cachedData = fmvCache.getCachedData();
+        if (cachedData) {
+          console.log('🚀 Using cached FMV market data (fast!)');
+          // Trigger background refresh if data is getting stale
+          if (fmvCache.hasStaleData()) {
+            // Background refresh without blocking UI
+            setTimeout(() => {
+              fetchMarketDataInBackground();
+            }, 0);
+          }
+          // Process cached data with current filters
+          await processMarketData(cachedData);
+          return;
+        }
+      }
+      
       // Use the same approach as Analytics screen: fetch ALL data first, then filter client-side
       const analyticsDataService = new AnalyticsDataService();
       const allData = await analyticsDataService.getAnalyticsData({
@@ -192,172 +509,18 @@ export const useFMVData = () => {
         year: ''
       });
       
-      if (allData.length === 0) {
-        setMarketData(null);
-        setPercentiles({ tcc: null, wrvu: null, cf: null });
-        return;
-      }
-
-      // Apply client-side filtering using the same logic as Analytics screen
-      const filteredData = allData.filter(row => {
-        // CRITICAL: Exclude summary rows that are created by AnalyticsTable
-        // These rows have surveySource like "Family Medicine - Simple Average" or "Family Medicine - Weighted Average"
-        if (row.surveySource && (
-          row.surveySource.includes(' - Simple Average') || 
-          row.surveySource.includes(' - Weighted Average')
-        )) {
-          return false;
-        }
-        
-        // Specialty filter - use exact matching like Analytics
-        if (filters.specialty && filters.specialty !== '') {
-          if (row.standardizedName !== filters.specialty) {
-            return false;
-          }
-        }
-        
-        // Survey source filter (exclude "All Sources")
-        if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources' && row.surveySource !== filters.surveySource) {
-          return false;
-        }
-        
-        // Geographic region filter
-        if (filters.region && filters.region !== '' && filters.region !== 'All Regions' && row.geographicRegion !== filters.region) {
-          return false;
-        }
-        
-        // Provider type filter (exclude "All Types")
-        if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types' && row.providerType !== filters.providerType) {
-          return false;
-        }
-        
-        // Year filter (exclude "All Years")
-        if (filters.year && filters.year !== '' && filters.year !== 'All Years' && row.surveyYear !== filters.year) {
-          return false;
-        }
-        
-        return true;
-      });
-
-      setSurveyCount(filteredData.length);
-
-      if (filteredData.length === 0) {
-        setMarketData(null);
-        setPercentiles({ tcc: null, wrvu: null, cf: null });
-        setSurveyCount(0);
-        return;
-      }
-
-      // Convert AnalyticsDataService format to FMV format
-      const normalizedRows: NormalizedSurveyRow[] = filteredData.map((row, index) => ({
-        id: `fmv-${index}`, // Generate a unique ID
-        providerType: row.providerType || '',
-        geographicRegion: row.geographicRegion || '',
-        specialty: row.surveySpecialty || '',
-        normalizedSpecialty: row.standardizedName || '',
-        surveySource: (row.surveySource as any) || 'Custom',
-        year: row.surveyYear || '',
-        // TCC metrics with organizational data
-        tcc_n_orgs: row.tcc_n_orgs || 0,
-        tcc_n_incumbents: row.tcc_n_incumbents || 0,
-        tcc_p25: row.tcc_p25 || 0,
-        tcc_p50: row.tcc_p50 || 0,
-        tcc_p75: row.tcc_p75 || 0,
-        tcc_p90: row.tcc_p90 || 0,
-        // wRVU metrics with organizational data
-        wrvu_n_orgs: row.wrvu_n_orgs || 0,
-        wrvu_n_incumbents: row.wrvu_n_incumbents || 0,
-        wrvu_p25: row.wrvu_p25 || 0,
-        wrvu_p50: row.wrvu_p50 || 0,
-        wrvu_p75: row.wrvu_p75 || 0,
-        wrvu_p90: row.wrvu_p90 || 0,
-        // CF metrics with organizational data
-        cf_n_orgs: row.cf_n_orgs || 0,
-        cf_n_incumbents: row.cf_n_incumbents || 0,
-        cf_p25: row.cf_p25 || 0,
-        cf_p50: row.cf_p50 || 0,
-        cf_p75: row.cf_p75 || 0,
-        cf_p90: row.cf_p90 || 0,
-      }));
-
-
-      // Handle specialty blending if enabled
-      if (filters.useSpecialtyBlending && filters.specialtyBlending) {
-        
-        // Import blending calculation utilities
-        const { calculateBlendedMarketData } = await import('../utils/specialtyBlendingCalculations');
-        
-        // Group data by specialty for blending
-        const specialtyDataMap = new Map<string, NormalizedSurveyRow[]>();
-        normalizedRows.forEach(row => {
-          const specialty = row.normalizedSpecialty || row.specialty;
-          if (!specialtyDataMap.has(specialty)) {
-            specialtyDataMap.set(specialty, []);
-          }
-          specialtyDataMap.get(specialty)!.push(row);
-        });
-        
-        // Prepare specialty data for blending
-        const specialtyData = filters.specialtyBlending.specialties.map(blendItem => {
-          const specialtyRows = specialtyDataMap.get(blendItem.specialty) || [];
-          const specialtyMarketData = calculateMarketData(specialtyRows, filters.aggregationMethod);
-          
-          return {
-            specialty: blendItem.specialty,
-            data: specialtyMarketData,
-            percentage: blendItem.percentage,
-            weight: blendItem.weight,
-            sampleSize: specialtyRows.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0)
-          };
-        });
-        
-        // Calculate blended market data
-        const blendedMarketData = calculateBlendedMarketData(specialtyData, filters.specialtyBlending);
-        
-        // Store blended data for display
-        setBlendedData(blendedMarketData);
-        
-        // Use blended percentiles for user calculations
-        const calculatedMarketData = {
-          tcc: blendedMarketData.blendedPercentiles.tcc,
-          wrvu: blendedMarketData.blendedPercentiles.wrvu,
-          cf: blendedMarketData.blendedPercentiles.cf
-        };
-        
-        // Calculate user percentiles using blended data
-        const calculatedPercentiles = calculateUserPercentiles(
-          calculatedMarketData,
-          tccFTEAdjusted,
-          wrvusFTEAdjusted,
-          Number(cf)
-        );
-
-        setMarketData(calculatedMarketData);
-        setPercentiles(calculatedPercentiles);
-      } else {
-        // Clear blended data when not using blending
-        setBlendedData(null);
-        
-        // Calculate market data using the normalized rows with the selected aggregation method
-        const calculatedMarketData = calculateMarketData(normalizedRows, filters.aggregationMethod);
-
-        // Calculate user percentiles
-        const calculatedPercentiles = calculateUserPercentiles(
-          calculatedMarketData,
-          tccFTEAdjusted,
-          wrvusFTEAdjusted,
-          Number(cf)
-        );
-
-        setMarketData(calculatedMarketData);
-        setPercentiles(calculatedPercentiles);
-      }
+      // Cache the raw data
+      fmvCache.setCachedData(allData);
+      console.log('💾 Cached FMV market data for future use');
+      
+      // Process the data with current filters
+      await processMarketData(allData);
     } catch (err) {
       setError('Failed to load market data');
     } finally {
       setLoading(false);
     }
-  }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf]);
+  }, [processMarketData]);
 
   /**
    * Updates filters and triggers market data recalculation
@@ -445,6 +608,14 @@ export const useFMVData = () => {
     fetchMarketData();
   }, [fetchMarketData]);
 
+  /**
+   * Clear FMV cache (call when data changes)
+   */
+  const clearFMVCache = useCallback(() => {
+    fmvCache.clearCache();
+    console.log('🗑️ Cleared FMV cache');
+  }, []);
+
   return {
     // State
     filters,
@@ -478,5 +649,6 @@ export const useFMVData = () => {
     clearCompComponents,
     resetAll,
     fetchMarketData,
+    clearFMVCache,
   };
 };

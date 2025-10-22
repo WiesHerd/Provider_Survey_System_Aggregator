@@ -1,4 +1,4 @@
-import { IYearConfig, IYearFilter, IYearValidation, IYearData } from '../types/year';
+import { IYearConfig, IYearValidation, IYearData } from '../types/year';
 import { ISurveyData } from '../types/survey';
 import { ISpecialtyMapping } from '../types/specialty';
 

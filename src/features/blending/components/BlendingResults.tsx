@@ -116,19 +116,19 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">25th Percentile:</span>
-                  <span className="font-medium">${result.blendedData.tcc_p25.toLocaleString()}</span>
+                  <span className="font-medium">${result.blendedData.tcc_p25.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">50th Percentile:</span>
-                  <span className="font-medium">${result.blendedData.tcc_p50.toLocaleString()}</span>
+                  <span className="font-medium">${result.blendedData.tcc_p50.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">75th Percentile:</span>
-                  <span className="font-medium">${result.blendedData.tcc_p75.toLocaleString()}</span>
+                  <span className="font-medium">${result.blendedData.tcc_p75.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">90th Percentile:</span>
-                  <span className="font-medium">${result.blendedData.tcc_p90.toLocaleString()}</span>
+                  <span className="font-medium">${result.blendedData.tcc_p90.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -139,19 +139,19 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">25th Percentile:</span>
-                  <span className="font-medium">{result.blendedData.wrvu_p25.toLocaleString()}</span>
+                  <span className="font-medium">{result.blendedData.wrvu_p25.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">50th Percentile:</span>
-                  <span className="font-medium">{result.blendedData.wrvu_p50.toLocaleString()}</span>
+                  <span className="font-medium">{result.blendedData.wrvu_p50.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">75th Percentile:</span>
-                  <span className="font-medium">{result.blendedData.wrvu_p75.toLocaleString()}</span>
+                  <span className="font-medium">{result.blendedData.wrvu_p75.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">90th Percentile:</span>
-                  <span className="font-medium">{result.blendedData.wrvu_p90.toLocaleString()}</span>
+                  <span className="font-medium">{result.blendedData.wrvu_p90.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>

@@ -10,6 +10,7 @@ import { MappingProvider } from './contexts/MappingContext';
 import { YearProvider } from './contexts/YearContext';
 import { ProviderContextProvider } from './contexts/ProviderContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
+import './utils/cacheUtils'; // Initialize cache utilities for development
 import { PageSpinner, SuspenseSpinner } from './shared/components';
 import { SurveyMigrationService } from './services/SurveyMigrationService';
 
@@ -79,12 +80,6 @@ const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 
-// Loading component for Suspense fallback
-const AppLoadingSpinner = () => (
-  <div className="flex items-center justify-center h-64">
-    <PageSpinner message="Initializing application..." />
-  </div>
-);
 
 const PageContent = () => {
   const location = useLocation();

@@ -57,12 +57,14 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:clean": "node clear-dev-cache.js && npm start",
     "build": "react-scripts build",
     "build:ci": "set NODE_OPTIONS=--openssl-legacy-provider && set CI=false && set DISABLE_ESLINT_PLUGIN=true && set GENERATE_SOURCEMAP=false && react-scripts build",
     "vercel-build": "node build-vercel.js",
     "deploy": "npm run build && git add . && (git commit -m \"Deploy to production\" || echo \"No changes to commit\") && git push origin main && echo \"✅ Deployed to GitHub! Vercel will automatically deploy from GitHub.\"",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "clear-cache": "node clear-dev-cache.js"
   },
   "eslintConfig": {
     "extends": [

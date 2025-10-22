@@ -322,8 +322,17 @@ export const calculateBlendedMetricsNew = (
   
   if (blendingMethod === 'weighted') {
     // Weight by incumbent count (number of people)
-    const totalIncumbents = selectedData.reduce((sum, row) => sum + (row.n_incumbents || 0), 0);
-    weights = selectedData.map(row => (row.n_incumbents || 0) / totalIncumbents);
+    const totalIncumbents = selectedData.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0);
+    
+    
+    if (totalIncumbents === 0) {
+      // Fallback to equal weights if no incumbent data available
+      console.warn('No incumbent data available for weighted average, falling back to equal weights');
+      weights = selectedData.map(() => 1 / selectedData.length);
+    } else {
+      weights = selectedData.map(row => (row.tcc_n_incumbents || 0) / totalIncumbents);
+    }
+    
     blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
   } else if (blendingMethod === 'simple') {
     // Equal weights
@@ -362,6 +371,23 @@ export const calculateBlendedMetricsNew = (
     blended.cf_p75 += (row.cf_p75 || 0) * weight;
     blended.cf_p90 += (row.cf_p90 || 0) * weight;
   });
+  
+  // Round to 2 decimal places for currency and percentage values
+  blended.tcc_p25 = Math.round(blended.tcc_p25 * 100) / 100;
+  blended.tcc_p50 = Math.round(blended.tcc_p50 * 100) / 100;
+  blended.tcc_p75 = Math.round(blended.tcc_p75 * 100) / 100;
+  blended.tcc_p90 = Math.round(blended.tcc_p90 * 100) / 100;
+  
+  blended.wrvu_p25 = Math.round(blended.wrvu_p25 * 100) / 100;
+  blended.wrvu_p50 = Math.round(blended.wrvu_p50 * 100) / 100;
+  blended.wrvu_p75 = Math.round(blended.wrvu_p75 * 100) / 100;
+  blended.wrvu_p90 = Math.round(blended.wrvu_p90 * 100) / 100;
+  
+  blended.cf_p25 = Math.round(blended.cf_p25 * 100) / 100;
+  blended.cf_p50 = Math.round(blended.cf_p50 * 100) / 100;
+  blended.cf_p75 = Math.round(blended.cf_p75 * 100) / 100;
+  blended.cf_p90 = Math.round(blended.cf_p90 * 100) / 100;
+
 
   return blended;
 };

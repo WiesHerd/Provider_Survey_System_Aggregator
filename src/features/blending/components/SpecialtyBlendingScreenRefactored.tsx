@@ -729,16 +729,16 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.tcc_p25.toLocaleString()}
+                        ${blendedMetrics.tcc_p25.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
-                        ${blendedMetrics.tcc_p50.toLocaleString()}
+                        ${blendedMetrics.tcc_p50.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.tcc_p75.toLocaleString()}
+                        ${blendedMetrics.tcc_p75.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.tcc_p90.toLocaleString()}
+                        ${blendedMetrics.tcc_p90.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                     <tr className="hover:bg-gray-50">
@@ -749,16 +749,16 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        {blendedMetrics.wrvu_p25.toLocaleString()}
+                        {blendedMetrics.wrvu_p25.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
-                        {blendedMetrics.wrvu_p50.toLocaleString()}
+                        {blendedMetrics.wrvu_p50.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        {blendedMetrics.wrvu_p75.toLocaleString()}
+                        {blendedMetrics.wrvu_p75.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        {blendedMetrics.wrvu_p90.toLocaleString()}
+                        {blendedMetrics.wrvu_p90.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                     <tr className="hover:bg-gray-50">
