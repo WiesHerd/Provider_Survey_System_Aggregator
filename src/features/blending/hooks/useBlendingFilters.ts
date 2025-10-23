@@ -197,6 +197,13 @@ export const useBlendingFilters = (allData: any[]) => {
     handleProviderTypeChange,
     handleSpecialtySearchChange,
     
+    // Direct setters for template restoration
+    setSelectedSurvey,
+    setSelectedYear,
+    setSelectedRegion,
+    setSelectedProviderType,
+    setSpecialtySearch,
+    
     // Reset function
     resetFilters: useCallback(() => {
       setSelectedSurvey('');

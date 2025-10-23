@@ -98,6 +98,11 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     handleRegionChange,
     handleProviderTypeChange,
     handleSpecialtySearchChange,
+    setSelectedSurvey,
+    setSelectedYear,
+    setSelectedRegion,
+    setSelectedProviderType,
+    setSpecialtySearch,
     resetFilters
   } = useBlendingFilters(allData);
 
@@ -269,7 +274,17 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         weights: selectedSpecialties.map(s => s.weight),
         createdBy: 'current_user',
         isPublic: false,
-        tags: []
+        tags: [],
+        // Save filter state for enterprise-grade template restoration
+        filterState: {
+          selectedSurvey: selectedSurvey,
+          selectedYear: selectedYear,
+          selectedRegion: selectedRegion,
+          selectedProviderType: selectedProviderType,
+          specialtySearch: specialtySearch,
+          blendingMethod: blendingMethod,
+          customWeights: customWeights
+        }
       };
       
       console.log('🔍 Template data:', templateData);
@@ -330,6 +345,24 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     setBlendName(template.name);
     setBlendDescription(template.description);
     
+    // Restore filter state for enterprise-grade template restoration
+    if (template.filterState) {
+      console.log('🔍 Restoring filter state:', template.filterState);
+      setSelectedSurvey(template.filterState.selectedSurvey);
+      setSelectedYear(template.filterState.selectedYear);
+      setSelectedRegion(template.filterState.selectedRegion);
+      setSelectedProviderType(template.filterState.selectedProviderType);
+      setSpecialtySearch(template.filterState.specialtySearch);
+      setBlendingMethod(template.filterState.blendingMethod);
+      setCustomWeights(template.filterState.customWeights || {});
+      
+      // Wait for filters to be applied before selecting rows
+      setTimeout(() => {
+        loadTemplateSelections(template);
+      }, 500);
+      return;
+    }
+    
     // If no survey data is loaded yet, show a message and wait
     if (!filteredSurveyData || filteredSurveyData.length === 0) {
       toast({
@@ -340,6 +373,11 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       return;
     }
     
+    loadTemplateSelections(template);
+  };
+  
+  const loadTemplateSelections = (template: any) => {
+    
     // Find and select the corresponding rows in the table
     const templateRowIndices: number[] = [];
     
@@ -347,7 +385,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     console.log('🔍 Template specialties:', template.specialties);
     console.log('🔍 Available survey data:', filteredSurveyData.length, 'rows');
     
-    template.specialties.forEach(specialty => {
+    template.specialties.forEach((specialty: any) => {
       console.log('🔍 Looking for specialty:', specialty);
       
       const matchingRows = filteredSurveyData

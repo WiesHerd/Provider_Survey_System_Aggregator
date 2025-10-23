@@ -26,6 +26,16 @@ export interface SpecialtyBlend {
   createdBy: string;
 }
 
+export interface FilterState {
+  selectedSurvey: string;
+  selectedYear: string;
+  selectedRegion: string;
+  selectedProviderType: string;
+  specialtySearch: string;
+  blendingMethod: 'simple' | 'weighted' | 'custom';
+  customWeights: Record<number, number>;
+}
+
 export interface SpecialtyBlendTemplate {
   id: string;
   name: string;
@@ -36,6 +46,7 @@ export interface SpecialtyBlendTemplate {
   createdBy: string;
   isPublic: boolean;
   tags: string[];
+  filterState?: FilterState; // Enterprise-grade template restoration
 }
 
 export interface BlendedMetrics {
