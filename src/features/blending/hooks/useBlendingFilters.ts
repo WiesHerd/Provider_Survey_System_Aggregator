@@ -44,7 +44,16 @@ export const useBlendingFilters = (allData: any[]) => {
 
   // Cascading filter options - computed based on current selections
   const filterOptions = useMemo((): FilterOptions => {
+    console.log('🔍 Filter Options Debug:', {
+      allDataLength: allData?.length || 0,
+      selectedSurvey,
+      selectedYear,
+      selectedRegion,
+      selectedProviderType
+    });
+
     if (!allData || allData.length === 0) {
+      console.log('⚠️ No survey data available for filters');
       return {
         surveys: [],
         years: [],
@@ -53,53 +62,74 @@ export const useBlendingFilters = (allData: any[]) => {
       };
     }
 
+    // Always show all available surveys
+    const surveys = [...new Set(allData.map(row => safeString(row?.surveySource)).filter(Boolean))].sort();
+
+    // For other filters, show options based on current selections
     let filteredData = allData;
 
-    const surveys = [...new Set(filteredData.map(row => safeString(row?.surveySource)).filter(Boolean))].sort();
-
+    // Apply survey filter if one is selected
     if (selectedSurvey) {
       filteredData = filteredData.filter(row => safeString(row?.surveySource) === selectedSurvey);
     }
+
+    // For years, show all available years from the current filtered data
     const years = [...new Set(filteredData.map(row => safeString(row?.surveyYear)).filter(Boolean))].sort();
 
+    // Apply year filter if one is selected
     if (selectedYear) {
       filteredData = filteredData.filter(row => safeString(row?.surveyYear) === selectedYear);
     }
+
+    // For regions, show all available regions from the current filtered data
     const regions = [...new Set(filteredData.map(row => safeString(row?.geographicRegion)).filter(Boolean))].sort();
 
+    // Apply region filter if one is selected
     if (selectedRegion) {
       filteredData = filteredData.filter(row => safeString(row?.geographicRegion) === selectedRegion);
     }
+
+    // For provider types, show all available provider types from the current filtered data
     const providerTypes = [...new Set(filteredData.map(row => safeString(row?.providerType)).filter(Boolean))].sort();
 
-    return {
+    const result = {
       surveys,
       years,
       regions,
       providerTypes
     };
-  }, [allData, selectedSurvey, selectedYear, selectedRegion, safeString]);
+
+    console.log('🔍 Final Filter Options:', result);
+    return result;
+  }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, safeString]);
 
   // Cascading filter change handlers
   const handleSurveyChange = useCallback((value: string) => {
-    const normalized = value ? safeString(value) : '';
+    const normalized = value === 'all-surveys' ? '' : (value ? safeString(value) : '');
     setSelectedSurvey(normalized);
-    setSelectedYear('');
-    setSelectedRegion('');
-    setSelectedProviderType('');
+    // Only clear dependent filters when selecting a specific survey (not "All")
+    // When "All Surveys" is selected, preserve other filter selections
+    if (normalized && normalized !== '') {
+      // Only clear other filters when a specific survey is selected
+      setSelectedYear('');
+      setSelectedRegion('');
+      setSelectedProviderType('');
+    }
+    // When selecting "All Surveys" (empty string), keep all other filters
   }, [safeString]);
 
   const handleYearChange = useCallback((value: string) => {
     const normalized = value ? safeString(value) : '';
     setSelectedYear(normalized);
-    setSelectedRegion('');
-    setSelectedProviderType('');
+    // Don't clear dependent filters - just update available options
+    // Let the filter options logic handle showing only valid combinations
   }, [safeString]);
 
   const handleRegionChange = useCallback((value: string) => {
     const normalized = value ? safeString(value) : '';
     setSelectedRegion(normalized);
-    setSelectedProviderType('');
+    // Don't clear dependent filters - just update available options
+    // Let the filter options logic handle showing only valid combinations
   }, [safeString]);
 
   const handleProviderTypeChange = useCallback((value: string) => {

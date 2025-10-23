@@ -12,12 +12,15 @@ import { BlendConfiguration } from './BlendConfiguration';
 import { SurveyDataFilters } from './SurveyDataFilters';
 import { SurveyDataTable } from './SurveyDataTable';
 import { BlendingResults } from './BlendingResults';
-import { EmptyState } from '../../mapping/components/shared/EmptyState';
-import { BoltIcon } from '@heroicons/react/24/outline';
+// Chart components are used in BlendingResults
+// import { BlendingChartsContainer } from './BlendingChartsContainer';
+// import { EmptyState } from '../../mapping/components/shared/EmptyState';
+// import { BoltIcon } from '@heroicons/react/24/outline';
 import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
 import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import './BlendingCharts.css';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 
 interface SpecialtyBlendingScreenProps {
@@ -179,9 +182,18 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     
     try {
       const result = await createBlend(blendName, blendDescription);
-      setBlendedResult(result);
+      
+      // Enhance the result with chart data
+      const enhancedResult = {
+        ...result,
+        blendingMethod: blendingMethod,
+        selectedData: selectedDataRows.map(index => filteredSurveyData[index]).filter(row => row),
+        customWeights: customWeights
+      };
+      
+      setBlendedResult(enhancedResult);
       setShowResults(true);
-      onBlendCreated?.(result);
+      onBlendCreated?.(enhancedResult);
       toast({
         title: 'Blend Created Successfully',
         description: `"${blendName}" has been created and is ready for analysis.`
@@ -197,7 +209,12 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   };
   
   const handleSaveTemplate = () => {
+    console.log('🔍 Save Template clicked');
+    console.log('🔍 Blend name:', blendName);
+    console.log('🔍 Selected rows:', selectedDataRows.length);
+    
     if (!blendName.trim()) {
+      console.log('❌ No blend name provided');
       toast({
         title: 'Template Name Required',
         description: 'Please enter a template name to save your blend.',
@@ -207,6 +224,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     }
     
     if (selectedDataRows.length === 0) {
+      console.log('❌ No data rows selected');
       toast({
         title: 'No Data Selected',
         description: 'Please select at least one row to save as template.',
@@ -215,17 +233,21 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       return;
     }
     
+    console.log('✅ Opening confirmation modal');
     setShowSaveConfirmation(true);
   };
 
   const handleConfirmSave = async () => {
+    console.log('🔍 Confirmation save started');
     setIsSaving(true);
     setShowSaveConfirmation(false);
     
     try {
+      console.log('🔍 Converting selected data rows to specialty items');
       // Convert selected data rows to specialty items
       const selectedSpecialties = selectedDataRows.map(index => {
         const row = filteredSurveyData[index];
+        console.log('🔍 Processing row:', row);
         return {
           id: `${row.surveySpecialty}-${row.surveySource}-${row.surveyYear}-${row.geographicRegion}-${row.providerType}`,
           name: row.surveySpecialty,
@@ -238,6 +260,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         };
       });
       
+      console.log('🔍 Created specialties:', selectedSpecialties);
+      
       const templateData = {
         name: blendName,
         description: blendDescription,
@@ -248,11 +272,15 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         tags: []
       };
       
+      console.log('🔍 Template data:', templateData);
+      console.log('🔍 Calling saveTemplate...');
+      
       await saveTemplate(templateData);
       
+      console.log('✅ Template saved successfully');
       setShowSaveSuccess(true);
     } catch (err) {
-      console.error('Failed to save template:', err);
+      console.error('❌ Failed to save template:', err);
       toast({
         title: 'Failed to Save Blend',
         description: `An error occurred while saving the blend: ${err instanceof Error ? err.message : 'Unknown error'}`,
@@ -289,16 +317,39 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
 
   const handleLoadTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
-    if (!template) return;
+    if (!template) {
+      toast({
+        title: 'Template Not Found',
+        description: 'The selected template could not be found.',
+        variant: 'destructive'
+      });
+      return;
+    }
     
     setSelectedTemplateId(templateId);
     setBlendName(template.name);
     setBlendDescription(template.description);
     
+    // If no survey data is loaded yet, show a message and wait
+    if (!filteredSurveyData || filteredSurveyData.length === 0) {
+      toast({
+        title: 'Loading Survey Data',
+        description: 'Please wait for survey data to load, then try loading the template again.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
     // Find and select the corresponding rows in the table
     const templateRowIndices: number[] = [];
     
+    console.log('🔍 Loading template:', template.name);
+    console.log('🔍 Template specialties:', template.specialties);
+    console.log('🔍 Available survey data:', filteredSurveyData.length, 'rows');
+    
     template.specialties.forEach(specialty => {
+      console.log('🔍 Looking for specialty:', specialty);
+      
       const matchingRows = filteredSurveyData
         .map((row, index) => ({ row, index }))
         .filter(({ row }) => 
@@ -309,6 +360,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           row.providerType === specialty.providerType
         );
       
+      console.log('🔍 Found matching rows:', matchingRows.length);
+      
       matchingRows.forEach(({ index }) => {
         if (!templateRowIndices.includes(index)) {
           templateRowIndices.push(index);
@@ -316,12 +369,22 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       });
     });
     
+    console.log('🔍 Total selected rows:', templateRowIndices.length);
+    
     setSelectedDataRows(templateRowIndices);
     
-    toast({
-      title: 'Template Loaded Successfully',
-      description: `"${template.name}" has been loaded with ${templateRowIndices.length} rows selected.`
-    });
+    if (templateRowIndices.length === 0) {
+      toast({
+        title: 'No Matching Data Found',
+        description: 'The template specialties could not be found in the current filtered data. Try adjusting your filters or check if the data has changed.',
+        variant: 'destructive'
+      });
+    } else {
+      toast({
+        title: 'Template Loaded Successfully',
+        description: `"${template.name}" has been loaded with ${templateRowIndices.length} rows selected.`
+      });
+    }
   };
   
   const handleReset = () => {
@@ -383,7 +446,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50 min-h-full">
       <div className="w-full px-2 py-2">
         
         {/* Blend Configuration */}
@@ -625,9 +688,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                                     setCustomWeights(prev => ({ ...prev, [index]: value }));
                                   }}
                                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-slider"
-                                  style={{
-                                    background: `linear-gradient(to right, #4f46e5 0%, #4f46e5 ${currentWeight}%, #e5e7eb ${currentWeight}%, #e5e7eb 100%)`
-                                  }}
+                                  data-weight={currentWeight}
+                                  style={{ '--weight-percent': `${currentWeight}%` } as React.CSSProperties}
                                   aria-label={`Set weight percentage for ${row.surveySpecialty}`}
                                 />
                               </div>

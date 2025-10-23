@@ -92,8 +92,9 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
         <FormControl fullWidth size="small">
           <InputLabel>Survey Source</InputLabel>
           <Select
-            value={selectedSurvey}
+            value={selectedSurvey || 'all-surveys'}
             label="Survey Source"
+            renderValue={(value: string) => value === 'all-surveys' ? 'All Surveys' : value}
             onChange={(e: SelectChangeEvent) => {
               onSurveyChange(e.target.value);
               onSpecialtySearchChange('');
@@ -119,7 +120,7 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
               }
             }}
           >
-            <MenuItem value="">All Surveys</MenuItem>
+            <MenuItem value="all-surveys">All Surveys</MenuItem>
             {filterOptions.surveys.map(survey => (
               <MenuItem key={survey} value={survey}>{survey}</MenuItem>
             ))}
@@ -138,10 +139,10 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
               onYearChange(e.target.value);
               onSpecialtySearchChange('');
             }}
-            disabled={!selectedSurvey}
+            disabled={false}
             sx={{
               '& .MuiOutlinedInput-root': {
-                backgroundColor: selectedSurvey ? 'white' : '#f9fafb',
+                backgroundColor: 'white',
                 borderRadius: '8px',
                 height: '40px',
                 border: '1px solid #d1d5db !important',
@@ -179,10 +180,10 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
               onRegionChange(e.target.value);
               onSpecialtySearchChange('');
             }}
-            disabled={!selectedYear}
+            disabled={!selectedSurvey && !selectedYear}
             sx={{
               '& .MuiOutlinedInput-root': {
-                backgroundColor: selectedYear ? 'white' : '#f9fafb',
+                backgroundColor: (selectedSurvey || selectedYear) ? 'white' : '#f9fafb',
                 borderRadius: '8px',
                 height: '40px',
                 border: '1px solid #d1d5db !important',
@@ -222,10 +223,10 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
               onProviderTypeChange(e.target.value);
               onSpecialtySearchChange('');
             }}
-            disabled={!selectedSurvey}
+            disabled={false}
             sx={{
               '& .MuiOutlinedInput-root': {
-                backgroundColor: selectedSurvey ? 'white' : '#f9fafb',
+                backgroundColor: 'white',
                 borderRadius: '8px',
                 height: '40px',
                 border: '1px solid #d1d5db !important',

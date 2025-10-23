@@ -301,6 +301,9 @@ export const useSpecialtyBlending = ({
           n_orgs: blendedData.totalRecords,
           n_incumbents: blendedData.totalRecords
         },
+        blendingMethod: 'simple', // Default to simple for now
+        selectedData: [], // Will be populated by the calling component
+        customWeights: {}, // Will be populated by the calling component
         confidence,
         sampleSize,
         createdAt: new Date()

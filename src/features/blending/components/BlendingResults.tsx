@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { BlendedResult } from '../types/blending';
+import { BlendingChartsContainer } from './BlendingChartsContainer';
 
 interface BlendingResultsProps {
   result: BlendedResult;
@@ -35,7 +36,7 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
   };
   
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -179,6 +180,25 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
               </div>
             </div>
           </div>
+        </div>
+        
+        {/* Charts Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Visual Analysis</h2>
+          <BlendingChartsContainer
+            blendedMetrics={result.blendedData}
+            blendingMethod={result.blendingMethod}
+            selectedData={result.selectedData?.map((item: any, index: number) => ({
+              specialty: item.surveySpecialty,
+              weight: result.blendingMethod === 'weighted' 
+                ? (item.tcc_n_incumbents || 0) / (result.selectedData?.reduce((sum: number, r: any) => sum + (r.tcc_n_incumbents || 0), 0) || 1) * 100
+                : result.blendingMethod === 'custom'
+                ? (result.customWeights?.[index] || 0) / (Object.values(result.customWeights || {}).reduce((sum: number, w: number) => sum + w, 0) || 1) * 100
+                : 100 / (result.selectedData?.length || 1),
+              records: item.tcc_n_orgs || item.n_orgs || 0
+            })) || []}
+            customWeights={result.customWeights || {}}
+          />
         </div>
         
         {/* Actions */}

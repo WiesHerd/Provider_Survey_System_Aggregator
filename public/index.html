@@ -3,28 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <!-- Primary favicon for modern browsers -->
-    <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
-    <link rel="icon" type="image/svg+xml" sizes="16x16" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
-    <link rel="icon" type="image/svg+xml" sizes="32x32" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
+    <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
+    <link rel="icon" type="image/svg+xml" sizes="16x16" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
+    <link rel="icon" type="image/svg+xml" sizes="32x32" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
     
     <!-- Fallback favicon for older browsers and Edge -->
-    <link rel="icon" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
-    <link rel="shortcut icon" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
+    <link rel="icon" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
+    <link rel="shortcut icon" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
     
     <!-- Apple touch icon -->
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
     
     <!-- Microsoft Edge and IE specific -->
     <meta name="msapplication-TileColor" content="#4F46E5" />
-    <meta name="msapplication-TileImage" content="%PUBLIC_URL%/benchpoint-icon.svg?v=1761152279501" />
+    <meta name="msapplication-TileImage" content="%PUBLIC_URL%/benchpoint-icon.svg?v=1761163445238" />
     <meta name="msapplication-config" content="none" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#4F46E5" />
     
-    <!-- Cache-busting meta tags -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
     <meta
       name="description"
       content="BenchPoint: Physician Compensation Survey Aggregation and Analytics"
@@ -38,30 +34,5 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
-    <!-- Cache-busting script for development -->
-    <script>
-      // Only run in development
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        // Clear caches on development
-        if ('caches' in window) {
-          caches.keys().then(function(cacheNames) {
-            return Promise.all(
-              cacheNames.map(function(cacheName) {
-                return caches.delete(cacheName);
-              })
-            );
-          });
-        }
-        
-        // Add cache-busting parameter to prevent stale JS/CSS
-        if (!window.location.search.includes('v=')) {
-          const url = new URL(window.location);
-          url.searchParams.set('v', Date.now());
-          if (window.location.search === '') {
-            window.history.replaceState({}, '', url.toString());
-          }
-        }
-      }
-    </script>
   </body>
 </html> 

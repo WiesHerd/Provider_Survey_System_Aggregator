@@ -4,6 +4,8 @@
  * Handles all blending calculation logic
  */
 
+import { generatePieChartHTML, generateBarChartHTML, WeightDistributionData, CompensationRangeData } from './chartGenerators';
+
 export interface BlendedMetrics {
   tcc_p25: number;
   tcc_p50: number;
@@ -393,6 +395,71 @@ export const calculateBlendedMetricsNew = (
 };
 
 /**
+ * Generates chart data for HTML reports
+ * 
+ * @param blendedMetrics - The calculated blended metrics
+ * @param blendingMethod - The blending method used
+ * @param selectedDataRows - Selected row indices
+ * @param filteredSurveyData - The filtered survey data
+ * @param customWeights - Custom weights if applicable
+ * @returns Chart data object
+ */
+export const generateChartData = (
+  blendedMetrics: BlendedMetrics,
+  blendingMethod: BlendingMethod,
+  selectedDataRows: number[] = [],
+  filteredSurveyData: any[] = [],
+  customWeights: Record<number, number> = {}
+) => {
+  const selectedData = selectedDataRows.map(index => filteredSurveyData[index]).filter(row => row);
+  
+  // Prepare weight distribution data
+  const weightDistributionData = selectedData.map((row, index) => {
+    let weight = 0;
+    
+    if (blendingMethod === 'simple') {
+      weight = 100 / selectedData.length;
+    } else if (blendingMethod === 'weighted') {
+      const totalIncumbents = selectedData.reduce((sum, r) => sum + (r.tcc_n_incumbents || 0), 0);
+      weight = totalIncumbents > 0 ? ((row.tcc_n_incumbents || 0) / totalIncumbents) * 100 : 100 / selectedData.length;
+    } else if (blendingMethod === 'custom') {
+      const totalCustomWeight = selectedDataRows.reduce((sum, idx) => sum + (customWeights[idx] || 0), 0);
+      weight = totalCustomWeight > 0 ? ((customWeights[index] || 0) / totalCustomWeight) * 100 : 100 / selectedData.length;
+    }
+    
+    return {
+      specialty: row.surveySpecialty,
+      weight: weight,
+      records: row.tcc_n_orgs || row.n_orgs || 0
+    };
+  });
+
+  return {
+    weightDistribution: weightDistributionData,
+    compensationRange: {
+      tcc: {
+        p25: blendedMetrics.tcc_p25,
+        p50: blendedMetrics.tcc_p50,
+        p75: blendedMetrics.tcc_p75,
+        p90: blendedMetrics.tcc_p90
+      },
+      wrvu: {
+        p25: blendedMetrics.wrvu_p25,
+        p50: blendedMetrics.wrvu_p50,
+        p75: blendedMetrics.wrvu_p75,
+        p90: blendedMetrics.wrvu_p90
+      },
+      cf: {
+        p25: blendedMetrics.cf_p25,
+        p50: blendedMetrics.cf_p50,
+        p75: blendedMetrics.cf_p75,
+        p90: blendedMetrics.cf_p90
+      }
+    }
+  };
+};
+
+/**
  * Generates HTML report content for blended metrics
  * 
  * @param blendedMetrics - The calculated blended metrics
@@ -447,12 +514,104 @@ export const generateBlendedReportHTML = (
     }
   };
   
+  // Generate chart data and SVGs
+  const selectedData = selectedDataRows.map(index => filteredSurveyData[index]).filter(row => row);
+  
+  // Prepare weight distribution data for pie chart (for weighted and custom methods)
+  let weightDistributionData: WeightDistributionData[] = [];
+  if (blendingMethod === 'weighted' || blendingMethod === 'custom') {
+    weightDistributionData = selectedData.map((row, index) => {
+      let weight = 0;
+      
+      if (blendingMethod === 'weighted') {
+        const totalIncumbents = selectedData.reduce((sum, r) => sum + (r.tcc_n_incumbents || 0), 0);
+        weight = totalIncumbents > 0 ? ((row.tcc_n_incumbents || 0) / totalIncumbents) * 100 : 100 / selectedData.length;
+      } else if (blendingMethod === 'custom') {
+        const totalCustomWeight = selectedDataRows.reduce((sum, idx) => sum + (customWeights[idx] || 0), 0);
+        weight = totalCustomWeight > 0 ? ((customWeights[index] || 0) / totalCustomWeight) * 100 : 100 / selectedData.length;
+      }
+      
+      return {
+        specialty: row.surveySpecialty,
+        weight: weight,
+        records: row.tcc_n_orgs || row.n_orgs || 0
+      };
+    });
+  }
+  
+  // Prepare compensation range data for bar chart
+  const compensationRangeData: CompensationRangeData = {
+    tcc: {
+      p25: blendedMetrics.tcc_p25,
+      p50: blendedMetrics.tcc_p50,
+      p75: blendedMetrics.tcc_p75,
+      p90: blendedMetrics.tcc_p90
+    },
+    wrvu: {
+      p25: blendedMetrics.wrvu_p25,
+      p50: blendedMetrics.wrvu_p50,
+      p75: blendedMetrics.wrvu_p75,
+      p90: blendedMetrics.wrvu_p90
+    },
+    cf: {
+      p25: blendedMetrics.cf_p25,
+      p50: blendedMetrics.cf_p50,
+      p75: blendedMetrics.cf_p75,
+      p90: blendedMetrics.cf_p90
+    }
+  };
+  
+  // Debug the compensation data
+  console.log('🔍 compensationRangeData:', compensationRangeData);
+  console.log('🔍 TCC values:', [compensationRangeData.tcc.p25, compensationRangeData.tcc.p50, compensationRangeData.tcc.p75, compensationRangeData.tcc.p90]);
+  console.log('🔍 wRVU values:', [compensationRangeData.wrvu.p25, compensationRangeData.wrvu.p50, compensationRangeData.wrvu.p75, compensationRangeData.wrvu.p90]);
+  console.log('🔍 CF values:', [compensationRangeData.cf.p25, compensationRangeData.cf.p50, compensationRangeData.cf.p75, compensationRangeData.cf.p90]);
+  
+  // Generate HTML charts with Chart.js
+  const weightChartHTML = (blendingMethod === 'weighted' || blendingMethod === 'custom') && weightDistributionData.length > 0
+    ? generatePieChartHTML(
+        weightDistributionData,
+        blendingMethod === 'weighted' 
+          ? 'Weight Distribution (by Incumbent Count)'
+          : 'Custom Weight Distribution',
+        400,
+        350
+      )
+    : '';
+    
+  const compensationChartHTML = generateBarChartHTML(
+    compensationRangeData,
+    'Compensation Range Analysis',
+    600,
+    400
+  );
+  
+  // Test if the HTML is being generated
+  console.log('🔍 compensationChartHTML generated:', compensationChartHTML.length > 0);
+  console.log('🔍 compensationChartHTML preview:', compensationChartHTML.substring(0, 200));
+  
+  // Debug logging
+  console.log('🔍 weightChartHTML length:', weightChartHTML.length);
+  console.log('🔍 compensationChartHTML length:', compensationChartHTML.length);
+  console.log('🔍 blendingMethod:', blendingMethod);
+  console.log('🔍 weightDistributionData length:', weightDistributionData.length);
+  
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <title>Blended Compensation Report</title>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
       <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        * {
+          font-family: inherit;
+        }
+        
         @media print {
           body { margin: 0; padding: 0.25in; }
           .no-print { display: none; }
@@ -520,6 +679,8 @@ export const generateBlendedReportHTML = (
           border-collapse: collapse; 
           margin: 20px 0; 
           page-break-inside: avoid;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          font-size: 14px;
         }
         .metrics-table th { 
           background: #f3f4f6; 
@@ -555,6 +716,59 @@ export const generateBlendedReportHTML = (
           font-size: 12px; 
           page-break-inside: avoid;
         }
+        .chart-section { 
+          margin: 30px 0; 
+          page-break-inside: avoid;
+        }
+        .chart-container { 
+          display: flex; 
+          justify-content: center; 
+          align-items: center;
+          margin: 20px 0; 
+          background: #f9fafb; 
+          border: 1px solid #e5e7eb; 
+          border-radius: 8px; 
+          padding: 20px;
+          height: 320px;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
+        .chart-wrapper {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .chart-grid { 
+          display: grid; 
+          grid-template-columns: 1fr 1fr; 
+          gap: 30px; 
+          margin: 20px 0;
+          align-items: start;
+        }
+        .chart-single { 
+          display: flex; 
+          justify-content: center; 
+          margin: 20px 0;
+        }
+        .chart-title { 
+          font-size: 18px; 
+          font-weight: 600; 
+          color: #1f2937; 
+          margin-bottom: 15px; 
+          text-align: center;
+        }
+        .chart-placeholder { 
+          text-align: center; 
+          color: #6b7280; 
+          font-style: italic; 
+          padding: 40px;
+        }
+        @media print {
+          .chart-container { 
+            background: white; 
+            border: 1px solid #d1d5db;
+          }
+        }
       </style>
     </head>
     <body>
@@ -570,15 +784,60 @@ export const generateBlendedReportHTML = (
         </div>
         <div class="info-item">
           <div class="info-label">Specialties Included</div>
-          <div class="info-value">${reportData.specialties.join(', ')}</div>
+          <div class="info-value">${reportData.specialties.join(', ')} (${reportData.totalRecords.toLocaleString()} records)</div>
         </div>
-        <div class="info-item">
-          <div class="info-label">Total Records</div>
-          <div class="info-value">${reportData.totalRecords.toLocaleString()}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Report Type</div>
-          <div class="info-value">Compensation Benchmarking Analysis</div>
+      </div>
+      
+      <!-- Charts Section -->
+      <div class="chart-section">
+        ${weightChartHTML && compensationChartHTML ? `
+          <div class="chart-grid">
+            <div class="chart-container">
+              ${weightChartHTML}
+            </div>
+            <div class="chart-container">
+              ${compensationChartHTML}
+            </div>
+          </div>
+        ` : compensationChartHTML ? `
+          <div class="chart-single">
+            <div class="chart-container">
+              ${compensationChartHTML}
+            </div>
+          </div>
+        ` : weightChartHTML ? `
+          <div class="chart-grid">
+            <div class="chart-container">
+              ${weightChartHTML}
+            </div>
+            <div class="chart-container">
+              ${compensationChartHTML || `
+                <div class="chart-placeholder">
+                  <p>Bar chart failed to load</p>
+                  <p>Debug: compensationChartHTML length: ${compensationChartHTML ? compensationChartHTML.length : 0}</p>
+                  <p>Data available: ${compensationRangeData ? 'Yes' : 'No'}</p>
+                </div>
+              `}
+            </div>
+          </div>
+        ` : `
+          <div class="chart-placeholder">
+            <p>No charts available. Debug info:</p>
+            <p>weightChartHTML: ${weightChartHTML ? 'Present' : 'Missing'}</p>
+            <p>compensationChartHTML: ${compensationChartHTML ? 'Present' : 'Missing'}</p>
+            <p>blendingMethod: ${blendingMethod}</p>
+            <p>weightChartHTML length: ${weightChartHTML ? weightChartHTML.length : 0}</p>
+            <p>compensationChartHTML length: ${compensationChartHTML ? compensationChartHTML.length : 0}</p>
+            <div style="background: #f0f0f0; padding: 10px; margin: 10px 0; border: 1px solid #ccc;">
+              <strong>Bar Chart HTML Preview:</strong>
+              <pre style="font-size: 10px; max-height: 200px; overflow: auto;">${compensationChartHTML ? compensationChartHTML.substring(0, 500) + '...' : 'No HTML generated'}</pre>
+            </div>
+          </div>
+        `}
+        
+        <!-- Chart Explanation -->
+        <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 15px; margin: 20px 0; font-size: 14px; color: #0c4a6e;">
+          <strong>📊 Chart Note:</strong> The primary chart shows Total Cash Compensation (TCC) across all percentiles with actual dollar values. Work RVU and Conversion Factor medians are displayed as compact indicators below for reference.
         </div>
       </div>
       

@@ -180,7 +180,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
       </div>
       
       <div className="bg-white rounded-b-xl">
-        <div className="overflow-x-auto max-w-full">
+        <div className="overflow-x-auto max-w-full overflow-y-visible">
           <table className="w-full" style={{ tableLayout: 'fixed' }}>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

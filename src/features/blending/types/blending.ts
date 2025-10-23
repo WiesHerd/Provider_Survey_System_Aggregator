@@ -38,26 +38,36 @@ export interface SpecialtyBlendTemplate {
   tags: string[];
 }
 
+export interface BlendedMetrics {
+  tcc_p25: number;
+  tcc_p50: number;
+  tcc_p75: number;
+  tcc_p90: number;
+  wrvu_p25: number;
+  wrvu_p50: number;
+  wrvu_p75: number;
+  wrvu_p90: number;
+  cf_p25: number;
+  cf_p50: number;
+  cf_p75: number;
+  cf_p90: number;
+  n_orgs: number;
+  n_incumbents: number;
+}
+
 export interface BlendedResult {
   id: string;
   blendName: string;
   specialties: SpecialtyItem[];
-  blendedData: {
-    tcc_p25: number;
-    tcc_p50: number;
-    tcc_p75: number;
-    tcc_p90: number;
-    wrvu_p25: number;
-    wrvu_p50: number;
-    wrvu_p75: number;
-    wrvu_p90: number;
-    cf_p25: number;
-    cf_p50: number;
-    cf_p75: number;
-    cf_p90: number;
-    n_orgs: number;
-    n_incumbents: number;
-  };
+  blendedData: BlendedMetrics;
+  blendingMethod: 'simple' | 'weighted' | 'custom';
+  selectedData?: Array<{
+    surveySpecialty: string;
+    tcc_n_incumbents?: number;
+    tcc_n_orgs?: number;
+    n_orgs?: number;
+  }>;
+  customWeights?: Record<number, number>;
   confidence: number;
   sampleSize: number;
   createdAt: Date;
