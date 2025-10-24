@@ -53,6 +53,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   
   // Row selection state
   const [selectedDataRows, setSelectedDataRows] = useState<number[]>([]);
@@ -114,6 +115,21 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       completeProgress();
     }
   }, [isLoading, startProgress, completeProgress]);
+
+  // Clear selected rows when filters change (except during template loading)
+  useEffect(() => {
+    if (!isLoading && !isLoadingTemplate && selectedDataRows.length > 0) {
+      // Only clear if we're not in the middle of loading a template
+      const timeoutId = setTimeout(() => {
+        if (selectedDataRows.length > 0 && !isLoadingTemplate) {
+          console.log('🔍 Clearing selected rows due to filter change');
+          setSelectedDataRows([]);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch, isLoadingTemplate]);
 
   // Calculate blended metrics for selected specialties
   const blendedMetrics = useMemo(() => {
@@ -348,6 +364,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     // Restore filter state for enterprise-grade template restoration
     if (template.filterState) {
       console.log('🔍 Restoring filter state:', template.filterState);
+      setIsLoadingTemplate(true);
       setSelectedSurvey(template.filterState.selectedSurvey);
       setSelectedYear(template.filterState.selectedYear);
       setSelectedRegion(template.filterState.selectedRegion);
@@ -359,6 +376,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       // Wait for filters to be applied before selecting rows
       setTimeout(() => {
         loadTemplateSelections(template);
+        setIsLoadingTemplate(false);
       }, 500);
       return;
     }
@@ -373,7 +391,9 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       return;
     }
     
+    setIsLoadingTemplate(true);
     loadTemplateSelections(template);
+    setIsLoadingTemplate(false);
   };
   
   const loadTemplateSelections = (template: any) => {
