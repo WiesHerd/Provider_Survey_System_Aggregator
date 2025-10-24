@@ -4,7 +4,7 @@
  * Main screen for specialty blending functionality with proper separation of concerns
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { useBlendingFilters } from '../hooks/useBlendingFilters';
 import { calculateBlendedMetricsNew, generateBlendedReportHTML } from '../utils/blendingCalculations';
@@ -116,20 +116,69 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     }
   }, [isLoading, startProgress, completeProgress]);
 
+  // Store template data for restoration after filter changes
+  const [pendingTemplate, setPendingTemplate] = useState<any>(null);
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
+  const isApplyingTemplateRef = useRef(false);
+  const templateLoadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Clear selected rows when filters change (except during template loading)
   useEffect(() => {
-    if (!isLoading && !isLoadingTemplate && selectedDataRows.length > 0) {
-      // Only clear if we're not in the middle of loading a template
-      const timeoutId = setTimeout(() => {
-        if (selectedDataRows.length > 0 && !isLoadingTemplate) {
+    // Don't clear if we're applying a template or have a pending template
+    if (isApplyingTemplateRef.current || pendingTemplate) {
+      console.log('🔍 Skipping clear due to template loading in progress');
+      return;
+    }
+    
+    // Clear any existing timeout
+    if (templateLoadingTimeoutRef.current) {
+      clearTimeout(templateLoadingTimeoutRef.current);
+      templateLoadingTimeoutRef.current = null;
+    }
+    
+    if (!isLoading && !isLoadingTemplate && !isApplyingTemplate && selectedDataRows.length > 0) {
+      // Only clear if we're not in the middle of loading a template and no template is pending
+      templateLoadingTimeoutRef.current = setTimeout(() => {
+        // Triple-check all protection flags
+        if (selectedDataRows.length > 0 && 
+            !isLoadingTemplate && 
+            !isApplyingTemplate && 
+            !isApplyingTemplateRef.current && 
+            !pendingTemplate &&
+            !templateLoadingTimeoutRef.current) {
           console.log('🔍 Clearing selected rows due to filter change');
           setSelectedDataRows([]);
+        } else {
+          console.log('🔍 Skipping clear - template loading detected during timeout');
         }
-      }, 100);
-      
-      return () => clearTimeout(timeoutId);
+        templateLoadingTimeoutRef.current = null;
+      }, 1000); // Much longer timeout to ensure template loading completes
     }
-  }, [selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch, isLoadingTemplate]);
+  }, [selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch, isLoadingTemplate, pendingTemplate, isApplyingTemplate]);
+
+  // Watch for filtered data changes and restore template selections if needed
+  useEffect(() => {
+    console.log('🔍 useEffect triggered - pendingTemplate:', !!pendingTemplate, 'filteredData length:', filteredSurveyData.length, 'isLoadingTemplate:', isLoadingTemplate);
+    if (pendingTemplate && filteredSurveyData.length > 0) {
+      console.log('🔍 Filtered data updated, restoring template selections');
+      setIsApplyingTemplate(true);
+      isApplyingTemplateRef.current = true;
+      // Small delay to ensure state is stable
+      setTimeout(() => {
+        loadTemplateSelections(pendingTemplate);
+        setPendingTemplate(null);
+      }, 100);
+    }
+  }, [filteredSurveyData, pendingTemplate]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (templateLoadingTimeoutRef.current) {
+        clearTimeout(templateLoadingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Calculate blended metrics for selected specialties
   const blendedMetrics = useMemo(() => {
@@ -347,8 +396,10 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   };
 
   const handleLoadTemplate = (templateId: string) => {
+    console.log('🔍 handleLoadTemplate called with templateId:', templateId);
     const template = templates.find(t => t.id === templateId);
     if (!template) {
+      console.log('❌ Template not found for ID:', templateId);
       toast({
         title: 'Template Not Found',
         description: 'The selected template could not be found.',
@@ -356,6 +407,10 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       });
       return;
     }
+    
+    console.log('🔍 Found template:', template.name);
+    console.log('🔍 Template specialties:', template.specialties);
+    console.log('🔍 Template filterState:', template.filterState);
     
     setSelectedTemplateId(templateId);
     setBlendName(template.name);
@@ -373,16 +428,15 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       setBlendingMethod(template.filterState.blendingMethod);
       setCustomWeights(template.filterState.customWeights || {});
       
-      // Wait for filters to be applied before selecting rows
-      setTimeout(() => {
-        loadTemplateSelections(template);
-        setIsLoadingTemplate(false);
-      }, 1000);
+      // Store template for restoration after filters are applied
+      setPendingTemplate(template);
+      console.log('🔍 Template stored as pending, waiting for filter changes');
       return;
     }
     
     // If no survey data is loaded yet, show a message and wait
     if (!filteredSurveyData || filteredSurveyData.length === 0) {
+      console.log('❌ No filtered survey data available');
       toast({
         title: 'Loading Survey Data',
         description: 'Please wait for survey data to load, then try loading the template again.',
@@ -391,35 +445,76 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       return;
     }
     
+    console.log('🔍 Loading template selections directly');
     setIsLoadingTemplate(true);
     loadTemplateSelections(template);
     setIsLoadingTemplate(false);
   };
   
   const loadTemplateSelections = (template: any) => {
-    
-    // Find and select the corresponding rows in the table
-    const templateRowIndices: number[] = [];
-    
     console.log('🔍 Loading template:', template.name);
     console.log('🔍 Template specialties:', template.specialties);
     console.log('🔍 Available survey data:', filteredSurveyData.length, 'rows');
     console.log('🔍 Current selectedDataRows before loading:', selectedDataRows);
     
+    // Debug: Log the first few rows of filtered data
+    console.log('🔍 First 3 rows of filtered data:', filteredSurveyData.slice(0, 3).map(row => ({
+      specialty: row.surveySpecialty,
+      source: row.surveySource,
+      year: row.surveyYear,
+      region: row.geographicRegion,
+      provider: row.providerType
+    })));
+    
+    // Find and select the corresponding rows in the table
+    const templateRowIndices: number[] = [];
+    
+    if (!template.specialties || template.specialties.length === 0) {
+      console.log('🔍 No specialties in template, clearing selections');
+      setSelectedDataRows([]);
+      setIsLoadingTemplate(false);
+      toast({
+        title: 'Template Loaded',
+        description: `"${template.name}" has been loaded with no selections.`
+      });
+      return;
+    }
+    
     template.specialties.forEach((specialty: any) => {
       console.log('🔍 Looking for specialty:', specialty);
+      console.log('🔍 Specialty details:', {
+        name: specialty.name,
+        source: specialty.surveySource,
+        year: specialty.surveyYear,
+        region: specialty.geographicRegion,
+        provider: specialty.providerType
+      });
       
       const matchingRows = filteredSurveyData
         .map((row, index) => ({ row, index }))
-        .filter(({ row }) => 
-          row.surveySpecialty === specialty.name &&
-          row.surveySource === specialty.surveySource &&
-          row.surveyYear === specialty.surveyYear &&
-          row.geographicRegion === specialty.geographicRegion &&
-          row.providerType === specialty.providerType
-        );
+        .filter(({ row, index }) => {
+          const matches = 
+            row.surveySpecialty === specialty.name &&
+            row.surveySource === specialty.surveySource &&
+            row.surveyYear === specialty.surveyYear &&
+            row.geographicRegion === specialty.geographicRegion &&
+            row.providerType === specialty.providerType;
+          
+          if (matches) {
+            console.log('🔍 Found matching row at index', index, ':', row.surveySpecialty);
+          } else {
+            console.log('🔍 No match for row at index', index, ':', {
+              specialty: row.surveySpecialty,
+              source: row.surveySource,
+              year: row.surveyYear,
+              region: row.geographicRegion,
+              provider: row.providerType
+            });
+          }
+          return matches;
+        });
       
-      console.log('🔍 Found matching rows:', matchingRows.length);
+      console.log('🔍 Found matching rows for', specialty.name, ':', matchingRows.length);
       
       matchingRows.forEach(({ index }) => {
         if (!templateRowIndices.includes(index)) {
@@ -431,12 +526,38 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     console.log('🔍 Total selected rows:', templateRowIndices.length);
     console.log('🔍 Setting selectedDataRows to:', templateRowIndices);
     
-    setSelectedDataRows(templateRowIndices);
+    // Clear existing selections first
+    setSelectedDataRows([]);
     
-    // Verify the state was set
+    // Set new selections after a brief delay to ensure state is cleared
     setTimeout(() => {
-      console.log('🔍 selectedDataRows after setting:', selectedDataRows);
-    }, 100);
+      setSelectedDataRows(templateRowIndices);
+      console.log('🔍 selectedDataRows set to:', templateRowIndices);
+      
+      // Set loading to false after a much longer delay to ensure selections are applied and protected
+      setTimeout(() => {
+        // Clear any pending clearing timeouts
+        if (templateLoadingTimeoutRef.current) {
+          clearTimeout(templateLoadingTimeoutRef.current);
+          templateLoadingTimeoutRef.current = null;
+        }
+        
+        setIsLoadingTemplate(false);
+        setIsApplyingTemplate(false);
+        isApplyingTemplateRef.current = false;
+        console.log('🔍 Loading template completed, isLoadingTemplate and isApplyingTemplate set to false');
+      }, 500);
+      
+      // Verify the state was set and re-apply if needed
+      setTimeout(() => {
+        console.log('🔍 Final selectedDataRows state:', selectedDataRows);
+        // If selections were cleared, re-apply them
+        if (selectedDataRows.length === 0 && templateRowIndices.length > 0) {
+          console.log('🔍 Re-applying selections that were cleared');
+          setSelectedDataRows(templateRowIndices);
+        }
+      }, 100);
+    }, 50);
     
     if (templateRowIndices.length === 0) {
       toast({

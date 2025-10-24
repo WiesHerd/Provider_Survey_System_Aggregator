@@ -235,7 +235,8 @@ export const useMemoizedFiltering = (data: AggregatedData[], filters: AnalyticsF
  */
 export const useMemoizedColumnGroups = (selectedVariables: string[], isDynamicData: boolean) => {
   return useMemo(() => {
-    if (!isDynamicData || selectedVariables.length === 0) {
+    // FIXED: Generate column groups even for legacy data when variables are selected
+    if (selectedVariables.length === 0) {
       return [];
     }
     

@@ -112,7 +112,7 @@ export const VARIABLE_COLORS = [
  * Default variable selections for new users
  * These use standardized names that will match normalized variations
  */
-export const DEFAULT_VARIABLES = ['tcc', 'work_rvus', 'tcc_per_work_rvu'] as const;
+export const DEFAULT_VARIABLES = ['tcc', 'work_rvus', 'cfs'] as const;
 
 /**
  * Maximum number of variables that can be selected

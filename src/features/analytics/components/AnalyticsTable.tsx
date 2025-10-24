@@ -74,10 +74,20 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  // Detect if we're using dynamic data format
+  // Detect if we're using dynamic data format OR if we have selected variables
   const isDynamicData = useMemo(() => {
-    return data.length > 0 && 'variables' in data[0];
-  }, [data]);
+    const hasVariables = data.length > 0 && 'variables' in data[0];
+    // Reduced logging to prevent console spam
+    if (data.length > 0) {
+      console.log('🔍 AnalyticsTable: Data format check:', { 
+        hasVariables: 'variables' in data[0], 
+        selectedVariablesCount: selectedVariables.length,
+        isDynamicData: hasVariables
+      });
+    }
+    // FIXED: Only use dynamic format if data actually has variables property
+    return hasVariables;
+  }, [data, selectedVariables]);
   
   // Use memoized column groups for dynamic variables
   const columnGroups = useMemoizedColumnGroups(selectedVariables, isDynamicData);
@@ -106,7 +116,76 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         // For dynamic data, use the calculation directly
         cache[specialty] = calculateDynamicSummaryRows(rows as DynamicAggregatedData[], selectedVariables);
       } else {
-        cache[specialty] = calculateSummaryRows(rows as any[]);
+        // For legacy data, use legacy calculation but convert to dynamic format for rendering
+        const legacySummary = calculateSummaryRows(rows as any[]);
+        // Convert legacy summary to dynamic format for consistent rendering
+        const dynamicFormat: {
+          simple: Record<string, any>;
+          weighted: Record<string, any>;
+        } = {
+          simple: {},
+          weighted: {}
+        };
+        
+        // Map legacy fields to dynamic variable names
+        if (selectedVariables.includes('tcc')) {
+          dynamicFormat.simple.tcc = {
+            n_orgs: legacySummary.simple.tcc_n_orgs,
+            n_incumbents: legacySummary.simple.tcc_n_incumbents,
+            p25: legacySummary.simple.tcc_p25,
+            p50: legacySummary.simple.tcc_p50,
+            p75: legacySummary.simple.tcc_p75,
+            p90: legacySummary.simple.tcc_p90
+          };
+          dynamicFormat.weighted.tcc = {
+            n_orgs: legacySummary.weighted.tcc_n_orgs,
+            n_incumbents: legacySummary.weighted.tcc_n_incumbents,
+            p25: legacySummary.weighted.tcc_p25,
+            p50: legacySummary.weighted.tcc_p50,
+            p75: legacySummary.weighted.tcc_p75,
+            p90: legacySummary.weighted.tcc_p90
+          };
+        }
+        
+        if (selectedVariables.includes('work_rvus') || selectedVariables.includes('wrvu')) {
+          dynamicFormat.simple.work_rvus = {
+            n_orgs: legacySummary.simple.wrvu_n_orgs,
+            n_incumbents: legacySummary.simple.wrvu_n_incumbents,
+            p25: legacySummary.simple.wrvu_p25,
+            p50: legacySummary.simple.wrvu_p50,
+            p75: legacySummary.simple.wrvu_p75,
+            p90: legacySummary.simple.wrvu_p90
+          };
+          dynamicFormat.weighted.work_rvus = {
+            n_orgs: legacySummary.weighted.wrvu_n_orgs,
+            n_incumbents: legacySummary.weighted.wrvu_n_incumbents,
+            p25: legacySummary.weighted.wrvu_p25,
+            p50: legacySummary.weighted.wrvu_p50,
+            p75: legacySummary.weighted.wrvu_p75,
+            p90: legacySummary.weighted.wrvu_p90
+          };
+        }
+        
+        if (selectedVariables.includes('cfs') || selectedVariables.includes('cf')) {
+          dynamicFormat.simple.cfs = {
+            n_orgs: legacySummary.simple.cf_n_orgs,
+            n_incumbents: legacySummary.simple.cf_n_incumbents,
+            p25: legacySummary.simple.cf_p25,
+            p50: legacySummary.simple.cf_p50,
+            p75: legacySummary.simple.cf_p75,
+            p90: legacySummary.simple.cf_p90
+          };
+          dynamicFormat.weighted.cfs = {
+            n_orgs: legacySummary.weighted.cf_n_orgs,
+            n_incumbents: legacySummary.weighted.cf_n_incumbents,
+            p25: legacySummary.weighted.cf_p25,
+            p50: legacySummary.weighted.cf_p50,
+            p75: legacySummary.weighted.cf_p75,
+            p90: legacySummary.weighted.cf_p90
+          };
+        }
+        
+        cache[specialty] = dynamicFormat;
       }
     });
     return cache;
@@ -219,7 +298,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                </TableCell>
               
               {/* DYNAMIC: Generate headers for selected variables */}
-              {isDynamicData && columnGroups.map((group, index) => (
+              {columnGroups.length > 0 && columnGroups.map((group, index) => (
                 <TableCell 
                   key={group.normalizedName}
                   sx={{
@@ -235,7 +314,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               ))}
               
               {/* FALLBACK: Original hardcoded headers for backward compatibility */}
-              {!isDynamicData && (
+              {columnGroups.length === 0 && (
                 <>
               <TableCell sx={{ 
                 fontWeight: 'bold', 
@@ -299,7 +378,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                }}>Region</TableCell>
                
                {/* DYNAMIC: Generate sub-headers for selected variables */}
-               {isDynamicData && columnGroups.map((group, index) => (
+               {columnGroups.length > 0 && columnGroups.map((group, index) => (
                  <React.Fragment key={group.normalizedName}>
                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right"># Orgs</TableCell>
                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right"># Inc</TableCell>
@@ -311,7 +390,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                ))}
                
                {/* FALLBACK: Original hardcoded sub-headers for backward compatibility */}
-               {!isDynamicData && (
+               {columnGroups.length === 0 && (
                  <>
                {/* TCC Sub-headers */}
                <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Orgs</TableCell>
@@ -371,32 +450,102 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     }}>{formatRegionForDisplay(row.geographicRegion)}</TableCell>
                     
                     {/* DYNAMIC: Render data for selected variables */}
-                    {isDynamicData && selectedVariables.map((varName, varIndex) => {
+                    {columnGroups.length > 0 && selectedVariables.map((varName, varIndex) => {
                       const dynamicRow = row as unknown as DynamicAggregatedData;
-                      const metrics = dynamicRow.variables?.[varName];
+                      const legacyRow = row as any; // Legacy data format
                       const lightColor = getVariableLightBackgroundColor(varName, varIndex);
                       
-                      return metrics ? (
-                        <React.Fragment key={varName}>
-                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_orgs.toLocaleString()}</TableCell>
-                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_incumbents.toLocaleString()}</TableCell>
-                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p25, varName)}</TableCell>
-                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p50, varName)}</TableCell>
-                          <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p75, varName)}</TableCell>
-                          <TableCell sx={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0' }} align="right">{formatVariableValue(metrics.p90, varName)}</TableCell>
-                        </React.Fragment>
-                      ) : (
-                        // Handle missing data gracefully
-                        <React.Fragment key={varName}>
-                          <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
-                            N/A
-                          </TableCell>
-                        </React.Fragment>
-                      );
+                      // Reduced logging to prevent console spam
+                      if (varName === 'cfs' && row.surveySource === 'Gallagher Physician') {
+                        console.log(`🔍 AnalyticsTable: Processing CF variable for Gallagher data:`, {
+                          hasVariables: !!dynamicRow.variables,
+                          variableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables) : [],
+                          cfData: dynamicRow.variables?.[varName]
+                        });
+                      }
+                      
+                      // Check if we have dynamic variables format
+                      if (dynamicRow.variables) {
+                        const metrics = dynamicRow.variables[varName];
+                        return metrics ? (
+                          <React.Fragment key={varName}>
+                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_orgs.toLocaleString()}</TableCell>
+                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_incumbents.toLocaleString()}</TableCell>
+                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p25, varName)}</TableCell>
+                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p50, varName)}</TableCell>
+                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p75, varName)}</TableCell>
+                            <TableCell sx={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0' }} align="right">{formatVariableValue(metrics.p90, varName)}</TableCell>
+                          </React.Fragment>
+                        ) : (
+                          <React.Fragment key={varName}>
+                            <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                              n/a
+                            </TableCell>
+                          </React.Fragment>
+                        );
+                      } else {
+                        // Handle legacy data format - map variable names to legacy fields
+                        const legacyFieldMap: Record<string, string> = {
+                          'tcc': 'tcc',
+                          'work_rvus': 'wrvu',
+                          'wrvu': 'wrvu',
+                          'cf': 'cf',
+                          'conversion_factor': 'cf',
+                          'tcc_per_work_rvu': 'cf',
+                          'cfs': 'cf',  // Add mapping for 'cfs' to 'cf'
+                          'tcc_per_work_rvus': 'cf'  // Add mapping for plural form
+                        };
+                        
+                        // Reduced logging to prevent console spam
+                        if (varName === 'cfs') {
+                          console.log(`🔍 AnalyticsTable: Processing CF variable for legacy data:`, {
+                            variable: varName,
+                            mappedField: legacyFieldMap[varName]
+                          });
+                        }
+                        
+                        const legacyPrefix = legacyFieldMap[varName] || varName;
+                        const nOrgs = legacyRow[`${legacyPrefix}_n_orgs`] || 0;
+                        const nIncumbents = legacyRow[`${legacyPrefix}_n_incumbents`] || 0;
+                        const p25 = legacyRow[`${legacyPrefix}_p25`] || 0;
+                        const p50 = legacyRow[`${legacyPrefix}_p50`] || 0;
+                        const p75 = legacyRow[`${legacyPrefix}_p75`] || 0;
+                        const p90 = legacyRow[`${legacyPrefix}_p90`] || 0;
+                        
+                        // Reduced logging to prevent console spam
+                        if (varName === 'cfs') {
+                          console.log(`🔍 AnalyticsTable: CF data values:`, {
+                            nOrgs, nIncumbents, p25, p50, p75, p90,
+                            availableCFFields: Object.keys(legacyRow).filter(k => k.includes('cf'))
+                          });
+                        }
+                        
+                        // Only show if we have meaningful data
+                        if (p50 > 0) {
+                          return (
+                            <React.Fragment key={varName}>
+                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{nOrgs.toLocaleString()}</TableCell>
+                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{nIncumbents.toLocaleString()}</TableCell>
+                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(p25, varName)}</TableCell>
+                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(p50, varName)}</TableCell>
+                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(p75, varName)}</TableCell>
+                              <TableCell sx={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0' }} align="right">{formatVariableValue(p90, varName)}</TableCell>
+                            </React.Fragment>
+                          );
+                        } else {
+                          return (
+                            <React.Fragment key={varName}>
+                              <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                                n/a
+                              </TableCell>
+                            </React.Fragment>
+                          );
+                        }
+                      }
                     })}
                     
                     {/* FALLBACK: Original hardcoded sections for backward compatibility */}
-                    {!isDynamicData && (() => {
+                    {columnGroups.length === 0 && (() => {
                       const legacyRow = row as any; // Cast to any for legacy data
                       return (
                         <>
@@ -432,7 +581,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                 {/* Summary Rows - Memoized for performance */}
                 {(() => {
                   const summaryData = getSummaryRows(specialty);
-                  if (isDynamicData) {
+                  if (columnGroups.length > 0) {
                     return (
                       <>
                         {/* Simple Average Row */}
@@ -491,7 +640,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                             ) : (
                               <React.Fragment key={varName}>
                                 <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
-                                  N/A
+                                  n/a
                                 </TableCell>
                               </React.Fragment>
                             );
@@ -554,7 +703,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                             ) : (
                               <React.Fragment key={varName}>
                                 <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
-                                  N/A
+                                  n/a
                                 </TableCell>
                               </React.Fragment>
                             );

@@ -88,62 +88,67 @@ export const calculateSummaryRows = (rows: AggregatedData[]): SummaryCalculation
     };
   }
 
+  // Filter out rows with no data for each metric type
+  const tccRows = rows.filter(row => row.tcc_p50 > 0);
+  const wrvuRows = rows.filter(row => row.wrvu_p50 > 0);
+  const cfRows = rows.filter(row => row.cf_p50 > 0);
+  
   // Simple averages (mean of all values) - Each metric section has independent org/incumbent counts
   const simple = {
     // TCC metrics with independent organizational data
-    tcc_n_orgs: Math.round(rows.reduce((sum, row) => sum + row.tcc_n_orgs, 0) / rows.length),
-    tcc_n_incumbents: Math.round(rows.reduce((sum, row) => sum + row.tcc_n_incumbents, 0) / rows.length),
-    tcc_p25: rows.reduce((sum, row) => sum + row.tcc_p25, 0) / rows.length,
-    tcc_p50: rows.reduce((sum, row) => sum + row.tcc_p50, 0) / rows.length,
-    tcc_p75: rows.reduce((sum, row) => sum + row.tcc_p75, 0) / rows.length,
-    tcc_p90: rows.reduce((sum, row) => sum + row.tcc_p90, 0) / rows.length,
+    tcc_n_orgs: tccRows.length > 0 ? Math.round(tccRows.reduce((sum, row) => sum + row.tcc_n_orgs, 0) / tccRows.length) : 0,
+    tcc_n_incumbents: tccRows.length > 0 ? Math.round(tccRows.reduce((sum, row) => sum + row.tcc_n_incumbents, 0) / tccRows.length) : 0,
+    tcc_p25: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p25, 0) / tccRows.length : 0,
+    tcc_p50: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p50, 0) / tccRows.length : 0,
+    tcc_p75: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p75, 0) / tccRows.length : 0,
+    tcc_p90: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p90, 0) / tccRows.length : 0,
     
     // wRVU metrics with independent organizational data
-    wrvu_n_orgs: Math.round(rows.reduce((sum, row) => sum + row.wrvu_n_orgs, 0) / rows.length),
-    wrvu_n_incumbents: Math.round(rows.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0) / rows.length),
-    wrvu_p25: rows.reduce((sum, row) => sum + row.wrvu_p25, 0) / rows.length,
-    wrvu_p50: rows.reduce((sum, row) => sum + row.wrvu_p50, 0) / rows.length,
-    wrvu_p75: rows.reduce((sum, row) => sum + row.wrvu_p75, 0) / rows.length,
-    wrvu_p90: rows.reduce((sum, row) => sum + row.wrvu_p90, 0) / rows.length,
+    wrvu_n_orgs: wrvuRows.length > 0 ? Math.round(wrvuRows.reduce((sum, row) => sum + row.wrvu_n_orgs, 0) / wrvuRows.length) : 0,
+    wrvu_n_incumbents: wrvuRows.length > 0 ? Math.round(wrvuRows.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0) / wrvuRows.length) : 0,
+    wrvu_p25: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p25, 0) / wrvuRows.length : 0,
+    wrvu_p50: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p50, 0) / wrvuRows.length : 0,
+    wrvu_p75: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p75, 0) / wrvuRows.length : 0,
+    wrvu_p90: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p90, 0) / wrvuRows.length : 0,
     
     // CF metrics with independent organizational data
-    cf_n_orgs: Math.round(rows.reduce((sum, row) => sum + row.cf_n_orgs, 0) / rows.length),
-    cf_n_incumbents: Math.round(rows.reduce((sum, row) => sum + row.cf_n_incumbents, 0) / rows.length),
-    cf_p25: rows.reduce((sum, row) => sum + row.cf_p25, 0) / rows.length,
-    cf_p50: rows.reduce((sum, row) => sum + row.cf_p50, 0) / rows.length,
-    cf_p75: rows.reduce((sum, row) => sum + row.cf_p75, 0) / rows.length,
-    cf_p90: rows.reduce((sum, row) => sum + row.cf_p90, 0) / rows.length,
+    cf_n_orgs: cfRows.length > 0 ? Math.round(cfRows.reduce((sum, row) => sum + row.cf_n_orgs, 0) / cfRows.length) : 0,
+    cf_n_incumbents: cfRows.length > 0 ? Math.round(cfRows.reduce((sum, row) => sum + row.cf_n_incumbents, 0) / cfRows.length) : 0,
+    cf_p25: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p25, 0) / cfRows.length : 0,
+    cf_p50: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p50, 0) / cfRows.length : 0,
+    cf_p75: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p75, 0) / cfRows.length : 0,
+    cf_p90: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p90, 0) / cfRows.length : 0,
   };
 
   // Weighted averages (weighted by number of incumbents) - Each metric section weighted independently
-  const totalTccIncumbents = rows.reduce((sum, row) => sum + row.tcc_n_incumbents, 0);
-  const totalWrvuIncumbents = rows.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0);
-  const totalCfIncumbents = rows.reduce((sum, row) => sum + row.cf_n_incumbents, 0);
+  const totalTccIncumbents = tccRows.reduce((sum, row) => sum + row.tcc_n_incumbents, 0);
+  const totalWrvuIncumbents = wrvuRows.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0);
+  const totalCfIncumbents = cfRows.reduce((sum, row) => sum + row.cf_n_incumbents, 0);
   
   const weighted = {
     // TCC weighted averages
-    tcc_n_orgs: rows.reduce((sum, row) => sum + row.tcc_n_orgs, 0),
+    tcc_n_orgs: tccRows.reduce((sum, row) => sum + row.tcc_n_orgs, 0),
     tcc_n_incumbents: totalTccIncumbents,
-    tcc_p25: totalTccIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.tcc_p25 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    tcc_p50: totalTccIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.tcc_p50 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    tcc_p75: totalTccIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.tcc_p75 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    tcc_p90: totalTccIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.tcc_p90 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
+    tcc_p25: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p25 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
+    tcc_p50: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p50 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
+    tcc_p75: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p75 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
+    tcc_p90: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p90 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
     
     // wRVU weighted averages
-    wrvu_n_orgs: rows.reduce((sum, row) => sum + row.wrvu_n_orgs, 0),
+    wrvu_n_orgs: wrvuRows.reduce((sum, row) => sum + row.wrvu_n_orgs, 0),
     wrvu_n_incumbents: totalWrvuIncumbents,
-    wrvu_p25: totalWrvuIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.wrvu_p25 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    wrvu_p50: totalWrvuIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.wrvu_p50 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    wrvu_p75: totalWrvuIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.wrvu_p75 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    wrvu_p90: totalWrvuIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.wrvu_p90 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
+    wrvu_p25: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p25 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
+    wrvu_p50: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p50 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
+    wrvu_p75: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p75 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
+    wrvu_p90: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p90 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
     
     // CF weighted averages
-    cf_n_orgs: rows.reduce((sum, row) => sum + row.cf_n_orgs, 0),
+    cf_n_orgs: cfRows.reduce((sum, row) => sum + row.cf_n_orgs, 0),
     cf_n_incumbents: totalCfIncumbents,
-    cf_p25: totalCfIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.cf_p25 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-    cf_p50: totalCfIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.cf_p50 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-    cf_p75: totalCfIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.cf_p75 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-    cf_p90: totalCfIncumbents > 0 ? rows.reduce((sum, row) => sum + (row.cf_p90 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
+    cf_p25: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p25 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
+    cf_p50: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p50 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
+    cf_p75: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p75 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
+    cf_p90: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p90 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
   };
 
   return { simple, weighted };

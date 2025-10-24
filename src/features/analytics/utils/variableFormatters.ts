@@ -17,10 +17,10 @@ export const formatVariableDisplayName = (normalizedName: string): string => {
     'work_rvus': 'Work RVUs',
     'work_rvu': 'Work RVUs',
     'wrvu': 'Work RVUs',
-    'tcc_per_work_rvu': 'TCC per Work RVU',
-    'tcc_per_work_rvus': 'TCC per Work RVU',
-    'cf': 'Conversion Factor',
-    'conversion_factor': 'Conversion Factor',
+    'tcc_per_work_rvu': 'CFs',
+    'tcc_per_work_rvus': 'CFs',
+    'cf': 'CFs',
+    'conversion_factor': 'CFs',
     'base_salary': 'Base Salary',
     'base_compensation': 'Base Salary',
     'asa_units': 'ASA Units',
@@ -56,7 +56,8 @@ const formatVariableNameFromPattern = (normalizedName: string): string => {
     .replace(/\bRvu\b/g, 'RVU')
     .replace(/\bRvus\b/g, 'RVUs')
     .replace(/\bAsa\b/g, 'ASA')
-    .replace(/\bCf\b/g, 'CF');
+    .replace(/\bCf\b/g, 'CF')
+    .replace(/\bCfs\b/g, 'CFs');
 };
 
 /**
@@ -136,7 +137,9 @@ const isCurrencyVariable = (variableName: string): boolean => {
     /salary/,
     /pay/,
     /bonus/,
-    /cash/
+    /cash/,
+    /cf$/,  // Add CF variables as currency
+    /cfs$/  // Add CFS variables as currency
   ];
   
   return currencyPatterns.some(pattern => pattern.test(lower));
@@ -154,6 +157,7 @@ const isRatioVariable = (variableName: string): boolean => {
     /tcc.*per.*work.*rvu/,
     /conversion.*factor/,
     /cf$/,
+    /cfs$/,  // Add support for 'cfs' variable
     /per.*encounter/,
     /per.*asa/,
     /rate/,
@@ -240,6 +244,7 @@ export const mapVariableNameToStandard = (normalizedName: string): string => {
     'tcc_per_wrvu': 'tcc_per_work_rvu',
     'conversion_factor': 'tcc_per_work_rvu',
     'cf': 'tcc_per_work_rvu',
+    'cfs': 'tcc_per_work_rvu',  // Add mapping for 'cfs' to 'tcc_per_work_rvu'
     'comp_per_wrvu': 'tcc_per_work_rvu',
     'compensation_per_wrvu': 'tcc_per_work_rvu',
     

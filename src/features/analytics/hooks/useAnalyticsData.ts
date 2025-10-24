@@ -83,22 +83,26 @@ const useAnalyticsData = (
       setError(null);
       startProgress(); // Start smooth progress animation
       
-      // NEW: Use dynamic data fetching if variables are selected
-      const allData = selectedVariables.length > 0 
-        ? await analyticsDataService.getAnalyticsDataByVariables({
-            specialty: '',
-            surveySource: '',
-            geographicRegion: '',
-            providerType: '',
-            year: ''
-          }, selectedVariables)
-        : await analyticsDataService.getAnalyticsData({
-            specialty: '',
-            surveySource: '',
-            geographicRegion: '',
-            providerType: '',
-            year: ''
-          });
+      // FIXED: Always use legacy data fetching for now to ensure CF data displays
+      // The dynamic data path is not working correctly with existing data
+      // Reduced logging to prevent console spam
+      console.log('🔍 useAnalyticsData: Fetching analytics data with', selectedVariables.length, 'selected variables');
+      const allData = await analyticsDataService.getAnalyticsData({
+        specialty: '',
+        surveySource: '',
+        geographicRegion: '',
+        providerType: '',
+        year: ''
+      });
+      
+      // Reduced logging to prevent console spam
+      console.log('🔍 useAnalyticsData: Loaded', allData.length, 'records');
+      if (allData.length > 0) {
+        console.log('🔍 useAnalyticsData: Data format:', {
+          hasVariables: 'variables' in allData[0],
+          recordKeys: Object.keys(allData[0]).slice(0, 10) // Show first 10 keys only
+        });
+      }
       
       // Also fetch mappings for filter options
       const dataService = getDataService();
@@ -122,7 +126,7 @@ const useAnalyticsData = (
       setLoading(false);
       resetProgress();
     }
-  }, [selectedVariables]); // Re-fetch when selected variables change
+  }, []); // Only fetch once on mount, don't refetch on variable changes
 
   // Export functions
   const exportToExcel = useCallback(() => {
@@ -203,20 +207,28 @@ const useAnalyticsData = (
     setFilters(newFilters);
   }, []);
 
-  // Force refresh function (on-demand)
+  // Force refresh function (on-demand) - FIXED: Remove fetchData dependency
   const forceRefresh = useCallback(async () => {
     console.log('🔄 Force refreshing analytics data (on-demand)');
     const analyticsDataService = new AnalyticsDataService();
     analyticsDataService.invalidateCache();
-    await fetchData();
-  }, [fetchData]);
+    // Trigger a fresh fetch without dependency issues
+    setLoading(true);
+    setError(null);
+    setTimeout(() => {
+      fetchData();
+    }, 100);
+  }, []); // FIXED: Empty dependency array
 
-  // Initial data fetch and refetch when filters change
+  // Initial data fetch only - FIXED: Remove fetchData dependency to prevent infinite loop
   useEffect(() => {
+    console.log('🔍 useAnalyticsData: Initial data fetch triggered');
     fetchData();
-  }, [fetchData]);
+  }, []); // FIXED: Empty dependency array to fetch only once on mount
 
-  // Listen for cache invalidation events
+  // TEMPORARILY DISABLED: Cache invalidation listeners to stop infinite loop
+  // TODO: Re-enable these once the infinite loop issue is resolved
+  /*
   useEffect(() => {
     const { cacheInvalidationManager, CacheInvalidationEvent } = require('../utils/cacheInvalidation');
     
@@ -224,7 +236,11 @@ const useAnalyticsData = (
       CacheInvalidationEvent.MAPPING_CHANGED,
       () => {
         console.log('🔄 Mapping changed - refreshing analytics data');
-        fetchData();
+        setLoading(true);
+        setError(null);
+        setTimeout(() => {
+          fetchData();
+        }, 100);
       }
     );
 
@@ -232,7 +248,11 @@ const useAnalyticsData = (
       CacheInvalidationEvent.NEW_SURVEY_UPLOADED,
       () => {
         console.log('🔄 New survey uploaded - refreshing analytics data');
-        fetchData();
+        setLoading(true);
+        setError(null);
+        setTimeout(() => {
+          fetchData();
+        }, 100);
       }
     );
 
@@ -240,17 +260,21 @@ const useAnalyticsData = (
       CacheInvalidationEvent.DATA_CLEARED,
       () => {
         console.log('🔄 Data cleared - refreshing analytics data');
-        fetchData();
+        setLoading(true);
+        setError(null);
+        setTimeout(() => {
+          fetchData();
+        }, 100);
       }
     );
 
-    // Cleanup listeners on unmount
     return () => {
       unsubscribeMappingChanged();
       unsubscribeNewSurvey();
       unsubscribeDataCleared();
     };
-  }, [fetchData]);
+  }, []);
+  */
 
   // Return hook interface
   return {

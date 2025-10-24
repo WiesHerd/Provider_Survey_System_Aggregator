@@ -640,6 +640,7 @@ export class AnalyticsDataService {
   ): Promise<DynamicAggregatedData[]> {
     try {
       console.log('🔍 AnalyticsDataService: Fetching data for variables:', selectedVariables);
+      console.log('🔍 AnalyticsDataService: Filters:', filters);
       
       // Get all surveys and cached mappings
       const [surveys, { 
@@ -661,6 +662,7 @@ export class AnalyticsDataService {
       
       // Process surveys in parallel for better performance
       const allNormalizedRows: DynamicNormalizedRow[] = [];
+      console.log('🔍 AnalyticsDataService: Processing', surveys.length, 'surveys');
       
       // Limit concurrent surveys to avoid overwhelming IndexedDB
       const maxConcurrent = Math.min(3, surveys.length);
@@ -719,9 +721,17 @@ export class AnalyticsDataService {
       }
       
       // Aggregate the normalized data dynamically
+      console.log('🔍 AnalyticsDataService: Normalized rows count:', allNormalizedRows.length);
+      if (allNormalizedRows.length > 0) {
+        console.log('🔍 AnalyticsDataService: First normalized row:', JSON.stringify(allNormalizedRows[0], null, 2));
+      }
+      
       const aggregatedData = await this.aggregateByVariables(allNormalizedRows);
       
       console.log(`✅ AnalyticsDataService: Aggregated ${aggregatedData.length} records for ${selectedVariables.length} variables`);
+      if (aggregatedData.length > 0) {
+        console.log('🔍 AnalyticsDataService: First aggregated record:', JSON.stringify(aggregatedData[0], null, 2));
+      }
       
       return aggregatedData;
       
@@ -1551,8 +1561,8 @@ export class AnalyticsDataService {
       'work_rvus': 'Work RVUs',
       'work_rvu': 'Work RVUs',
       'wrvu': 'Work RVUs',
-      'tcc_per_work_rvu': 'TCC per Work RVU',
-      'cf': 'Conversion Factor',
+      'tcc_per_work_rvu': 'CFs',
+      'cf': 'CFs',
       'base_salary': 'Base Salary',
       'asa_units': 'ASA Units',
       'panel_size': 'Panel Size',

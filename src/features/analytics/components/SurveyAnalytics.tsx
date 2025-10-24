@@ -29,6 +29,7 @@ interface SurveyAnalyticsProps {
  * 4. Handling export functionality
  */
 const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilter }) => {
+  console.log('🔍 SurveyAnalytics: Component rendered');
   const { currentYear } = useYear();
   const { selectedProviderType } = useProviderContext();
   
@@ -36,7 +37,9 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   const [selectedVariables, setSelectedVariables] = useState<string[]>(() => {
     // Load from localStorage or use defaults
     const saved = localStorage.getItem('analytics_selected_variables');
-    return saved ? JSON.parse(saved) : [...DEFAULT_VARIABLES];
+    const variables = saved ? JSON.parse(saved) : [...DEFAULT_VARIABLES];
+    console.log('🔍 SurveyAnalytics: selectedVariables from localStorage/defaults:', variables);
+    return variables;
   });
   
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
@@ -68,6 +71,25 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   useEffect(() => {
     localStorage.setItem('analytics_selected_variables', JSON.stringify(selectedVariables));
   }, [selectedVariables]);
+  
+  // TEMPORARILY DISABLED: Cache clearing to stop infinite loop
+  // TODO: Re-enable cache clearing once the infinite loop issue is resolved
+  /*
+  useEffect(() => {
+    const hasClearedCache = sessionStorage.getItem('analytics_cache_cleared');
+    if (!hasClearedCache) {
+      try {
+        const { AnalyticsDataService } = require('../services/analyticsDataService');
+        const service = new AnalyticsDataService();
+        service.clearCache();
+        sessionStorage.setItem('analytics_cache_cleared', 'true');
+        console.log('🔄 Cleared analytics cache once for fresh data fetch');
+      } catch (error) {
+        console.warn('Failed to clear analytics cache:', error);
+      }
+    }
+  }, []);
+  */
   
   // Helper function to categorize provider types into PHYSICIAN/APP categories
   const categorizeProviderType = (providerType: string): 'PHYSICIAN' | 'APP' | 'OTHER' => {
@@ -113,7 +135,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   const data = useMemo(() => {
     // First apply provider type filtering if specified
     let providerFilteredData = allData;
-    if (effectiveProviderType) {
+    if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
       providerFilteredData = allData.filter(row => {
         const category = categorizeProviderType(row.providerType || '');
         return category === effectiveProviderType;
