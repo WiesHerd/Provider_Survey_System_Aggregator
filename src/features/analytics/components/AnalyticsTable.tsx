@@ -7,15 +7,7 @@
  */
 
 import React, { memo, useState, useMemo, useCallback } from 'react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper
-} from '@mui/material';
+// Removed Material-UI table imports - using HTML table instead
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
 import { calculateSummaryRows, calculateDynamicSummaryRows } from '../utils/analyticsCalculations';
@@ -264,190 +256,591 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         </button>
       </div>
 
-      {/* Table with horizontal scrolling */}
+      {/* HTML Table with frozen headers */}
       <div className="overflow-x-auto">
-        <TableContainer 
-          component={Paper} 
-          sx={{ 
+        <div 
+          className="rounded-xl border border-gray-200 shadow-sm"
+          style={{ 
             maxHeight: '600px',
             overflow: 'auto',
-            borderRadius: '12px', // Add rounded corners to container
-            border: '1px solid #e5e7eb', // Add border to the container
-            '& .MuiTable-root': {
-              minWidth: '1200px', // Ensure table has minimum width for all columns
-              borderRadius: '12px', // Add rounded corners to table
-              overflow: 'hidden' // Ensure content respects rounded corners
-            }
+            backgroundColor: 'white'
           }}
         >
-        <Table stickyHeader size="small">
-           <TableHead>
-             <TableRow>
-               {/* Survey Data Section Header */}
-               <TableCell sx={{ 
-                 fontWeight: 'bold', 
-                 backgroundColor: '#F5F5F5', 
-                 borderRight: '1px solid #E0E0E0',
-                 textAlign: 'center',
-                 color: '#424242',
-                 position: 'sticky',
-                 left: 0,
-                 zIndex: 2
-               }} colSpan={3}>
-                 Survey Data
-               </TableCell>
+        <table 
+          className="w-full border-collapse"
+          style={{ 
+            minWidth: '1200px',
+            borderSpacing: '0',
+            borderCollapse: 'collapse'
+          }}
+        >
+          <thead style={{ 
+            position: 'sticky', 
+            top: 0, 
+            zIndex: 10, 
+            backgroundColor: 'white',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
+            <tr style={{ margin: '0', padding: '0' }}>
+              {/* Survey Data Section Header */}
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#F5F5F5', 
+                  borderRight: '1px solid #E0E0E0',
+                  borderBottom: 'none',
+                  textAlign: 'center',
+                  color: '#424242',
+                  position: 'sticky',
+                  left: 0,
+                  top: 0,
+                  zIndex: 12,
+                  minWidth: '440px',
+                  padding: '12px 8px'
+                }} 
+                colSpan={3}
+              >
+                Survey Data
+              </th>
               
               {/* DYNAMIC: Generate headers for selected variables */}
               {columnGroups.length > 0 && columnGroups.map((group, index) => (
-                <TableCell 
+                <th 
                   key={group.normalizedName}
-                  sx={{
+                  style={{
                     fontWeight: 'bold',
                     backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
                     textAlign: 'center',
-                    borderRight: '1px solid #E0E0E0'
+                    borderRight: '1px solid #E0E0E0',
+                    borderBottom: 'none',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 11,
+                    padding: '12px 8px'
                   }}
                   colSpan={6}
                 >
                   {group.displayName}
-                </TableCell>
+                </th>
               ))}
               
               {/* FALLBACK: Original hardcoded headers for backward compatibility */}
               {columnGroups.length === 0 && (
                 <>
-              <TableCell sx={{ 
-                fontWeight: 'bold', 
-                backgroundColor: '#E3F2FD', 
-                borderRight: '1px solid #E0E0E0',
-                textAlign: 'center',
-                color: '#1976D2'
-              }} colSpan={6}>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD', 
+                  borderRight: '1px solid #E0E0E0',
+                  borderBottom: 'none',
+                  textAlign: 'center',
+                  color: '#1976D2',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 11,
+                  padding: '12px 8px'
+                }} 
+                colSpan={6}
+              >
                 Total Cash Compensation
-              </TableCell>
+              </th>
               
-              <TableCell sx={{ 
-                fontWeight: 'bold', 
-                backgroundColor: '#E8F5E8', 
-                borderRight: '1px solid #E0E0E0',
-                textAlign: 'center',
-                color: '#388E3C'
-              }} colSpan={6}>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8', 
+                  borderRight: '1px solid #E0E0E0',
+                  borderBottom: 'none',
+                  textAlign: 'center',
+                  color: '#388E3C',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 11,
+                  padding: '12px 8px'
+                }} 
+                colSpan={6}
+              >
                 Productivity - wRVUs
-              </TableCell>
+              </th>
               
-              <TableCell sx={{ 
-                fontWeight: 'bold',
-                backgroundColor: '#FFF3E0', 
-                textAlign: 'center',
-                color: '#F57C00'
-              }} colSpan={6}>
+              <th 
+                style={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: '#FFF3E0', 
+                  borderBottom: 'none',
+                  textAlign: 'center',
+                  color: '#F57C00',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 11,
+                  padding: '12px 8px'
+                }} 
+                colSpan={6}
+              >
                 Conversion Factors
-                </TableCell>
+              </th>
                 </>
               )}
-            </TableRow>
+            </tr>
             
-             {/* Sub-header row with column names */}
-             <TableRow>
-               {/* Survey Data Sub-headers */}
-               <TableCell sx={{ 
-                 fontWeight: 'bold', 
-                 backgroundColor: '#F5F5F5',
-                 position: 'sticky',
-                 left: 0,
-                 zIndex: 2,
-                 minWidth: '140px'
-               }}>Survey Source</TableCell>
-               <TableCell sx={{ 
-                 fontWeight: 'bold', 
-                 backgroundColor: '#F5F5F5',
-                 position: 'sticky',
-                 left: '140px',
-                 zIndex: 2,
-                 minWidth: '180px'
-               }}>Specialty</TableCell>
-               <TableCell sx={{ 
-                 fontWeight: 'bold', 
-                 backgroundColor: '#F5F5F5',
-                 position: 'sticky',
-                 left: '320px',
-                 zIndex: 2,
-                 minWidth: '120px',
-                 borderRight: '1px solid #E0E0E0'
-               }}>Region</TableCell>
+            {/* Sub-header row with column names */}
+            <tr style={{
+              borderBottom: 'none',
+              marginTop: '0',
+              marginBottom: '0'
+            }}>
+              {/* Survey Data Sub-headers */}
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#F5F5F5',
+                  position: 'sticky',
+                  left: 0,
+                  top: '48px',
+                  zIndex: 12,
+                  minWidth: '140px',
+                  padding: '8px',
+                  textAlign: 'left',
+                  borderBottom: 'none'
+                }}
+              >
+                Survey Source
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#F5F5F5',
+                  position: 'sticky',
+                  left: '140px',
+                  top: '48px',
+                  zIndex: 12,
+                  minWidth: '180px',
+                  padding: '8px',
+                  textAlign: 'left',
+                  borderBottom: 'none'
+                }}
+              >
+                Specialty
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#F5F5F5',
+                  position: 'sticky',
+                  left: '320px',
+                  top: '48px',
+                  zIndex: 12,
+                  minWidth: '120px',
+                  borderRight: '1px solid #E0E0E0',
+                  padding: '8px',
+                  textAlign: 'left',
+                  borderBottom: 'none'
+                }}
+              >
+                Region
+              </th>
                
-               {/* DYNAMIC: Generate sub-headers for selected variables */}
-               {columnGroups.length > 0 && columnGroups.map((group, index) => (
-                 <React.Fragment key={group.normalizedName}>
-                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right"># Orgs</TableCell>
-                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right"># Inc</TableCell>
-                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right">P25</TableCell>
-                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right">P50</TableCell>
-                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index) }} align="right">P75</TableCell>
-                   <TableCell sx={{ fontWeight: 'bold', backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index), borderRight: '1px solid #E0E0E0' }} align="right">P90</TableCell>
-                 </React.Fragment>
-               ))}
+              {/* DYNAMIC: Generate sub-headers for selected variables */}
+              {columnGroups.length > 0 && columnGroups.map((group, index) => (
+                <React.Fragment key={group.normalizedName}>
+                  <th 
+                    style={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                      position: 'sticky',
+                      top: '48px',
+                      zIndex: 11,
+                      padding: '8px',
+                      textAlign: 'right',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    # Orgs
+                  </th>
+                  <th 
+                    style={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                      position: 'sticky',
+                      top: '48px',
+                      zIndex: 11,
+                      padding: '8px',
+                      textAlign: 'right',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    # Inc
+                  </th>
+                  <th 
+                    style={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                      position: 'sticky',
+                      top: '48px',
+                      zIndex: 11,
+                      padding: '8px',
+                      textAlign: 'right',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    P25
+                  </th>
+                  <th 
+                    style={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                      position: 'sticky',
+                      top: '48px',
+                      zIndex: 11,
+                      padding: '8px',
+                      textAlign: 'right',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    P50
+                  </th>
+                  <th 
+                    style={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                      position: 'sticky',
+                      top: '48px',
+                      zIndex: 11,
+                      padding: '8px',
+                      textAlign: 'right',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    P75
+                  </th>
+                  <th 
+                    style={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index), 
+                      borderRight: '1px solid #E0E0E0',
+                      position: 'sticky',
+                      top: '48px',
+                      zIndex: 11,
+                      padding: '8px',
+                      textAlign: 'right',
+                      borderBottom: 'none'
+                    }}
+                  >
+                    P90
+                  </th>
+                </React.Fragment>
+              ))}
                
-               {/* FALLBACK: Original hardcoded sub-headers for backward compatibility */}
-               {columnGroups.length === 0 && (
-                 <>
-               {/* TCC Sub-headers */}
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Orgs</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right"># Incumbents</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right">TCC P25</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right">TCC P50</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }} align="right">TCC P75</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">TCC P90</TableCell>
-               
-               {/* wRVU Sub-headers */}
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right"># Orgs</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right"># Incumbents</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right">wRVU P25</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right">wRVU P50</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }} align="right">wRVU P75</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }} align="right">wRVU P90</TableCell>
-               
-               {/* CF Sub-headers */}
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right"># Orgs</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right"># Incumbents</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P25</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P50</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P75</TableCell>
-               <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }} align="right">CF P90</TableCell>
-                 </>
-               )}
-             </TableRow>
-          </TableHead>
-          <TableBody>
+              {/* FALLBACK: Original hardcoded sub-headers for backward compatibility */}
+              {columnGroups.length === 0 && (
+                <>
+              {/* TCC Sub-headers */}
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                # Orgs
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                # Incumbents
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                TCC P25
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                TCC P50
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                TCC P75
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E3F2FD', 
+                  borderRight: '1px solid #E0E0E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                TCC P90
+              </th>
+              
+              {/* wRVU Sub-headers */}
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                # Orgs
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                # Incumbents
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                wRVU P25
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                wRVU P50
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                wRVU P75
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#E8F5E8', 
+                  borderRight: '1px solid #E0E0E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                wRVU P90
+              </th>
+              
+              {/* CF Sub-headers */}
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#FFF3E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                # Orgs
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#FFF3E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                # Incumbents
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#FFF3E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                CF P25
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#FFF3E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                CF P50
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#FFF3E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                CF P75
+              </th>
+              <th 
+                style={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: '#FFF3E0',
+                  position: 'sticky',
+                  top: '48px',
+                  zIndex: 11,
+                  padding: '8px',
+                  textAlign: 'right',
+                  borderBottom: 'none'
+                }}
+              >
+                CF P90
+              </th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
             {paginatedSpecialties.map((specialty) => {
               const rows = groupedData[specialty];
               return (
               <React.Fragment key={specialty}>
                 {/* Data Rows */}
                 {rows.map((row, index) => (
-                  <TableRow key={`${row.surveySource}-${row.geographicRegion}-${index}`} hover>
-                    <TableCell sx={{ 
-                      position: 'sticky',
-                      left: 0,
-                      backgroundColor: 'white',
-                      borderRight: '1px solid #e0e0e0',
-                      zIndex: 1
-                    }}>{row.surveySource}</TableCell>
-                    <TableCell sx={{ 
-                      position: 'sticky',
-                      left: '140px',
-                      backgroundColor: 'white',
-                      borderRight: '1px solid #e0e0e0',
-                      zIndex: 1
-                    }}>{formatSpecialtyForDisplay(row.originalSpecialty)}</TableCell>
-                    <TableCell sx={{ 
-                      position: 'sticky',
-                      left: '320px',
-                      backgroundColor: 'white',
-                      borderRight: '1px solid #e0e0e0',
-                      zIndex: 1
-                    }}>{formatRegionForDisplay(row.geographicRegion)}</TableCell>
+                  <tr key={`${row.surveySource}-${row.geographicRegion}-${index}`} className="hover:bg-gray-50">
+                    <td 
+                      style={{ 
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: 'white',
+                        borderRight: '1px solid #e0e0e0',
+                        zIndex: 1,
+                        padding: '8px'
+                      }}
+                    >
+                      {row.surveySource}
+                    </td>
+                    <td 
+                      style={{ 
+                        position: 'sticky',
+                        left: '140px',
+                        backgroundColor: 'white',
+                        borderRight: '1px solid #e0e0e0',
+                        zIndex: 1,
+                        padding: '8px'
+                      }}
+                    >
+                      {formatSpecialtyForDisplay(row.originalSpecialty)}
+                    </td>
+                    <td 
+                      style={{ 
+                        position: 'sticky',
+                        left: '320px',
+                        backgroundColor: 'white',
+                        borderRight: '1px solid #e0e0e0',
+                        zIndex: 1,
+                        padding: '8px'
+                      }}
+                    >
+                      {formatRegionForDisplay(row.geographicRegion)}
+                    </td>
                     
                     {/* DYNAMIC: Render data for selected variables */}
                     {columnGroups.length > 0 && selectedVariables.map((varName, varIndex) => {
@@ -469,18 +862,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                         const metrics = dynamicRow.variables[varName];
                         return metrics ? (
                           <React.Fragment key={varName}>
-                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_orgs.toLocaleString()}</TableCell>
-                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{metrics.n_incumbents.toLocaleString()}</TableCell>
-                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p25, varName)}</TableCell>
-                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p50, varName)}</TableCell>
-                            <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(metrics.p75, varName)}</TableCell>
-                            <TableCell sx={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0' }} align="right">{formatVariableValue(metrics.p90, varName)}</TableCell>
+                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_orgs.toLocaleString()}</td>
+                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_incumbents.toLocaleString()}</td>
+                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p25, varName)}</td>
+                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p50, varName)}</td>
+                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p75, varName)}</td>
+                            <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p90, varName)}</td>
                           </React.Fragment>
                         ) : (
                           <React.Fragment key={varName}>
-                            <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                            <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
                               n/a
-                            </TableCell>
+                            </td>
                           </React.Fragment>
                         );
                       } else {
@@ -524,20 +917,20 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                         if (p50 > 0) {
                           return (
                             <React.Fragment key={varName}>
-                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{nOrgs.toLocaleString()}</TableCell>
-                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{nIncumbents.toLocaleString()}</TableCell>
-                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(p25, varName)}</TableCell>
-                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(p50, varName)}</TableCell>
-                              <TableCell sx={{ backgroundColor: lightColor }} align="right">{formatVariableValue(p75, varName)}</TableCell>
-                              <TableCell sx={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0' }} align="right">{formatVariableValue(p90, varName)}</TableCell>
+                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{nOrgs.toLocaleString()}</td>
+                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{nIncumbents.toLocaleString()}</td>
+                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(p25, varName)}</td>
+                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(p50, varName)}</td>
+                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(p75, varName)}</td>
+                              <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatVariableValue(p90, varName)}</td>
                             </React.Fragment>
                           );
                         } else {
                           return (
                             <React.Fragment key={varName}>
-                              <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                              <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
                                 n/a
-                              </TableCell>
+                              </td>
                             </React.Fragment>
                           );
                         }
@@ -550,32 +943,32 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                       return (
                         <>
                           {/* TCC Section */}
-                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{legacyRow.tcc_n_orgs?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{legacyRow.tcc_n_incumbents?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(legacyRow.tcc_p25 || 0, 2)}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(legacyRow.tcc_p50 || 0, 2)}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E3F2FD' }} align="right">{formatCurrency(legacyRow.tcc_p75 || 0, 2)}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }} align="right">{formatCurrency(legacyRow.tcc_p90 || 0, 2)}</TableCell>
+                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{legacyRow.tcc_n_orgs?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{legacyRow.tcc_n_incumbents?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p25 || 0, 2)}</td>
+                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p50 || 0, 2)}</td>
+                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p75 || 0, 2)}</td>
+                          <td style={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p90 || 0, 2)}</td>
                     
                     {/* wRVU Section */}
-                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_n_orgs?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_n_incumbents?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_p25?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_p50?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E8F5E8' }} align="right">{legacyRow.wrvu_p75?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }} align="right">{legacyRow.wrvu_p90?.toLocaleString() || '0'}</TableCell>
+                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_n_orgs?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_n_incumbents?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p25?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p50?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p75?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p90?.toLocaleString() || '0'}</td>
                     
                     {/* CF Section */}
-                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{legacyRow.cf_n_orgs?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{legacyRow.cf_n_incumbents?.toLocaleString() || '0'}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p25 || 0, 2)}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p50 || 0, 2)}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p75 || 0, 2)}</TableCell>
-                          <TableCell sx={{ backgroundColor: '#FFF3E0' }} align="right">{formatCurrency(legacyRow.cf_p90 || 0, 2)}</TableCell>
+                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{legacyRow.cf_n_orgs?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{legacyRow.cf_n_incumbents?.toLocaleString() || '0'}</td>
+                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p25 || 0, 2)}</td>
+                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p50 || 0, 2)}</td>
+                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p75 || 0, 2)}</td>
+                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p90 || 0, 2)}</td>
                         </>
                       );
                     })()}
-                  </TableRow>
+                  </tr>
                 ))}
 
                 {/* Summary Rows - Memoized for performance */}
@@ -585,31 +978,40 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     return (
                       <>
                         {/* Simple Average Row */}
-                        <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                          <TableCell sx={{ 
-                            fontWeight: 'bold',
-                            position: 'sticky',
-                            left: 0,
-                            backgroundColor: 'grey.50',
-                            borderRight: '1px solid #e0e0e0',
-                            zIndex: 1
-                          }}>
+                        <tr style={{ backgroundColor: '#f5f5f5' }}>
+                          <td 
+                            style={{ 
+                              fontWeight: 'bold',
+                              position: 'sticky',
+                              left: 0,
+                              backgroundColor: '#f5f5f5',
+                              borderRight: '1px solid #e0e0e0',
+                              zIndex: 1,
+                              padding: '8px'
+                            }}
+                          >
                             {formatSpecialtyForDisplay(specialty)} - Simple Average
-                          </TableCell>
-                          <TableCell sx={{ 
-                            position: 'sticky',
-                            left: '140px',
-                            backgroundColor: 'grey.50',
-                            borderRight: '1px solid #e0e0e0',
-                            zIndex: 1
-                          }}></TableCell>
-                          <TableCell sx={{ 
-                            position: 'sticky',
-                            left: '320px',
-                            backgroundColor: 'grey.50',
-                            borderRight: '1px solid #e0e0e0',
-                            zIndex: 1
-                          }}></TableCell>
+                          </td>
+                          <td 
+                            style={{ 
+                              position: 'sticky',
+                              left: '140px',
+                              backgroundColor: '#f5f5f5',
+                              borderRight: '1px solid #e0e0e0',
+                              zIndex: 1,
+                              padding: '8px'
+                            }}
+                          ></td>
+                          <td 
+                            style={{ 
+                              position: 'sticky',
+                              left: '320px',
+                              backgroundColor: '#f5f5f5',
+                              borderRight: '1px solid #e0e0e0',
+                              zIndex: 1,
+                              padding: '8px'
+                            }}
+                          ></td>
                           
                           {/* Dynamic variable summary data */}
                           {selectedVariables.map((varName, varIndex) => {
@@ -618,61 +1020,70 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                             
                             return summary ? (
                               <React.Fragment key={varName}>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {summary.n_orgs.toLocaleString()}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {summary.n_incumbents.toLocaleString()}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p25, varName)}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p50, varName)}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p75, varName)}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p90, varName)}
-                                </TableCell>
+                                </td>
                               </React.Fragment>
                             ) : (
                               <React.Fragment key={varName}>
-                                <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                                <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
                                   n/a
-                                </TableCell>
+                                </td>
                               </React.Fragment>
                             );
                           })}
-                        </TableRow>
+                        </tr>
                         
                         {/* Weighted Average Row */}
-                        <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                          <TableCell sx={{ 
-                            fontWeight: 'bold',
-                            position: 'sticky',
-                            left: 0,
-                            backgroundColor: 'grey.100',
-                            borderRight: '1px solid #e0e0e0',
-                            zIndex: 1
-                          }}>
+                        <tr style={{ backgroundColor: '#e5e5e5' }}>
+                          <td 
+                            style={{ 
+                              fontWeight: 'bold',
+                              position: 'sticky',
+                              left: 0,
+                              backgroundColor: '#e5e5e5',
+                              borderRight: '1px solid #e0e0e0',
+                              zIndex: 1,
+                              padding: '8px'
+                            }}
+                          >
                             {formatSpecialtyForDisplay(specialty)} - Weighted Average
-                          </TableCell>
-                          <TableCell sx={{ 
-                            position: 'sticky',
-                            left: '140px',
-                            backgroundColor: 'grey.100',
-                            borderRight: '1px solid #e0e0e0',
-                            zIndex: 1
-                          }}></TableCell>
-                          <TableCell sx={{ 
-                            position: 'sticky',
-                            left: '320px',
-                            backgroundColor: 'grey.100',
-                            borderRight: '1px solid #e0e0e0',
-                            zIndex: 1
-                          }}></TableCell>
+                          </td>
+                          <td 
+                            style={{ 
+                              position: 'sticky',
+                              left: '140px',
+                              backgroundColor: '#e5e5e5',
+                              borderRight: '1px solid #e0e0e0',
+                              zIndex: 1,
+                              padding: '8px'
+                            }}
+                          ></td>
+                          <td 
+                            style={{ 
+                              position: 'sticky',
+                              left: '320px',
+                              backgroundColor: '#e5e5e5',
+                              borderRight: '1px solid #e0e0e0',
+                              zIndex: 1,
+                              padding: '8px'
+                            }}
+                          ></td>
                           
                           {/* Dynamic variable weighted summary data */}
                           {selectedVariables.map((varName, varIndex) => {
@@ -681,34 +1092,34 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                             
                             return summary ? (
                               <React.Fragment key={varName}>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {summary.n_orgs.toLocaleString()}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {summary.n_incumbents.toLocaleString()}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p25, varName)}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p50, varName)}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p75, varName)}
-                                </TableCell>
-                                <TableCell sx={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0' }} align="right">
+                                </td>
+                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>
                                   {formatVariableValue(summary.p90, varName)}
-                                </TableCell>
+                                </td>
                               </React.Fragment>
                             ) : (
                               <React.Fragment key={varName}>
-                                <TableCell sx={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af' }} colSpan={6}>
+                                <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
                                   n/a
-                                </TableCell>
+                                </td>
                               </React.Fragment>
                             );
                           })}
-                        </TableRow>
+                        </tr>
                       </>
                     );
                   }
@@ -716,88 +1127,97 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                   const { simple, weighted } = summaryData;
                   return (
                     <>
-                      <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                        <TableCell sx={{ 
-                          fontWeight: 'bold',
-                          position: 'sticky',
-                          left: 0,
-                          backgroundColor: 'grey.50',
-                          borderRight: '1px solid #e0e0e0',
-                          zIndex: 1
-                        }}>
+                      <tr style={{ backgroundColor: '#f5f5f5' }}>
+                        <td 
+                          style={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            left: 0,
+                            backgroundColor: '#f5f5f5',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1,
+                            padding: '8px'
+                          }}
+                        >
                           {formatSpecialtyForDisplay(specialty)} - Simple Average
-                        </TableCell>
-                        <TableCell sx={{ 
-                          position: 'sticky',
-                          left: '140px',
-                          backgroundColor: 'grey.50',
-                          borderRight: '1px solid #e0e0e0',
-                          zIndex: 1
-                        }}></TableCell>
-                        <TableCell sx={{ 
-                          position: 'sticky',
-                          left: '320px',
-                          backgroundColor: 'grey.50',
-                          borderRight: '1px solid #e0e0e0',
-                          zIndex: 1
-                        }}></TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td 
+                          style={{ 
+                            position: 'sticky',
+                            left: '140px',
+                            backgroundColor: '#f5f5f5',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1,
+                            padding: '8px'
+                          }}
+                        ></td>
+                        <td 
+                          style={{ 
+                            position: 'sticky',
+                            left: '320px',
+                            backgroundColor: '#f5f5f5',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: 1,
+                            padding: '8px'
+                          }}
+                        ></td>
+                        <td style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>
                           {simple.tcc_n_orgs.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>
                           {simple.tcc_n_incumbents.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {formatCurrency(simple.tcc_p25, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {formatCurrency(simple.tcc_p50, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {formatCurrency(simple.tcc_p75, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
                           {formatCurrency(simple.tcc_p90, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {simple.wrvu_n_orgs.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {simple.wrvu_n_incumbents.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {simple.wrvu_p25.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {simple.wrvu_p50.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {simple.wrvu_p75.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
                           {simple.wrvu_p90.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {simple.cf_n_orgs.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {simple.cf_n_incumbents.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(simple.cf_p25, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(simple.cf_p50, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(simple.cf_p75, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(simple.cf_p90, 2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow sx={{ backgroundColor: 'primary.50' }}>
-                        <TableCell sx={{ 
+                        </td>
+                      </tr>
+                      <tr style={{ backgroundColor: 'primary.50' }}>
+                        <td style={{ 
                           fontWeight: 'bold',
                           position: 'sticky',
                           left: 0,
@@ -806,85 +1226,85 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                           zIndex: 1
                         }}>
                           {formatSpecialtyForDisplay(specialty)} - Weighted Average
-                        </TableCell>
-                        <TableCell sx={{ 
+                        </td>
+                        <td style={{ 
                           position: 'sticky',
                           left: '140px',
                           backgroundColor: 'primary.50',
                           borderRight: '1px solid #e0e0e0',
                           zIndex: 1
-                        }}></TableCell>
-                        <TableCell sx={{ 
+                        }}></td>
+                        <td style={{ 
                           position: 'sticky',
                           left: '320px',
                           backgroundColor: 'primary.50',
                           borderRight: '1px solid #e0e0e0',
                           zIndex: 1
-                        }}></TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        }}></td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {weighted.tcc_n_orgs.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {weighted.tcc_n_incumbents.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {formatCurrency(weighted.tcc_p25, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {formatCurrency(weighted.tcc_p50, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
                           {formatCurrency(weighted.tcc_p75, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
                           {formatCurrency(weighted.tcc_p90, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {weighted.wrvu_n_orgs.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {weighted.wrvu_n_incumbents.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {weighted.wrvu_p25.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {weighted.wrvu_p50.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
                           {weighted.wrvu_p75.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
                           {weighted.wrvu_p90.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {weighted.cf_n_orgs.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {weighted.cf_n_incumbents.toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(weighted.cf_p25, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(weighted.cf_p50, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(weighted.cf_p75, 2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
+                        </td>
+                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
                           {formatCurrency(weighted.cf_p90, 2)}
-                        </TableCell>
-              </TableRow>
+                        </td>
+              </tr>
                     </>
                   );
                 })()}
               </React.Fragment>
               );
             })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+          </tbody>
+        </table>
+      </div>
       </div>
 
       {/* Modern Pagination - Consistent with other screens */}
