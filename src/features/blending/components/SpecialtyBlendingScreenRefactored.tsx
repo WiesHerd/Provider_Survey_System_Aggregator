@@ -377,7 +377,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       setTimeout(() => {
         loadTemplateSelections(template);
         setIsLoadingTemplate(false);
-      }, 500);
+      }, 1000);
       return;
     }
     
@@ -404,6 +404,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     console.log('🔍 Loading template:', template.name);
     console.log('🔍 Template specialties:', template.specialties);
     console.log('🔍 Available survey data:', filteredSurveyData.length, 'rows');
+    console.log('🔍 Current selectedDataRows before loading:', selectedDataRows);
     
     template.specialties.forEach((specialty: any) => {
       console.log('🔍 Looking for specialty:', specialty);
@@ -428,8 +429,14 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     });
     
     console.log('🔍 Total selected rows:', templateRowIndices.length);
+    console.log('🔍 Setting selectedDataRows to:', templateRowIndices);
     
     setSelectedDataRows(templateRowIndices);
+    
+    // Verify the state was set
+    setTimeout(() => {
+      console.log('🔍 selectedDataRows after setting:', selectedDataRows);
+    }, 100);
     
     if (templateRowIndices.length === 0) {
       toast({
