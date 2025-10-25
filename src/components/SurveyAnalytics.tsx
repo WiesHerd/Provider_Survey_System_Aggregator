@@ -32,124 +32,35 @@ import { fuzzyMatchSpecialty, filterSpecialtyOptions } from '../shared/utils/spe
 import { useYear } from '../contexts/YearContext';
 import { performanceMonitor } from '../shared/utils/performance';
 import { analyticsDataService } from '../features/analytics/services/analyticsDataService';
-import { filterAnalyticsData } from '../features/analytics/utils/analyticsCalculations';
+import { filterAnalyticsData, calculatePercentile, formatCurrency } from '../features/analytics/utils/analyticsCalculations';
+import { useAnalyticsFilters } from '../features/analytics/hooks/useAnalyticsFilters';
+import { useAnalyticsExport } from '../features/analytics/hooks/useAnalyticsExport';
 import { AggregatedData, AnalyticsFilters } from '../features/analytics/types/analytics';
 
 const SHOW_DEBUG = false; // Set to false for production performance
 
-// Utility functions
-const calculatePercentile = (numbers: number[], percentile: number): number => {
-  if (numbers.length === 0) return 0;
-  const sortedNumbers = numbers.sort((a, b) => a - b);
-  const index = Math.floor((percentile / 100) * sortedNumbers.length);
-  return sortedNumbers[index] || 0;
-};
-
-const formatCurrency = (value: number, decimals: number = 0): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value);
-};
+// Utility functions are now imported from shared analytics utilities
 
 const SurveyAnalytics = React.memo(function SurveyAnalytics() {
-  // Export functions
-  const exportToExcel = () => {
-    const headers = [
-      'Survey Source',
-      'Specialty',
-      'Geographic Region',
-      'Provider Type',
-      'N Orgs',
-      'N Incumbents',
-      'TCC P25',
-      'TCC P50',
-      'TCC P75',
-      'TCC P90',
-      'wRVU P25',
-      'wRVU P50',
-      'wRVU P75',
-      'wRVU P90',
-      'CF P25',
-      'CF P50',
-      'CF P75',
-      'CF P90'
-    ];
+  // Custom hooks for state management
+  const { currentYear, availableYears, setCurrentYear } = useYear();
+  const dataService = useMemo(() => getDataService(), []);
+  
+  // Use custom hooks for filters and export
+  const { filters, handleFilterChange, resetFilters, hasActiveFilters } = useAnalyticsFilters({
+    specialty: '',
+    surveySource: '',
+    geographicRegion: '',
+    providerType: '',
+    year: currentYear || ''
+  });
+  
+  const { exportToCSV, isExporting } = useAnalyticsExport();
 
-    const csvData = aggregatedData.map(row => [
-      row.surveySource,
-      row.standardizedName,
-      row.geographicRegion,
-      row.providerType,
-      row.tcc_n_orgs || 0,
-      row.tcc_n_incumbents || 0,
-      row.tcc_p25,
-      row.tcc_p50,
-      row.tcc_p75,
-      row.tcc_p90,
-      row.wrvu_p25,
-      row.wrvu_p50,
-      row.wrvu_p75,
-      row.wrvu_p90,
-      row.cf_p25,
-      row.cf_p50,
-      row.cf_p75,
-      row.cf_p90
-    ]);
-
-    // Convert to CSV string
-    const csvContent = csvData
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-
-    // Create and download file
-    const blob = new Blob([headers.join(',') + '\n' + csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `analytics_data_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
-
-  // State management
+  // State management for data loading
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allAnalyticsData, setAllAnalyticsData] = useState<AggregatedData[]>([]);
-  
-  // Persist filters in localStorage to survive component re-renders (e.g., sidebar toggle)
-  const [filters, setFilters] = useState(() => {
-    try {
-      const savedFilters = localStorage.getItem('analyticsFilters');
-      if (savedFilters) {
-        return JSON.parse(savedFilters);
-      }
-    } catch (error) {
-      console.warn('Failed to load saved filters:', error);
-    }
-    return {
-      specialty: '',
-      providerType: '',
-      region: '',
-      surveySource: ''
-    };
-  });
-
-  const { currentYear, availableYears, setCurrentYear } = useYear();
-  const dataService = useMemo(() => getDataService(), []);
-
-  // Save filters to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('analyticsFilters', JSON.stringify(filters));
-    } catch (error) {
-      console.warn('Failed to save filters:', error);
-    }
-  }, [filters]);
 
   // Load analytics data using the proper analytics service
   useEffect(() => {
@@ -196,7 +107,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
     const analyticsFilters: AnalyticsFilters = {
       specialty: filters.specialty || '',
       surveySource: filters.surveySource || '',
-      geographicRegion: filters.region || '',
+      geographicRegion: filters.geographicRegion || '',
       providerType: filters.providerType || '',
       year: currentYear || ''
     };
@@ -247,27 +158,7 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
     };
   }, [allAnalyticsData]);
 
-  // Debounced filter change handler
-  const debouncedFilterChange = useMemo(
-    () => performanceMonitor.debounce((filterName: string, value: string) => {
-      setFilters((prev: typeof filters) => {
-        const newFilters = { ...prev, [filterName]: value };
-        
-        if (filterName === 'specialty') {
-          newFilters.providerType = '';
-          newFilters.region = '';
-          newFilters.surveySource = '';
-        }
-        
-        return newFilters;
-      });
-    }, 300),
-    []
-  );
-
-  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
-    debouncedFilterChange(filterName as string, value);
-  };
+  // Filter change handler is now provided by useAnalyticsFilters hook
 
   // Show loading state
   if (isLoading) {
@@ -306,8 +197,8 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
               <Button
                 variant="outlined"
                 startIcon={<DocumentTextIcon className="h-5 w-5" />}
-                onClick={exportToExcel}
-                disabled={aggregatedData.length === 0}
+                onClick={() => exportToCSV(aggregatedData, filters)}
+                disabled={aggregatedData.length === 0 || isExporting}
                 sx={{ borderRadius: '8px' }}
               >
                 Export to CSV
@@ -366,8 +257,8 @@ const SurveyAnalytics = React.memo(function SurveyAnalytics() {
             {/* Geographic Region Filter */}
             <FormControl fullWidth size="small">
               <Autocomplete
-                value={filters.region}
-                onChange={(_: any, newValue: string | null) => handleFilterChange('region', newValue || '')}
+                value={filters.geographicRegion}
+                onChange={(_: any, newValue: string | null) => handleFilterChange('geographicRegion', newValue || '')}
                 options={uniqueValues.regions}
                 renderInput={(params: any) => (
                   <TextField
