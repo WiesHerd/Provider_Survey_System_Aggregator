@@ -400,13 +400,6 @@ export class IndexedDBService {
           
           // Debug: Show what specialties actually exist in the data
           if (data.length > 0) {
-            const actualSpecialties = [...new Set(data.map(item => 
-              item.specialty || item.data?.specialty || item.data?.Specialty || ''
-            ))].filter(Boolean).sort();
-            
-            const actualProviderTypes = [...new Set(data.map(item => 
-              item.providerType || item.data?.providerType || item.data?.['Provider Type'] || item.data?.provider_type || ''
-            ))].filter(Boolean).sort();
             
             // Debug: Show the actual data structure
             if (data.length > 0) {

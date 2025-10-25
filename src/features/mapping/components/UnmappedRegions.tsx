@@ -3,14 +3,11 @@ import {
   TextField,
   Typography,
   Paper,
-  Button,
   InputAdornment,
-  Alert,
   IconButton
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
-  ExclamationTriangleIcon as WarningIcon,
   BoltIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';

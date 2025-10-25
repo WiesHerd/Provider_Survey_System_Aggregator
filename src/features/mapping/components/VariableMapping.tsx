@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  PlusIcon as AddIcon,
   BoltIcon,
-  TrashIcon as DeleteSweepIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  LightBulbIcon,
-  XMarkIcon,
-  EyeIcon,
-  PencilIcon
+  TrashIcon as DeleteSweepIcon
 } from '@heroicons/react/24/outline';
-import { VariableMappingProps, IVariableMapping } from '../types/mapping';
+import { VariableMappingProps } from '../types/mapping';
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';

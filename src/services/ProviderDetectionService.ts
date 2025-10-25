@@ -9,9 +9,7 @@ import {
   ProviderDetectionResult, 
   ProviderValidationResult, 
   RawSurveyData, 
-  ProviderType,
-  PhysicianType,
-  APPType 
+  ProviderType
 } from '../types/provider';
 
 export class ProviderDetectionService {
