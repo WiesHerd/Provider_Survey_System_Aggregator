@@ -89,62 +89,6 @@ export const useRegionMappingData = () => {
     }
   }, [dataService, selectedProviderType]);
 
-  // Detect unmapped regions from survey data
-  const detectUnmappedRegions = useCallback(async (): Promise<IUnmappedRegion[]> => {
-    try {
-      const surveys = await dataService.getAllSurveys();
-      
-      const detectedRegions: IUnmappedRegion[] = [];
-      const regionMap = new Map<string, IUnmappedRegion>();
-
-      for (const survey of surveys) {
-        const surveyDataResult = await dataService.getSurveyData(survey.id);
-        
-        if (!surveyDataResult || !surveyDataResult.rows || !Array.isArray(surveyDataResult.rows)) {
-          continue;
-        }
-
-        const surveyData = surveyDataResult.rows;
-
-        // Look for geographic region data
-        const regionCounts = new Map<string, number>();
-        
-        surveyData.forEach(row => {
-          const region = row.geographicRegion || row.geographic_region || row.region;
-          if (region) {
-            const regionName = String(region).trim();
-            if (regionName) {
-              regionCounts.set(regionName, (regionCounts.get(regionName) || 0) + 1);
-            }
-          }
-        });
-
-
-        // Create unmapped regions for each unique region
-        regionCounts.forEach((frequency, regionName) => {
-          const surveySource = (survey as any).type || (survey as any).surveySource || 'unknown';
-          const key = `${surveySource}-${regionName}`;
-          if (!regionMap.has(key)) {
-            const unmappedRegion: IUnmappedRegion = {
-              id: key,
-              name: regionName,
-              surveySource: surveySource,
-              frequency
-            };
-            regionMap.set(key, unmappedRegion);
-            console.log('✅ Created unmapped region:', unmappedRegion);
-          }
-        });
-      }
-
-      const result = Array.from(regionMap.values());
-      console.log('🎯 Final unmapped regions:', result);
-      return result;
-    } catch (error) {
-      console.error('❌ Error detecting unmapped regions:', error);
-      return [];
-    }
-  }, [dataService]);
 
 
   // Create region mapping
