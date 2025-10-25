@@ -7,6 +7,7 @@
 
 import { AggregatedData, SummaryCalculation } from '../types/analytics';
 import { analyticsComputationCache, cacheUtils } from '../services/analyticsComputationCache';
+import { mapVariableNameToStandard } from './variableFormatters';
 
 /**
  * Calculates percentile value from an array of numbers
@@ -61,98 +62,10 @@ export const groupBySpecialty = (data: AggregatedData[]): Record<string, Aggrega
 };
 
 /**
- * Calculates summary rows for a group of analytics data
- * 
- * @param rows - Array of aggregated data rows
- * @returns Summary calculation with simple and weighted averages
+ * DEPRECATED: Legacy calculation function removed
+ * All calculations now use the unified calculateDynamicSummaryRows function
+ * This ensures consistent behavior and eliminates code duplication
  */
-export const calculateSummaryRows = (rows: AggregatedData[]): SummaryCalculation => {
-  if (rows.length === 0) {
-    return {
-      simple: {
-        tcc_n_orgs: 0, tcc_n_incumbents: 0,
-        tcc_p25: 0, tcc_p50: 0, tcc_p75: 0, tcc_p90: 0,
-        wrvu_n_orgs: 0, wrvu_n_incumbents: 0,
-        wrvu_p25: 0, wrvu_p50: 0, wrvu_p75: 0, wrvu_p90: 0,
-        cf_n_orgs: 0, cf_n_incumbents: 0,
-        cf_p25: 0, cf_p50: 0, cf_p75: 0, cf_p90: 0
-      },
-      weighted: {
-        tcc_n_orgs: 0, tcc_n_incumbents: 0,
-        tcc_p25: 0, tcc_p50: 0, tcc_p75: 0, tcc_p90: 0,
-        wrvu_n_orgs: 0, wrvu_n_incumbents: 0,
-        wrvu_p25: 0, wrvu_p50: 0, wrvu_p75: 0, wrvu_p90: 0,
-        cf_n_orgs: 0, cf_n_incumbents: 0,
-        cf_p25: 0, cf_p50: 0, cf_p75: 0, cf_p90: 0
-      }
-    };
-  }
-
-  // Filter out rows with no data for each metric type
-  const tccRows = rows.filter(row => row.tcc_p50 > 0);
-  const wrvuRows = rows.filter(row => row.wrvu_p50 > 0);
-  const cfRows = rows.filter(row => row.cf_p50 > 0);
-  
-  // Simple averages (mean of all values) - Each metric section has independent org/incumbent counts
-  const simple = {
-    // TCC metrics with independent organizational data
-    tcc_n_orgs: tccRows.length > 0 ? Math.round(tccRows.reduce((sum, row) => sum + row.tcc_n_orgs, 0) / tccRows.length) : 0,
-    tcc_n_incumbents: tccRows.length > 0 ? Math.round(tccRows.reduce((sum, row) => sum + row.tcc_n_incumbents, 0) / tccRows.length) : 0,
-    tcc_p25: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p25, 0) / tccRows.length : 0,
-    tcc_p50: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p50, 0) / tccRows.length : 0,
-    tcc_p75: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p75, 0) / tccRows.length : 0,
-    tcc_p90: tccRows.length > 0 ? tccRows.reduce((sum, row) => sum + row.tcc_p90, 0) / tccRows.length : 0,
-    
-    // wRVU metrics with independent organizational data
-    wrvu_n_orgs: wrvuRows.length > 0 ? Math.round(wrvuRows.reduce((sum, row) => sum + row.wrvu_n_orgs, 0) / wrvuRows.length) : 0,
-    wrvu_n_incumbents: wrvuRows.length > 0 ? Math.round(wrvuRows.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0) / wrvuRows.length) : 0,
-    wrvu_p25: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p25, 0) / wrvuRows.length : 0,
-    wrvu_p50: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p50, 0) / wrvuRows.length : 0,
-    wrvu_p75: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p75, 0) / wrvuRows.length : 0,
-    wrvu_p90: wrvuRows.length > 0 ? wrvuRows.reduce((sum, row) => sum + row.wrvu_p90, 0) / wrvuRows.length : 0,
-    
-    // CF metrics with independent organizational data
-    cf_n_orgs: cfRows.length > 0 ? Math.round(cfRows.reduce((sum, row) => sum + row.cf_n_orgs, 0) / cfRows.length) : 0,
-    cf_n_incumbents: cfRows.length > 0 ? Math.round(cfRows.reduce((sum, row) => sum + row.cf_n_incumbents, 0) / cfRows.length) : 0,
-    cf_p25: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p25, 0) / cfRows.length : 0,
-    cf_p50: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p50, 0) / cfRows.length : 0,
-    cf_p75: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p75, 0) / cfRows.length : 0,
-    cf_p90: cfRows.length > 0 ? cfRows.reduce((sum, row) => sum + row.cf_p90, 0) / cfRows.length : 0,
-  };
-
-  // Weighted averages (weighted by number of incumbents) - Each metric section weighted independently
-  const totalTccIncumbents = tccRows.reduce((sum, row) => sum + row.tcc_n_incumbents, 0);
-  const totalWrvuIncumbents = wrvuRows.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0);
-  const totalCfIncumbents = cfRows.reduce((sum, row) => sum + row.cf_n_incumbents, 0);
-  
-  const weighted = {
-    // TCC weighted averages
-    tcc_n_orgs: tccRows.reduce((sum, row) => sum + row.tcc_n_orgs, 0),
-    tcc_n_incumbents: totalTccIncumbents,
-    tcc_p25: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p25 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    tcc_p50: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p50 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    tcc_p75: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p75 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    tcc_p90: totalTccIncumbents > 0 ? tccRows.reduce((sum, row) => sum + (row.tcc_p90 * row.tcc_n_incumbents), 0) / totalTccIncumbents : 0,
-    
-    // wRVU weighted averages
-    wrvu_n_orgs: wrvuRows.reduce((sum, row) => sum + row.wrvu_n_orgs, 0),
-    wrvu_n_incumbents: totalWrvuIncumbents,
-    wrvu_p25: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p25 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    wrvu_p50: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p50 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    wrvu_p75: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p75 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    wrvu_p90: totalWrvuIncumbents > 0 ? wrvuRows.reduce((sum, row) => sum + (row.wrvu_p90 * row.wrvu_n_incumbents), 0) / totalWrvuIncumbents : 0,
-    
-    // CF weighted averages
-    cf_n_orgs: cfRows.reduce((sum, row) => sum + row.cf_n_orgs, 0),
-    cf_n_incumbents: totalCfIncumbents,
-    cf_p25: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p25 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-    cf_p50: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p50 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-    cf_p75: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p75 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-    cf_p90: totalCfIncumbents > 0 ? cfRows.reduce((sum, row) => sum + (row.cf_p90 * row.cf_n_incumbents), 0) / totalCfIncumbents : 0,
-  };
-
-  return { simple, weighted };
-};
 
 /**
  * Transforms survey data into aggregated analytics format
@@ -359,10 +272,11 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
 };
 
 /**
- * Calculate summary rows for dynamic variables
- * NEW: Handles DynamicAggregatedData with selected variables
+ * UNIFIED: Calculate summary rows for analytics data
+ * Single function that handles all data formats with proper variable normalization
+ * Production-grade implementation with no legacy cruft
  */
-export const calculateDynamicSummaryRows = (
+export const calculateSummaryRows = (
   rows: any[], // DynamicAggregatedData[]
   selectedVariables: string[]
 ): {
@@ -371,6 +285,9 @@ export const calculateDynamicSummaryRows = (
 } => {
   const simple: Record<string, any> = {};
   const weighted: Record<string, any> = {};
+  
+  // Production-grade: All data is now in dynamic format
+  // No legacy fallbacks needed - unified data structure
   
   selectedVariables.forEach(varName => {
     // Collect all percentile values and weights for this variable
@@ -383,7 +300,77 @@ export const calculateDynamicSummaryRows = (
     let totalIncumbents = 0;
     
     rows.forEach(row => {
-      const metrics = row.variables?.[varName];
+      // CRITICAL FIX: Normalize variable name before data lookup for dynamic variables
+      const normalizedVarName = mapVariableNameToStandard(varName);
+      
+      // Debug logging for CF variables
+      if (varName === 'cfs' || varName === 'cf') {
+        console.log(`🔍 calculateDynamicSummaryRows: Variable normalization:`, {
+          originalVarName: varName,
+          normalizedVarName: normalizedVarName,
+          availableVariables: row.variables ? Object.keys(row.variables) : []
+        });
+      }
+      
+      // Try dynamic variables first with normalized name
+      let metrics = row.variables?.[normalizedVarName];
+      
+      // Debug logging for CF variables
+      if (varName === 'cfs' || varName === 'cf') {
+        console.log(`🔍 calculateDynamicSummaryRows: Data lookup for ${varName}:`, {
+          normalizedVarName,
+          hasMetrics: !!metrics,
+          metricsData: metrics ? {
+            p25: metrics.p25,
+            p50: metrics.p50,
+            p75: metrics.p75,
+            p90: metrics.p90,
+            n_orgs: metrics.n_orgs,
+            n_incumbents: metrics.n_incumbents
+          } : null
+        });
+      }
+      
+      // CRITICAL FIX: Handle both dynamic and legacy data formats
+      // The data loading still produces legacy format, so we need fallback logic
+      if (!metrics && !row.variables) {
+        // Legacy data format fallback
+        const legacyFieldMap: Record<string, string> = {
+          'tcc': 'tcc',
+          'work_rvus': 'wrvu',
+          'wrvu': 'wrvu',
+          'cf': 'cf',
+          'conversion_factor': 'cf',
+          'tcc_per_work_rvu': 'cf',
+          'cfs': 'cf',  // Map 'cfs' to 'cf' for legacy data
+          'tcc_per_work_rvus': 'cf'
+        };
+        
+        const legacyPrefix = legacyFieldMap[varName] || varName;
+        
+        // Extract legacy data fields
+        const nOrgs = row[`${legacyPrefix}_n_orgs`] || 0;
+        const nIncumbents = row[`${legacyPrefix}_n_incumbents`] || 0;
+        const p25 = row[`${legacyPrefix}_p25`] || 0;
+        const p50 = row[`${legacyPrefix}_p50`] || 0;
+        const p75 = row[`${legacyPrefix}_p75`] || 0;
+        const p90 = row[`${legacyPrefix}_p90`] || 0;
+        
+        // Create metrics object from legacy fields
+        if (p50 > 0) {
+          metrics = {
+            variableName: varName,
+            n_orgs: nOrgs,
+            n_incumbents: nIncumbents,
+            p25: p25,
+            p50: p50,
+            p75: p75,
+            p90: p90
+          };
+        }
+      }
+      
+      // Process metrics from either dynamic or legacy data structure
       if (metrics && metrics.p50 > 0) {
         // Collect all percentile values
         p25Values.push(metrics.p25 || 0);

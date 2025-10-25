@@ -249,7 +249,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       </div>
 
       {/* Data Table Section - Contained with horizontal scroll */}
-      <div className="w-full">
+      <div className="w-full max-w-full overflow-hidden">
         <AnalyticsTable
           data={data} // This will be filtered by the hook based on UI filters
           loading={loading}

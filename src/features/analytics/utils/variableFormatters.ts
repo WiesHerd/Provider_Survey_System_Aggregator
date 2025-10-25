@@ -172,9 +172,9 @@ const isRatioVariable = (variableName: string): boolean => {
  */
 export const getVariableColor = (variableName: string, index: number): string => {
   const VARIABLE_COLORS = [
-    '#1976D2', // Dark Blue (TCC)
-    '#388E3C', // Dark Green (wRVU)
-    '#F57C00', // Dark Orange (CF)
+    '#1565C0', // Medium Blue (TCC) - closer to table's #E3F2FD
+    '#2E7D32', // Medium Green (wRVU) - closer to table's #E8F5E8
+    '#FFD54F', // Light Amber (CF) - closer to table's #FFF3E0 and more yellowish
     '#7B1FA2', // Dark Purple (Base Salary)
     '#00796B', // Dark Teal (ASA Units)
     '#C2185B', // Dark Pink (Panel Size)

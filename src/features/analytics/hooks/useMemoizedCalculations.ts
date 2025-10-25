@@ -7,7 +7,7 @@
 
 import { useMemo, useCallback } from 'react';
 import { analyticsComputationCache, cacheUtils } from '../services/analyticsComputationCache';
-import { groupBySpecialty, calculateSummaryRows, calculateDynamicSummaryRows, filterAnalyticsData } from '../utils/analyticsCalculations';
+import { groupBySpecialty, calculateSummaryRows, filterAnalyticsData } from '../utils/analyticsCalculations';
 import { AggregatedData, AnalyticsFilters } from '../types/analytics';
 
 /**
@@ -176,15 +176,8 @@ export const useMemoizedSummaryRows = (rows: AggregatedData[], variables?: strin
       return cached;
     }
 
-    // Compute summary rows
-    let result;
-    if (variables && variables.length > 0) {
-      // Dynamic variables calculation
-      result = calculateDynamicSummaryRows(rows as any[], variables);
-    } else {
-      // Legacy calculation
-      result = calculateSummaryRows(rows);
-    }
+    // Production-grade: Unified calculation for all data
+    const result = calculateSummaryRows(rows, variables || []);
 
     // Cache the result
     analyticsComputationCache.set(cacheKey, result);

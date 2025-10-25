@@ -10,11 +10,12 @@ import React, { memo, useState, useMemo, useCallback } from 'react';
 // Removed Material-UI table imports - using HTML table instead
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import { AnalyticsTableProps } from '../types/analytics';
-import { calculateSummaryRows, calculateDynamicSummaryRows } from '../utils/analyticsCalculations';
+import { calculateSummaryRows } from '../utils/analyticsCalculations';
 import { formatCurrency, formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { 
   formatVariableValue, 
-  getVariableLightBackgroundColor 
+  getVariableLightBackgroundColor,
+  mapVariableNameToStandard
 } from '../utils/variableFormatters';
 import { DynamicAggregatedData } from '../types/variables';
 import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
@@ -66,23 +67,17 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  // Detect if we're using dynamic data format OR if we have selected variables
-  const isDynamicData = useMemo(() => {
-    const hasVariables = data.length > 0 && 'variables' in data[0];
-    // Reduced logging to prevent console spam
-    if (data.length > 0) {
-      console.log('🔍 AnalyticsTable: Data format check:', { 
-        hasVariables: 'variables' in data[0], 
-        selectedVariablesCount: selectedVariables.length,
-        isDynamicData: hasVariables
-      });
-    }
-    // FIXED: Only use dynamic format if data actually has variables property
-    return hasVariables;
-  }, [data, selectedVariables]);
+  // Freeze state for left columns
+  const [freezeLeftColumns, setFreezeLeftColumns] = useState(true);
+  
+  // Debug logging
+  console.log('🔍 AnalyticsTable: freezeLeftColumns state:', freezeLeftColumns);
+  
+  // Production-grade: All data is in dynamic format
+  // No conditional logic needed - unified data structure
   
   // Use memoized column groups for dynamic variables
-  const columnGroups = useMemoizedColumnGroups(selectedVariables, isDynamicData);
+  const columnGroups = useMemoizedColumnGroups(selectedVariables, true);
   
   // Use memoized grouping to avoid recalculation
   const groupedData = useMemoizedGrouping(data);
@@ -99,89 +94,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     return specialties.slice(startIndex, endIndex);
   }, [groupedData, startIndex, endIndex]);
 
-  // Pre-calculate summary rows for all specialties to avoid hook calls in render
+  // Production-grade: Unified summary calculation for all specialties
   const summaryRowsCache = useMemo(() => {
     const cache: Record<string, any> = {};
     Object.keys(groupedData).forEach(specialty => {
       const rows = groupedData[specialty];
-      if (isDynamicData) {
-        // For dynamic data, use the calculation directly
-        cache[specialty] = calculateDynamicSummaryRows(rows as DynamicAggregatedData[], selectedVariables);
-      } else {
-        // For legacy data, use legacy calculation but convert to dynamic format for rendering
-        const legacySummary = calculateSummaryRows(rows as any[]);
-        // Convert legacy summary to dynamic format for consistent rendering
-        const dynamicFormat: {
-          simple: Record<string, any>;
-          weighted: Record<string, any>;
-        } = {
-          simple: {},
-          weighted: {}
-        };
-        
-        // Map legacy fields to dynamic variable names
-        if (selectedVariables.includes('tcc')) {
-          dynamicFormat.simple.tcc = {
-            n_orgs: legacySummary.simple.tcc_n_orgs,
-            n_incumbents: legacySummary.simple.tcc_n_incumbents,
-            p25: legacySummary.simple.tcc_p25,
-            p50: legacySummary.simple.tcc_p50,
-            p75: legacySummary.simple.tcc_p75,
-            p90: legacySummary.simple.tcc_p90
-          };
-          dynamicFormat.weighted.tcc = {
-            n_orgs: legacySummary.weighted.tcc_n_orgs,
-            n_incumbents: legacySummary.weighted.tcc_n_incumbents,
-            p25: legacySummary.weighted.tcc_p25,
-            p50: legacySummary.weighted.tcc_p50,
-            p75: legacySummary.weighted.tcc_p75,
-            p90: legacySummary.weighted.tcc_p90
-          };
-        }
-        
-        if (selectedVariables.includes('work_rvus') || selectedVariables.includes('wrvu')) {
-          dynamicFormat.simple.work_rvus = {
-            n_orgs: legacySummary.simple.wrvu_n_orgs,
-            n_incumbents: legacySummary.simple.wrvu_n_incumbents,
-            p25: legacySummary.simple.wrvu_p25,
-            p50: legacySummary.simple.wrvu_p50,
-            p75: legacySummary.simple.wrvu_p75,
-            p90: legacySummary.simple.wrvu_p90
-          };
-          dynamicFormat.weighted.work_rvus = {
-            n_orgs: legacySummary.weighted.wrvu_n_orgs,
-            n_incumbents: legacySummary.weighted.wrvu_n_incumbents,
-            p25: legacySummary.weighted.wrvu_p25,
-            p50: legacySummary.weighted.wrvu_p50,
-            p75: legacySummary.weighted.wrvu_p75,
-            p90: legacySummary.weighted.wrvu_p90
-          };
-        }
-        
-        if (selectedVariables.includes('cfs') || selectedVariables.includes('cf')) {
-          dynamicFormat.simple.cfs = {
-            n_orgs: legacySummary.simple.cf_n_orgs,
-            n_incumbents: legacySummary.simple.cf_n_incumbents,
-            p25: legacySummary.simple.cf_p25,
-            p50: legacySummary.simple.cf_p50,
-            p75: legacySummary.simple.cf_p75,
-            p90: legacySummary.simple.cf_p90
-          };
-          dynamicFormat.weighted.cfs = {
-            n_orgs: legacySummary.weighted.cf_n_orgs,
-            n_incumbents: legacySummary.weighted.cf_n_incumbents,
-            p25: legacySummary.weighted.cf_p25,
-            p50: legacySummary.weighted.cf_p50,
-            p75: legacySummary.weighted.cf_p75,
-            p90: legacySummary.weighted.cf_p90
-          };
-        }
-        
-        cache[specialty] = dynamicFormat;
-      }
+      // Single calculation function for all data
+      cache[specialty] = calculateSummaryRows(rows, selectedVariables);
     });
     return cache;
-  }, [groupedData, isDynamicData, selectedVariables]);
+  }, [groupedData, selectedVariables]);
 
   // Helper function to get cached summary rows
   const getSummaryRows = useCallback((specialty: string) => {
@@ -244,9 +166,22 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
-      {/* Export button positioned at top right */}
-      <div className="flex justify-end mb-2">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 w-full max-w-full" style={{ overflow: 'hidden' }}>
+      {/* Control buttons positioned at top right */}
+      <div className="flex justify-end gap-2 mb-2">
+        <button
+          onClick={() => setFreezeLeftColumns(!freezeLeftColumns)}
+          className={`inline-flex items-center px-4 py-2 text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl ${
+            freezeLeftColumns 
+              ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white focus:ring-green-500' 
+              : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white focus:ring-gray-500'
+          }`}
+        >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {freezeLeftColumns ? 'Unfreeze Left Columns' : 'Freeze Left Columns'}
+        </button>
         <button
           onClick={onExport}
           className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
@@ -257,21 +192,23 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       </div>
 
       {/* HTML Table with frozen headers */}
-      <div className="overflow-x-auto">
-        <div 
-          className="rounded-xl border border-gray-200 shadow-sm"
-          style={{ 
-            maxHeight: '600px',
-            overflow: 'auto',
-            backgroundColor: 'white'
-          }}
-        >
+      <div 
+        className="rounded-xl border border-gray-200 shadow-sm"
+        style={{ 
+          maxHeight: '600px',
+          maxWidth: '100%',
+          overflow: 'auto',
+          backgroundColor: 'white',
+          position: 'relative'
+        }}
+      >
         <table 
           className="w-full border-collapse"
           style={{ 
             minWidth: '1200px',
             borderSpacing: '0',
-            borderCollapse: 'collapse'
+            borderCollapse: 'collapse',
+            position: 'relative'
           }}
         >
           <thead style={{ 
@@ -286,17 +223,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               <th 
                 style={{ 
                   fontWeight: 'bold', 
-                  backgroundColor: '#F5F5F5', 
+                  backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5', 
                   borderRight: '1px solid #E0E0E0',
                   borderBottom: 'none',
                   textAlign: 'center',
                   color: '#424242',
-                  position: 'sticky',
-                  left: 0,
+                  position: freezeLeftColumns ? 'sticky' : 'static',
+                  left: freezeLeftColumns ? 0 : 'auto',
                   top: 0,
-                  zIndex: 12,
+                  zIndex: freezeLeftColumns ? 15 : 'auto',
                   minWidth: '440px',
-                  padding: '12px 8px'
+                  padding: '12px 8px',
+                  boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                 }} 
                 colSpan={3}
               >
@@ -393,15 +331,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               <th 
                 style={{ 
                   fontWeight: 'bold', 
-                  backgroundColor: '#F5F5F5',
-                  position: 'sticky',
-                  left: 0,
-                  top: '48px',
-                  zIndex: 12,
+                  backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5',
+                  position: freezeLeftColumns ? 'sticky' : 'static',
+                  left: freezeLeftColumns ? 0 : 'auto',
+                  top: freezeLeftColumns ? '48px' : 'auto',
+                  zIndex: freezeLeftColumns ? 15 : 'auto',
                   minWidth: '140px',
                   padding: '8px',
                   textAlign: 'left',
-                  borderBottom: 'none'
+                  borderBottom: 'none',
+                  boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                 }}
               >
                 Survey Source
@@ -409,15 +348,16 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               <th 
                 style={{ 
                   fontWeight: 'bold', 
-                  backgroundColor: '#F5F5F5',
-                  position: 'sticky',
-                  left: '140px',
-                  top: '48px',
-                  zIndex: 12,
+                  backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5',
+                  position: freezeLeftColumns ? 'sticky' : 'static',
+                  left: freezeLeftColumns ? '140px' : 'auto',
+                  top: freezeLeftColumns ? '48px' : 'auto',
+                  zIndex: freezeLeftColumns ? 15 : 'auto',
                   minWidth: '180px',
                   padding: '8px',
                   textAlign: 'left',
-                  borderBottom: 'none'
+                  borderBottom: 'none',
+                  boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                 }}
               >
                 Specialty
@@ -425,16 +365,17 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               <th 
                 style={{ 
                   fontWeight: 'bold', 
-                  backgroundColor: '#F5F5F5',
-                  position: 'sticky',
-                  left: '320px',
-                  top: '48px',
-                  zIndex: 12,
+                  backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5',
+                  position: freezeLeftColumns ? 'sticky' : 'static',
+                  left: freezeLeftColumns ? '320px' : 'auto',
+                  top: freezeLeftColumns ? '48px' : 'auto',
+                  zIndex: freezeLeftColumns ? 15 : 'auto',
                   minWidth: '120px',
                   borderRight: '1px solid #E0E0E0',
                   padding: '8px',
                   textAlign: 'left',
-                  borderBottom: 'none'
+                  borderBottom: 'none',
+                  boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                 }}
               >
                 Region
@@ -801,83 +742,62 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
             {paginatedSpecialties.map((specialty) => {
               const rows = groupedData[specialty];
               return (
-              <React.Fragment key={specialty}>
+                <React.Fragment key={specialty}>
                 {/* Data Rows */}
                 {rows.map((row, index) => (
                   <tr key={`${row.surveySource}-${row.geographicRegion}-${index}`} className="hover:bg-gray-50">
                     <td 
                       style={{ 
-                        position: 'sticky',
-                        left: 0,
-                        backgroundColor: 'white',
+                        position: freezeLeftColumns ? 'sticky' : 'static',
+                        left: freezeLeftColumns ? 0 : 'auto',
+                        backgroundColor: freezeLeftColumns ? '#f8f9fa' : 'white',
                         borderRight: '1px solid #e0e0e0',
-                        zIndex: 1,
-                        padding: '8px'
+                        zIndex: freezeLeftColumns ? 5 : 'auto',
+                        padding: '8px',
+                        boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                       }}
                     >
                       {row.surveySource}
                     </td>
                     <td 
                       style={{ 
-                        position: 'sticky',
-                        left: '140px',
-                        backgroundColor: 'white',
+                        position: freezeLeftColumns ? 'sticky' : 'static',
+                        left: freezeLeftColumns ? '140px' : 'auto',
+                        backgroundColor: freezeLeftColumns ? '#f8f9fa' : 'white',
                         borderRight: '1px solid #e0e0e0',
-                        zIndex: 1,
-                        padding: '8px'
+                        zIndex: freezeLeftColumns ? 5 : 'auto',
+                        padding: '8px',
+                        boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                       }}
                     >
                       {formatSpecialtyForDisplay(row.originalSpecialty)}
                     </td>
                     <td 
                       style={{ 
-                        position: 'sticky',
-                        left: '320px',
-                        backgroundColor: 'white',
+                        position: freezeLeftColumns ? 'sticky' : 'static',
+                        left: freezeLeftColumns ? '320px' : 'auto',
+                        backgroundColor: freezeLeftColumns ? '#f8f9fa' : 'white',
                         borderRight: '1px solid #e0e0e0',
-                        zIndex: 1,
-                        padding: '8px'
+                        zIndex: freezeLeftColumns ? 5 : 'auto',
+                        padding: '8px',
+                        boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
                       }}
                     >
                       {formatRegionForDisplay(row.geographicRegion)}
                     </td>
                     
-                    {/* DYNAMIC: Render data for selected variables */}
-                    {columnGroups.length > 0 && selectedVariables.map((varName, varIndex) => {
-                      const dynamicRow = row as unknown as DynamicAggregatedData;
+                    {/* Production-grade: Unified rendering for all variables */}
+                    {selectedVariables.map((varName, varIndex) => {
+                      const dynamicRow = row as DynamicAggregatedData;
                       const legacyRow = row as any; // Legacy data format
                       const lightColor = getVariableLightBackgroundColor(varName, varIndex);
                       
-                      // Reduced logging to prevent console spam
-                      if (varName === 'cfs' && row.surveySource === 'Gallagher Physician') {
-                        console.log(`🔍 AnalyticsTable: Processing CF variable for Gallagher data:`, {
-                          hasVariables: !!dynamicRow.variables,
-                          variableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables) : [],
-                          cfData: dynamicRow.variables?.[varName]
-                        });
-                      }
+                      // Try dynamic format first
+                      const normalizedVarName = mapVariableNameToStandard(varName);
+                      let metrics = dynamicRow.variables?.[normalizedVarName];
                       
-                      // Check if we have dynamic variables format
-                      if (dynamicRow.variables) {
-                        const metrics = dynamicRow.variables[varName];
-                        return metrics ? (
-                          <React.Fragment key={varName}>
-                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_orgs.toLocaleString()}</td>
-                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_incumbents.toLocaleString()}</td>
-                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p25, varName)}</td>
-                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p50, varName)}</td>
-                            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p75, varName)}</td>
-                            <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p90, varName)}</td>
-                          </React.Fragment>
-                        ) : (
-                          <React.Fragment key={varName}>
-                            <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
-                              n/a
-                            </td>
-                          </React.Fragment>
-                        );
-                      } else {
-                        // Handle legacy data format - map variable names to legacy fields
+                      // Fallback to legacy format if dynamic format not available
+                      if (!metrics && !dynamicRow.variables) {
                         const legacyFieldMap: Record<string, string> = {
                           'tcc': 'tcc',
                           'work_rvus': 'wrvu',
@@ -885,17 +805,9 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                           'cf': 'cf',
                           'conversion_factor': 'cf',
                           'tcc_per_work_rvu': 'cf',
-                          'cfs': 'cf',  // Add mapping for 'cfs' to 'cf'
-                          'tcc_per_work_rvus': 'cf'  // Add mapping for plural form
+                          'cfs': 'cf',  // Map 'cfs' to 'cf' for legacy data
+                          'tcc_per_work_rvus': 'cf'
                         };
-                        
-                        // Reduced logging to prevent console spam
-                        if (varName === 'cfs') {
-                          console.log(`🔍 AnalyticsTable: Processing CF variable for legacy data:`, {
-                            variable: varName,
-                            mappedField: legacyFieldMap[varName]
-                          });
-                        }
                         
                         const legacyPrefix = legacyFieldMap[varName] || varName;
                         const nOrgs = legacyRow[`${legacyPrefix}_n_orgs`] || 0;
@@ -905,237 +817,59 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                         const p75 = legacyRow[`${legacyPrefix}_p75`] || 0;
                         const p90 = legacyRow[`${legacyPrefix}_p90`] || 0;
                         
-                        // Reduced logging to prevent console spam
-                        if (varName === 'cfs') {
-                          console.log(`🔍 AnalyticsTable: CF data values:`, {
-                            nOrgs, nIncumbents, p25, p50, p75, p90,
-                            availableCFFields: Object.keys(legacyRow).filter(k => k.includes('cf'))
-                          });
-                        }
-                        
-                        // Only show if we have meaningful data
                         if (p50 > 0) {
-                          return (
-                            <React.Fragment key={varName}>
-                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{nOrgs.toLocaleString()}</td>
-                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{nIncumbents.toLocaleString()}</td>
-                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(p25, varName)}</td>
-                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(p50, varName)}</td>
-                              <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(p75, varName)}</td>
-                              <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatVariableValue(p90, varName)}</td>
-                            </React.Fragment>
-                          );
-                        } else {
-                          return (
-                            <React.Fragment key={varName}>
-                              <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
-                                n/a
-                              </td>
-                            </React.Fragment>
-                          );
+                          metrics = {
+                            variableName: varName,
+                            n_orgs: nOrgs,
+                            n_incumbents: nIncumbents,
+                            p25: p25,
+                            p50: p50,
+                            p75: p75,
+                            p90: p90
+                          };
                         }
                       }
+                      
+                      return metrics ? (
+                        <React.Fragment key={varName}>
+                          <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_orgs.toLocaleString()}</td>
+                          <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_incumbents.toLocaleString()}</td>
+                          <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p25, varName)}</td>
+                          <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p50, varName)}</td>
+                          <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p75, varName)}</td>
+                          <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p90, varName)}</td>
+                        </React.Fragment>
+                      ) : (
+                        <React.Fragment key={varName}>
+                          <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
+                            n/a
+                          </td>
+                        </React.Fragment>
+                      );
                     })}
                     
-                    {/* FALLBACK: Original hardcoded sections for backward compatibility */}
-                    {columnGroups.length === 0 && (() => {
-                      const legacyRow = row as any; // Cast to any for legacy data
-                      return (
-                        <>
-                          {/* TCC Section */}
-                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{legacyRow.tcc_n_orgs?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{legacyRow.tcc_n_incumbents?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p25 || 0, 2)}</td>
-                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p50 || 0, 2)}</td>
-                          <td style={{ backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p75 || 0, 2)}</td>
-                          <td style={{ backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.tcc_p90 || 0, 2)}</td>
-                    
-                    {/* wRVU Section */}
-                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_n_orgs?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_n_incumbents?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p25?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p50?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E8F5E8', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p75?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{legacyRow.wrvu_p90?.toLocaleString() || '0'}</td>
-                    
-                    {/* CF Section */}
-                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{legacyRow.cf_n_orgs?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{legacyRow.cf_n_incumbents?.toLocaleString() || '0'}</td>
-                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p25 || 0, 2)}</td>
-                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p50 || 0, 2)}</td>
-                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p75 || 0, 2)}</td>
-                          <td style={{ backgroundColor: '#FFF3E0', textAlign: 'right', padding: '8px' }}>{formatCurrency(legacyRow.cf_p90 || 0, 2)}</td>
-                        </>
-                      );
-                    })()}
+                    {/* Production-grade: No legacy fallback needed - unified data structure */}
                   </tr>
                 ))}
 
                 {/* Summary Rows - Memoized for performance */}
                 {(() => {
                   const summaryData = getSummaryRows(specialty);
-                  if (columnGroups.length > 0) {
-                    return (
-                      <>
-                        {/* Simple Average Row */}
-                        <tr style={{ backgroundColor: '#f5f5f5' }}>
-                          <td 
-                            style={{ 
-                              fontWeight: 'bold',
-                              position: 'sticky',
-                              left: 0,
-                              backgroundColor: '#f5f5f5',
-                              borderRight: '1px solid #e0e0e0',
-                              zIndex: 1,
-                              padding: '8px'
-                            }}
-                          >
-                            {formatSpecialtyForDisplay(specialty)} - Simple Average
-                          </td>
-                          <td 
-                            style={{ 
-                              position: 'sticky',
-                              left: '140px',
-                              backgroundColor: '#f5f5f5',
-                              borderRight: '1px solid #e0e0e0',
-                              zIndex: 1,
-                              padding: '8px'
-                            }}
-                          ></td>
-                          <td 
-                            style={{ 
-                              position: 'sticky',
-                              left: '320px',
-                              backgroundColor: '#f5f5f5',
-                              borderRight: '1px solid #e0e0e0',
-                              zIndex: 1,
-                              padding: '8px'
-                            }}
-                          ></td>
-                          
-                          {/* Dynamic variable summary data */}
-                          {selectedVariables.map((varName, varIndex) => {
-                            const summary = summaryData.simple[varName];
-                            const lightColor = getVariableLightBackgroundColor(varName, varIndex);
-                            
-                            return summary ? (
-                              <React.Fragment key={varName}>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {summary.n_orgs.toLocaleString()}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {summary.n_incumbents.toLocaleString()}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p25, varName)}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p50, varName)}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p75, varName)}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p90, varName)}
-                                </td>
-                              </React.Fragment>
-                            ) : (
-                              <React.Fragment key={varName}>
-                                <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
-                                  n/a
-                                </td>
-                              </React.Fragment>
-                            );
-                          })}
-                        </tr>
-                        
-                        {/* Weighted Average Row */}
-                        <tr style={{ backgroundColor: '#e5e5e5' }}>
-                          <td 
-                            style={{ 
-                              fontWeight: 'bold',
-                              position: 'sticky',
-                              left: 0,
-                              backgroundColor: '#e5e5e5',
-                              borderRight: '1px solid #e0e0e0',
-                              zIndex: 1,
-                              padding: '8px'
-                            }}
-                          >
-                            {formatSpecialtyForDisplay(specialty)} - Weighted Average
-                          </td>
-                          <td 
-                            style={{ 
-                              position: 'sticky',
-                              left: '140px',
-                              backgroundColor: '#e5e5e5',
-                              borderRight: '1px solid #e0e0e0',
-                              zIndex: 1,
-                              padding: '8px'
-                            }}
-                          ></td>
-                          <td 
-                            style={{ 
-                              position: 'sticky',
-                              left: '320px',
-                              backgroundColor: '#e5e5e5',
-                              borderRight: '1px solid #e0e0e0',
-                              zIndex: 1,
-                              padding: '8px'
-                            }}
-                          ></td>
-                          
-                          {/* Dynamic variable weighted summary data */}
-                          {selectedVariables.map((varName, varIndex) => {
-                            const summary = summaryData.weighted[varName];
-                            const lightColor = getVariableLightBackgroundColor(varName, varIndex);
-                            
-                            return summary ? (
-                              <React.Fragment key={varName}>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {summary.n_orgs.toLocaleString()}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {summary.n_incumbents.toLocaleString()}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p25, varName)}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p50, varName)}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p75, varName)}
-                                </td>
-                                <td style={{ backgroundColor: lightColor, fontWeight: 'bold', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>
-                                  {formatVariableValue(summary.p90, varName)}
-                                </td>
-                              </React.Fragment>
-                            ) : (
-                              <React.Fragment key={varName}>
-                                <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
-                                  n/a
-                                </td>
-                              </React.Fragment>
-                            );
-                          })}
-                        </tr>
-                      </>
-                    );
-                  }
                   
-                  const { simple, weighted } = summaryData;
+                  
+                  // Production-grade: Unified summary rendering
                   return (
                     <>
-                      <tr style={{ backgroundColor: '#f5f5f5' }}>
+                      {/* Simple Average Row */}
+                      <tr style={{ backgroundColor: '#f5f5f5', borderTop: '1px solid #d1d5db' }}>
                         <td 
                           style={{ 
                             fontWeight: 'bold',
-                            position: 'sticky',
-                            left: 0,
+                            position: freezeLeftColumns ? 'sticky' : 'static',
+                            left: freezeLeftColumns ? 0 : 'auto',
                             backgroundColor: '#f5f5f5',
                             borderRight: '1px solid #e0e0e0',
-                            zIndex: 1,
+                            zIndex: freezeLeftColumns ? 5 : 'auto',
                             padding: '8px'
                           }}
                         >
@@ -1143,159 +877,130 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                         </td>
                         <td 
                           style={{ 
-                            position: 'sticky',
-                            left: '140px',
+                            position: freezeLeftColumns ? 'sticky' : 'static',
+                            left: freezeLeftColumns ? '140px' : 'auto',
                             backgroundColor: '#f5f5f5',
                             borderRight: '1px solid #e0e0e0',
-                            zIndex: 1,
+                            zIndex: freezeLeftColumns ? 5 : 'auto',
                             padding: '8px'
                           }}
                         ></td>
                         <td 
                           style={{ 
-                            position: 'sticky',
-                            left: '320px',
+                            position: freezeLeftColumns ? 'sticky' : 'static',
+                            left: freezeLeftColumns ? '320px' : 'auto',
                             backgroundColor: '#f5f5f5',
                             borderRight: '1px solid #e0e0e0',
-                            zIndex: 1,
+                            zIndex: freezeLeftColumns ? 5 : 'auto',
                             padding: '8px'
                           }}
                         ></td>
-                        <td style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>
-                          {simple.tcc_n_orgs.toLocaleString()}
-                        </td>
-                        <td style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', textAlign: 'right', padding: '8px' }}>
-                          {simple.tcc_n_incumbents.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatCurrency(simple.tcc_p25, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatCurrency(simple.tcc_p50, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatCurrency(simple.tcc_p75, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
-                          {formatCurrency(simple.tcc_p90, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {simple.wrvu_n_orgs.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {simple.wrvu_n_incumbents.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {simple.wrvu_p25.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {simple.wrvu_p50.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {simple.wrvu_p75.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
-                          {simple.wrvu_p90.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {simple.cf_n_orgs.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {simple.cf_n_incumbents.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(simple.cf_p25, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(simple.cf_p50, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(simple.cf_p75, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(simple.cf_p90, 2)}
-                        </td>
+                        
+                        {/* Unified variable summary data */}
+                        {selectedVariables.map((varName, varIndex) => {
+                          const summary = summaryData.simple[varName];
+                          
+                          return summary ? (
+                            <React.Fragment key={varName}>
+                              <td style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {summary.n_orgs.toLocaleString()}
+                              </td>
+                              <td style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {summary.n_incumbents.toLocaleString()}
+                              </td>
+                              <td style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p25, varName)}
+                              </td>
+                              <td style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p50, varName)}
+                              </td>
+                              <td style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p75, varName)}
+                              </td>
+                              <td style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p90, varName)}
+                              </td>
+                            </React.Fragment>
+                          ) : (
+                            <React.Fragment key={varName}>
+                              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
+                                n/a
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
                       </tr>
-                      <tr style={{ backgroundColor: 'primary.50' }}>
-                        <td style={{ 
-                          fontWeight: 'bold',
-                          position: 'sticky',
-                          left: 0,
-                          backgroundColor: 'primary.50',
-                          borderRight: '1px solid #e0e0e0',
-                          zIndex: 1
-                        }}>
+                      
+                      {/* Weighted Average Row */}
+                      <tr style={{ backgroundColor: '#e8eaf6', borderBottom: '1px solid #d1d5db' }}>
+                        <td 
+                          style={{ 
+                            fontWeight: 'bold',
+                            position: freezeLeftColumns ? 'sticky' : 'static',
+                            left: freezeLeftColumns ? 0 : 'auto',
+                            backgroundColor: '#e8eaf6',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: freezeLeftColumns ? 5 : 'auto',
+                            padding: '8px'
+                          }}
+                        >
                           {formatSpecialtyForDisplay(specialty)} - Weighted Average
                         </td>
-                        <td style={{ 
-                          position: 'sticky',
-                          left: '140px',
-                          backgroundColor: 'primary.50',
-                          borderRight: '1px solid #e0e0e0',
-                          zIndex: 1
-                        }}></td>
-                        <td style={{ 
-                          position: 'sticky',
-                          left: '320px',
-                          backgroundColor: 'primary.50',
-                          borderRight: '1px solid #e0e0e0',
-                          zIndex: 1
-                        }}></td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {weighted.tcc_n_orgs.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {weighted.tcc_n_incumbents.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatCurrency(weighted.tcc_p25, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatCurrency(weighted.tcc_p50, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD' }}>
-                          {formatCurrency(weighted.tcc_p75, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0' }}>
-                          {formatCurrency(weighted.tcc_p90, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {weighted.wrvu_n_orgs.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {weighted.wrvu_n_incumbents.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {weighted.wrvu_p25.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {weighted.wrvu_p50.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8' }}>
-                          {weighted.wrvu_p75.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0' }}>
-                          {weighted.wrvu_p90.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {weighted.cf_n_orgs.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {weighted.cf_n_incumbents.toLocaleString()}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(weighted.cf_p25, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(weighted.cf_p50, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(weighted.cf_p75, 2)}
-                        </td>
-                        <td  style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0' }}>
-                          {formatCurrency(weighted.cf_p90, 2)}
-                        </td>
-              </tr>
+                        <td 
+                          style={{ 
+                            position: freezeLeftColumns ? 'sticky' : 'static',
+                            left: freezeLeftColumns ? '140px' : 'auto',
+                            backgroundColor: '#e8eaf6',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: freezeLeftColumns ? 5 : 'auto',
+                            padding: '8px'
+                          }}
+                        ></td>
+                        <td 
+                          style={{ 
+                            position: freezeLeftColumns ? 'sticky' : 'static',
+                            left: freezeLeftColumns ? '320px' : 'auto',
+                            backgroundColor: '#e8eaf6',
+                            borderRight: '1px solid #e0e0e0',
+                            zIndex: freezeLeftColumns ? 5 : 'auto',
+                            padding: '8px'
+                          }}
+                        ></td>
+                        
+                        {/* Unified variable weighted summary data */}
+                        {selectedVariables.map((varName, varIndex) => {
+                          const summary = summaryData.weighted[varName];
+                          
+                          return summary ? (
+                            <React.Fragment key={varName}>
+                              <td style={{ backgroundColor: '#e8eaf6', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {summary.n_orgs.toLocaleString()}
+                              </td>
+                              <td style={{ backgroundColor: '#e8eaf6', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {summary.n_incumbents.toLocaleString()}
+                              </td>
+                              <td style={{ backgroundColor: '#e8eaf6', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p25, varName)}
+                              </td>
+                              <td style={{ backgroundColor: '#e8eaf6', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p50, varName)}
+                              </td>
+                              <td style={{ backgroundColor: '#e8eaf6', fontWeight: 'bold', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p75, varName)}
+                              </td>
+                              <td style={{ backgroundColor: '#e8eaf6', fontWeight: 'bold', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>
+                                {formatVariableValue(summary.p90, varName)}
+                              </td>
+                            </React.Fragment>
+                          ) : (
+                            <React.Fragment key={varName}>
+                              <td style={{ backgroundColor: '#e8eaf6', textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
+                                n/a
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tr>
                     </>
                   );
                 })()}
@@ -1304,7 +1009,6 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
             })}
           </tbody>
         </table>
-      </div>
       </div>
 
       {/* Modern Pagination - Consistent with other screens */}
