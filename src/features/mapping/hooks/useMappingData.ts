@@ -91,7 +91,7 @@ export const useMappingData = (): UseMappingDataReturn => {
   // Load data on mount
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Smart tab selection based on data availability (only on initial load)
   useEffect(() => {
@@ -267,7 +267,7 @@ export const useMappingData = (): UseMappingDataReturn => {
     } catch (err) {
       setError('Failed to create mappings');
     }
-  }, [selectedSpecialties, dataService]);
+  }, [selectedSpecialties, dataService, selectedProviderType]);
 
   // Create individual mappings - each selected specialty gets its own mapping
   const createIndividualMappings = useCallback(async () => {
@@ -364,7 +364,7 @@ export const useMappingData = (): UseMappingDataReturn => {
     } catch (err) {
       setError('Failed to create grouped mapping');
     }
-  }, [selectedSpecialties, dataService]);
+  }, [selectedSpecialties, dataService, selectedProviderType]);
 
   const deleteMapping = useCallback(async (mappingId: string) => {
     try {
