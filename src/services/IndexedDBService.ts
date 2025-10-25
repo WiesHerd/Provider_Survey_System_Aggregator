@@ -209,7 +209,7 @@ export class IndexedDBService {
       
       // Delete survey
       const surveyStore = transaction.objectStore('surveys');
-      const surveyRequest = surveyStore.delete(id);
+      surveyStore.delete(id);
 
       // Delete associated data
       const dataStore = transaction.objectStore('surveyData');

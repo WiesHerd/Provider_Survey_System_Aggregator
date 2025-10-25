@@ -1,5 +1,4 @@
 import { IndexedDBService } from './IndexedDBService';
-import { ISurveyRow } from '../types/survey';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
 import { IColumnMapping } from '../types/column';
 

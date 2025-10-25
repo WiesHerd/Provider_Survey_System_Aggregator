@@ -1,7 +1,6 @@
 import React from 'react';
 import { 
   LightBulbIcon,
-  TrashIcon as DeleteSweepIcon,
   UserGroupIcon,
   UserIcon,
   ArrowDownTrayIcon,

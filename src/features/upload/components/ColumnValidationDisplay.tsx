@@ -11,8 +11,6 @@ import {
   Chip
 } from '@mui/material';
 import { 
-  CheckCircleIcon, 
-  ExclamationTriangleIcon, 
   InformationCircleIcon,
   XCircleIcon
 } from '@heroicons/react/24/outline';
