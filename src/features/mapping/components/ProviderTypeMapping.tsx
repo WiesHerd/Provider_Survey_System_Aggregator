@@ -51,7 +51,6 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
    
     // Data operations
     loadData,
-    createMapping,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
@@ -60,8 +59,7 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
    
     // Search and filters
     setSearchTerm,
-    setMappedSearchTerm,
-    clearError
+    setMappedSearchTerm
   } = useProviderTypeMappingData();
 
 

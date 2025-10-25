@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BoltIcon,
   TrashIcon as DeleteSweepIcon
 } from '@heroicons/react/24/outline';
 import { RegionMappingProps } from '../types/mapping';
@@ -51,7 +50,6 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     
     // Data operations
     loadData,
-    createMapping,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
@@ -60,8 +58,7 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     
     // Search and filters
     setSearchTerm,
-    setMappedSearchTerm,
-    clearError
+    setMappedSearchTerm
   } = useRegionMappingData();
 
 

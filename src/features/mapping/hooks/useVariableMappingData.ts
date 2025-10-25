@@ -101,7 +101,7 @@ export const useVariableMappingData = () => {
         return [];
       }
       
-      const unmappedVariables: IUnmappedVariable[] = [];
+      const detectedVariables: IUnmappedVariable[] = [];
       const variableMap = new Map<string, IUnmappedVariable>();
 
       for (const survey of surveys) {

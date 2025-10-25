@@ -94,7 +94,7 @@ export const useRegionMappingData = () => {
     try {
       const surveys = await dataService.getAllSurveys();
       
-      const unmappedRegions: IUnmappedRegion[] = [];
+      const detectedRegions: IUnmappedRegion[] = [];
       const regionMap = new Map<string, IUnmappedRegion>();
 
       for (const survey of surveys) {

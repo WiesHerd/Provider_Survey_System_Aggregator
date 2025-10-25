@@ -449,7 +449,6 @@ export const useMappingData = (): UseMappingDataReturn => {
       
       const learnedEntries = Object.entries(learnedMappings);
       
-      let appliedCount = 0;
       
       for (const [originalSpecialty, standardizedSpecialty] of learnedEntries) {
         try {
@@ -470,7 +469,6 @@ export const useMappingData = (): UseMappingDataReturn => {
           
           // Save the mapping to the database
           await dataService.createSpecialtyMapping(newMapping);
-          appliedCount++;
           
           
         } catch (mappingError) {
