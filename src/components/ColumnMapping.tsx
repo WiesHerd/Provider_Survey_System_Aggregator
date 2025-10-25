@@ -9,8 +9,8 @@ import { AnalysisProgressBar } from '../shared/components';
 import { ConfirmationDialog } from '../shared';
 
 // Lazy load components for better performance
-const MappedColumns = lazy(() => import('./MappedColumns').then(module => ({ default: module.default })));
-const LearnedColumnMappings = lazy(() => import('./LearnedColumnMappings').then(module => ({ default: module.default })));
+const MappedColumns = lazy(() => import('../features/mapping/components/MappedSpecialties').then(module => ({ default: module.MappedSpecialties })));
+const LearnedColumnMappings = lazy(() => import('../features/mapping/components/LearnedColumnMappings').then(module => ({ default: module.default })));
 
 interface ColumnMappingProps {
   onMappingChange?: (mappings: any[]) => void;

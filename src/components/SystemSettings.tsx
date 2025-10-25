@@ -14,7 +14,7 @@ import {
 import { InlineSpinner, ButtonSpinner } from '../shared/components';
 import { getDataService } from '../services/DataService';
 import { IndexedDBInspector } from '../utils/indexedDBInspector';
-import LearnedMappingsTrigger from './LearnedMappingsTrigger';
+// LearnedMappingsTrigger removed - functionality moved to mapping features
 
 interface StorageStats {
   usedSpace: number;
@@ -357,7 +357,10 @@ const SystemSettings: React.FC = () => {
               </div>
 
               <div className="p-8">
-                <LearnedMappingsTrigger />
+                <div className="text-center text-gray-500">
+                  <p>Learned mappings functionality has been moved to the mapping features.</p>
+                  <p className="mt-2">Use the mapping screens to manage learned mappings.</p>
+                </div>
               </div>
             </div>
 
