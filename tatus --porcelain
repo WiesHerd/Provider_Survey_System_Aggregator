@@ -1,5 +1,0 @@
-[33m5e15e47[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix AG Grid pagination alignment and synchronization - Updated AG Grid to use Quartz theme with column separators - Implemented client-side pagination with custom ModernPagination component - Fixed pagination container alignment to match AG Grid width - Removed bold formatting from headers and specialty column - Added comprehensive CSS customizations for column separators
-[33m4951ccc[m Add backend-only deployment workflow - focus on getting backend working first
-[33m46dcb7d[m Fix frontend build - add CI-specific build script that bypasses all linting
-[33m98953ba[m Add simple deployment workflow - bypass complex issues
-[33mecf81d5[m Fix frontend build - set CI=false in workflow to prevent ESLint errors
