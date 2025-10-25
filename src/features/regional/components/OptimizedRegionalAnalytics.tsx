@@ -49,25 +49,13 @@ export const OptimizedRegionalAnalytics: React.FC = () => {
   // Optimized data hook
   const {
     analyticsData,
-    mappings,
-    regionMappings,
     loading,
     error,
-    selectedSpecialty,
-    selectedProviderType,
-    selectedSurveySource,
-    selectedYear,
     filteredData,
     regionalComparisonData,
-    setSelectedSpecialty,
-    setSelectedProviderType,
-    setSelectedSurveySource,
-    setSelectedYear,
     loadData,
-    refreshData,
     clearCache,
     getCacheStats,
-    clearError,
     lastLoadTime,
     cacheHitRate
   } = useOptimizedRegionalData();

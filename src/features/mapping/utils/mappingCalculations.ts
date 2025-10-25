@@ -3,8 +3,6 @@ import {
   ISpecialtyMapping, 
   MappingFilters
 } from '../types/mapping';
-import { normalizeSpecialty, calculateSimilarity } from '../../../shared/utils/specialtyMatching';
-import { SurveySource } from '../../../shared/types';
 
 /**
  * Survey source color mapping

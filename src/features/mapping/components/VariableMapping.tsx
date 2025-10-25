@@ -8,17 +8,9 @@ import {
   LightBulbIcon,
   XMarkIcon,
   EyeIcon,
-  PencilIcon,
-  ArrowDownTrayIcon,
-  TrashIcon,
-  MagnifyingGlassIcon as SearchIcon
+  PencilIcon
 } from '@heroicons/react/24/outline';
-import {
-  TextField,
-  InputAdornment,
-  IconButton
-} from '@mui/material';
-import { VariableMappingProps, IVariableMapping, IUnmappedVariable } from '../types/mapping';
+import { VariableMappingProps, IVariableMapping } from '../types/mapping';
 import { useVariableMappingData } from '../hooks/useVariableMappingData';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
@@ -36,10 +28,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   onVariableMappingChange,
   onUnmappedVariableChange
 }) => {
-  // State for editing mappings (keep for future use)
-  const [editingMapping, setEditingMapping] = useState<IVariableMapping | null>(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [variableCategory, setVariableCategory] = useState<'compensation' | 'categorical'>('compensation');
 
   // Custom hook for data management
   const {
@@ -70,7 +59,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     
     // Data operations
     loadData,
-    createVariableMapping,
     createGroupedVariableMapping,
     deleteVariableMapping,
     clearAllVariableMappings,
@@ -78,8 +66,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     
     // Search and filters
     setSearchTerm,
-    setMappedSearchTerm,
-    clearError
+    setMappedSearchTerm
   } = useVariableMappingData();
 
 
