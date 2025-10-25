@@ -59,7 +59,6 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
 
   // Generate year options (current year + 10 years back)
   const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - i);
 
   return (
     <Box sx={{ mb: 3, p: 3, bgcolor: 'background.paper', borderRadius: 2, boxShadow: 1 }}>

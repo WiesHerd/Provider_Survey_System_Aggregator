@@ -581,7 +581,7 @@ export class IndexedDBService {
       const sourceStore = transaction.objectStore('specialtyMappingSources');
 
       // Save mapping
-      const mappingRequest = mappingStore.add(mapping);
+      mappingStore.add(mapping);
       
       // Save sources
       mapping.sourceSpecialties.forEach((source: any) => {
@@ -1008,15 +1008,7 @@ export class IndexedDBService {
     });
 
     
-    // ENTERPRISE DEBUG: Show specialty counts for MGMA
-    const mgmaSpecialties = Array.from(specialtyCounts.entries()).filter(([key, value]) => 
-      Array.from(value.sources).some(source => source.toLowerCase().includes('mgma'))
-    );
-    
-    // ENTERPRISE DEBUG: Show specialty counts for Gallagher
-    const gallagherSpecialties = Array.from(specialtyCounts.entries()).filter(([key, value]) => 
-      Array.from(value.sources).some(source => source.toLowerCase().includes('gallagher'))
-    );
+    // ENTERPRISE DEBUG: Specialty counts calculated
     
     return unmapped;
   }

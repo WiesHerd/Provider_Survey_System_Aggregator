@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   ISpecialtyMapping, 
   IUnmappedSpecialty, 
-  MappingState,
   MappingFilters
 } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';

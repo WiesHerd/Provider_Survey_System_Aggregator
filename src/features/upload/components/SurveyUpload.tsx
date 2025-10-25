@@ -77,13 +77,10 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     // Actions
     uploadFiles,
     deleteSurvey,
-    loadSurveys,
-    refreshData,
     
     // Loading states
     isLoading,
     isUploading,
-    isDeleting,
     error,
     clearError
   } = useUploadData({

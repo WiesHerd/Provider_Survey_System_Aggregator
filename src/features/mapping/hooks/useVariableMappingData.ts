@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   IVariableMapping, 
-  IUnmappedVariable, 
-  VariableMappingState 
+  IUnmappedVariable
 } from '../types/mapping';
 import { DataService } from '../../../services/DataService';
 import { useProviderContext } from '../../../contexts/ProviderContext';

@@ -289,8 +289,6 @@ export class ProviderDetectionService {
 
     // Calculate statistics
     const avgCompensation = compensationValues.reduce((sum, val) => sum + val, 0) / compensationValues.length;
-    const maxCompensation = Math.max(...compensationValues);
-    const minCompensation = Math.min(...compensationValues);
 
     // Check against known ranges
     const isPhysicianRange = avgCompensation >= this.PHYSICIAN_PATTERNS.compensationRanges.min &&
