@@ -3,13 +3,12 @@
  * Real-time performance monitoring and cache management
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Box, 
   Typography, 
   Card, 
   CardContent, 
-  Button,
   Chip,
   LinearProgress,
   Table,
@@ -23,11 +22,9 @@ import {
   Tooltip
 } from '@mui/material';
 import { 
-  XMarkIcon,
   TrashIcon,
   ArrowPathIcon,
-  ChartBarIcon,
-  CpuChipIcon
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 
 interface PerformanceDashboardProps {

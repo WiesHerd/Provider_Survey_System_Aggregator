@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  PlusIcon as AddIcon,
   BoltIcon,
-  TrashIcon as DeleteSweepIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  LightBulbIcon,
-  XMarkIcon,
-  ArrowDownTrayIcon,
-  TrashIcon
+  TrashIcon as DeleteSweepIcon
 } from '@heroicons/react/24/outline';
 import { ProviderTypeMappingProps } from '../types/mapping';
 import { useProviderTypeMappingData } from '../hooks/useProviderTypeMappingData';
