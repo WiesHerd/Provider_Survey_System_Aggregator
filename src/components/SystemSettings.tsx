@@ -43,10 +43,6 @@ const SystemSettings: React.FC = () => {
   const dataService = getDataService();
   const indexedDBInspector = new IndexedDBInspector();
 
-  useEffect(() => {
-    loadStorageStats();
-  }, []);
-
   const loadStorageStats = async () => {
     try {
       const status = await indexedDBInspector.getStatus();
@@ -62,6 +58,10 @@ const SystemSettings: React.FC = () => {
       console.error('Error loading storage stats:', error);
     }
   };
+
+  useEffect(() => {
+    loadStorageStats();
+  }, [loadStorageStats]);
 
   const exportAllData = async () => {
     setLoading(true);

@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy, useEffect } from 'react';
 import { useOptimizedColumnMappingData } from '../features/mapping/hooks/useOptimizedColumnMappingData';
-import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from '../features/mapping/components/shared';
+import { BaseMappingHeader, BaseMappingContent, HelpModal } from '../features/mapping/components/shared';
 import { UnmappedColumns } from '../features/mapping/components/UnmappedColumns';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useToast } from './ui/use-toast'; // Added toast import
@@ -63,8 +63,7 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
     setActiveTab,
     setSearchTerm,
     setMappedSearchTerm,
-    loadData,
-    clearError
+    loadData
   } = useOptimizedColumnMappingData();
 
   // Get provider type from context
@@ -353,9 +352,6 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
     await loadData();
   };
 
-  const createGroupedMapping = async (standardizedName: string, columns: any[]) => {
-    return createMapping(standardizedName, columns);
-  };
 
   const deleteMapping = async (mappingId: string) => {
     showConfirmationDialog(
