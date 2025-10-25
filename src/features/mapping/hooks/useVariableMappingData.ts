@@ -200,7 +200,7 @@ export const useVariableMappingData = () => {
       // Don't throw error, just return empty array to prevent breaking the UI
       return [];
     }
-  }, [dataService, detectVariableType]);
+  }, [dataService]);
 
   // Enhanced variable type detection for both compensation and categorical variables
   const detectVariableType = useCallback((variableName: string): { 

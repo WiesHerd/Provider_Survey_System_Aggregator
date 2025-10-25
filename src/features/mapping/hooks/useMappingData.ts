@@ -91,7 +91,7 @@ export const useMappingData = (): UseMappingDataReturn => {
   // Load data on mount
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, []);
 
   // Smart tab selection based on data availability (only on initial load)
   useEffect(() => {
