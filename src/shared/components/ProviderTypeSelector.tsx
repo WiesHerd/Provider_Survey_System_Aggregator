@@ -64,7 +64,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       const firstAvailable = availableTypes[0];
       return {
         text: firstAvailable.type === 'PHYSICIAN' ? 'Physicians' : 
-              firstAvailable.type === 'APP' ? 'APP\'s' : 
+              firstAvailable.type === 'APP' ? 'Advanced Practice Providers' : 
               firstAvailable.displayName,
         hasData: true,
         surveyCount: firstAvailable.surveyCount
@@ -82,7 +82,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       case 'APP':
         const appInfo = availableTypes.find(t => t.type === 'APP');
         return {
-          text: 'APP\'s',
+          text: 'Advanced Practice Providers',
           hasData: !!appInfo,
           surveyCount: appInfo?.surveyCount || 0
         };
@@ -303,7 +303,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
       case 'PHYSICIAN':
         return 'Physicians';
       case 'APP':
-        return 'APP\'s';
+        return 'Advanced Practice Providers';
       case 'BOTH':
         return 'Combined';
       default:
@@ -331,7 +331,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
     if (appInfo) {
       options.push({
         value: 'APP',
-        text: 'APP\'s'
+        text: 'Advanced Practice Providers'
       });
     }
 

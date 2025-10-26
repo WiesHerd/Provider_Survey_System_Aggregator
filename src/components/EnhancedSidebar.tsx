@@ -305,16 +305,21 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 							onChange={(e: any) => setProviderType(e.target.value as 'PHYSICIAN' | 'APP', 'sidebar')}
 							sx={{
 								backgroundColor: 'white',
-								height: '40px',
+								minHeight: '40px',
 								'& .MuiOutlinedInput-root': {
 									fontSize: '0.875rem',
-									height: '40px',
+									minHeight: '40px',
 									borderRadius: '8px',
 								},
 								'& .MuiSelect-select': {
 									paddingTop: '8px',
 									paddingBottom: '8px',
 									textAlign: 'left',
+									whiteSpace: 'normal',
+									lineHeight: '1.4',
+									minHeight: '24px',
+									display: 'flex',
+									alignItems: 'center',
 								}
 							}}
 						>
