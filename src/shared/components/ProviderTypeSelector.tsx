@@ -65,7 +65,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       return {
          text: firstAvailable.type === 'PHYSICIAN' ? 'Physician' : 
                firstAvailable.type === 'APP' ? 'APP' : 
-               firstAvailable.type === 'CALL' ? 'Call' :
+               firstAvailable.type === 'CALL' ? 'Call Pay' :
                firstAvailable.displayName,
         hasData: true,
         surveyCount: firstAvailable.surveyCount
@@ -90,7 +90,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
        case 'CALL':
          const callInfo = availableTypes.find(t => t.type === 'CALL');
          return {
-           text: 'Call',
+           text: 'Call Pay',
            hasData: !!callInfo,
            surveyCount: callInfo?.surveyCount || 0
          };
@@ -146,12 +146,12 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
        });
      }
 
-     // Add Call option if data exists
+     // Add Call Pay option if data exists
      const callInfo = availableTypes.find(t => t.type === 'CALL');
      if (callInfo) {
        options.push({
          value: 'CALL',
-         text: 'Call'
+         text: 'Call Pay'
        });
      }
 
@@ -319,7 +319,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
        case 'APP':
          return 'APP';
        case 'CALL':
-         return 'Call';
+         return 'Call Pay';
        case 'BOTH':
          return 'Combined';
        default:
@@ -355,7 +355,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
      if (callInfo) {
        options.push({
          value: 'CALL',
-         text: 'Call'
+         text: 'Call Pay'
        });
      }
 
