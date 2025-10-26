@@ -302,8 +302,9 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					<ProviderTypeSelector
 						value={selectedProviderType}
 						onChange={(value) => setProviderType(value, 'sidebar')}
-						context="sidebar"
+						context="navigation"
 						className="w-full"
+						showBothOption={false}
 					/>
 				</div>
 			)}
