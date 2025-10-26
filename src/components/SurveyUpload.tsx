@@ -60,7 +60,7 @@ const getShortenedSurveyType = (surveyType: string, providerType: ProviderType):
 };
 
 // Provider type enum for type safety
-type ProviderType = 'PHYSICIAN' | 'APP' | 'CUSTOM';
+type ProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'CUSTOM';
 
 interface FileWithPreview extends File {
   preview?: string;
