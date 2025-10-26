@@ -54,7 +54,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     }
 
     if (!hasAnyData) {
-      return { text: 'No data available', hasData: false };
+      return { text: 'No Survey Data Loaded', hasData: false };
     }
 
     // Check if current selection has data, if not, show first available type
@@ -191,16 +191,16 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     );
   }
 
-  // Show no data state
+  // Show no data state - Silicon Valley Professional Style
   if (!hasAnyData) {
     return (
       <div className={`relative ${className}`}>
-        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-yellow-50 border border-yellow-300 rounded-md">
-          <span className="text-yellow-700">No provider data available</span>
+        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-gray-50 border border-gray-300 rounded-md cursor-not-allowed">
+          <span className="text-gray-600">No Survey Data Loaded</span>
           <button
             onClick={refresh}
-            className="text-yellow-600 hover:text-yellow-700"
-            title="Refresh"
+            className="text-gray-500 hover:text-gray-600 transition-colors duration-150"
+            title="Refresh data"
           >
             <ExclamationTriangleIcon className="w-4 h-4" />
           </button>
@@ -216,7 +216,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 h-10"
         aria-label="Select provider type"
-        aria-expanded={isOpen}
+        aria-expanded={isOpen ? 'true' : 'false'}
         aria-haspopup="listbox"
       >
         <span className="text-gray-900">{currentDisplay.text}</span>
@@ -235,10 +235,10 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
           />
           
           {/* Menu - Google Style with Data Indicators */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden" role="listbox">
             {options.length === 0 ? (
               <div className="px-3 py-2.5 text-sm text-gray-500 text-center">
-                No provider data available
+                No Survey Data Loaded
               </div>
             ) : (
               options.map((option, index) => {
@@ -254,7 +254,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                     role="option"
-                    aria-selected={isSelected}
+                    aria-selected={isSelected ? 'true' : 'false'}
                   >
                     <div className="flex-1">
                       <span className="font-medium">{option.text}</span>
@@ -297,7 +297,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
   const getCurrentText = () => {
     if (isLoading) return 'Loading...';
     if (error) return 'Error';
-    if (!hasAnyData) return 'No Data';
+    if (!hasAnyData) return 'No Survey Data';
 
     switch (value) {
       case 'PHYSICIAN':
@@ -361,8 +361,8 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
   if (!hasAnyData) {
     return (
       <div className={`relative ${className}`}>
-        <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-yellow-50 border border-yellow-300 rounded">
-          <span className="text-yellow-700">No Data</span>
+        <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-gray-50 border border-gray-300 rounded cursor-not-allowed">
+          <span className="text-gray-600">No Survey Data</span>
         </div>
       </div>
     );
@@ -375,7 +375,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
-        aria-expanded={isOpen}
+        aria-expanded={isOpen ? 'true' : 'false'}
         aria-haspopup="listbox"
       >
         <span className="text-gray-900">{getCurrentText()}</span>
@@ -394,7 +394,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
           />
           
           {/* Menu */}
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg z-20 overflow-hidden min-w-[100px]">
+          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg z-20 overflow-hidden min-w-[100px]" role="listbox">
             {options.map((option) => {
               const isSelected = value === option.value;
               
@@ -411,7 +411,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                   role="option"
-                  aria-selected={isSelected}
+                  aria-selected={isSelected ? 'true' : 'false'}
                 >
                   <span className="font-medium">{option.text}</span>
                   {isSelected && (
