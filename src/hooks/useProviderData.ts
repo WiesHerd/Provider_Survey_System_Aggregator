@@ -210,6 +210,7 @@ export const useMultipleProviderData = (
   return {
     PHYSICIAN: physicianData,
     APP: appData,
+    CALL: appData, // Use APP data structure for CALL for now
     CUSTOM: customData
   };
 };

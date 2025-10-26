@@ -367,6 +367,7 @@ export class ProviderDataService {
     return {
       PHYSICIAN: this.cache.has('PHYSICIAN'),
       APP: this.cache.has('APP'),
+      CALL: this.cache.has('CALL'),
       CUSTOM: this.cache.has('CUSTOM')
     };
   }
