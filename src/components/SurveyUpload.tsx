@@ -119,9 +119,20 @@ const SurveyUpload: React.FC = () => {
   const [customSurveyType, setCustomSurveyType] = useState('');
   const [customSurveyName, setCustomSurveyName] = useState('');
   const [surveyYear, setSurveyYear] = useState(currentYear);
+  
+  // Update survey year when currentYear changes
+  useEffect(() => {
+    setSurveyYear(currentYear);
+  }, [currentYear]);
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
+  const [gridApi, setGridApi] = useState<any>(null);
+  
+  // Reset grid API when survey changes to ensure fresh connection
+  useEffect(() => {
+    setGridApi(null);
+  }, [selectedSurvey]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -719,7 +730,6 @@ const SurveyUpload: React.FC = () => {
                     >
                       <MenuItem value="PHYSICIAN">Physician</MenuItem>
                       <MenuItem value="APP">Advanced Practice Provider</MenuItem>
-                      <MenuItem value="CALL">Call Pay</MenuItem>
                       <MenuItem value="CUSTOM">Custom</MenuItem>
                     </Select>
                   </FormControl>
@@ -732,6 +742,7 @@ const SurveyUpload: React.FC = () => {
                       className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                         placeholder-gray-400 text-sm transition-colors duration-200"
+                      style={{ borderRadius: '8px' }}
                     />
                   )}
                 </div>
@@ -782,6 +793,7 @@ const SurveyUpload: React.FC = () => {
                       className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                         placeholder-gray-400 text-sm transition-colors duration-200"
+                      style={{ borderRadius: '8px' }}
                     />
                   )}
                 </div>
@@ -841,10 +853,24 @@ const SurveyUpload: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSurveyUpload}
-                    disabled={files.length === 0 || !surveyType || !surveyYear || 
-                             (providerType === 'CUSTOM' && !customProviderType) ||
-                             (surveyType === 'CUSTOM' && !customSurveyType.trim()) || 
-                             isUploading}
+                    disabled={
+                      files.length === 0 || 
+                      !surveyYear || 
+                      isUploading ||
+                      // Survey type validation
+                      (surveyType === 'CUSTOM' && !customSurveyType.trim()) ||
+                      (surveyType !== 'CUSTOM' && !surveyType) ||
+                      // Provider type validation  
+                      (providerType === 'CUSTOM' && !customProviderType.trim())
+                    }
+                    title={
+                      files.length === 0 ? 'Please select a file to upload' :
+                      !surveyYear ? 'Please enter a survey year' :
+                      (surveyType === 'CUSTOM' && !customSurveyType.trim()) ? 'Please enter a custom survey type' :
+                      (surveyType !== 'CUSTOM' && !surveyType) ? 'Please select a survey type' :
+                      (providerType === 'CUSTOM' && !customProviderType.trim()) ? 'Please enter a custom provider type' :
+                      'Ready to upload'
+                    }
                     className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
                   >
                     <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
@@ -958,7 +984,35 @@ const SurveyUpload: React.FC = () => {
                       return (
                         <div key={survey.id} className="relative group inline-flex items-center">
                           <button
-                            onClick={() => setSelectedSurvey(survey.id)}
+                            onClick={() => {
+                              setSelectedSurvey(survey.id);
+                              // Trigger Google-style intelligent sizing after survey selection
+                              const triggerIntelligentSizing = () => {
+                                if (gridApi) {
+                                  try {
+                                    // Step 1: Auto-size based on content
+                                    if (gridApi.autoSizeAllColumns) {
+                                      gridApi.autoSizeAllColumns();
+                                    }
+                                    // Step 2: Size to fit container intelligently
+                                    if (gridApi.sizeColumnsToFit) {
+                                      gridApi.sizeColumnsToFit();
+                                    }
+                                    console.log('Intelligent sizing triggered for survey:', survey.surveyType);
+                                  } catch (error) {
+                                    console.log('Intelligent sizing on survey selection failed:', error);
+                                  }
+                                } else {
+                                  console.log('Grid API not available for intelligent sizing');
+                                }
+                              };
+                              
+                              // Multiple attempts with progressive delays to ensure it works for all surveys
+                              setTimeout(triggerIntelligentSizing, 100);
+                              setTimeout(triggerIntelligentSizing, 300);
+                              setTimeout(triggerIntelligentSizing, 600);
+                              setTimeout(triggerIntelligentSizing, 1000);
+                            }}
                             className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
                             title={`${survey.surveyType} • ${survey.surveyYear}`}
                           >
@@ -1018,6 +1072,7 @@ const SurveyUpload: React.FC = () => {
                   onError={handleError}
                   globalFilters={globalFilters}
                   onFilterChange={handleFilterChange}
+                  {...({ onGridReady: (api: any) => setGridApi(api) } as any)}
                 />
               </div>
             </div>

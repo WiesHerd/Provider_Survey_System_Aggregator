@@ -66,6 +66,7 @@ interface DataPreviewProps {
     variable: string;
   };
   onFilterChange: (filterName: string, value: string) => void;
+  onGridReady?: (api: any) => void;
 }
 
 interface FileStats {
@@ -75,7 +76,7 @@ interface FileStats {
   totalDataPoints: number;
 }
 
-const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange }) => {
+const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange, onGridReady }) => {
   const dataService = getDataService();
   
   // Use smooth progress for dynamic loading
@@ -333,28 +334,49 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
-  // Auto-fit columns when data changes using AG Grid native methods
+  // Google-style intelligent column sizing
   useEffect(() => {
     if (gridApi && filteredData.length > 0) {
-      // Use AG Grid's native auto-sizing - this is what happens when you double-click column borders
-      const autoSizeColumns = () => {
+      const intelligentSizing = () => {
         try {
-          // This automatically sizes each column to fit its content (header + data)
-          gridApi.autoSizeAllColumns();
+          if (gridApi) {
+            // Step 1: Auto-size based on content to get natural widths
+            if (gridApi.autoSizeAllColumns) {
+              gridApi.autoSizeAllColumns();
+            }
+            
+            // Step 2: Get the grid's available width
+            const gridWidth = gridApi.getDisplayedColumns().reduce((total: number, col: any) => {
+              return total + (col.getActualWidth() || 0);
+            }, 0);
+            
+            // Step 3: If we have extra space, distribute it intelligently
+            const containerWidth = gridApi.getDisplayedColumns().length > 0 ? 
+              gridApi.getDisplayedColumns()[0].getGridApi().getDisplayedColumns().reduce((total: number, col: any) => {
+                return total + (col.getActualWidth() || 0);
+              }, 0) : 0;
+            
+            // Step 4: Use sizeColumnsToFit to fill remaining space intelligently
+            if (gridApi.sizeColumnsToFit) {
+              gridApi.sizeColumnsToFit();
+            }
+            
+            console.log('Google-style intelligent sizing applied');
+          }
         } catch (error) {
-          console.log('Auto-sizing failed:', error);
+          console.log('Intelligent sizing failed:', error);
         }
       };
       
-      // Immediate attempt
-      autoSizeColumns();
-      
-      // Multiple delayed attempts to ensure it works after data rendering
-      setTimeout(autoSizeColumns, 100);
-      setTimeout(autoSizeColumns, 300);
-      setTimeout(autoSizeColumns, 500);
+      // Multiple attempts with progressive delays for more reliable rendering
+      intelligentSizing(); // Immediate
+      setTimeout(intelligentSizing, 100);
+      setTimeout(intelligentSizing, 300);
+      setTimeout(intelligentSizing, 500);
+      setTimeout(intelligentSizing, 800);
+      setTimeout(intelligentSizing, 1200);
     }
-  }, [gridApi, filteredData]);
+  }, [gridApi, filteredData, file]);
 
   const createColumnDefs = () => {
     // Use the stored headers
@@ -394,6 +416,14 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         sortable: true,
         filter: isNumeric ? 'agNumberColumnFilter' : 'agTextColumnFilter',
         resizable: true,
+        // Google-style intelligent column sizing
+        minWidth: isSpecialty ? 250 : isVariable ? 200 : isNumeric ? 90 : 130,
+        maxWidth: isSpecialty ? 400 : isVariable ? 300 : isNumeric ? 120 : 200,
+        // Smart flex ratios based on content importance and typical length
+        flex: isSpecialty ? 3 : isVariable ? 2.5 : isNumeric ? 1 : 1.5,
+        // Enable text wrapping for long content
+        wrapText: isSpecialty || isVariable,
+        autoHeight: isSpecialty || isVariable,
         cellClass: isNumeric ? 'ag-right-aligned-cell' : (isSpecialty ? 'font-semibold' : undefined),
         headerClass: isNumeric ? 'ag-right-aligned-header' : undefined,
         headerComponent: 'CustomHeader',
@@ -743,16 +773,35 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               setGridApi(params.api);
               setColumnApi(params.columnApi);
               
-              // Auto-size columns immediately when grid is ready
+              // Pass grid API to parent component immediately
+              if (onGridReady) {
+                onGridReady(params.api);
+                console.log('Grid API passed to parent component');
+              }
+              
+              // Google-style intelligent sizing when grid is ready
               if (params.api) {
-                // Small delay to ensure grid is fully initialized
-                setTimeout(() => {
+                const intelligentSizing = () => {
                   try {
-                    params.api.autoSizeAllColumns();
+                    // Step 1: Auto-size based on content
+                    if (params.api.autoSizeAllColumns) {
+                      params.api.autoSizeAllColumns();
+                    }
+                    // Step 2: Size to fit container intelligently
+                    if (params.api.sizeColumnsToFit) {
+                      params.api.sizeColumnsToFit();
+                    }
+                    console.log('Initial intelligent sizing successful');
                   } catch (error) {
-                    console.log('Initial auto-sizing failed:', error);
+                    console.log('Initial intelligent sizing failed:', error);
                   }
-                }, 50);
+                };
+                
+                // Multiple attempts with progressive delays for more reliable sizing
+                setTimeout(intelligentSizing, 100);
+                setTimeout(intelligentSizing, 300);
+                setTimeout(intelligentSizing, 600);
+                setTimeout(intelligentSizing, 1000);
               }
             }}
             rowData={filteredData.map((row) => {
