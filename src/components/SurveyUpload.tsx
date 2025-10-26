@@ -153,7 +153,12 @@ const SurveyUpload: React.FC = () => {
   // Filter survey options based on selected provider type
   const availableSurveyTypes = useMemo(() => {
     if (providerType === 'CUSTOM') {
-      return []; // Custom surveys will be handled separately
+      // For custom provider types, show all available survey types
+      return [
+        'SullivanCotter Physician', 'MGMA Physician', 'Gallagher Physician', 'ECG Physician', 'AMGA Physician',
+        'SullivanCotter APP', 'MGMA APP', 'Gallagher APP', 'ECG APP', 'AMGA APP',
+        'SullivanCotter Call Pay', 'MGMA Call Pay', 'Gallagher Call Pay', 'ECG Call Pay', 'AMGA Call Pay'
+      ];
     }
     return SURVEY_OPTIONS[providerType]?.options || [];
   }, [providerType]);
@@ -741,7 +746,7 @@ const SurveyUpload: React.FC = () => {
                       value={surveyType}
                       onChange={handleSurveyTypeChange}
                       displayEmpty
-                      disabled={providerType === 'CUSTOM' && !isCustom}
+                      disabled={false}
                       sx={{
                         backgroundColor: 'white',
                         height: '40px',
