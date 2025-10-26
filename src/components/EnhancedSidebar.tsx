@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { UIProviderType } from '../types/provider';
-import { FormControl, Select, MenuItem } from '@mui/material';
+import { ProviderTypeSelector } from '../shared/components/ProviderTypeSelector';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -299,34 +299,12 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 							Data View
 						</h3>
 					</div>
-					<FormControl fullWidth>
-						<Select
-							value={selectedProviderType}
-							onChange={(e: any) => setProviderType(e.target.value as 'PHYSICIAN' | 'APP', 'sidebar')}
-							sx={{
-								backgroundColor: 'white',
-								minHeight: '40px',
-								'& .MuiOutlinedInput-root': {
-									fontSize: '0.875rem',
-									minHeight: '40px',
-									borderRadius: '8px',
-								},
-								'& .MuiSelect-select': {
-									paddingTop: '8px',
-									paddingBottom: '8px',
-									textAlign: 'left',
-									whiteSpace: 'normal',
-									lineHeight: '1.4',
-									minHeight: '24px',
-									display: 'flex',
-									alignItems: 'center',
-								}
-							}}
-						>
-							<MenuItem value="PHYSICIAN">Physician</MenuItem>
-							<MenuItem value="APP">APP</MenuItem>
-						</Select>
-					</FormControl>
+					<ProviderTypeSelector
+						value={selectedProviderType}
+						onChange={(value) => setProviderType(value, 'sidebar')}
+						context="sidebar"
+						className="w-full"
+					/>
 				</div>
 			)}
 
