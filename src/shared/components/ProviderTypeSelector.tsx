@@ -250,7 +250,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                     onClick={() => handleOptionSelect(option.value)}
                     className={`w-full flex items-start px-3 py-2.5 text-sm text-left transition-colors duration-150 ${
                       isSelected 
-                        ? 'bg-blue-50 text-blue-900' 
+                        ? 'bg-gray-100 text-gray-900' 
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                     role="option"
@@ -260,7 +260,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                       <span className="font-medium">{option.text}</span>
                     </div>
                     {isSelected && (
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5" />
+                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0 mt-1.5" />
                     )}
                   </button>
                 );
@@ -405,17 +405,17 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors duration-150 ${
-                    isSelected 
-                      ? 'bg-blue-50 text-blue-900' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                   className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors duration-150 ${
+                     isSelected 
+                       ? 'bg-gray-100 text-gray-900' 
+                       : 'text-gray-700 hover:bg-gray-50'
+                   }`}
                   role="option"
                   aria-selected={isSelected}
                 >
                   <span className="font-medium">{option.text}</span>
                   {isSelected && (
-                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0" />
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0" />
                   )}
                 </button>
               );
