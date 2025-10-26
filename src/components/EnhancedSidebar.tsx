@@ -324,7 +324,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 							}}
 						>
 							<MenuItem value="PHYSICIAN">Physician</MenuItem>
-							<MenuItem value="APP">Advanced Practice Provider</MenuItem>
+							<MenuItem value="APP">APP</MenuItem>
 						</Select>
 					</FormControl>
 				</div>

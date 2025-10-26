@@ -54,7 +54,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     }
 
     if (!hasAnyData) {
-      return { text: 'No Survey Data Loaded', hasData: false };
+      return { text: 'No data available', hasData: false };
     }
 
     // Check if current selection has data, if not, show first available type
@@ -63,29 +63,29 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       // Current selection has no data, show first available type
       const firstAvailable = availableTypes[0];
       return {
-        text: firstAvailable.type === 'PHYSICIAN' ? 'Physicians' : 
-              firstAvailable.type === 'APP' ? 'Advanced Practice Providers' : 
-              firstAvailable.displayName,
+         text: firstAvailable.type === 'PHYSICIAN' ? 'Physician' : 
+               firstAvailable.type === 'APP' ? 'APP' : 
+               firstAvailable.displayName,
         hasData: true,
         surveyCount: firstAvailable.surveyCount
       };
     }
 
     switch (value) {
-      case 'PHYSICIAN':
-        const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
-        return {
-          text: 'Physicians',
-          hasData: !!physicianInfo,
-          surveyCount: physicianInfo?.surveyCount || 0
-        };
-      case 'APP':
-        const appInfo = availableTypes.find(t => t.type === 'APP');
-        return {
-          text: 'Advanced Practice Providers',
-          hasData: !!appInfo,
-          surveyCount: appInfo?.surveyCount || 0
-        };
+       case 'PHYSICIAN':
+         const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
+         return {
+           text: 'Physician',
+           hasData: !!physicianInfo,
+           surveyCount: physicianInfo?.surveyCount || 0
+         };
+       case 'APP':
+         const appInfo = availableTypes.find(t => t.type === 'APP');
+         return {
+           text: 'APP',
+           hasData: !!appInfo,
+           surveyCount: appInfo?.surveyCount || 0
+         };
       case 'BOTH':
         return {
           text: 'Combined View',
@@ -120,23 +120,23 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       text: string;
     }> = [];
 
-    // Add Physician option if data exists
-    const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
-    if (physicianInfo) {
-      options.push({
-        value: 'PHYSICIAN',
-        text: 'Physicians'
-      });
-    }
+     // Add Physician option if data exists
+     const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
+     if (physicianInfo) {
+       options.push({
+         value: 'PHYSICIAN',
+         text: 'Physician'
+       });
+     }
 
-    // Add APP option if data exists
-    const appInfo = availableTypes.find(t => t.type === 'APP');
-    if (appInfo) {
-      options.push({
-        value: 'APP',
-        text: 'APP\'s'
-      });
-    }
+     // Add APP option if data exists
+     const appInfo = availableTypes.find(t => t.type === 'APP');
+     if (appInfo) {
+       options.push({
+         value: 'APP',
+         text: 'APP'
+       });
+     }
 
     // Add Combined option only if multiple provider types exist AND showBothOption is true
     if (showBothOption && availableTypes.length > 1) {
@@ -191,16 +191,16 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     );
   }
 
-  // Show no data state - Silicon Valley Professional Style
+  // Show no data state
   if (!hasAnyData) {
     return (
       <div className={`relative ${className}`}>
-        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-gray-50 border border-gray-300 rounded-md cursor-not-allowed">
-          <span className="text-gray-600">No Survey Data Loaded</span>
+        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-yellow-50 border border-yellow-300 rounded-md">
+          <span className="text-yellow-700">No provider data available</span>
           <button
             onClick={refresh}
-            className="text-gray-500 hover:text-gray-600 transition-colors duration-150"
-            title="Refresh data"
+            className="text-yellow-600 hover:text-yellow-700"
+            title="Refresh"
           >
             <ExclamationTriangleIcon className="w-4 h-4" />
           </button>
@@ -216,7 +216,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 h-10"
         aria-label="Select provider type"
-        aria-expanded={isOpen ? 'true' : 'false'}
+        aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
         <span className="text-gray-900">{currentDisplay.text}</span>
@@ -235,10 +235,10 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
           />
           
           {/* Menu - Google Style with Data Indicators */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden" role="listbox">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
             {options.length === 0 ? (
               <div className="px-3 py-2.5 text-sm text-gray-500 text-center">
-                No Survey Data Loaded
+                No provider data available
               </div>
             ) : (
               options.map((option, index) => {
@@ -254,7 +254,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                     role="option"
-                    aria-selected={isSelected ? 'true' : 'false'}
+                    aria-selected={isSelected}
                   >
                     <div className="flex-1">
                       <span className="font-medium">{option.text}</span>
@@ -297,18 +297,18 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
   const getCurrentText = () => {
     if (isLoading) return 'Loading...';
     if (error) return 'Error';
-    if (!hasAnyData) return 'No Survey Data';
+    if (!hasAnyData) return 'No Data';
 
-    switch (value) {
-      case 'PHYSICIAN':
-        return 'Physicians';
-      case 'APP':
-        return 'Advanced Practice Providers';
-      case 'BOTH':
-        return 'Combined';
-      default:
-        return 'Select';
-    }
+     switch (value) {
+       case 'PHYSICIAN':
+         return 'Physician';
+       case 'APP':
+         return 'APP';
+       case 'BOTH':
+         return 'Combined';
+       default:
+         return 'Select';
+     }
   };
 
   // Get dropdown options
@@ -318,22 +318,22 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
       text: string;
     }> = [];
 
-    // Add available provider types
-    const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
-    if (physicianInfo) {
-      options.push({
-        value: 'PHYSICIAN',
-        text: 'Physicians'
-      });
-    }
+     // Add available provider types
+     const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
+     if (physicianInfo) {
+       options.push({
+         value: 'PHYSICIAN',
+         text: 'Physician'
+       });
+     }
 
-    const appInfo = availableTypes.find(t => t.type === 'APP');
-    if (appInfo) {
-      options.push({
-        value: 'APP',
-        text: 'Advanced Practice Providers'
-      });
-    }
+     const appInfo = availableTypes.find(t => t.type === 'APP');
+     if (appInfo) {
+       options.push({
+         value: 'APP',
+         text: 'APP'
+       });
+     }
 
     if (showBothOption && availableTypes.length > 1) {
       options.push({
@@ -361,8 +361,8 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
   if (!hasAnyData) {
     return (
       <div className={`relative ${className}`}>
-        <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-gray-50 border border-gray-300 rounded cursor-not-allowed">
-          <span className="text-gray-600">No Survey Data</span>
+        <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-yellow-50 border border-yellow-300 rounded">
+          <span className="text-yellow-700">No Data</span>
         </div>
       </div>
     );
@@ -375,7 +375,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-2 py-1.5 text-xs font-normal bg-white border border-gray-300 rounded-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
         aria-label="Select provider type"
-        aria-expanded={isOpen ? 'true' : 'false'}
+        aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
         <span className="text-gray-900">{getCurrentText()}</span>
@@ -394,7 +394,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
           />
           
           {/* Menu */}
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg z-20 overflow-hidden min-w-[100px]" role="listbox">
+          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg z-20 overflow-hidden min-w-[100px]">
             {options.map((option) => {
               const isSelected = value === option.value;
               
@@ -411,7 +411,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                   role="option"
-                  aria-selected={isSelected ? 'true' : 'false'}
+                  aria-selected={isSelected}
                 >
                   <span className="font-medium">{option.text}</span>
                   {isSelected && (
