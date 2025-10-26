@@ -65,6 +65,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       return {
          text: firstAvailable.type === 'PHYSICIAN' ? 'Physician' : 
                firstAvailable.type === 'APP' ? 'APP' : 
+               firstAvailable.type === 'CALL' ? 'Call' :
                firstAvailable.displayName,
         hasData: true,
         surveyCount: firstAvailable.surveyCount
@@ -85,6 +86,13 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
            text: 'APP',
            hasData: !!appInfo,
            surveyCount: appInfo?.surveyCount || 0
+         };
+       case 'CALL':
+         const callInfo = availableTypes.find(t => t.type === 'CALL');
+         return {
+           text: 'Call',
+           hasData: !!callInfo,
+           surveyCount: callInfo?.surveyCount || 0
          };
       case 'BOTH':
         return {
@@ -115,10 +123,10 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
 
   // Get dropdown options based on available data
   const getOptions = () => {
-    const options: Array<{
-      value: 'PHYSICIAN' | 'APP' | 'BOTH';
-      text: string;
-    }> = [];
+  const options: Array<{
+    value: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
+    text: string;
+  }> = [];
 
      // Add Physician option if data exists
      const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
@@ -138,6 +146,15 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
        });
      }
 
+     // Add Call option if data exists
+     const callInfo = availableTypes.find(t => t.type === 'CALL');
+     if (callInfo) {
+       options.push({
+         value: 'CALL',
+         text: 'Call'
+       });
+     }
+
     // Add Combined option only if multiple provider types exist AND showBothOption is true
     if (showBothOption && availableTypes.length > 1) {
       options.push({
@@ -152,7 +169,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   const options = getOptions();
 
   // Handle option selection
-  const handleOptionSelect = (optionValue: 'PHYSICIAN' | 'APP' | 'BOTH') => {
+  const handleOptionSelect = (optionValue: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH') => {
     onChange(optionValue);
     setIsOpen(false);
   };
@@ -301,6 +318,8 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
          return 'Physician';
        case 'APP':
          return 'APP';
+       case 'CALL':
+         return 'Call';
        case 'BOTH':
          return 'Combined';
        default:
@@ -310,10 +329,10 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
 
   // Get dropdown options
   const getOptions = () => {
-    const options: Array<{
-      value: 'PHYSICIAN' | 'APP' | 'BOTH';
-      text: string;
-    }> = [];
+  const options: Array<{
+    value: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
+    text: string;
+  }> = [];
 
      // Add available provider types
      const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
@@ -332,7 +351,15 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
        });
      }
 
-    if (showBothOption && availableTypes.length > 1) {
+     const callInfo = availableTypes.find(t => t.type === 'CALL');
+     if (callInfo) {
+       options.push({
+         value: 'CALL',
+         text: 'Call'
+       });
+     }
+
+     if (showBothOption && availableTypes.length > 1) {
       options.push({
         value: 'BOTH',
         text: 'Combined'

@@ -6,10 +6,10 @@
  */
 
 // Base provider types
-export type ProviderType = 'PHYSICIAN' | 'APP' | 'CUSTOM';
+export type ProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'CUSTOM';
 
 // UI provider selection types (for navigation and UI components)
-export type UIProviderType = 'PHYSICIAN' | 'APP' | 'BOTH';
+export type UIProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
 export type PhysicianType = 'MD' | 'DO' | 'Resident' | 'Fellow';
 export type APPType = 'NP' | 'PA' | 'CRNA' | 'CNS' | 'CNM' | 'Other APP';
 

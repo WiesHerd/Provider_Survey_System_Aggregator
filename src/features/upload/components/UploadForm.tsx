@@ -219,6 +219,7 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
             >
               <MenuItem value="PHYSICIAN">Physicians</MenuItem>
               <MenuItem value="APP">APPs</MenuItem>
+              <MenuItem value="CALL">Call</MenuItem>
             </Select>
           </FormControl>
         </Grid>

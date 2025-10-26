@@ -169,6 +169,7 @@ const UploadForm: React.FC<UploadFormProps> = ({
                 >
                   <MenuItem value="PHYSICIAN">Physician</MenuItem>
                   <MenuItem value="APP">Advanced Practice Provider</MenuItem>
+                  <MenuItem value="CALL">Call</MenuItem>
                   <MenuItem value="CUSTOM">Custom</MenuItem>
                 </Select>
               </FormControl>
