@@ -399,7 +399,7 @@ const SurveyUpload: React.FC = () => {
     const file = files[0];
     if (!file || !surveyType || !surveyYear || 
         (providerType === 'CUSTOM' && !customProviderType) ||
-        (surveyType === 'CUSTOM' && !customSurveyName.trim())) {
+        (surveyType === 'CUSTOM' && !customSurveyType.trim())) {
       handleError('Please fill in all required fields');
       return;
     }
@@ -443,7 +443,7 @@ const SurveyUpload: React.FC = () => {
       // Create survey object
       const surveyId = crypto.randomUUID();
       const defaultSurveyName = file.name.replace('.csv', '');
-      const surveyName = (surveyType === 'CUSTOM' && customSurveyName.trim()) ? customSurveyName.trim() : defaultSurveyName;
+      const surveyName = (surveyType === 'CUSTOM' && customSurveyType.trim()) ? customSurveyType.trim() : defaultSurveyName;
       const surveyTypeName = isCustom ? customSurveyType : surveyType;
       
       const survey = {
@@ -776,8 +776,8 @@ const SurveyUpload: React.FC = () => {
                   {surveyType === 'CUSTOM' && (
                     <input
                       type="text"
-                      value={customSurveyName}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveyName(e.target.value)}
+                      value={customSurveyType}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveyType(e.target.value)}
                       placeholder="Enter custom survey type name"
                       className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
@@ -843,7 +843,7 @@ const SurveyUpload: React.FC = () => {
                     onClick={handleSurveyUpload}
                     disabled={files.length === 0 || !surveyType || !surveyYear || 
                              (providerType === 'CUSTOM' && !customProviderType) ||
-                             (surveyType === 'CUSTOM' && !customSurveyName.trim()) || 
+                             (surveyType === 'CUSTOM' && !customSurveyType.trim()) || 
                              isUploading}
                     className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
                   >
@@ -869,7 +869,7 @@ const SurveyUpload: React.FC = () => {
                       </div>
                       {surveyType && surveyYear ? (
                         <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                          {isCustom ? customSurveyType : surveyType} • {surveyYear}
+                          {surveyType === 'CUSTOM' ? customSurveyType : surveyType} • {surveyYear}
                         </span>
                       ) : (
                         <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
