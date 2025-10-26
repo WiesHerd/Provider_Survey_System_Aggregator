@@ -27,6 +27,10 @@ const SURVEY_OPTIONS = {
   APP: {
     label: 'Advanced Practice Provider Surveys', 
     options: ['SullivanCotter APP', 'MGMA APP', 'Gallagher APP', 'ECG APP', 'AMGA APP']
+  },
+  CALL: {
+    label: 'Call Pay Surveys',
+    options: ['SullivanCotter Call Pay', 'MGMA Call Pay', 'Gallagher Call Pay', 'ECG Call Pay', 'AMGA Call Pay']
   }
 };
 
@@ -48,6 +52,8 @@ const getShortenedSurveyType = (surveyType: string, providerType: ProviderType):
     shortenedType = surveyType.replace('Physician', ' - PHYS');
   } else if (providerType === 'APP') {
     shortenedType = surveyType.replace('APP', ' - APP'); // Add hyphen with spaces before APP
+  } else if (providerType === 'CALL') {
+    shortenedType = surveyType.replace('Call Pay', ' - CALL');
   }
   
   return shortenedType;
