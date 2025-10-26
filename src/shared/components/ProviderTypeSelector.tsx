@@ -259,9 +259,6 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                     <div className="flex-1">
                       <span className="font-medium">{option.text}</span>
                     </div>
-                    {isSelected && (
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0 mt-1.5" />
-                    )}
                   </button>
                 );
               })
@@ -414,9 +411,6 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
                   aria-selected={isSelected}
                 >
                   <span className="font-medium">{option.text}</span>
-                  {isSelected && (
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0" />
-                  )}
                 </button>
               );
             })}
