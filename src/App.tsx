@@ -9,8 +9,9 @@ import { StorageProvider } from './contexts/StorageContext';
 import { MappingProvider } from './contexts/MappingContext';
 import { YearProvider } from './contexts/YearContext';
 import { ProviderContextProvider } from './contexts/ProviderContext';
+import { AuthProvider } from './contexts/AuthContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
-import { PageSpinner, SuspenseSpinner } from './shared/components';
+import { SuspenseSpinner } from './shared/components';
 import { SurveyMigrationService } from './services/SurveyMigrationService';
 
 // Create Material-UI theme
@@ -78,6 +79,7 @@ const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReports = lazy(() => import('./components/CustomReports'));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
+const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
 
 
 const PageContent = () => {
@@ -320,6 +322,9 @@ const PageContent = () => {
               <Route path="/cross-provider/market-analysis" element={<SurveyAnalytics />} />
               <Route path="/cross-provider/trends" element={<RegionalAnalytics />} />
               
+              {/* Simple authentication test route */}
+              <Route path="/auth-test" element={<SimpleAuthScreen />} />
+              
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Suspense>
@@ -365,17 +370,19 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <StorageProvider>
-        <MappingProvider>
-          <YearProvider>
-            <ProviderContextProvider>
-              <Router basename={basename}>
-                <PageContent />
-              </Router>
-            </ProviderContextProvider>
-          </YearProvider>
-        </MappingProvider>
-      </StorageProvider>
+      <AuthProvider>
+        <StorageProvider>
+          <MappingProvider>
+            <YearProvider>
+              <ProviderContextProvider>
+                <Router basename={basename}>
+                  <PageContent />
+                </Router>
+              </ProviderContextProvider>
+            </YearProvider>
+          </MappingProvider>
+        </StorageProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
