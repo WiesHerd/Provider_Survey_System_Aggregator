@@ -40,6 +40,10 @@ export interface RawSurveyRow {
   cf_p50?: number;
   cf_p75?: number;
   cf_p90?: number;
+  base_salary_p25?: number;
+  base_salary_p50?: number;
+  base_salary_p75?: number;
+  base_salary_p90?: number;
 }
 
 export interface NormalizedRow {

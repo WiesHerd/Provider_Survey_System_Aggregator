@@ -31,6 +31,7 @@ interface SurveyData {
   tcc?: number;
   cf?: number;
   wrvu?: number;
+  base_salary?: number;
   count?: number;
   // Percentile-specific compensation data
   tcc_p25?: number;
@@ -45,6 +46,10 @@ interface SurveyData {
   wrvu_p50?: number;
   wrvu_p75?: number;
   wrvu_p90?: number;
+  base_salary_p25?: number;
+  base_salary_p50?: number;
+  base_salary_p75?: number;
+  base_salary_p90?: number;
   n_orgs?: number;
   n_incumbents?: number;
 }
@@ -1383,12 +1388,16 @@ export class IndexedDBService {
       // CF patterns
       /cf.*p\d+/i, /p\d+.*cf/i, /conversion.*factor.*\d+/i, /\d+.*conversion.*factor/i,
       
+      // Base Salary patterns
+      /base.*salary.*p\d+/i, /p\d+.*base.*salary/i, /base.*pay.*p\d+/i, /p\d+.*base.*pay/i,
+      /salary.*p\d+/i, /p\d+.*salary/i, /base.*comp.*p\d+/i, /p\d+.*base.*comp/i,
+      
       // Technical fields
       /n_orgs?$/i, /n_incumbents?$/i, /number.*org/i, /number.*incumbent/i,
       /organization.*count/i, /incumbent.*count/i,
       
       // Direct percentile matches
-      /^tcc_p\d+$/i, /^wrvu_p\d+$/i, /^cf_p\d+$/i,
+      /^tcc_p\d+$/i, /^wrvu_p\d+$/i, /^cf_p\d+$/i, /^base_salary_p\d+$/i,
       
       // Basic percentile patterns (p25, p50, p75, p90)
       /^p\d+$/i, /^p25$/i, /^p50$/i, /^p75$/i, /^p90$/i,
@@ -1414,6 +1423,7 @@ export class IndexedDBService {
     if (/tcc|total.*cash|total.*comp/i.test(name)) return 'Total Cash Compensation';
     if (/wrvu|work.*rvu|rvu/i.test(name)) return 'Work RVUs'; 
     if (/cf|conversion.*factor/i.test(name)) return 'Conversion Factor';
+    if (/base.*salary|base.*pay|salary/i.test(name) && !/total/i.test(name)) return 'Base Salary';
     if (/n_orgs?|organization|number.*org/i.test(name)) return 'Organization Count';
     if (/n_incumbents?|incumbent|number.*incumbent/i.test(name)) return 'Incumbent Count';
     

@@ -126,7 +126,15 @@ export const transformSurveyData = (
       cf_p25: 40.0 + (baseMultiplier * 20.0),
       cf_p50: 50.0 + (baseMultiplier * 30.0),
       cf_p75: 60.0 + (baseMultiplier * 40.0),
-      cf_p90: 80.0 + (baseMultiplier * 60.0)
+      cf_p90: 80.0 + (baseMultiplier * 60.0),
+      
+      // Base Salary - Realistic data based on survey size (typically 70-80% of TCC)
+      base_salary_n_orgs: Math.round(10 + (baseMultiplier * 20)),
+      base_salary_n_incumbents: Math.round(30 + (baseMultiplier * 60)),
+      base_salary_p25: Math.round((200000 + (baseMultiplier * 100000)) * 0.75),
+      base_salary_p50: Math.round((250000 + (baseMultiplier * 150000)) * 0.75),
+      base_salary_p75: Math.round((300000 + (baseMultiplier * 200000)) * 0.75),
+      base_salary_p90: Math.round((400000 + (baseMultiplier * 300000)) * 0.75)
     });
   });
 
@@ -343,7 +351,10 @@ export const calculateSummaryRows = (
           'conversion_factor': 'cf',
           'tcc_per_work_rvu': 'cf',
           'cfs': 'cf',  // Map 'cfs' to 'cf' for legacy data
-          'tcc_per_work_rvus': 'cf'
+          'tcc_per_work_rvus': 'cf',
+          'base_salary': 'base_salary',
+          'base_pay': 'base_salary',
+          'salary': 'base_salary'
         };
         
         const legacyPrefix = legacyFieldMap[varName] || varName;
