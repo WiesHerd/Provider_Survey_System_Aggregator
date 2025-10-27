@@ -68,6 +68,11 @@ export const useProviderTypeDetection = (
       setHasAnyData(result.hasAnyData);
       setTotalSurveys(result.totalSurveys);
       setLastScan(result.lastScan);
+      
+      // If no data, stop auto-refresh to prevent infinite spinning
+      if (!result.hasAnyData) {
+        console.log('🔍 No provider data found - stopping auto-refresh to prevent infinite spinning');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to detect provider types');
       console.error('Provider type detection error:', err);
@@ -126,16 +131,19 @@ export const useProviderTypeDetection = (
     }
   }, [autoRefresh, loadProviderTypes]);
 
-  // Set up refresh interval
+  // Set up refresh interval - only refresh if we have data or are actively loading
   useEffect(() => {
-    if (autoRefresh && refreshInterval > 0) {
+    if (autoRefresh && refreshInterval > 0 && (hasAnyData || isLoading)) {
       const interval = setInterval(() => {
-        loadProviderTypes();
+        // Only refresh if we have data or are currently loading
+        if (hasAnyData || isLoading) {
+          loadProviderTypes();
+        }
       }, refreshInterval);
 
       return () => clearInterval(interval);
     }
-  }, [autoRefresh, refreshInterval, loadProviderTypes]);
+  }, [autoRefresh, refreshInterval, loadProviderTypes, hasAnyData, isLoading]);
 
   return {
     // Detection state

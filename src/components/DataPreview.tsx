@@ -757,9 +757,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
       {/* Data Table - AG Grid as primary */}
       <div className="relative mt-6 p-4 bg-white rounded-xl border border-gray-200 shadow-sm" style={{ width: '100%', height: '600px' }}>
-        {/* Subtle refreshing overlay */}
+        {/* Subtle refreshing overlay - positioned above the grid */}
         {isRefreshing && (
-          <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
+          <div className="absolute top-0 left-0 right-0 bg-white bg-opacity-90 flex items-center justify-center z-10 py-4">
             <UnifiedLoadingSpinner
               message="Updating data..."
               recordCount={0}

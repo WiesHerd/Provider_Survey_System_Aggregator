@@ -11,18 +11,18 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDCZKKkWX22vRbWCdxUz4iREVkv0ZR8XF0",
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "benchpoint-ae780.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "benchpoint-ae780",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "benchpoint-ae780.firebasestorage.app",
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "537521526239",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:537521526239:web:e08eedadf285aed518a06a",
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-TRYNL3TX6F"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 /**
  * Validates that all required Firebase environment variables are present
- * Falls back to hardcoded values if environment variables are not available
+ * Returns false if any required keys are missing
  */
 const validateFirebaseConfig = (): boolean => {
   const requiredKeys = [
@@ -37,14 +37,14 @@ const validateFirebaseConfig = (): boolean => {
   const missingKeys = requiredKeys.filter(key => !process.env[key]);
 
   if (missingKeys.length > 0) {
-    console.warn('⚠️ Firebase environment variables not found, using fallback values');
-    console.warn('📝 Create .env.local file with Firebase credentials for production deployment');
+    console.warn('⚠️ Firebase environment variables not found');
+    console.warn('📝 Create .env.local file with Firebase credentials');
     console.log('🔧 Missing keys:', missingKeys);
-  } else {
-    console.log('✅ Firebase configuration loaded from environment variables');
+    return false;
   }
 
-  return true; // Always return true since we have fallback values
+  console.log('✅ Firebase configuration loaded from environment variables');
+  return true;
 };
 
 // Initialize Firebase only if configuration is valid

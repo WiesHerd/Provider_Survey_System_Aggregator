@@ -41,7 +41,7 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     isLoading,
     error,
     refresh
-  } = useProviderTypeDetection(true, 30000); // Auto-refresh every 30 seconds
+  } = useProviderTypeDetection(true, 120000); // Auto-refresh every 2 minutes (reduced frequency)
 
   // Get the display text for the current value
   const getCurrentDisplay = () => {
