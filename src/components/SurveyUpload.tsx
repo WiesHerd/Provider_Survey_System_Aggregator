@@ -144,6 +144,7 @@ const SurveyUpload: React.FC = () => {
   // Confirmation dialog states
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showClearAllConfirmation, setShowClearAllConfirmation] = useState(false);
+  const [showForceClose, setShowForceClose] = useState(false);
   const [surveyToDelete, setSurveyToDelete] = useState<UploadedSurvey | null>(null);
   
   // Add global filter state
@@ -566,35 +567,65 @@ const SurveyUpload: React.FC = () => {
     setShowClearAllConfirmation(true);
   };
 
+  const forceCloseModal = () => {
+    console.log('🛑 Force closing clear all modal');
+    setShowClearAllConfirmation(false);
+    setIsDeleting(false);
+    setIsDeletingAll(false);
+    setShowForceClose(false);
+    completeProgress();
+  };
+
 
 
   const confirmClearAll = async () => {
+    let forceCloseTimeout: NodeJS.Timeout | null = null;
+    
     try {
       setIsDeleting(true);
       setIsDeletingAll(true);
       startProgress(); // Start smooth progress animation
       
-      // Clear all surveys first
-      await dataService.deleteAllSurveys();
+      console.log('🧹 Starting clear all operation...');
       
-      // Clear both possible IndexedDB databases
-      await clearStorage.clearIndexedDB(); // SurveyAggregatorDB
+      // Set up force close timeout (30 seconds)
+      forceCloseTimeout = setTimeout(() => {
+        console.warn('⚠️ Clear all operation taking too long, showing force close option');
+        setShowForceClose(true);
+      }, 30000);
+      
+      // Add timeout wrapper for each operation
+      const withTimeout = (promise: Promise<any>, timeoutMs: number, operation: string) => {
+        return Promise.race([
+          promise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      };
+      
+      // Clear all surveys first with timeout
+      console.log('🗑️ Deleting all surveys...');
+      await withTimeout(dataService.deleteAllSurveys(), 10000, 'Delete all surveys');
+      
+      // Clear both possible IndexedDB databases with timeout
+      console.log('🗑️ Clearing IndexedDB...');
+      await withTimeout(clearStorage.clearIndexedDB(), 15000, 'Clear IndexedDB');
       
       // Also clear the old survey-data database if it exists
+      console.log('🗑️ Clearing old database...');
       try {
         const oldDbRequest = indexedDB.deleteDatabase('survey-data');
-        await new Promise((resolve, reject) => {
-          oldDbRequest.onsuccess = () => {
-            resolve(true);
-          };
-          oldDbRequest.onerror = () => {
-            resolve(true); // Not an error if it doesn't exist
-          };
-        });
+        await withTimeout(new Promise((resolve, reject) => {
+          oldDbRequest.onsuccess = () => resolve(true);
+          oldDbRequest.onerror = () => resolve(true); // Not an error if it doesn't exist
+        }), 5000, 'Clear old database');
       } catch (error) {
+        console.warn('⚠️ Could not clear old database:', error);
       }
       
       // Clear localStorage as well
+      console.log('🗑️ Clearing localStorage...');
       clearStorage.clearLocalStorage();
       
       setUploadedSurveys([]);
@@ -610,30 +641,59 @@ const SurveyUpload: React.FC = () => {
       // Also dispatch custom events for immediate refresh
       window.dispatchEvent(new CustomEvent('survey-deleted', { detail: { type: 'all' } }));
       
+      console.log('✅ Clear all operation completed successfully!');
       
       // Complete progress and show success message
       completeProgress();
       
+      // Reset states immediately
+      setIsDeleting(false);
+      setIsDeletingAll(false);
+      
       // Close modal after showing progress
       setTimeout(() => {
+        console.log('🔄 Closing modal and reloading page...');
         setShowClearAllConfirmation(false);
         alert('✅ All data cleared successfully! The page will reload to ensure a clean state.');
         window.location.reload();
       }, 1500);
       
+      // Backup timeout to force close modal if something goes wrong
+      setTimeout(() => {
+        console.log('🛑 Backup timeout: Force closing modal');
+        setShowClearAllConfirmation(false);
+        setIsDeleting(false);
+        setIsDeletingAll(false);
+        setShowForceClose(false);
+      }, 10000); // 10 seconds backup timeout
+      
     } catch (error) {
-      handleError('Error clearing data');
+      console.error('❌ Error during clear all operation:', error);
+      handleError(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`);
       completeProgress(); // Complete progress even on error
+      
+      // Reset states immediately on error
+      setIsDeleting(false);
+      setIsDeletingAll(false);
       
       // Close modal after showing progress even on error
       setTimeout(() => {
+        console.log('🔄 Closing modal after error...');
         setShowClearAllConfirmation(false);
+        setShowForceClose(false);
       }, 1500);
     } finally {
+      // Clear the force close timeout
+      if (forceCloseTimeout) {
+        clearTimeout(forceCloseTimeout);
+      }
+      
+      // Ensure states are reset even if there's an error
       setTimeout(() => {
         setIsDeleting(false);
         setIsDeletingAll(false);
-      }, 1800);
+        setShowForceClose(false);
+      }, 2000);
     }
   };
 
@@ -1203,18 +1263,33 @@ const SurveyUpload: React.FC = () => {
                 <div className="mt-2 w-full bg-red-200 rounded-full h-1.5">
                   <div className="bg-red-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                 </div>
+                {showForceClose && (
+                  <div className="mt-2 text-xs text-orange-600 text-center">
+                    Operation taking longer than expected. You can force close if needed.
+                  </div>
+                )}
               </div>
             )}
             
             <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => setShowClearAllConfirmation(false)}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
+              {showForceClose ? (
+                <button
+                  type="button"
+                  onClick={forceCloseModal}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
+                >
+                  Force Close
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowClearAllConfirmation(false)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 type="button"
                 onClick={confirmClearAll}
