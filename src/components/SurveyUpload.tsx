@@ -647,6 +647,7 @@ const SurveyUpload: React.FC = () => {
       
       setUploadedSurveys([]);
       setSelectedSurvey(null);
+      setGridApi(null); // Clear grid API reference
       
       // Trigger storage event to notify other components
       window.dispatchEvent(new StorageEvent('storage', {
@@ -1170,7 +1171,7 @@ const SurveyUpload: React.FC = () => {
           </div>
 
         {/* Data Preview */}
-        {selectedSurvey && (() => {
+        {selectedSurvey && uploadedSurveys.length > 0 && (() => {
           const selectedSurveyData = uploadedSurveys.find(s => s.id === selectedSurvey);
           return selectedSurveyData ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

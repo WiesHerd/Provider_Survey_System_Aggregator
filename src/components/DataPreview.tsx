@@ -116,6 +116,22 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
 
 
+  // Listen for data changes (like when all surveys are cleared)
+  useEffect(() => {
+    const handleDataChange = () => {
+      console.log('🔄 Data change detected in DataPreview, refreshing...');
+      setIsRefreshing(true);
+      // Clear current data
+      setOriginalData([]);
+      setPreviewData([]);
+      setPreviewHeaders([]);
+      setStats(null);
+    };
+
+    window.addEventListener('survey-deleted', handleDataChange);
+    return () => window.removeEventListener('survey-deleted', handleDataChange);
+  }, []);
+
   // Consolidated data loading effect to prevent race conditions
   useEffect(() => {
     let isCancelled = false;
@@ -131,6 +147,14 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     
     const loadSurveyData = async () => {
       try {
+        // Check if file exists and has valid data
+        if (!file || !file.id) {
+          console.log('No file or file ID provided, skipping data load');
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+
         // Show loading only on initial load or when switching surveys
         if (!originalData.length || !previewData.length) {
           setIsLoading(true);
@@ -161,6 +185,18 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         });
         
         if (!isCancelled) {
+          // Check if survey data is empty (survey might have been deleted)
+          if (surveyData.length === 0) {
+            console.log('No survey data found - survey may have been deleted');
+            setOriginalData([]);
+            setPreviewData([]);
+            setPreviewHeaders([]);
+            setStats(null);
+            setIsLoading(false);
+            setIsRefreshing(false);
+            return;
+          }
+          
           // Store original data for filtering
           setOriginalData(surveyData);
           
