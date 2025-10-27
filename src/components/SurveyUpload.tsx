@@ -1186,7 +1186,7 @@ const SurveyUpload: React.FC = () => {
     </div>
       {/* Upload Progress Modal - Fixed Position Overlay */}
       {isUploading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
             <div className="text-center">
               {/* Purple/Indigo Arc Spinner */}
@@ -1220,7 +1220,7 @@ const SurveyUpload: React.FC = () => {
       )}
       {/* Deleting Progress Modal - Fixed Position Overlay */}
       {isDeleting && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
             <div className="text-center">
               {/* Purple/Indigo Arc Spinner */}
@@ -1257,7 +1257,7 @@ const SurveyUpload: React.FC = () => {
 
       {/* Individual Survey Delete Confirmation Modal */}
       {showDeleteConfirmation && surveyToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
             <p className="text-sm text-gray-700 mb-6">
@@ -1311,7 +1311,7 @@ const SurveyUpload: React.FC = () => {
 
       {/* Clear All Surveys Confirmation Modal */}
       {showClearAllConfirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
             <p className="text-sm text-gray-700 mb-6">

@@ -174,7 +174,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	};
 
 	return (
-		<div className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${
+		<div className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${
 			isOpen ? 'w-64' : 'w-16'
 		}`}>
 			{/* Header */}
