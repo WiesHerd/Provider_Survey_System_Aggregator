@@ -426,7 +426,7 @@ const SurveyUpload: React.FC = () => {
       setIsUploading(false);
       completeProgress();
       handleError('Upload timed out. Please try again.');
-    }, 30000); // 30 second timeout
+    }, 60000); // 60 second timeout (increased from 30)
 
     try {
       // Read the CSV file
@@ -522,31 +522,26 @@ const SurveyUpload: React.FC = () => {
 
       // Progress is handled by useSmoothProgress hook
 
-      // Refresh provider type detection to auto-switch to the uploaded data type
-      try {
-        // Clear provider type detection cache to ensure fresh data detection
-        providerTypeDetectionService.clearCache();
-        
-        // Add a small delay to ensure data is fully persisted
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Force refresh provider type detection
-        await refreshProviderTypeDetection();
-        
-        console.log('✅ Provider type detection refreshed after upload');
-        
-        // Trigger storage event to notify other components
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'survey-uploaded',
-          newValue: surveyId,
-          url: window.location.href
-        }));
-        
-        // Also dispatch custom events for immediate refresh
-        window.dispatchEvent(new CustomEvent('survey-uploaded', { detail: { surveyId } }));
-      } catch (error) {
-        console.error('Failed to refresh provider type detection:', error);
-      }
+      // Trigger storage event to notify other components (non-blocking)
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'survey-uploaded',
+        newValue: surveyId,
+        url: window.location.href
+      }));
+      
+      // Also dispatch custom events for immediate refresh (non-blocking)
+      window.dispatchEvent(new CustomEvent('survey-uploaded', { detail: { surveyId } }));
+      
+      // Clear provider type detection cache and refresh in background (non-blocking)
+      setTimeout(async () => {
+        try {
+          providerTypeDetectionService.clearCache();
+          await refreshProviderTypeDetection();
+          console.log('✅ Provider type detection refreshed after upload');
+        } catch (error) {
+          console.error('Failed to refresh provider type detection:', error);
+        }
+      }, 1000); // 1 second delay to ensure data is fully persisted
 
       // State already updated above, just set the flag to prevent useEffect override
       setJustUploaded(true);
