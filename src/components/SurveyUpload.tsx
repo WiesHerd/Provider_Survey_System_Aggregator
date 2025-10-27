@@ -420,6 +420,14 @@ const SurveyUpload: React.FC = () => {
     setIsUploading(true);
     startProgress(); // Start progress animation
 
+    // Add timeout wrapper to prevent infinite hanging
+    const uploadTimeout = setTimeout(() => {
+      console.error('⏰ Upload timeout - forcing completion');
+      setIsUploading(false);
+      completeProgress();
+      handleError('Upload timed out. Please try again.');
+    }, 30000); // 30 second timeout
+
     try {
       // Read the CSV file
       const text = await file.text();
@@ -504,8 +512,13 @@ const SurveyUpload: React.FC = () => {
       // Progress is handled by useSmoothProgress hook
 
       // Save survey and data to IndexedDB
+      console.log('💾 Saving survey to IndexedDB...');
       await dataService.createSurvey(survey);
+      console.log('✅ Survey created successfully');
+      
+      console.log('💾 Saving survey data to IndexedDB...');
       await dataService.saveSurveyData(surveyId, parsedRows);
+      console.log('✅ Survey data saved successfully');
 
       // Progress is handled by useSmoothProgress hook
 
@@ -557,9 +570,13 @@ const SurveyUpload: React.FC = () => {
       }, 1000);
 
     } catch (error) {
+      console.error('❌ Upload error:', error);
       handleError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsUploading(false);
       completeProgress(); // Complete progress animation
+    } finally {
+      // Clear the timeout
+      clearTimeout(uploadTimeout);
     }
   };
 
@@ -1171,23 +1188,75 @@ const SurveyUpload: React.FC = () => {
         })()}
       </div>
     </div>
-      {/* Upload Progress Modal - Use Unified Spinner */}
+      {/* Upload Progress Modal - Fixed Position Overlay */}
       {isUploading && (
-        <UnifiedLoadingSpinner
-          message="Uploading survey..."
-          recordCount={0}
-          progress={progress}
-          showProgress={true}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
+            <div className="text-center">
+              {/* Purple/Indigo Arc Spinner */}
+              <div className="w-12 h-12 mx-auto mb-4">
+                <div 
+                  className="w-12 h-12 rounded-full animate-spin"
+                  style={{
+                    background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
+                    mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
+                    WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
+                  }}
+                />
+              </div>
+              
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Uploading survey...</h3>
+              <p className="text-gray-600 mb-4">Processing data for optimal performance...</p>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                <div 
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              
+              {/* Progress Percentage */}
+              <p className="text-sm text-gray-700 font-medium">{progress.toFixed(2)}% complete</p>
+            </div>
+          </div>
+        </div>
       )}
-      {/* Deleting Progress Modal - Use Unified Spinner */}
+      {/* Deleting Progress Modal - Fixed Position Overlay */}
       {isDeleting && (
-        <UnifiedLoadingSpinner
-          message={isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
-          recordCount={0}
-          progress={progress}
-          showProgress={true}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
+            <div className="text-center">
+              {/* Purple/Indigo Arc Spinner */}
+              <div className="w-12 h-12 mx-auto mb-4">
+                <div 
+                  className="w-12 h-12 rounded-full animate-spin"
+                  style={{
+                    background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
+                    mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
+                    WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
+                  }}
+                />
+              </div>
+              
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
+              </h3>
+              <p className="text-gray-600 mb-4">Processing data for optimal performance...</p>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                <div 
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              
+              {/* Progress Percentage */}
+              <p className="text-sm text-gray-700 font-medium">{progress.toFixed(2)}% complete</p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Individual Survey Delete Confirmation Modal */}
