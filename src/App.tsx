@@ -16,6 +16,7 @@ import { SuspenseSpinner } from './shared/components';
 import { SurveyMigrationService } from './services/SurveyMigrationService';
 import { Box, Typography, Button, Alert, CircularProgress } from '@mui/material';
 import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { DatabaseDiagnostics } from './components/DatabaseDiagnostics';
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -91,6 +92,7 @@ const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen')
  */
 const DatabaseInitializationScreen: React.FC = () => {
   const { isReady, isInitializing, healthStatus, error, initialize, repair, clearError } = useDatabase();
+  const [showAdvancedOptions, setShowAdvancedOptions] = React.useState(false);
 
   if (isReady && healthStatus === 'healthy') {
     return null; // Database is ready, show main app
@@ -104,6 +106,13 @@ const DatabaseInitializationScreen: React.FC = () => {
   const handleRepair = async () => {
     clearError();
     await repair();
+  };
+
+  const handleSkipInitialization = () => {
+    // Force the app to continue even if database isn't ready
+    // This is a fallback for corporate environments
+    console.warn('⚠️ Skipping database initialization - app may not function properly');
+    window.location.reload();
   };
 
   return (
@@ -155,7 +164,27 @@ const DatabaseInitializationScreen: React.FC = () => {
                 {error}
               </Typography>
             </Alert>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+            
+            {/* Troubleshooting tips */}
+            <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Troubleshooting Tips:
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                • Try refreshing the page
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                • Check if your browser supports IndexedDB
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                • Clear browser cache and cookies
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                • Try a different browser (Chrome, Firefox, Edge)
+              </Typography>
+            </Box>
+            
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Button
                 variant="contained"
                 onClick={handleRetry}
@@ -170,7 +199,37 @@ const DatabaseInitializationScreen: React.FC = () => {
               >
                 Repair Database
               </Button>
+              <Button
+                variant="text"
+                onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                sx={{ borderRadius: '8px', px: 3 }}
+              >
+                Advanced Options
+              </Button>
             </Box>
+            
+            {showAdvancedOptions && (
+              <Box sx={{ mt: 3 }}>
+                <DatabaseDiagnostics />
+                
+                <Box sx={{ p: 2, bgcolor: 'warning.50', borderRadius: 1, border: '1px solid', borderColor: 'warning.200' }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: 'warning.dark' }}>
+                    Advanced Options (Use with caution):
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    onClick={handleSkipInitialization}
+                    sx={{ borderRadius: '8px', px: 3 }}
+                  >
+                    Skip Database Initialization
+                  </Button>
+                  <Typography variant="caption" display="block" sx={{ mt: 1, color: 'warning.dark' }}>
+                    This will bypass database initialization but may cause the app to malfunction.
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </>
         ) : (
           <>

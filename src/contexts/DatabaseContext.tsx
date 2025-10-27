@@ -62,7 +62,14 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
 
     try {
       console.log('🔧 DatabaseContext: Starting database initialization...');
-      await service.initialize();
+      
+      // Add timeout to prevent infinite hanging
+      const initPromise = service.initialize();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database initialization timed out after 10 seconds')), 10000)
+      );
+      
+      await Promise.race([initPromise, timeoutPromise]);
       
       setState(prev => ({
         ...prev,
@@ -77,6 +84,20 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize database';
       console.error('❌ DatabaseContext: Database initialization failed:', error);
+      
+      // Check if IndexedDB is supported
+      if (!window.indexedDB) {
+        console.error('❌ IndexedDB is not supported in this browser');
+        setState(prev => ({
+          ...prev,
+          isReady: false,
+          isInitializing: false,
+          healthStatus: 'unhealthy',
+          error: 'IndexedDB is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Edge.',
+          lastChecked: Date.now()
+        }));
+        return;
+      }
       
       setState(prev => ({
         ...prev,
