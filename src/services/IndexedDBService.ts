@@ -57,23 +57,30 @@ export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
   private readonly DB_VERSION = 6;
+  private isInitializing = false;
 
   async initialize(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        console.error('❌ Failed to open IndexedDB:', request.error);
+        reject(request.error);
+      };
       request.onsuccess = () => {
         this.db = request.result;
+        console.log('✅ IndexedDB opened successfully');
         resolve();
       };
 
       request.onupgradeneeded = (event) => {
+        console.log('🔧 Database upgrade needed, creating object stores...');
         const db = (event.target as IDBOpenDBRequest).result;
         const oldVersion = event.oldVersion;
 
         // Create surveys store
         if (!db.objectStoreNames.contains('surveys')) {
+          console.log('📊 Creating surveys object store...');
           const surveyStore = db.createObjectStore('surveys', { keyPath: 'id' });
           surveyStore.createIndex('name', 'name', { unique: false });
           surveyStore.createIndex('type', 'type', { unique: false });
@@ -82,6 +89,7 @@ export class IndexedDBService {
 
         // Create survey data store
         if (!db.objectStoreNames.contains('surveyData')) {
+          console.log('📊 Creating surveyData object store...');
           const dataStore = db.createObjectStore('surveyData', { keyPath: 'id' });
           dataStore.createIndex('surveyId', 'surveyId', { unique: false });
           dataStore.createIndex('specialty', 'specialty', { unique: false });
@@ -89,6 +97,7 @@ export class IndexedDBService {
 
         // Create specialty mappings store
         if (!db.objectStoreNames.contains('specialtyMappings')) {
+          console.log('📊 Creating specialtyMappings object store...');
           const mappingStore = db.createObjectStore('specialtyMappings', { keyPath: 'id' });
           mappingStore.createIndex('standardizedName', 'standardizedName', { unique: false });
         }
@@ -166,6 +175,8 @@ export class IndexedDBService {
           blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
           blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
         }
+        
+        console.log('✅ Database upgrade completed, all object stores created');
       };
     });
   }
@@ -175,10 +186,15 @@ export class IndexedDBService {
       await this.initialize();
     }
     
-    // Check if all required object stores exist, if not, reinitialize
-    if (this.db && !this.hasRequiredObjectStores()) {
+    // Check if all required object stores exist, if not, reinitialize (but only once)
+    if (this.db && !this.hasRequiredObjectStores() && !this.isInitializing) {
       console.log('🔧 Missing object stores detected, reinitializing database...');
-      await this.initialize();
+      this.isInitializing = true;
+      try {
+        await this.initialize();
+      } finally {
+        this.isInitializing = false;
+      }
     }
     
     return this.db!;
