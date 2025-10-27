@@ -58,6 +58,7 @@ export const useProviderTypeDetection = (
 
   // Load provider types
   const loadProviderTypes = useCallback(async () => {
+    console.log('🔄 Loading provider types...');
     setIsLoading(true);
     setError(null);
 
@@ -72,11 +73,14 @@ export const useProviderTypeDetection = (
       // If no data, stop auto-refresh to prevent infinite spinning
       if (!result.hasAnyData) {
         console.log('🔍 No provider data found - stopping auto-refresh to prevent infinite spinning');
+      } else {
+        console.log(`✅ Found ${result.availableTypes.length} provider types with data`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to detect provider types');
       console.error('Provider type detection error:', err);
     } finally {
+      console.log('🏁 Provider type detection completed, setting loading to false');
       setIsLoading(false);
     }
   }, []);
@@ -131,6 +135,18 @@ export const useProviderTypeDetection = (
     }
   }, [autoRefresh, loadProviderTypes]);
 
+  // Safety timeout to ensure loading state is reset
+  useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        console.warn('⚠️ Provider type detection taking too long, forcing loading state to false');
+        setIsLoading(false);
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
+
   // Add immediate refresh capability when data changes
   useEffect(() => {
     const handleDataChange = () => {
@@ -148,19 +164,26 @@ export const useProviderTypeDetection = (
     };
   }, [loadProviderTypes]);
 
-  // Set up refresh interval - only refresh if we have data or are actively loading
+  // Set up refresh interval - only refresh if we have data
   useEffect(() => {
-    if (autoRefresh && refreshInterval > 0 && (hasAnyData || isLoading)) {
+    if (autoRefresh && refreshInterval > 0 && hasAnyData) {
+      console.log('🔄 Setting up auto-refresh interval for provider type detection');
       const interval = setInterval(() => {
-        // Only refresh if we have data or are currently loading
-        if (hasAnyData || isLoading) {
+        // Only refresh if we have data
+        if (hasAnyData) {
+          console.log('🔄 Auto-refreshing provider type detection...');
           loadProviderTypes();
         }
       }, refreshInterval);
 
-      return () => clearInterval(interval);
+      return () => {
+        console.log('🛑 Clearing auto-refresh interval');
+        clearInterval(interval);
+      };
+    } else if (!hasAnyData) {
+      console.log('🔍 No data available - skipping auto-refresh setup');
     }
-  }, [autoRefresh, refreshInterval, loadProviderTypes, hasAnyData, isLoading]);
+  }, [autoRefresh, refreshInterval, loadProviderTypes, hasAnyData]);
 
   return {
     // Detection state
