@@ -186,12 +186,19 @@ export class IndexedDBService {
       await this.initialize();
     }
     
-    // Check if all required object stores exist, if not, reinitialize (but only once)
+    // Check if all required object stores exist, if not, force reinitialize (but only once)
     if (this.db && !this.hasRequiredObjectStores() && !this.isInitializing) {
-      console.log('🔧 Missing object stores detected, reinitializing database...');
+      console.log('🔧 Missing object stores detected, forcing database reinitialization...');
       this.isInitializing = true;
       try {
-        await this.initialize();
+        // Close the current database connection
+        if (this.db) {
+          this.db.close();
+          this.db = null;
+        }
+        
+        // Force a version upgrade by incrementing the version
+        await this.forceUpgrade();
       } finally {
         this.isInitializing = false;
       }
@@ -205,6 +212,84 @@ export class IndexedDBService {
     
     const requiredStores = ['surveys', 'surveyData', 'specialtyMappings'];
     return requiredStores.every(storeName => this.db!.objectStoreNames.contains(storeName));
+  }
+
+  private async forceUpgrade(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Increment the version to force onupgradeneeded
+      const newVersion = this.DB_VERSION + 1;
+      console.log(`🔄 Forcing database upgrade from version ${this.DB_VERSION} to ${newVersion}`);
+      
+      const request = indexedDB.open(this.DB_NAME, newVersion);
+
+      request.onerror = () => {
+        console.error('❌ Failed to force upgrade IndexedDB:', request.error);
+        reject(request.error);
+      };
+      
+      request.onsuccess = () => {
+        this.db = request.result;
+        console.log('✅ Database force upgrade completed successfully');
+        resolve();
+      };
+
+      request.onupgradeneeded = (event) => {
+        console.log('🔧 Force upgrade: Database upgrade needed, creating object stores...');
+        const db = (event.target as IDBOpenDBRequest).result;
+
+        // Create surveys store
+        if (!db.objectStoreNames.contains('surveys')) {
+          console.log('📊 Creating surveys object store...');
+          const surveyStore = db.createObjectStore('surveys', { keyPath: 'id' });
+          surveyStore.createIndex('name', 'name', { unique: false });
+          surveyStore.createIndex('type', 'type', { unique: false });
+          surveyStore.createIndex('year', 'year', { unique: false });
+        }
+
+        // Create survey data store
+        if (!db.objectStoreNames.contains('surveyData')) {
+          console.log('📊 Creating surveyData object store...');
+          const dataStore = db.createObjectStore('surveyData', { keyPath: 'id' });
+          dataStore.createIndex('surveyId', 'surveyId', { unique: false });
+          dataStore.createIndex('specialty', 'specialty', { unique: false });
+        }
+
+        // Create specialty mappings store
+        if (!db.objectStoreNames.contains('specialtyMappings')) {
+          console.log('📊 Creating specialtyMappings object store...');
+          const mappingStore = db.createObjectStore('specialtyMappings', { keyPath: 'id' });
+          mappingStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+        }
+
+        // Create specialty mapping sources store
+        if (!db.objectStoreNames.contains('specialtyMappingSources')) {
+          const sourceStore = db.createObjectStore('specialtyMappingSources', { keyPath: 'id' });
+          sourceStore.createIndex('mappingId', 'mappingId', { unique: false });
+        }
+
+        // Create learned specialty mappings store
+        if (!db.objectStoreNames.contains('learnedSpecialtyMappings')) {
+          const learnedStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'original' });
+          learnedStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        // Create learned provider type mappings store
+        if (!db.objectStoreNames.contains('learnedProviderTypeMappings')) {
+          const learnedProviderTypeStore = db.createObjectStore('learnedProviderTypeMappings', { keyPath: 'original' });
+          learnedProviderTypeStore.createIndex('corrected', 'corrected', { unique: false });
+        }
+
+        // Create blend templates store
+        if (!db.objectStoreNames.contains('blendTemplates')) {
+          const blendTemplatesStore = db.createObjectStore('blendTemplates', { keyPath: 'id' });
+          blendTemplatesStore.createIndex('name', 'name', { unique: false });
+          blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
+          blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
+        }
+        
+        console.log('✅ Force upgrade: Database upgrade completed, all object stores created');
+      };
+    });
   }
 
   // Survey Methods
