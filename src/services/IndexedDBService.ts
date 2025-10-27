@@ -170,35 +170,76 @@ export class IndexedDBService {
     });
   }
 
-  private async ensureDB(): Promise<IDBDatabase> {
+  async ensureDB(): Promise<IDBDatabase> {
     if (!this.db) {
       await this.initialize();
     }
+    
+    // Check if all required object stores exist, if not, reinitialize
+    if (this.db && !this.hasRequiredObjectStores()) {
+      console.log('🔧 Missing object stores detected, reinitializing database...');
+      await this.initialize();
+    }
+    
     return this.db!;
+  }
+
+  private hasRequiredObjectStores(): boolean {
+    if (!this.db) return false;
+    
+    const requiredStores = ['surveys', 'surveyData', 'specialtyMappings'];
+    return requiredStores.every(storeName => this.db!.objectStoreNames.contains(storeName));
   }
 
   // Survey Methods
   async getAllSurveys(): Promise<Survey[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['surveys'], 'readonly');
-      const store = transaction.objectStore('surveys');
-      const request = store.getAll();
+      // Check if the surveys object store exists
+      if (!db.objectStoreNames.contains('surveys')) {
+        console.log('🔍 No surveys object store found - returning empty array');
+        resolve([]);
+        return;
+      }
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      try {
+        const transaction = db.transaction(['surveys'], 'readonly');
+        const store = transaction.objectStore('surveys');
+        const request = store.getAll();
+
+        request.onerror = () => {
+          console.error('❌ Failed to get surveys:', request.error);
+          resolve([]); // Return empty array instead of rejecting
+        };
+        request.onsuccess = () => resolve(request.result || []);
+      } catch (error) {
+        console.error('❌ Transaction error in getAllSurveys:', error);
+        resolve([]); // Return empty array instead of rejecting
+      }
     });
   }
 
   async createSurvey(survey: Survey): Promise<Survey> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['surveys'], 'readwrite');
-      const store = transaction.objectStore('surveys');
-      const request = store.add(survey);
+      // Check if the surveys object store exists
+      if (!db.objectStoreNames.contains('surveys')) {
+        console.error('❌ No surveys object store found - cannot create survey');
+        reject(new Error('Surveys object store not found. Please refresh the page to initialize the database.'));
+        return;
+      }
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(survey);
+      try {
+        const transaction = db.transaction(['surveys'], 'readwrite');
+        const store = transaction.objectStore('surveys');
+        const request = store.add(survey);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(survey);
+      } catch (error) {
+        console.error('❌ Transaction error in createSurvey:', error);
+        reject(error);
+      }
     });
   }
 
@@ -463,41 +504,56 @@ export class IndexedDBService {
     const db = await this.ensureDB();
     
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['surveyData'], 'readwrite');
-      const store = transaction.objectStore('surveyData');
+      // Check if the surveyData object store exists
+      if (!db.objectStoreNames.contains('surveyData')) {
+        console.error('❌ No surveyData object store found - cannot save survey data');
+        reject(new Error('SurveyData object store not found. Please refresh the page to initialize the database.'));
+        return;
+      }
 
-      rows.forEach((row, index) => {
-        const surveyData: SurveyData = {
-          id: `${surveyId}_${index}`,
-          surveyId,
-          data: row,
-          specialty: row.specialty || row.Specialty || row['Provider Type'],
-          providerType: row.providerType || row['Provider Type'] || row.provider_type,
-          region: row.region || row.Region || row.geographic_region,
-          tcc: row.tcc || row.TCC,
-          cf: row.cf || row.CF,
-          wrvu: row.wrvu || row.wRVU,
-          // Store percentile-specific compensation data
-          tcc_p25: row.tcc_p25,
-          tcc_p50: row.tcc_p50,
-          tcc_p75: row.tcc_p75,
-          tcc_p90: row.tcc_p90,
-          cf_p25: row.cf_p25,
-          cf_p50: row.cf_p50,
-          cf_p75: row.cf_p75,
-          cf_p90: row.cf_p90,
-          wrvu_p25: row.wrvu_p25,
-          wrvu_p50: row.wrvu_p50,
-          wrvu_p75: row.wrvu_p75,
-          wrvu_p90: row.wrvu_p90,
-          n_orgs: row.n_orgs,
-          n_incumbents: row.n_incumbents
+      try {
+        const transaction = db.transaction(['surveyData'], 'readwrite');
+        const store = transaction.objectStore('surveyData');
+
+        rows.forEach((row, index) => {
+          const surveyData: SurveyData = {
+            id: `${surveyId}_${index}`,
+            surveyId,
+            data: row,
+            specialty: row.specialty || row.Specialty || row['Provider Type'],
+            providerType: row.providerType || row['Provider Type'] || row.provider_type,
+            region: row.region || row.Region || row.geographic_region,
+            tcc: row.tcc || row.TCC,
+            cf: row.cf || row.CF,
+            wrvu: row.wrvu || row.wRVU,
+            // Store percentile-specific compensation data
+            tcc_p25: row.tcc_p25,
+            tcc_p50: row.tcc_p50,
+            tcc_p75: row.tcc_p75,
+            tcc_p90: row.tcc_p90,
+            cf_p25: row.cf_p25,
+            cf_p50: row.cf_p50,
+            cf_p75: row.cf_p75,
+            cf_p90: row.cf_p90,
+            wrvu_p25: row.wrvu_p25,
+            wrvu_p50: row.wrvu_p50,
+            wrvu_p75: row.wrvu_p75,
+            wrvu_p90: row.wrvu_p90,
+            n_orgs: row.n_orgs,
+            n_incumbents: row.n_incumbents
+          };
+          store.add(surveyData);
+        });
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => {
+          console.error('❌ Transaction error in saveSurveyData:', transaction.error);
+          reject(transaction.error);
         };
-        store.add(surveyData);
-      });
-
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+      } catch (error) {
+        console.error('❌ Error in saveSurveyData:', error);
+        reject(error);
+      }
     });
   }
 
