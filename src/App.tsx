@@ -10,9 +10,12 @@ import { MappingProvider } from './contexts/MappingContext';
 import { YearProvider } from './contexts/YearContext';
 import { ProviderContextProvider } from './contexts/ProviderContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { DatabaseProvider, useDatabase } from './contexts/DatabaseContext';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { SuspenseSpinner } from './shared/components';
 import { SurveyMigrationService } from './services/SurveyMigrationService';
+import { Box, Typography, Button, Alert, CircularProgress } from '@mui/material';
+import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -81,6 +84,118 @@ const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
 
+
+/**
+ * Database Initialization Screen
+ * Shows while database is initializing or if there are errors
+ */
+const DatabaseInitializationScreen: React.FC = () => {
+  const { isReady, isInitializing, healthStatus, error, initialize, repair, clearError } = useDatabase();
+
+  if (isReady && healthStatus === 'healthy') {
+    return null; // Database is ready, show main app
+  }
+
+  const handleRetry = async () => {
+    clearError();
+    await initialize();
+  };
+
+  const handleRepair = async () => {
+    clearError();
+    await repair();
+  };
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        p: 3,
+        bgcolor: 'background.default'
+      }}
+    >
+      <Box
+        sx={{
+          maxWidth: 500,
+          width: '100%',
+          textAlign: 'center'
+        }}
+      >
+        {isInitializing ? (
+          <>
+            <CircularProgress size={48} sx={{ mb: 3, color: 'primary.main' }} />
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+              Initializing Database
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              Setting up your local data storage. This may take a few moments...
+            </Typography>
+          </>
+        ) : error ? (
+          <>
+            <Box sx={{ mb: 3 }}>
+              <ExclamationTriangleIcon 
+                style={{ 
+                  width: 48, 
+                  height: 48, 
+                  color: '#f59e0b',
+                  margin: '0 auto'
+                }} 
+              />
+            </Box>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600, color: 'error.main' }}>
+              Database Error
+            </Typography>
+            <Alert severity="error" sx={{ mb: 3, textAlign: 'left' }}>
+              <Typography variant="body2">
+                {error}
+              </Typography>
+            </Alert>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+              <Button
+                variant="contained"
+                onClick={handleRetry}
+                sx={{ borderRadius: '8px', px: 3 }}
+              >
+                Try Again
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={handleRepair}
+                sx={{ borderRadius: '8px', px: 3 }}
+              >
+                Repair Database
+              </Button>
+            </Box>
+          </>
+        ) : (
+          <>
+            <Box sx={{ mb: 3 }}>
+              <CheckCircleIcon 
+                style={{ 
+                  width: 48, 
+                  height: 48, 
+                  color: '#10b981',
+                  margin: '0 auto'
+                }} 
+              />
+            </Box>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+              Database Ready
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Your local data storage is ready to use.
+            </Typography>
+          </>
+        )}
+      </Box>
+    </Box>
+  );
+};
 
 const PageContent = () => {
   const location = useLocation();
@@ -370,19 +485,22 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider>
-        <StorageProvider>
-          <MappingProvider>
-            <YearProvider>
-              <ProviderContextProvider>
-                <Router basename={basename}>
-                  <PageContent />
-                </Router>
-              </ProviderContextProvider>
-            </YearProvider>
-          </MappingProvider>
-        </StorageProvider>
-      </AuthProvider>
+      <DatabaseProvider>
+        <DatabaseInitializationScreen />
+        <AuthProvider>
+          <StorageProvider>
+            <MappingProvider>
+              <YearProvider>
+                <ProviderContextProvider>
+                  <Router basename={basename}>
+                    <PageContent />
+                  </Router>
+                </ProviderContextProvider>
+              </YearProvider>
+            </MappingProvider>
+          </StorageProvider>
+        </AuthProvider>
+      </DatabaseProvider>
     </ThemeProvider>
   );
 }

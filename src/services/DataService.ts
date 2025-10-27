@@ -36,8 +36,20 @@ export class DataService {
     return await this.indexedDB.createSurvey(survey);
   }
 
+  async getSurveyById(surveyId: string) {
+    return await this.indexedDB.getSurveyById(surveyId);
+  }
+
   async deleteSurvey(id: string) {
     return await this.indexedDB.deleteSurvey(id);
+  }
+
+  async deleteWithVerification(surveyId: string) {
+    return await this.indexedDB.deleteWithVerification(surveyId);
+  }
+
+  async cascadeDelete(surveyId: string) {
+    return await this.indexedDB.cascadeDelete(surveyId);
   }
 
   async deleteAllSurveys() {

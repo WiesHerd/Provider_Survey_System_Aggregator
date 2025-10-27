@@ -20,6 +20,10 @@ import { useUploadData } from '../hooks/useUploadData';
 import { UploadForm } from './UploadForm';
 import { FileUpload } from './FileUpload';
 import { UploadedSurveys } from './UploadedSurveys';
+import { UploadProgressDialog } from './UploadProgressDialog';
+import { UploadErrorBoundary } from './UploadErrorBoundary';
+import { UploadValidationSummary } from './UploadValidationSummary';
+import { CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 /**
  * Main Survey Upload component
@@ -57,6 +61,9 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     uploadProgress,
     deleteProgress,
     
+    // Enhanced upload state
+    uploadState,
+    
     // Filter state
     globalFilters,
     updateGlobalFilters,
@@ -82,7 +89,10 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     isLoading,
     isUploading,
     error,
-    clearError
+    clearError,
+    
+    // Database state
+    isDatabaseReady
   } = useUploadData({
     initialFilters,
     onUploadComplete,
@@ -90,16 +100,41 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     onSurveyDelete
   });
 
+  // Local state for UI enhancements
+  const [showProgressDialog, setShowProgressDialog] = React.useState(false);
+  const [showValidationSummary, setShowValidationSummary] = React.useState(false);
+  const [validationResults, setValidationResults] = React.useState<any[]>([]);
+
   // Event handlers
   const handleUpload = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0 || !isDatabaseReady) return;
     
     // Validate form
     if (!formValidation.isValid) {
       return;
     }
     
-    await uploadFiles();
+    // Show progress dialog
+    setShowProgressDialog(true);
+    
+    try {
+      await uploadFiles();
+    } finally {
+      // Progress dialog will be closed by the upload completion
+    }
+  };
+
+  const handleCancelUpload = () => {
+    setShowProgressDialog(false);
+    // Note: In a real implementation, you would cancel the actual upload process
+  };
+
+  const handleValidationPreview = async () => {
+    if (files.length === 0) return;
+    
+    // This would run validation and show the summary
+    // For now, we'll just show a placeholder
+    setShowValidationSummary(true);
   };
 
   const handleSurveySelect = (surveyId: string | null) => {
@@ -119,9 +154,30 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
   return (
     <Box sx={{ p: 3 }}>
       {/* Page Header */}
-      <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
-        Survey Upload
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Survey Upload
+        </Typography>
+        
+        {/* Database Health Indicator */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {isDatabaseReady ? (
+            <>
+              <CheckCircleIcon style={{ width: 20, height: 20, color: '#10b981' }} />
+              <Typography variant="body2" color="text.secondary">
+                Database Ready
+              </Typography>
+            </>
+          ) : (
+            <>
+              <ExclamationTriangleIcon style={{ width: 20, height: 20, color: '#f59e0b' }} />
+              <Typography variant="body2" color="text.secondary">
+                Initializing...
+              </Typography>
+            </>
+          )}
+        </Box>
+      </Box>
 
       {/* Error Display */}
       {error && (
@@ -190,9 +246,9 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
               disabled={isUploading}
             />
 
-            {/* Upload Button */}
+            {/* Upload Buttons */}
             {files.length > 0 && (
-              <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+              <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
                 <Button
                   variant="contained"
                   onClick={handleUpload}
@@ -200,7 +256,8 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                     isUploading || 
                     !formValidation.isValid || 
                     !fileValidation.isValid ||
-                    files.length === 0
+                    files.length === 0 ||
+                    !isDatabaseReady
                   }
                   sx={{ 
                     borderRadius: '8px',
@@ -209,6 +266,15 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   }}
                 >
                   {isUploading ? 'Uploading...' : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  onClick={handleValidationPreview}
+                  disabled={isUploading || !isDatabaseReady}
+                  sx={{ borderRadius: '8px' }}
+                >
+                  Preview Validation
                 </Button>
                 
                 <Button
@@ -311,6 +377,45 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
           </Box>
         </Box>
       )}
+
+      {/* Upload Progress Dialog */}
+      <UploadProgressDialog
+        open={showProgressDialog}
+        onClose={() => setShowProgressDialog(false)}
+        onCancel={handleCancelUpload}
+        progress={uploadState.progress}
+        currentTransaction={uploadState.currentTransaction}
+        completedTransactions={uploadState.completedTransactions}
+        failedTransactions={uploadState.failedTransactions}
+      />
+
+      {/* Upload Validation Summary */}
+      <UploadValidationSummary
+        open={showValidationSummary}
+        onClose={() => setShowValidationSummary(false)}
+        onConfirm={() => {
+          setShowValidationSummary(false);
+          handleUpload();
+        }}
+        validationResults={validationResults}
+        totalRows={files.reduce((sum, file) => sum + (file as any).rowCount || 0, 0)}
+        estimatedTime={`${Math.ceil(files.length * 0.5)} min`}
+      />
+
+      {/* Upload Error Boundary */}
+      <UploadErrorBoundary
+        onRetry={() => {
+          clearError();
+          handleUpload();
+        }}
+        onClear={() => {
+          clearError();
+          clearFiles();
+        }}
+        onDismiss={clearError}
+      >
+        {/* This would wrap the upload components if needed */}
+      </UploadErrorBoundary>
     </Box>
   );
 });

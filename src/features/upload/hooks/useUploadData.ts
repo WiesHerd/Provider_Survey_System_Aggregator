@@ -17,17 +17,26 @@ import {
   UploadSectionState,
   UploadValidationResult
 } from '../types/upload';
+import { 
+  UploadTransaction, 
+  UploadState,
+  UploadValidationSummary,
+  UPLOAD_STEP_MESSAGES,
+  DEFAULT_UPLOAD_SETTINGS
+} from '../types/uploadStates';
+import { 
+  validateFileUpload, 
+  detectDuplicates,
+  validateUploadTransaction
+} from '../utils/uploadValidation';
+import { useDatabase } from '../../../contexts/DatabaseContext';
 import { SurveySource } from '../../../shared/types';
 import { 
   calculateSurveyStats,
   extractUniqueValues,
   filterSurveys,
-  validateFileUpload,
   validateSurveyForm,
-  calculateUploadSummary,
-  sortSurveysByDate,
-  formatSurveyMetadata,
-  generateSurveyPreview
+  calculateUploadSummary
 } from '../utils/uploadCalculations';
 
 interface UseUploadDataReturn {
@@ -51,6 +60,9 @@ interface UseUploadDataReturn {
   // Progress state
   uploadProgress: UploadProgress;
   deleteProgress: DeleteProgress;
+  
+  // Enhanced upload state
+  uploadState: UploadState;
   
   // Filter state
   globalFilters: UploadGlobalFilters;
@@ -81,6 +93,9 @@ interface UseUploadDataReturn {
   isDeleting: boolean;
   error: string | null;
   clearError: () => void;
+  
+  // Database state
+  isDatabaseReady: boolean;
 }
 
 interface UseUploadDataOptions {
@@ -150,8 +165,26 @@ export const useUploadData = (
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Data service
+  // Enhanced upload state
+  const [uploadState, setUploadState] = useState<UploadState>({
+    progress: {
+      isUploading: false,
+      step: 'idle',
+      progress: 0,
+      currentFileIndex: 0,
+      totalFiles: 0,
+      message: UPLOAD_STEP_MESSAGES.idle
+    },
+    completedTransactions: [],
+    failedTransactions: [],
+    autoRetry: DEFAULT_UPLOAD_SETTINGS.autoRetry,
+    maxRetries: DEFAULT_UPLOAD_SETTINGS.maxRetries,
+    retryDelay: DEFAULT_UPLOAD_SETTINGS.retryDelay
+  });
+
+  // Data service and database context
   const dataService = useMemo(() => getDataService(), []);
+  const { isReady: isDatabaseReady, getService: getDatabaseService } = useDatabase();
 
   // Memoized computed values
   const uniqueValues = useMemo(() => {
@@ -184,10 +217,18 @@ export const useUploadData = (
     const allErrors: string[] = [];
     const allWarnings: string[] = [];
     
+    // Note: validateFileUpload is async, so we'll do basic validation here
+    // and full validation will happen during upload
     files.forEach(file => {
-      const validation = validateFileUpload(file, files);
-      allErrors.push(...validation.errors);
-      allWarnings.push(...validation.warnings);
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        allErrors.push(`${file.name} is not a CSV file`);
+      }
+      if (file.size === 0) {
+        allErrors.push(`${file.name} is empty`);
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        allErrors.push(`${file.name} is too large (max 50MB)`);
+      }
     });
     
     return {
@@ -286,78 +327,215 @@ export const useUploadData = (
     }
   }, [dataService, selectedSurvey, onSurveySelect]);
 
-  // File upload
+  // Enhanced file upload with transaction support
   const uploadFiles = useCallback(async () => {
-    if (files.length === 0) return;
+    if (files.length === 0 || !isDatabaseReady) return;
     
     try {
       setIsUploading(true);
-      setUploadProgress({
-        isUploading: true,
-        progress: 0,
-        totalFiles: files.length,
-        currentFileIndex: 0
-      });
       setError(null);
+      
+      // Initialize upload state
+      setUploadState(prev => ({
+        ...prev,
+        progress: {
+          isUploading: true,
+          step: 'validating',
+          progress: 0,
+          currentFileIndex: 0,
+          totalFiles: files.length,
+          message: UPLOAD_STEP_MESSAGES.validating
+        }
+      }));
 
       const uploadedSurveys: UploadedSurvey[] = [];
+      const transactions: UploadTransaction[] = [];
+      
+      // Step 1: Validate all files
+      setUploadState(prev => ({
+        ...prev,
+        progress: { ...prev.progress, step: 'validating', message: 'Validating files...' }
+      }));
+      
+      const validationResults: UploadValidationSummary[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const validation = await validateFileUpload(file, files);
+        
+        validationResults.push({
+          fileName: file.name,
+          isValid: validation.isValid,
+          errors: validation.errors,
+          warnings: validation.warnings,
+          rowCount: validation.details.rowCount,
+          columnCount: validation.details.columnCount,
+          detectedColumns: validation.details.detectedColumns,
+          sampleData: validation.details.sampleData
+        });
+        
+        if (!validation.isValid) {
+          throw new Error(`Validation failed for ${file.name}: ${validation.errors.join(', ')}`);
+        }
+      }
+      
+      // Step 2: Check for duplicates
+      setUploadState(prev => ({
+        ...prev,
+        progress: { ...prev.progress, step: 'parsing', message: 'Checking for duplicates...' }
+      }));
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
-        setUploadProgress(prev => ({
-          ...prev,
-          currentFile: file.name,
-          currentFileIndex: i,
-          progress: ((i + 1) / files.length) * 100
-        }));
-
-        // Read file content
-        const fileContent = await file.text();
-        const stats = calculateSurveyStats(fileContent);
-        
-        // Upload to backend
         const surveyType = formState.isCustom ? formState.customSurveyType : formState.surveyType;
-        const surveyYear = parseInt(formState.surveyYear);
-        const providerType = formState.providerType;
+        const surveyYear = formState.surveyYear;
         
-        const uploadedSurvey = await dataService.uploadSurvey(
-          file,
+        const duplicateCheck = await detectDuplicates(
           file.name,
-          surveyYear,
           surveyType,
-          providerType
+          surveyYear,
+          () => dataService.getAllSurveys()
         );
         
-        const processedSurvey: UploadedSurvey = {
-          id: uploadedSurvey.surveyId,
+        validationResults[i].duplicateCheck = duplicateCheck;
+        
+        if (duplicateCheck.isDuplicate) {
+          console.warn(`Potential duplicate detected for ${file.name}`);
+        }
+      }
+      
+      // Step 3: Process each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const transactionId = crypto.randomUUID();
+        
+        const transaction: UploadTransaction = {
+          id: transactionId,
           fileName: file.name,
-          surveyType: surveyType as SurveySource,
-          surveyYear: formState.surveyYear,
-          uploadDate: new Date(),
-          fileContent,
-          rows: [],
-          stats,
-          columnMappings: {}
+          step: 'parsing',
+          startTime: Date.now()
         };
         
-        uploadedSurveys.push(processedSurvey);
+        setUploadState(prev => ({
+          ...prev,
+          currentTransaction: transaction,
+          progress: {
+            ...prev.progress,
+            currentFile: file.name,
+            currentFileIndex: i,
+            progress: (i / files.length) * 100,
+            step: 'parsing',
+            message: `Processing ${file.name}...`
+          }
+        }));
+        
+        try {
+          // Parse file content
+          const fileContent = await file.text();
+          const stats = calculateSurveyStats(fileContent);
+          
+          // Upload to database
+          setUploadState(prev => ({
+            ...prev,
+            progress: { ...prev.progress, step: 'saving', message: `Saving ${file.name}...` }
+          }));
+          
+          const surveyType = formState.isCustom ? formState.customSurveyType : formState.surveyType;
+          const surveyYear = parseInt(formState.surveyYear);
+          const providerType = formState.providerType;
+          
+          const uploadedSurvey = await dataService.uploadSurvey(
+            file,
+            file.name,
+            surveyYear,
+            surveyType,
+            providerType
+          );
+          
+          // Verify upload
+          setUploadState(prev => ({
+            ...prev,
+            progress: { ...prev.progress, step: 'verifying', message: `Verifying ${file.name}...` }
+          }));
+          
+          const verification = await validateUploadTransaction(
+            uploadedSurvey.surveyId,
+            stats.totalRows,
+            (id) => getDatabaseService().getSurveyById(id),
+            (id) => dataService.getSurveyData(id)
+          );
+          
+          if (!verification.isValid) {
+            throw new Error(`Verification failed: ${verification.errors.join(', ')}`);
+          }
+          
+          const processedSurvey: UploadedSurvey = {
+            id: uploadedSurvey.surveyId,
+            fileName: file.name,
+            surveyType: surveyType as SurveySource,
+            surveyYear: formState.surveyYear,
+            uploadDate: new Date(),
+            fileContent,
+            rows: [],
+            stats,
+            columnMappings: {}
+          };
+          
+          uploadedSurveys.push(processedSurvey);
+          
+          // Mark transaction as completed
+          transaction.surveyId = uploadedSurvey.surveyId;
+          transaction.step = 'completed';
+          transaction.endTime = Date.now();
+          transactions.push(transaction);
+          
+        } catch (fileError) {
+          // Mark transaction as failed
+          transaction.step = 'error';
+          transaction.endTime = Date.now();
+          transaction.error = {
+            type: 'database',
+            message: fileError instanceof Error ? fileError.message : 'Unknown error',
+            recoverable: true,
+            retryCount: 0,
+            maxRetries: uploadState.maxRetries
+          };
+          transactions.push(transaction);
+          
+          // Rollback this file if possible
+          if (transaction.surveyId) {
+            try {
+              await dataService.deleteSurvey(transaction.surveyId);
+            } catch (rollbackError) {
+              console.error('Failed to rollback survey:', rollbackError);
+            }
+          }
+          
+          throw fileError;
+        }
       }
 
       // Update state
       setUploadedSurveys(prev => [...prev, ...uploadedSurveys]);
       clearFiles();
       
-      // Invalidate analytics cache since new data was added (Google-style)
+      // Update upload state
+      setUploadState(prev => ({
+        ...prev,
+        progress: {
+          isUploading: false,
+          step: 'completed',
+          progress: 100,
+          currentFileIndex: 0,
+          totalFiles: 0,
+          message: UPLOAD_STEP_MESSAGES.completed
+        },
+        completedTransactions: [...prev.completedTransactions, ...transactions],
+        currentTransaction: undefined
+      }));
+      
+      // Invalidate analytics cache
       const { cacheInvalidation } = await import('../../analytics/utils/cacheInvalidation');
       cacheInvalidation.onNewSurvey();
-      
-      // Refresh provider type detection to auto-switch to the uploaded data type
-      try {
-        const { useProviderContext } = await import('../../../contexts/ProviderContext');
-        // Note: This will be handled by the component that uses this hook
-      } catch (error) {
-      }
       
       // Call callback
       onUploadComplete?.(uploadedSurveys);
@@ -365,31 +543,59 @@ export const useUploadData = (
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload files';
       setError(errorMessage);
+      
+      setUploadState(prev => ({
+        ...prev,
+        progress: {
+          isUploading: false,
+          step: 'error',
+          progress: 0,
+          currentFileIndex: 0,
+          totalFiles: 0,
+          message: UPLOAD_STEP_MESSAGES.error
+        },
+        error: {
+          type: 'unknown',
+          message: errorMessage,
+          recoverable: true,
+          retryCount: 0,
+          maxRetries: uploadState.maxRetries
+        }
+      }));
     } finally {
       setIsUploading(false);
-      setUploadProgress({
-        isUploading: false,
-        progress: 0,
-        totalFiles: 0,
-        currentFileIndex: 0
-      });
     }
-  }, [files, formState, dataService, onUploadComplete, clearFiles]);
+  }, [files, formState, dataService, onUploadComplete, clearFiles, isDatabaseReady, getDatabaseService, uploadState.maxRetries]);
 
-  // Survey deletion
+  // Enhanced survey deletion with verification
   const deleteSurvey = useCallback(async (surveyId: string) => {
     try {
       setIsDeleting(true);
       setDeleteProgress({
         isDeleting: true,
-        progress: 50,
+        progress: 25,
         totalFiles: 1,
         currentFileIndex: 0
       });
       setError(null);
 
-              await dataService.deleteSurvey(surveyId);
+      console.log(`🗑️ Starting enhanced delete for survey: ${surveyId}`);
+
+      // Use enhanced delete with verification
+      const deleteResult = await dataService.deleteWithVerification(surveyId);
       
+      if (!deleteResult.success) {
+        throw new Error(deleteResult.error || 'Delete verification failed');
+      }
+
+      setDeleteProgress({
+        isDeleting: true,
+        progress: 75,
+        totalFiles: 1,
+        currentFileIndex: 0
+      });
+
+      // Update local state
       setUploadedSurveys(prev => prev.filter(survey => survey.id !== surveyId));
       
       // Clear selection if deleted survey was selected
@@ -397,16 +603,35 @@ export const useUploadData = (
         setSelectedSurvey(null);
         onSurveySelect?.(null);
       }
-      
-      // Invalidate analytics cache since data was removed (Google-style)
+
+      setDeleteProgress({
+        isDeleting: true,
+        progress: 100,
+        totalFiles: 1,
+        currentFileIndex: 0
+      });
+
+      // Verify deletion was successful
+      const verification = await dataService.getSurveyById?.(surveyId);
+      if (verification) {
+        console.warn('⚠️ Survey still exists after deletion - this may indicate a problem');
+      }
+
+      // Invalidate analytics cache since data was removed
       const analyticsService = new AnalyticsDataService();
       analyticsService.invalidateCache();
+      
+      console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows removed`);
       
       onSurveyDelete?.(surveyId);
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete survey';
+      console.error(`❌ Survey deletion failed:`, errorMessage);
       setError(errorMessage);
+      
+      // Show user-friendly error message
+      setError(`Failed to delete survey: ${errorMessage}. Please try again or refresh the page.`);
     } finally {
       setIsDeleting(false);
       setDeleteProgress({
@@ -469,6 +694,9 @@ export const useUploadData = (
     uploadProgress,
     deleteProgress,
     
+    // Enhanced upload state
+    uploadState,
+    
     // Filter state
     globalFilters,
     updateGlobalFilters,
@@ -497,6 +725,9 @@ export const useUploadData = (
     isUploading,
     isDeleting,
     error,
-    clearError
+    clearError,
+    
+    // Database state
+    isDatabaseReady
   };
 };

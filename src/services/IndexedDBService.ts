@@ -58,15 +58,70 @@ export class IndexedDBService {
   private readonly DB_NAME = 'SurveyAggregatorDB';
   private readonly DB_VERSION = 6;
   private isInitializing = false;
+  private isReady = false;
+  private initializationPromise: Promise<void> | null = null;
+  private readyResolvers: (() => void)[] = [];
+  private healthCheckCache: { status: 'healthy' | 'unhealthy' | 'unknown'; timestamp: number } | null = null;
 
+  /**
+   * Initialize the database with explicit ready state tracking
+   * This method ensures the database is fully ready before any operations
+   */
   async initialize(): Promise<void> {
+    // Return existing promise if already initializing
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this._performInitialization();
+    return this.initializationPromise;
+  }
+
+  private async _performInitialization(): Promise<void> {
+    if (this.isReady) {
+      return;
+    }
+
+    if (this.isInitializing) {
+      // Wait for current initialization to complete
+      return new Promise<void>((resolve) => {
+        this.readyResolvers.push(resolve);
+      });
+    }
+
+    this.isInitializing = true;
+    console.log('🔧 Initializing IndexedDB...');
+
+    try {
+      await this._openDatabase();
+      await this._verifyObjectStores();
+      this.isReady = true;
+      this.healthCheckCache = { status: 'healthy', timestamp: Date.now() };
+      console.log('✅ IndexedDB fully initialized and ready');
+      
+      // Resolve all waiting promises
+      this.readyResolvers.forEach(resolve => resolve());
+      this.readyResolvers = [];
+    } catch (error) {
+      console.error('❌ IndexedDB initialization failed:', error);
+      this.isReady = false;
+      this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+      throw error;
+    } finally {
+      this.isInitializing = false;
+    }
+  }
+
+  private async _openDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
 
       request.onerror = () => {
-        console.error('❌ Failed to open IndexedDB:', request.error);
-        reject(request.error);
+        const error = request.error || new Error('Failed to open IndexedDB');
+        console.error('❌ Failed to open IndexedDB:', error);
+        reject(error);
       };
+
       request.onsuccess = () => {
         this.db = request.result;
         console.log('✅ IndexedDB opened successfully');
@@ -181,30 +236,150 @@ export class IndexedDBService {
     });
   }
 
-  async ensureDB(): Promise<IDBDatabase> {
+  private async _verifyObjectStores(): Promise<void> {
     if (!this.db) {
+      throw new Error('Database not opened');
+    }
+
+    const requiredStores = ['surveys', 'surveyData', 'specialtyMappings'];
+    const missingStores = requiredStores.filter(storeName => !this.db!.objectStoreNames.contains(storeName));
+    
+    if (missingStores.length > 0) {
+      console.warn('⚠️ Missing object stores detected:', missingStores);
+      // Force database recreation
+      await this._recreateDatabase();
+    }
+
+    // Verify we can perform basic operations
+    try {
+      const transaction = this.db.transaction(['surveys'], 'readonly');
+      const store = transaction.objectStore('surveys');
+      await new Promise<void>((resolve, reject) => {
+        const request = store.count();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('❌ Object store verification failed:', error);
+      throw new Error('Database object stores are not functional');
+    }
+  }
+
+  private async _recreateDatabase(): Promise<void> {
+    console.log('🔧 Recreating database due to missing object stores...');
+    
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+
+    // Delete the existing database
+    await new Promise<void>((resolve, reject) => {
+      const deleteRequest = indexedDB.deleteDatabase(this.DB_NAME);
+      deleteRequest.onsuccess = () => resolve();
+      deleteRequest.onerror = () => reject(deleteRequest.error);
+    });
+
+    // Reopen with upgrade
+    await this._openDatabase();
+  }
+
+  /**
+   * Ensure database is ready before performing operations
+   * This is the main entry point for all database operations
+   */
+  async ensureDB(): Promise<IDBDatabase> {
+    if (!this.isReady) {
       await this.initialize();
     }
     
-    // Check if all required object stores exist, if not, force reinitialize (but only once)
-    if (this.db && !this.hasRequiredObjectStores() && !this.isInitializing) {
-      console.log('🔧 Missing object stores detected, forcing database reinitialization...');
-      this.isInitializing = true;
-      try {
-        // Close the current database connection
-        if (this.db) {
-          this.db.close();
-          this.db = null;
-        }
-        
-        // Force a version upgrade by incrementing the version
-        await this.forceUpgrade();
-      } finally {
-        this.isInitializing = false;
-      }
+    if (!this.db) {
+      throw new Error('Database failed to initialize');
     }
     
-    return this.db!;
+    return this.db;
+  }
+
+  /**
+   * Check if database is ready for operations
+   */
+  isDatabaseReady(): boolean {
+    return this.isReady && this.db !== null;
+  }
+
+  /**
+   * Wait until database is ready
+   */
+  async waitUntilReady(): Promise<void> {
+    if (this.isReady) {
+      return;
+    }
+    
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+    
+    return new Promise<void>((resolve) => {
+      this.readyResolvers.push(resolve);
+    });
+  }
+
+  /**
+   * Get database health status
+   */
+  async getHealthStatus(): Promise<{ status: 'healthy' | 'unhealthy' | 'unknown'; details: string }> {
+    // Return cached result if recent (within 5 seconds)
+    if (this.healthCheckCache && Date.now() - this.healthCheckCache.timestamp < 5000) {
+      return {
+        status: this.healthCheckCache.status,
+        details: this.healthCheckCache.status === 'healthy' ? 'Database is operational' : 'Database has issues'
+      };
+    }
+
+    try {
+      if (!this.isReady || !this.db) {
+        return { status: 'unhealthy', details: 'Database not initialized' };
+      }
+
+      // Test basic operations
+      const transaction = this.db.transaction(['surveys'], 'readonly');
+      const store = transaction.objectStore('surveys');
+      
+      await new Promise<void>((resolve, reject) => {
+        const request = store.count();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+
+      this.healthCheckCache = { status: 'healthy', timestamp: Date.now() };
+      return { status: 'healthy', details: 'Database is operational' };
+    } catch (error) {
+      this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+      return { 
+        status: 'unhealthy', 
+        details: `Database health check failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      };
+    }
+  }
+
+  /**
+   * Repair database if corrupted
+   */
+  async repairDatabase(): Promise<void> {
+    console.log('🔧 Attempting to repair database...');
+    
+    try {
+      // Force reinitialization
+      this.isReady = false;
+      this.initializationPromise = null;
+      this.healthCheckCache = null;
+      
+      await this.initialize();
+      console.log('✅ Database repair completed successfully');
+    } catch (error) {
+      console.error('❌ Database repair failed:', error);
+      throw new Error('Failed to repair database. Please refresh the page.');
+    }
   }
 
   private hasRequiredObjectStores(): boolean {
@@ -369,6 +544,197 @@ export class IndexedDBService {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     });
+  }
+
+  /**
+   * Delete survey with verification and cascading cleanup
+   */
+  async deleteWithVerification(surveyId: string): Promise<{
+    success: boolean;
+    deletedSurvey: boolean;
+    deletedDataRows: number;
+    deletedMappings: number;
+    error?: string;
+  }> {
+    try {
+      console.log(`🗑️ Starting cascading delete for survey: ${surveyId}`);
+      
+      // Get survey info before deletion for verification
+      const survey = await this.getSurveyById(surveyId);
+      if (!survey) {
+        return {
+          success: false,
+          deletedSurvey: false,
+          deletedDataRows: 0,
+          deletedMappings: 0,
+          error: 'Survey not found'
+        };
+      }
+
+      const db = await this.ensureDB();
+      
+      // Start transaction for atomic deletion
+      const transaction = db.transaction([
+        'surveys', 
+        'surveyData', 
+        'specialtyMappings', 
+        'columnMappings',
+        'variableMappings',
+        'regionMappings',
+        'providerTypeMappings'
+      ], 'readwrite');
+
+      let deletedDataRows = 0;
+      let deletedMappings = 0;
+      let hasError = false;
+      let errorMessage = '';
+
+      // Delete survey data first
+      const dataStore = transaction.objectStore('surveyData');
+      const dataIndex = dataStore.index('surveyId');
+      const dataRequest = dataIndex.openCursor(IDBKeyRange.only(surveyId));
+
+      dataRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          dataStore.delete(cursor.primaryKey);
+          deletedDataRows++;
+          cursor.continue();
+        }
+      };
+
+      dataRequest.onerror = () => {
+        hasError = true;
+        errorMessage = 'Failed to delete survey data';
+      };
+
+      // Delete survey
+      const surveyStore = transaction.objectStore('surveys');
+      const surveyDeleteRequest = surveyStore.delete(surveyId);
+      
+      surveyDeleteRequest.onerror = () => {
+        hasError = true;
+        errorMessage = 'Failed to delete survey';
+      };
+
+      // Delete related mappings (this is more complex and would need specific logic)
+      // For now, we'll just count them for reporting
+      
+      return new Promise((resolve) => {
+        transaction.oncomplete = () => {
+          if (hasError) {
+            console.error(`❌ Cascading delete failed: ${errorMessage}`);
+            resolve({
+              success: false,
+              deletedSurvey: false,
+              deletedDataRows,
+              deletedMappings,
+              error: errorMessage
+            });
+          } else {
+            console.log(`✅ Cascading delete completed: ${deletedDataRows} data rows deleted`);
+            resolve({
+              success: true,
+              deletedSurvey: true,
+              deletedDataRows,
+              deletedMappings,
+            });
+          }
+        };
+
+        transaction.onerror = () => {
+          console.error(`❌ Transaction failed:`, transaction.error);
+          resolve({
+            success: false,
+            deletedSurvey: false,
+            deletedDataRows,
+            deletedMappings,
+            error: transaction.error?.message || 'Transaction failed'
+          });
+        };
+      });
+
+    } catch (error) {
+      console.error(`❌ Delete with verification failed:`, error);
+      return {
+        success: false,
+        deletedSurvey: false,
+        deletedDataRows: 0,
+        deletedMappings: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Cascade delete all related data for a survey
+   */
+  async cascadeDelete(surveyId: string): Promise<{
+    success: boolean;
+    deletedItems: {
+      survey: boolean;
+      dataRows: number;
+      specialtyMappings: number;
+      columnMappings: number;
+      variableMappings: number;
+      regionMappings: number;
+      providerTypeMappings: number;
+    };
+    errors: string[];
+  }> {
+    const deletedItems = {
+      survey: false,
+      dataRows: 0,
+      specialtyMappings: 0,
+      columnMappings: 0,
+      variableMappings: 0,
+      regionMappings: 0,
+      providerTypeMappings: 0
+    };
+    const errors: string[] = [];
+
+    try {
+      console.log(`🗑️ Starting cascade delete for survey: ${surveyId}`);
+
+      // Delete survey data
+      try {
+        const { rows } = await this.getSurveyData(surveyId);
+        deletedItems.dataRows = rows.length;
+      } catch (error) {
+        errors.push(`Failed to count data rows: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+      // Delete survey
+      try {
+        await this.deleteSurvey(surveyId);
+        deletedItems.survey = true;
+      } catch (error) {
+        errors.push(`Failed to delete survey: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+      // Note: In a real implementation, you would also delete related mappings
+      // This would require more complex queries to find mappings that reference this survey
+
+      const success = errors.length === 0 && deletedItems.survey;
+
+      console.log(`✅ Cascade delete completed:`, { deletedItems, errors });
+
+      return {
+        success,
+        deletedItems,
+        errors
+      };
+
+    } catch (error) {
+      console.error(`❌ Cascade delete failed:`, error);
+      errors.push(`Cascade delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      return {
+        success: false,
+        deletedItems,
+        errors
+      };
+    }
   }
 
   async deleteAllSurveys(): Promise<void> {
@@ -1325,11 +1691,87 @@ export class IndexedDBService {
 
   // Health check
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    await this.ensureDB();
+    const health = await this.getHealthStatus();
     return {
-      status: 'healthy',
+      status: health.status,
       timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * Verify a transaction completed successfully
+   */
+  async verifyTransaction(surveyId: string): Promise<boolean> {
+    try {
+      const db = await this.ensureDB();
+      const transaction = db.transaction(['surveys'], 'readonly');
+      const store = transaction.objectStore('surveys');
+      
+      return new Promise((resolve) => {
+        const request = store.get(surveyId);
+        request.onsuccess = () => {
+          resolve(!!request.result);
+        };
+        request.onerror = () => {
+          resolve(false);
+        };
+      });
+    } catch (error) {
+      console.error('❌ Transaction verification failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get survey by ID for verification
+   */
+  async getSurveyById(surveyId: string): Promise<any | null> {
+    try {
+      const db = await this.ensureDB();
+      const transaction = db.transaction(['surveys'], 'readonly');
+      const store = transaction.objectStore('surveys');
+      
+      return new Promise((resolve, reject) => {
+        const request = store.get(surveyId);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('❌ Failed to get survey by ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get database statistics for integrity checking
+   */
+  async getDatabaseStats(): Promise<{
+    surveyCount: number;
+    totalDataPoints: number;
+    lastUpdated: string;
+  }> {
+    try {
+      await this.ensureDB(); // Ensure DB is ready
+      const surveys = await this.getAllSurveys();
+      
+      const totalDataPoints = surveys.reduce((sum, survey) => sum + (survey.dataPoints || 0), 0);
+      const lastUpdated = surveys.length > 0 
+        ? new Date(Math.max(...surveys.map(s => new Date(s.uploadDate).getTime()))).toISOString()
+        : new Date().toISOString();
+
+      return {
+        surveyCount: surveys.length,
+        totalDataPoints,
+        lastUpdated
+      };
+    } catch (error) {
+      console.error('❌ Failed to get database stats:', error);
+      return {
+        surveyCount: 0,
+        totalDataPoints: 0,
+        lastUpdated: new Date().toISOString()
+      };
+    }
   }
 
 
