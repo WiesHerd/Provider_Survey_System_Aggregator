@@ -9,6 +9,7 @@ import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinne
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
+import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
 import { downloadSampleFile } from '../utils/downloadUtils';
@@ -509,8 +510,28 @@ const SurveyUpload: React.FC = () => {
 
       // Refresh provider type detection to auto-switch to the uploaded data type
       try {
+        // Clear provider type detection cache to ensure fresh data detection
+        providerTypeDetectionService.clearCache();
+        
+        // Add a small delay to ensure data is fully persisted
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Force refresh provider type detection
         await refreshProviderTypeDetection();
+        
+        console.log('✅ Provider type detection refreshed after upload');
+        
+        // Trigger storage event to notify other components
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'survey-uploaded',
+          newValue: surveyId,
+          url: window.location.href
+        }));
+        
+        // Also dispatch custom events for immediate refresh
+        window.dispatchEvent(new CustomEvent('survey-uploaded', { detail: { surveyId } }));
       } catch (error) {
+        console.error('Failed to refresh provider type detection:', error);
       }
 
       // State already updated above, just set the flag to prevent useEffect override
@@ -578,6 +599,16 @@ const SurveyUpload: React.FC = () => {
       
       setUploadedSurveys([]);
       setSelectedSurvey(null);
+      
+      // Trigger storage event to notify other components
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'survey-deleted',
+        newValue: 'all',
+        url: window.location.href
+      }));
+      
+      // Also dispatch custom events for immediate refresh
+      window.dispatchEvent(new CustomEvent('survey-deleted', { detail: { type: 'all' } }));
       
       
       // Complete progress and show success message

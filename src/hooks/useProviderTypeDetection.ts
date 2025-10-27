@@ -131,6 +131,23 @@ export const useProviderTypeDetection = (
     }
   }, [autoRefresh, loadProviderTypes]);
 
+  // Add immediate refresh capability when data changes
+  useEffect(() => {
+    const handleDataChange = () => {
+      console.log('🔄 Data change detected, refreshing provider types...');
+      loadProviderTypes();
+    };
+
+    // Listen for custom events that indicate data changes
+    window.addEventListener('survey-uploaded', handleDataChange);
+    window.addEventListener('survey-deleted', handleDataChange);
+    
+    return () => {
+      window.removeEventListener('survey-uploaded', handleDataChange);
+      window.removeEventListener('survey-deleted', handleDataChange);
+    };
+  }, [loadProviderTypes]);
+
   // Set up refresh interval - only refresh if we have data or are actively loading
   useEffect(() => {
     if (autoRefresh && refreshInterval > 0 && (hasAnyData || isLoading)) {

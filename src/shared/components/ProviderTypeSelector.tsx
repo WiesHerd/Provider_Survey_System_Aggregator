@@ -43,6 +43,19 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     refresh
   } = useProviderTypeDetection(true, 120000); // Auto-refresh every 2 minutes (reduced frequency)
 
+  // Add a manual refresh trigger for immediate updates
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'survey-uploaded' || e.key === 'survey-deleted') {
+        console.log('🔄 Survey change detected, refreshing provider type detection...');
+        refresh();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [refresh]);
+
   // Get the display text for the current value
   const getCurrentDisplay = () => {
     if (isLoading) {
