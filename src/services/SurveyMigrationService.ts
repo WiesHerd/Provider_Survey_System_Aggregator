@@ -25,12 +25,20 @@ export class SurveyMigrationService {
     try {
       console.log('🔧 Starting survey migration to fix provider type tags...');
       
-      // Open IndexedDB
-      const request = indexedDB.open('SurveyAggregatorDB', 1);
+      // Open IndexedDB with current version
+      const request = indexedDB.open('SurveyAggregatorDB', 6);
       
       return new Promise((resolve, reject) => {
         request.onsuccess = async (event) => {
           const db = (event.target as IDBOpenDBRequest).result;
+          
+          // Check if the surveys object store exists
+          if (!db.objectStoreNames.contains('surveys')) {
+            console.log('🔍 No surveys object store found - no migration needed');
+            this.isMigrationComplete = true;
+            resolve();
+            return;
+          }
           
           try {
             // Get all surveys
@@ -150,8 +158,15 @@ export class SurveyMigrationService {
         };
         
         request.onerror = () => {
-          console.error('❌ Error opening database:', request.error);
-          reject(request.error);
+          console.error('❌ Failed to open database for migration:', request.error);
+          this.isMigrationComplete = true; // Mark as complete to prevent retries
+          resolve(); // Don't reject, just resolve to prevent app crash
+        };
+        
+        request.onupgradeneeded = () => {
+          console.log('🔍 Database upgrade needed - no migration needed');
+          this.isMigrationComplete = true;
+          resolve();
         };
       });
     } catch (error) {
@@ -165,29 +180,49 @@ export class SurveyMigrationService {
    */
   public async checkMigrationNeeded(): Promise<boolean> {
     try {
-      const request = indexedDB.open('SurveyAggregatorDB', 1);
+      const request = indexedDB.open('SurveyAggregatorDB', 6); // Use current database version
       
       return new Promise((resolve, reject) => {
         request.onsuccess = (event) => {
           const db = (event.target as IDBOpenDBRequest).result;
-          const transaction = db.transaction(['surveys'], 'readonly');
-          const store = transaction.objectStore('surveys');
-          const getAllRequest = store.getAll();
           
-          getAllRequest.onsuccess = () => {
-            const surveys = getAllRequest.result;
-            const needsMigration = surveys.some((survey: any) => !survey.providerType);
-            console.log(`🔍 Migration check: ${needsMigration ? 'NEEDED' : 'NOT NEEDED'} (${surveys.length} surveys checked)`);
-            resolve(needsMigration);
-          };
+          // Check if the surveys object store exists
+          if (!db.objectStoreNames.contains('surveys')) {
+            console.log('🔍 No surveys object store found - no migration needed');
+            resolve(false);
+            return;
+          }
           
-          getAllRequest.onerror = () => {
-            reject(getAllRequest.error);
-          };
+          try {
+            const transaction = db.transaction(['surveys'], 'readonly');
+            const store = transaction.objectStore('surveys');
+            const getAllRequest = store.getAll();
+            
+            getAllRequest.onsuccess = () => {
+              const surveys = getAllRequest.result;
+              const needsMigration = surveys.some((survey: any) => !survey.providerType);
+              console.log(`🔍 Migration check: ${needsMigration ? 'NEEDED' : 'NOT NEEDED'} (${surveys.length} surveys checked)`);
+              resolve(needsMigration);
+            };
+            
+            getAllRequest.onerror = () => {
+              console.error('❌ Failed to get surveys:', getAllRequest.error);
+              resolve(false); // Don't reject, just return false
+            };
+          } catch (transactionError) {
+            console.error('❌ Transaction error:', transactionError);
+            resolve(false); // Don't reject, just return false
+          }
         };
         
         request.onerror = () => {
-          reject(request.error);
+          console.error('❌ Failed to open database:', request.error);
+          resolve(false); // Don't reject, just return false
+        };
+        
+        request.onupgradeneeded = () => {
+          console.log('🔍 Database upgrade needed - no migration needed');
+          resolve(false);
         };
       });
     } catch (error) {
