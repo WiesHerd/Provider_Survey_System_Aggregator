@@ -121,6 +121,7 @@ export const OptimizedRegionalAnalytics: React.FC = () => {
         recordCount={0}
         progress={progress}
         showProgress={true}
+        overlay={true}
       />
     );
   }

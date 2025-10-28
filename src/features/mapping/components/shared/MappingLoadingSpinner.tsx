@@ -17,17 +17,10 @@ export const MappingLoadingSpinner: React.FC<MappingLoadingSpinnerProps> = ({
   const defaultMessage = message || `Loading ${entityName.toLowerCase()} mappings...`;
   
   return (
-    <div className="w-full min-h-screen">
-      <div className="w-full flex flex-col gap-4">
-        {/* Main Mapping Section - Same container as actual content */}
-        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <AnalysisProgressBar
-            message={defaultMessage}
-            progress={100}
-            recordCount={0}
-          />
-        </div>
-      </div>
-    </div>
+    <AnalysisProgressBar
+      message={defaultMessage}
+      progress={100}
+      recordCount={0}
+    />
   );
 };

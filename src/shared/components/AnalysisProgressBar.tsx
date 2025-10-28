@@ -27,6 +27,7 @@ export const AnalysisProgressBar: React.FC<AnalysisProgressBarProps> = ({
       progress={progress}
       showProgress={true}
       className={className}
+      overlay={true}
     />
   );
 };

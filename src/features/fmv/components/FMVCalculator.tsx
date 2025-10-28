@@ -145,6 +145,7 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
         recordCount={0}
         progress={progress}
         showProgress={true}
+        overlay={true}
       />
     );
   }

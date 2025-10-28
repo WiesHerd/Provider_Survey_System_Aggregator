@@ -1090,6 +1090,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         recordCount={0}
         progress={progress}
         showProgress={true}
+        overlay={true}
       />
     );
   }

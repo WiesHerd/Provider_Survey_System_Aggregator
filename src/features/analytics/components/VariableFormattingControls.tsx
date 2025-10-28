@@ -94,14 +94,6 @@ export const VariableFormattingControls: React.FC<VariableFormattingControlsProp
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white focus:ring-green-500"
-      >
-        <Cog6ToothIcon className="w-4 h-4 mr-2" />
-        Format Variables
-      </button>
-
       {open && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-screen items-center justify-center p-4">

@@ -874,6 +874,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
         recordCount={0}
         progress={progress}
         showProgress={true}
+        overlay={true}
       />
     );
   }

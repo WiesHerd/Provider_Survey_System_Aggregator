@@ -99,7 +99,7 @@ export const LoadingContainer: React.FC<LoadingContainerProps> = ({
       
       case 'overlay':
         return (
-          <div className="fixed inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm z-50">
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm z-[60]">
             <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
               <div className="w-6 h-6 rounded-full animate-spin mx-auto mb-3"
                 style={{

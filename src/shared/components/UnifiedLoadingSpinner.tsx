@@ -9,6 +9,7 @@ interface UnifiedLoadingSpinnerProps {
   progress?: number; // If provided, use this; otherwise use useSmoothProgress
   className?: string;
   onComplete?: () => void;
+  overlay?: boolean; // If true, show as overlay with blur backdrop
 }
 
 /**
@@ -30,7 +31,8 @@ export const UnifiedLoadingSpinner: React.FC<UnifiedLoadingSpinnerProps> = ({
   showProgress = true,
   progress: externalProgress,
   className = '',
-  onComplete
+  onComplete,
+  overlay = false
 }) => {
   // Use external progress if provided, otherwise use internal smooth progress
   const { progress: internalProgress, startProgress, completeProgress } = useSmoothProgress({
@@ -59,36 +61,48 @@ export const UnifiedLoadingSpinner: React.FC<UnifiedLoadingSpinnerProps> = ({
   
   console.log(`🔄 UnifiedLoadingSpinner progress: ${currentProgress.toFixed(1)}% (external: ${externalProgress}, internal: ${internalProgress.toFixed(1)})`);
 
+  const content = (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
+      <div className="text-center">
+        {/* Purple/Indigo Arc Spinner - UNIFIED SIZE */}
+        <div className="w-12 h-12 mx-auto mb-4">
+          <div 
+            className="w-12 h-12 rounded-full animate-spin unified-spinner"
+          />
+        </div>
+        
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{message}</h3>
+        <p className="text-gray-600 mb-4">Processing {recordCount} records for optimal performance...</p>
+        
+        {/* Progress Bar - Only show if showProgress is true */}
+        {showProgress && (
+          <>
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div 
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${currentProgress}%` }}
+              />
+            </div>
+            
+            {/* Progress Percentage */}
+            <p className="text-sm text-gray-700 font-medium">{currentProgress.toFixed(2)}% complete</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  if (overlay) {
+    return (
+      <div className={`fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[60] ${className}`}>
+        {content}
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen bg-gray-50 flex items-center justify-center ${className}`}>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
-        <div className="text-center">
-          {/* Purple/Indigo Arc Spinner - UNIFIED SIZE */}
-          <div className="w-12 h-12 mx-auto mb-4">
-            <div 
-              className="w-12 h-12 rounded-full animate-spin unified-spinner"
-            />
-          </div>
-          
-          <h3 className="text-lg font-medium text-gray-900 mb-2">{message}</h3>
-          <p className="text-gray-600 mb-4">Processing {recordCount} records for optimal performance...</p>
-          
-          {/* Progress Bar - Only show if showProgress is true */}
-          {showProgress && (
-            <>
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${currentProgress}%` }}
-                />
-              </div>
-              
-              {/* Progress Percentage */}
-              <p className="text-sm text-gray-700 font-medium">{currentProgress.toFixed(2)}% complete</p>
-            </>
-          )}
-        </div>
-      </div>
+      {content}
     </div>
   );
 };
