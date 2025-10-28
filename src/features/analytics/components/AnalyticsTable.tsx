@@ -105,18 +105,17 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <BoltIcon className="w-8 h-8 text-gray-500" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
-          <p className="text-gray-500 mb-4">{error}</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Benchmarking Data Available</h3>
+          <p className="text-gray-500 mb-4">All specialties are mapped, or no survey data is available.</p>
           <button
             onClick={() => window.location.reload()}
-            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
           >
-            Retry
+            <BoltIcon className="w-4 h-4 mr-2" />
+            Refresh Data
           </button>
         </div>
       </div>
@@ -125,12 +124,21 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <EmptyState
-          icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
-          title="No Benchmarking Data Available"
-          message="Try adjusting your filters to see results. Upload surveys and complete mappings to generate analytics data."
-        />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <BoltIcon className="w-8 h-8 text-gray-500" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Benchmarking Data Available</h3>
+          <p className="text-gray-500 mb-4">All specialties are mapped, or no survey data is available.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            <BoltIcon className="w-4 h-4 mr-2" />
+            Refresh Data
+          </button>
+        </div>
       </div>
     );
   }
