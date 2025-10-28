@@ -159,23 +159,6 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
             left: 'auto',
             top: 'auto',
             zIndex: 'auto',
-            minWidth: '140px',
-            padding: '8px',
-            textAlign: 'left',
-            borderBottom: 'none',
-            boxShadow: 'none'
-          }}
-        >
-          Survey Source
-        </th>
-        <th 
-          style={{ 
-            fontWeight: 'bold', 
-            backgroundColor: '#F5F5F5',
-            position: 'static',
-            left: 'auto',
-            top: 'auto',
-            zIndex: 'auto',
             minWidth: '180px',
             padding: '8px',
             textAlign: 'left',
@@ -194,7 +177,6 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
             top: 'auto',
             zIndex: 'auto',
             minWidth: '120px',
-            borderRight: '1px solid #E0E0E0',
             padding: '8px',
             textAlign: 'left',
             borderBottom: 'none',
@@ -202,6 +184,24 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
           }}
         >
           Region
+        </th>
+        <th 
+          style={{ 
+            fontWeight: 'bold', 
+            backgroundColor: '#F5F5F5',
+            position: 'static',
+            left: 'auto',
+            top: 'auto',
+            zIndex: 'auto',
+            minWidth: '140px',
+            borderRight: '1px solid #E0E0E0',
+            padding: '8px',
+            textAlign: 'left',
+            borderBottom: 'none',
+            boxShadow: 'none'
+          }}
+        >
+          Survey Source
         </th>
          
         {/* DYNAMIC: Generate sub-headers for selected variables */}

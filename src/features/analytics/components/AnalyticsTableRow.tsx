@@ -36,21 +36,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
 }) => {
   return (
     <tr key={`${row.surveySource}-${row.geographicRegion}-${index}`} className="hover:bg-gray-50">
-      {/* Survey Data Columns (Frozen) */}
-      <td 
-        style={{ 
-          position: 'static',
-          left: 'auto',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e0e0e0',
-          zIndex: 'auto',
-          padding: '8px',
-          boxShadow: 'none',
-          fontSize: '15px'
-        }}
-      >
-        {row.surveySource}
-      </td>
+      {/* Survey Data Columns (Frozen) - Reordered: Specialty, Region, Survey Source */}
       <td 
         style={{ 
           position: 'static',
@@ -78,6 +64,20 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         }}
       >
         {formatRegionForDisplay(row.geographicRegion)}
+      </td>
+      <td 
+        style={{ 
+          position: 'static',
+          left: 'auto',
+          backgroundColor: 'white',
+          borderRight: '1px solid #e0e0e0',
+          zIndex: 'auto',
+          padding: '8px',
+          boxShadow: 'none',
+          fontSize: '15px'
+        }}
+      >
+        {row.surveySource}
       </td>
       
       {/* Dynamic Variable Columns */}
