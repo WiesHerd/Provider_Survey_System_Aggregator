@@ -8,17 +8,17 @@
 import React, { memo } from 'react';
 import { formatSpecialtyForDisplay, formatRegionForDisplay } from '../../../shared/utils/formatters';
 import { 
-  formatVariableValue, 
   getVariableLightBackgroundColor,
   mapVariableNameToStandard
 } from '../utils/variableFormatters';
+import { VariableFormattingService } from '../services/variableFormattingService';
 import { DynamicAggregatedData } from '../types/variables';
 
 interface AnalyticsTableRowProps {
   row: any; // DynamicAggregatedData | AggregatedData
   selectedVariables: string[];
-  freezeLeftColumns: boolean;
   index: number;
+  formattingRules?: any[]; // User-defined formatting rules
 }
 
 /**
@@ -26,53 +26,55 @@ interface AnalyticsTableRowProps {
  * 
  * @param row - Data row to display
  * @param selectedVariables - Selected variables for dynamic rendering
- * @param freezeLeftColumns - Whether left columns are frozen
  * @param index - Row index for key
  */
 export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
   row,
   selectedVariables,
-  freezeLeftColumns,
-  index
+  index,
+  formattingRules = []
 }) => {
   return (
     <tr key={`${row.surveySource}-${row.geographicRegion}-${index}`} className="hover:bg-gray-50">
       {/* Survey Data Columns (Frozen) */}
       <td 
         style={{ 
-          position: freezeLeftColumns ? 'sticky' : 'static',
-          left: freezeLeftColumns ? 0 : 'auto',
-          backgroundColor: freezeLeftColumns ? '#f8f9fa' : 'white',
+          position: 'static',
+          left: 'auto',
+          backgroundColor: 'white',
           borderRight: '1px solid #e0e0e0',
-          zIndex: freezeLeftColumns ? 5 : 'auto',
+          zIndex: 'auto',
           padding: '8px',
-          boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+          boxShadow: 'none',
+          fontSize: '15px'
         }}
       >
         {row.surveySource}
       </td>
       <td 
         style={{ 
-          position: freezeLeftColumns ? 'sticky' : 'static',
-          left: freezeLeftColumns ? '140px' : 'auto',
-          backgroundColor: freezeLeftColumns ? '#f8f9fa' : 'white',
+          position: 'static',
+          left: 'auto',
+          backgroundColor: 'white',
           borderRight: '1px solid #e0e0e0',
-          zIndex: freezeLeftColumns ? 5 : 'auto',
+          zIndex: 'auto',
           padding: '8px',
-          boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+          boxShadow: 'none',
+          fontSize: '15px'
         }}
       >
         {formatSpecialtyForDisplay(row.originalSpecialty)}
       </td>
       <td 
         style={{ 
-          position: freezeLeftColumns ? 'sticky' : 'static',
-          left: freezeLeftColumns ? '320px' : 'auto',
-          backgroundColor: freezeLeftColumns ? '#f8f9fa' : 'white',
+          position: 'static',
+          left: 'auto',
+          backgroundColor: 'white',
           borderRight: '1px solid #e0e0e0',
-          zIndex: freezeLeftColumns ? 5 : 'auto',
+          zIndex: 'auto',
           padding: '8px',
-          boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+          boxShadow: 'none',
+          fontSize: '15px'
         }}
       >
         {formatRegionForDisplay(row.geographicRegion)}
@@ -84,12 +86,16 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         const legacyRow = row as any; // Legacy data format
         const lightColor = getVariableLightBackgroundColor(varName, varIndex);
         
-        // Try dynamic format first
+        // FIXED: Improved format detection and variable handling
         const normalizedVarName = mapVariableNameToStandard(varName);
-        let metrics = dynamicRow.variables?.[normalizedVarName];
+        let metrics: any = null;
         
-        // Fallback to legacy format if dynamic format not available
-        if (!metrics && !dynamicRow.variables) {
+        // Check if this is dynamic format (has variables property)
+        if (dynamicRow.variables && typeof dynamicRow.variables === 'object') {
+          // Dynamic format: use variables object directly
+          metrics = dynamicRow.variables[normalizedVarName];
+        } else {
+          // Legacy format: use expanded field mapping
           const legacyFieldMap: Record<string, string> = {
             'tcc': 'tcc',
             'work_rvus': 'wrvu',
@@ -98,7 +104,18 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             'conversion_factor': 'cf',
             'tcc_per_work_rvu': 'cf',
             'cfs': 'cf',  // Map 'cfs' to 'cf' for legacy data
-            'tcc_per_work_rvus': 'cf'
+            'tcc_per_work_rvus': 'cf',
+            // FIXED: Add support for new variables
+            'base_salary': 'base_salary',
+            'base_compensation': 'base_salary',
+            'salary': 'base_salary',
+            'panel_size': 'panel_size',
+            'total_encounters': 'total_encounters',
+            'encounters': 'total_encounters',
+            'asa_units': 'asa_units',
+            'asa': 'asa_units',
+            'net_collections': 'net_collections',
+            'collections': 'net_collections'
           };
           
           const legacyPrefix = legacyFieldMap[varName] || varName;
@@ -124,16 +141,24 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         
         return metrics ? (
           <React.Fragment key={varName}>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_orgs.toLocaleString()}</td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{metrics.n_incumbents.toLocaleString()}</td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p25, varName)}</td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p50, varName)}</td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p75, varName)}</td>
-            <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px' }}>{formatVariableValue(metrics.p90, varName)}</td>
+            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>{metrics.n_orgs.toLocaleString()}</td>
+            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>{metrics.n_incumbents.toLocaleString()}</td>
+            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+              {VariableFormattingService.getInstance().formatVariableValue(metrics.p25, varName, { rules: formattingRules })}
+            </td>
+            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+              {VariableFormattingService.getInstance().formatVariableValue(metrics.p50, varName, { rules: formattingRules })}
+            </td>
+            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+              {VariableFormattingService.getInstance().formatVariableValue(metrics.p75, varName, { rules: formattingRules })}
+            </td>
+            <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+              {VariableFormattingService.getInstance().formatVariableValue(metrics.p90, varName, { rules: formattingRules })}
+            </td>
           </React.Fragment>
         ) : (
           <React.Fragment key={varName}>
-            <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px' }} colSpan={6}>
+            <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px', fontSize: '15px' }} colSpan={6}>
               n/a
             </td>
           </React.Fragment>

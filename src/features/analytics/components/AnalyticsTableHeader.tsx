@@ -17,7 +17,6 @@ interface ColumnGroup {
 
 interface AnalyticsTableHeaderProps {
   columnGroups: ColumnGroup[];
-  freezeLeftColumns: boolean;
   selectedVariables: string[];
 }
 
@@ -25,12 +24,10 @@ interface AnalyticsTableHeaderProps {
  * AnalyticsTableHeader component for table headers
  * 
  * @param columnGroups - Dynamic column groups
- * @param freezeLeftColumns - Whether left columns are frozen
  * @param selectedVariables - Selected variables for fallback headers
  */
 export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
   columnGroups,
-  freezeLeftColumns,
   selectedVariables
 }) => {
   return (
@@ -46,19 +43,20 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
         {/* Survey Data Section Header */}
         <th 
           style={{ 
-            fontWeight: 'bold', 
-            backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5', 
+            fontWeight: '600', 
+            backgroundColor: '#F5F5F5', 
             borderRight: '1px solid #E0E0E0',
             borderBottom: 'none',
             textAlign: 'center',
             color: '#424242',
-            position: freezeLeftColumns ? 'sticky' : 'static',
-            left: freezeLeftColumns ? 0 : 'auto',
+            position: 'static',
+            left: 'auto',
             top: 0,
-            zIndex: freezeLeftColumns ? 15 : 'auto',
+            zIndex: 'auto',
             minWidth: '440px',
             padding: '12px 8px',
-            boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+            boxShadow: 'none',
+            fontSize: '15px'
           }} 
           colSpan={3}
         >
@@ -70,7 +68,7 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
           <th 
             key={group.normalizedName}
             style={{
-              fontWeight: 'bold',
+              fontWeight: '600',
               backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
               textAlign: 'center',
               borderRight: '1px solid #E0E0E0',
@@ -78,7 +76,8 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
               position: 'sticky',
               top: 0,
               zIndex: 11,
-              padding: '12px 8px'
+              padding: '12px 8px',
+              fontSize: '15px'
             }}
             colSpan={6}
           >
@@ -155,16 +154,16 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
         <th 
           style={{ 
             fontWeight: 'bold', 
-            backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5',
-            position: freezeLeftColumns ? 'sticky' : 'static',
-            left: freezeLeftColumns ? 0 : 'auto',
-            top: freezeLeftColumns ? '48px' : 'auto',
-            zIndex: freezeLeftColumns ? 15 : 'auto',
+            backgroundColor: '#F5F5F5',
+            position: 'static',
+            left: 'auto',
+            top: 'auto',
+            zIndex: 'auto',
             minWidth: '140px',
             padding: '8px',
             textAlign: 'left',
             borderBottom: 'none',
-            boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+            boxShadow: 'none'
           }}
         >
           Survey Source
@@ -172,16 +171,16 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
         <th 
           style={{ 
             fontWeight: 'bold', 
-            backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5',
-            position: freezeLeftColumns ? 'sticky' : 'static',
-            left: freezeLeftColumns ? '140px' : 'auto',
-            top: freezeLeftColumns ? '48px' : 'auto',
-            zIndex: freezeLeftColumns ? 15 : 'auto',
+            backgroundColor: '#F5F5F5',
+            position: 'static',
+            left: 'auto',
+            top: 'auto',
+            zIndex: 'auto',
             minWidth: '180px',
             padding: '8px',
             textAlign: 'left',
             borderBottom: 'none',
-            boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+            boxShadow: 'none'
           }}
         >
           Specialty
@@ -189,17 +188,17 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
         <th 
           style={{ 
             fontWeight: 'bold', 
-            backgroundColor: freezeLeftColumns ? '#e9ecef' : '#F5F5F5',
-            position: freezeLeftColumns ? 'sticky' : 'static',
-            left: freezeLeftColumns ? '320px' : 'auto',
-            top: freezeLeftColumns ? '48px' : 'auto',
-            zIndex: freezeLeftColumns ? 15 : 'auto',
+            backgroundColor: '#F5F5F5',
+            position: 'static',
+            left: 'auto',
+            top: 'auto',
+            zIndex: 'auto',
             minWidth: '120px',
             borderRight: '1px solid #E0E0E0',
             padding: '8px',
             textAlign: 'left',
             borderBottom: 'none',
-            boxShadow: freezeLeftColumns ? '2px 0 5px rgba(0,0,0,0.1)' : 'none'
+            boxShadow: 'none'
           }}
         >
           Region

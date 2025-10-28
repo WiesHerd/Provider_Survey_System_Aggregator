@@ -122,7 +122,7 @@ export const CHART_COLORS = {
 export const ROUTES = {
   DASHBOARD: '/dashboard',
   UPLOAD: '/upload',
-  ANALYTICS: '/analytics',
+  ANALYTICS: '/benchmarking',
   REGIONAL_ANALYTICS: '/regional-analytics',
   FMV_CALCULATOR: '/fmv-calculator',
   SPECIALTY_MAPPING: '/specialty-mapping',

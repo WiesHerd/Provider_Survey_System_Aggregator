@@ -1,11 +1,18 @@
 /**
- * Analytics Error Boundary Component
+ * Analytics Error Boundary
+ * Provides enterprise-grade error handling for the analytics feature
  * 
- * Error boundary for the analytics feature to handle runtime errors gracefully.
- * Following enterprise patterns for error handling and user experience.
+ * Google-Level Error Handling:
+ * - Graceful degradation
+ * - User-friendly error messages
+ * - Recovery options
+ * - Diagnostic information for debugging
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Box, Typography, Button, Alert, Collapse, IconButton } from '@mui/material';
+import { ExclamationTriangleIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@heroicons/react/24/solid';
 
 interface Props {
   children: ReactNode;
@@ -16,81 +23,266 @@ interface State {
   hasError: boolean;
   error?: Error;
   errorInfo?: ErrorInfo;
+  showDetails: boolean;
+  retryCount: number;
 }
 
-/**
- * AnalyticsErrorBoundary component for error handling
- * 
- * @param children - Child components to wrap
- * @param fallback - Custom fallback UI (optional)
- */
 export class AnalyticsErrorBoundary extends Component<Props, State> {
+  private maxRetries = 3;
+
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { 
+      hasError: false, 
+      showDetails: false,
+      retryCount: 0
+    };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Analytics Error Boundary caught an error:', error, errorInfo);
+    console.error('🚨 Analytics Error Boundary caught an error:', error, errorInfo);
     
-    // Log to error reporting service in production
-    if (process.env.NODE_ENV === 'production') {
-      // TODO: Integrate with error reporting service (e.g., Sentry)
-      console.error('Production error:', { error, errorInfo });
-    }
+    // Log to error reporting service (if available)
+    this.logErrorToService(error, errorInfo);
     
-    this.setState({ error, errorInfo });
+    this.setState({
+      error,
+      errorInfo
+    });
   }
 
-  handleRetry = () => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+  private logErrorToService = (error: Error, errorInfo: ErrorInfo) => {
+    // In a real application, this would send to an error reporting service
+    // For now, we'll just log to console with structured data
+    const errorReport = {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      url: window.location.href
+    };
+    
+    console.error('📊 Error Report:', errorReport);
+  };
+
+  private handleRetry = () => {
+    if (this.state.retryCount < this.maxRetries) {
+      this.setState(prevState => ({
+        hasError: false,
+        error: undefined,
+        errorInfo: undefined,
+        retryCount: prevState.retryCount + 1
+      }));
+    } else {
+      // Max retries reached, reload the page
+      window.location.reload();
+    }
+  };
+
+  private handleReload = () => {
+    window.location.reload();
+  };
+
+  private toggleDetails = () => {
+    this.setState(prevState => ({
+      showDetails: !prevState.showDetails
+    }));
+  };
+
+  private getErrorMessage = (error: Error): string => {
+    // Provide user-friendly error messages based on error type
+    if (error.message.includes('IndexedDB')) {
+      return 'Database connection failed. This might be due to browser storage issues.';
+    }
+    
+    if (error.message.includes('Failed to load analytics data')) {
+      return 'Unable to load survey data. Please check if you have uploaded any surveys.';
+    }
+    
+    if (error.message.includes('Network')) {
+      return 'Network error occurred while loading data. Please check your internet connection.';
+    }
+    
+    if (error.message.includes('Permission')) {
+      return 'Permission denied. Please check your browser settings for local storage access.';
+    }
+    
+    return 'An unexpected error occurred while loading analytics data.';
+  };
+
+  private getRecoverySuggestions = (error: Error): string[] => {
+    const suggestions: string[] = [];
+    
+    if (error.message.includes('IndexedDB')) {
+      suggestions.push('Try refreshing the page');
+      suggestions.push('Clear your browser cache and cookies');
+      suggestions.push('Check if your browser supports IndexedDB');
+      suggestions.push('Try using a different browser (Chrome, Firefox, Edge)');
+    } else if (error.message.includes('Failed to load analytics data')) {
+      suggestions.push('Upload some survey data first');
+      suggestions.push('Check if your data was uploaded successfully');
+      suggestions.push('Try refreshing the page');
+    } else {
+      suggestions.push('Try refreshing the page');
+      suggestions.push('Clear your browser cache');
+      suggestions.push('Contact support if the problem persists');
+    }
+    
+    return suggestions;
   };
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Analytics Error</h3>
-            <p className="text-gray-500 mb-4">
-              Something went wrong while loading the analytics data. Please try refreshing the page.
-            </p>
-            <div className="flex justify-center gap-4">
-              <button
+      const { error, retryCount, showDetails } = this.state;
+      const errorMessage = error ? this.getErrorMessage(error) : 'An unknown error occurred';
+      const suggestions = error ? this.getRecoverySuggestions(error) : [];
+      const canRetry = retryCount < this.maxRetries;
+
+      return (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '400px',
+            p: 3,
+            bgcolor: 'background.default'
+          }}
+        >
+          <Box
+            sx={{
+              maxWidth: 600,
+              width: '100%',
+              textAlign: 'center'
+            }}
+          >
+            {/* Error Icon */}
+            <Box sx={{ mb: 3 }}>
+              <ExclamationTriangleIcon 
+                style={{ 
+                  width: 64, 
+                  height: 64, 
+                  color: '#f59e0b',
+                  margin: '0 auto'
+                }} 
+              />
+            </Box>
+
+            {/* Error Title */}
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600, color: 'error.main' }}>
+              Analytics Error
+            </Typography>
+
+            {/* Error Message */}
+            <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
+              {errorMessage}
+            </Typography>
+
+            {/* Error Alert */}
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mb: 3, 
+                textAlign: 'left',
+                '& .MuiAlert-message': {
+                  width: '100%'
+                }
+              }}
+            >
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>What happened?</strong><br />
+                The analytics feature encountered an error while loading your data.
+              </Typography>
+              
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>Recovery suggestions:</strong>
+              </Typography>
+              
+              <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                {suggestions.map((suggestion, index) => (
+                  <Typography key={index} component="li" variant="body2" sx={{ mb: 0.5 }}>
+                    {suggestion}
+                  </Typography>
+                ))}
+              </Box>
+            </Alert>
+
+            {/* Action Buttons */}
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 3 }}>
+              {canRetry && (
+                <Button
+                  variant="contained"
+                  startIcon={<ArrowPathIcon style={{ width: 20, height: 20 }} />}
                 onClick={this.handleRetry}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  sx={{ borderRadius: '8px', px: 3 }}
+                >
+                  Try Again ({this.maxRetries - retryCount} attempts left)
+                </Button>
+              )}
+              
+              <Button
+                variant="outlined"
+                onClick={this.handleReload}
+                sx={{ borderRadius: '8px', px: 3 }}
               >
-                Try Again
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
-              >
-                Refresh Page
-              </button>
-            </div>
-            {process.env.NODE_ENV === 'development' && this.state.error && (
-              <details className="mt-4 text-left">
-                <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
-                  Error Details (Development)
-                </summary>
-                <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto">
-                  {this.state.error.toString()}
-                  {this.state.errorInfo?.componentStack}
-                </pre>
-              </details>
+                Reload Page
+              </Button>
+            </Box>
+
+            {/* Technical Details (Collapsible) */}
+            {error && (
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  variant="text"
+                  onClick={this.toggleDetails}
+                  endIcon={showDetails ? 
+                    <ChevronDownIcon style={{ width: 20, height: 20 }} /> : 
+                    <ChevronRightIcon style={{ width: 20, height: 20 }} />
+                  }
+                  sx={{ mb: 2 }}
+                >
+                  {showDetails ? 'Hide' : 'Show'} Technical Details
+                </Button>
+                
+                <Collapse in={showDetails}>
+                  <Alert severity="info" sx={{ textAlign: 'left' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                      Error Details:
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 1, fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                      <strong>Error:</strong> {error.message}
+                    </Typography>
+                    {error.stack && (
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'pre-wrap' }}>
+                        <strong>Stack Trace:</strong><br />
+                        {error.stack}
+                      </Typography>
+                    )}
+                    {this.state.errorInfo?.componentStack && (
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'pre-wrap', mt: 1 }}>
+                        <strong>Component Stack:</strong><br />
+                        {this.state.errorInfo.componentStack}
+                      </Typography>
+                    )}
+                  </Alert>
+                </Collapse>
+              </Box>
             )}
-          </div>
-        </div>
+
+            {/* Retry Count Info */}
+            {retryCount > 0 && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
+                Retry attempt {retryCount} of {this.maxRetries}
+              </Typography>
+            )}
+          </Box>
+        </Box>
       );
     }
 

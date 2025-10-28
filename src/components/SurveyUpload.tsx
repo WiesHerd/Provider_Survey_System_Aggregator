@@ -616,24 +616,20 @@ const SurveyUpload: React.FC = () => {
         ]);
       };
       
-      // Clear all surveys first with timeout
+      // Clear all surveys first with timeout (now includes cache clearing)
       console.log('🗑️ Deleting all surveys...');
-      await withTimeout(dataService.deleteAllSurveys(), 10000, 'Delete all surveys');
-      
-      // Clear both possible IndexedDB databases with timeout
-      console.log('🗑️ Clearing IndexedDB...');
-      await withTimeout(clearStorage.clearIndexedDB(), 15000, 'Clear IndexedDB');
-      
-      // Also clear the old survey-data database if it exists
-      console.log('🗑️ Clearing old database...');
       try {
-        const oldDbRequest = indexedDB.deleteDatabase('survey-data');
-        await withTimeout(new Promise((resolve, reject) => {
-          oldDbRequest.onsuccess = () => resolve(true);
-          oldDbRequest.onerror = () => resolve(true); // Not an error if it doesn't exist
-        }), 5000, 'Clear old database');
-      } catch (error) {
-        console.warn('⚠️ Could not clear old database:', error);
+        await withTimeout(dataService.deleteAllSurveys(), 10000, 'Delete all surveys');
+        console.log('✅ All surveys deleted successfully');
+      } catch (deleteError) {
+        console.warn('⚠️ Regular delete failed, trying force clear:', deleteError);
+        try {
+          await withTimeout(dataService.forceClearDatabase(), 5000, 'Force clear database');
+          console.log('✅ Database force cleared successfully');
+        } catch (forceError) {
+          console.error('❌ Both delete methods failed:', forceError);
+          throw new Error(`Failed to clear data: ${forceError instanceof Error ? forceError.message : 'Unknown error'}`);
+        }
       }
       
       // Clear localStorage as well

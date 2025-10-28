@@ -69,13 +69,14 @@ export class VariableDiscoveryService {
         if (a.category !== b.category) {
           return a.category.localeCompare(b.category);
         }
-        return a.name.localeCompare(b.name);
+        return a.normalizedName.localeCompare(b.normalizedName);
       });
       
       this.cacheTimestamp = now;
       
       const duration = performance.now() - startTime;
       console.log(`✅ VariableDiscoveryService: Discovered ${this.cache.length} variables in ${duration.toFixed(2)}ms`);
+      console.log('🔍 VariableDiscoveryService: Discovered variables:', this.cache.map(v => v.normalizedName));
       
       return this.cache;
       

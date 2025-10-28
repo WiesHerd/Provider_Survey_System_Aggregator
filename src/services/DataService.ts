@@ -29,7 +29,20 @@ export class DataService {
 
   // Survey Methods
   async getAllSurveys() {
-    return await this.indexedDB.getAllSurveys();
+    console.log('📥 DataService: Getting all surveys from IndexedDB...');
+    const surveys = await this.indexedDB.getAllSurveys();
+    console.log('📊 DataService: Retrieved surveys from IndexedDB:', {
+      surveyCount: surveys.length,
+      surveys: surveys.map(s => ({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        year: s.year,
+        rowCount: s.rowCount,
+        specialtyCount: s.specialtyCount
+      }))
+    });
+    return surveys;
   }
 
   async createSurvey(survey: any) {
@@ -48,12 +61,29 @@ export class DataService {
     return await this.indexedDB.deleteWithVerification(surveyId);
   }
 
+  // Cache Methods for Analytics
+  async saveToCache(key: string, data: any): Promise<void> {
+    return await this.indexedDB.saveToCache(key, data);
+  }
+
+  async getFromCache(key: string): Promise<any> {
+    return await this.indexedDB.getFromCache(key);
+  }
+
+  async clearCache(key?: string): Promise<void> {
+    return await this.indexedDB.clearCache(key);
+  }
+
   async cascadeDelete(surveyId: string) {
     return await this.indexedDB.cascadeDelete(surveyId);
   }
 
   async deleteAllSurveys() {
     return await this.indexedDB.deleteAllSurveys();
+  }
+
+  async forceClearDatabase() {
+    return await this.indexedDB.forceClearDatabase();
   }
 
   async uploadSurvey(

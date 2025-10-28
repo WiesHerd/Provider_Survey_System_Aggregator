@@ -126,15 +126,7 @@ export const transformSurveyData = (
       cf_p25: 40.0 + (baseMultiplier * 20.0),
       cf_p50: 50.0 + (baseMultiplier * 30.0),
       cf_p75: 60.0 + (baseMultiplier * 40.0),
-      cf_p90: 80.0 + (baseMultiplier * 60.0),
-      
-      // Base Salary - Realistic data based on survey size (typically 70-80% of TCC)
-      base_salary_n_orgs: Math.round(10 + (baseMultiplier * 20)),
-      base_salary_n_incumbents: Math.round(30 + (baseMultiplier * 60)),
-      base_salary_p25: Math.round((200000 + (baseMultiplier * 100000)) * 0.75),
-      base_salary_p50: Math.round((250000 + (baseMultiplier * 150000)) * 0.75),
-      base_salary_p75: Math.round((300000 + (baseMultiplier * 200000)) * 0.75),
-      base_salary_p90: Math.round((400000 + (baseMultiplier * 300000)) * 0.75)
+      cf_p90: 80.0 + (baseMultiplier * 60.0)
     });
   });
 
@@ -311,38 +303,13 @@ export const calculateSummaryRows = (
       // CRITICAL FIX: Normalize variable name before data lookup for dynamic variables
       const normalizedVarName = mapVariableNameToStandard(varName);
       
-      // Debug logging for CF variables
-      if (varName === 'cfs' || varName === 'cf') {
-        console.log(`🔍 calculateDynamicSummaryRows: Variable normalization:`, {
-          originalVarName: varName,
-          normalizedVarName: normalizedVarName,
-          availableVariables: row.variables ? Object.keys(row.variables) : []
-        });
-      }
-      
       // Try dynamic variables first with normalized name
       let metrics = row.variables?.[normalizedVarName];
       
-      // Debug logging for CF variables
-      if (varName === 'cfs' || varName === 'cf') {
-        console.log(`🔍 calculateDynamicSummaryRows: Data lookup for ${varName}:`, {
-          normalizedVarName,
-          hasMetrics: !!metrics,
-          metricsData: metrics ? {
-            p25: metrics.p25,
-            p50: metrics.p50,
-            p75: metrics.p75,
-            p90: metrics.p90,
-            n_orgs: metrics.n_orgs,
-            n_incumbents: metrics.n_incumbents
-          } : null
-        });
-      }
-      
       // CRITICAL FIX: Handle both dynamic and legacy data formats
-      // The data loading still produces legacy format, so we need fallback logic
-      if (!metrics && !row.variables) {
-        // Legacy data format fallback
+      // If no dynamic variables found, try legacy format
+      if (!metrics) {
+        // Legacy data format fallback with expanded variable support
         const legacyFieldMap: Record<string, string> = {
           'tcc': 'tcc',
           'work_rvus': 'wrvu',
@@ -350,11 +317,14 @@ export const calculateSummaryRows = (
           'cf': 'cf',
           'conversion_factor': 'cf',
           'tcc_per_work_rvu': 'cf',
-          'cfs': 'cf',  // Map 'cfs' to 'cf' for legacy data
+          'cfs': 'cf',
           'tcc_per_work_rvus': 'cf',
+          // FIXED: Add support for new variables
           'base_salary': 'base_salary',
-          'base_pay': 'base_salary',
-          'salary': 'base_salary'
+          'panel_size': 'panel_size',
+          'total_encounters': 'total_encounters',
+          'asa_units': 'asa_units',
+          'net_collections': 'net_collections'
         };
         
         const legacyPrefix = legacyFieldMap[varName] || varName;

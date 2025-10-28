@@ -98,7 +98,7 @@ const Dashboard: React.FC = () => {
           title: 'Benchmarking',
           description: 'Analyze and compare data across multiple surveys',
           icon: PresentationChartLineIcon,
-          path: '/analytics',
+          path: '/benchmarking',
           color: 'bg-amber-500',
           gradient: 'from-amber-500 to-amber-600',
         },

@@ -16,7 +16,23 @@ import { AggregatedData, AnalyticsFilters } from '../types/analytics';
  */
 export const useMemoizedGrouping = (data: any[]) => {
   return useMemo(() => {
-    if (!data || data.length === 0) return {};
+    console.log('🔍 useMemoizedGrouping: Input data length:', data?.length || 0);
+    
+    if (!data || data.length === 0) {
+      console.log('🔍 useMemoizedGrouping: No data, returning empty object');
+      return {};
+    }
+
+    // Debug: Check the first few rows to see their structure
+    if (data.length > 0) {
+      console.log('🔍 useMemoizedGrouping: First row sample:', {
+        standardizedName: data[0].standardizedName,
+        surveySource: data[0].surveySource,
+        surveySpecialty: data[0].surveySpecialty,
+        originalSpecialty: data[0].originalSpecialty,
+        geographicRegion: data[0].geographicRegion
+      });
+    }
 
     // Generate cache key
     const dataHash = JSON.stringify(data.map(d => d.surveySpecialty || d.standardizedName));
@@ -25,11 +41,13 @@ export const useMemoizedGrouping = (data: any[]) => {
     // Check cache first
     const cached = analyticsComputationCache.get<Record<string, any[]>>(cacheKey);
     if (cached) {
+      console.log('🔍 useMemoizedGrouping: Using cached result with', Object.keys(cached).length, 'specialties');
       return cached;
     }
 
     // Compute and cache result
     const result = groupBySpecialty(data);
+    console.log('🔍 useMemoizedGrouping: Grouped result has', Object.keys(result).length, 'specialties:', Object.keys(result));
     analyticsComputationCache.set(cacheKey, result);
     
     return result;

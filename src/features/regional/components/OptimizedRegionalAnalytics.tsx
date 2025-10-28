@@ -301,13 +301,13 @@ export const OptimizedRegionalAnalytics: React.FC = () => {
                       {region.count.toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {region.tcc_p50 > 0 ? `$${region.tcc_p50.toLocaleString()}` : 'N/A'}
+                      {region.tcc_p50 > 0 ? `$${region.tcc_p50.toLocaleString()}` : 'n/a'}
                     </TableCell>
                     <TableCell>
-                      {region.cf_p50 > 0 ? region.cf_p50.toFixed(2) : 'N/A'}
+                      {region.cf_p50 > 0 ? region.cf_p50.toFixed(2) : 'n/a'}
                     </TableCell>
                     <TableCell>
-                      {region.wrvu_p50 > 0 ? region.wrvu_p50.toLocaleString() : 'N/A'}
+                      {region.wrvu_p50 > 0 ? region.wrvu_p50.toLocaleString() : 'n/a'}
                     </TableCell>
                   </TableRow>
                 ))}

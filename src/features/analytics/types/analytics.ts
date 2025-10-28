@@ -129,8 +129,11 @@ export interface AnalyticsTableProps {
   loadingProgress?: number;
   error: string | null;
   onExport: () => void;
+  onFormatVariables: () => void;
   // NEW: Dynamic variable support
   selectedVariables?: string[]; // For dynamic table generation
+  // NEW: Variable formatting support
+  formattingRules?: any[]; // User-defined formatting rules
 }
 
 export interface AnalyticsSummaryProps {

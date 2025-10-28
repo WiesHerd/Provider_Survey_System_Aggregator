@@ -3,6 +3,11 @@
  * 
  * This hook manages all analytics data fetching, filtering, and state management.
  * Following enterprise patterns for separation of concerns and reusability.
+ * 
+ * Google-Level Architecture:
+ * - Direct IndexedDB access (no caching layer)
+ * - Fail-fast error handling
+ * - Simple, predictable data flow
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -11,12 +16,12 @@ import { AggregatedData, AnalyticsFilters, UseAnalyticsReturn } from '../types/a
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
 import { AnalyticsDataService } from '../services/analyticsDataService';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
-import { cacheInvalidation, CacheInvalidationEvent } from '../utils/cacheInvalidation';
 
 /**
  * Custom hook for managing analytics data
  * 
  * @param initialFilters - Initial filter values
+ * @param selectedVariables - Selected variables for dynamic data
  * @returns Object containing data, loading state, error, and actions
  */
 const useAnalyticsData = (
@@ -27,7 +32,7 @@ const useAnalyticsData = (
     providerType: '',
     year: ''
   },
-  selectedVariables: string[] = [] // NEW: Support for dynamic variables
+  selectedVariables: string[] = []
 ): UseAnalyticsReturn => {
   // State declarations
   const [data, setData] = useState<any[]>([]); // Support both AggregatedData and DynamicAggregatedData
@@ -46,66 +51,70 @@ const useAnalyticsData = (
     return filterAnalyticsData(data, filters);
   }, [data, filters]);
 
-  // Data fetching function - fetch ALL data without filters
+  // Data fetching function - always fetch fresh from IndexedDB
   const fetchData = useCallback(async () => {
+    console.log('🔍 useAnalyticsData: fetchData function called');
     try {
-      // Use singleton AnalyticsDataService instance (Google-style)
-      const analyticsDataService = new AnalyticsDataService();
+      console.log('🔍 useAnalyticsData: Starting fresh data fetch from IndexedDB');
+      setLoading(true);
+      setError(null);
+      startProgress();
       
-      // Check if we have cached data first (professional app behavior)
-      if (analyticsDataService.hasCachedData()) {
-        console.log('🚀 Using cached analytics data - no loading spinner needed');
-        const cachedData = analyticsDataService.getCachedData();
-        if (cachedData) {
-          setData(cachedData);
-          setLoading(false);
-          
-          // Still fetch mappings in background (they're lightweight)
-          const dataService = getDataService();
-          Promise.all([
-            dataService.getAllSpecialtyMappings(),
-            dataService.getAllColumnMappings(),
-            dataService.getRegionMappings()
-          ]).then(([specialtyMappings, colMappings, regMappings]) => {
-            setMappings(specialtyMappings);
-            setColumnMappings(colMappings);
-            setRegionMappings(regMappings);
-          }).catch(err => {
-            console.warn('Failed to load mappings in background:', err);
+      // DEBUG: Check IndexedDB directly first
+      const dataService = getDataService();
+      console.log('🔍 useAnalyticsData: Checking surveys in IndexedDB...');
+      const surveys = await dataService.getAllSurveys();
+      console.log('🔍 useAnalyticsData: Found surveys in IndexedDB:', surveys.length);
+      surveys.forEach((survey, index) => {
+        console.log(`🔍 Survey ${index + 1}:`, {
+          id: survey.id,
+          name: survey.name,
+          type: survey.type,
+          year: survey.year,
+          rowCount: survey.rowCount,
+          providerType: survey.providerType
+        });
+      });
+      
+      if (surveys.length === 0) {
+        console.log('❌ useAnalyticsData: No surveys found in IndexedDB - this is the problem!');
+        setData([]);
+        setError('No survey data found. Please upload surveys first.');
+        return;
+      }
+      
+      // DEBUG: Check if survey data exists for each survey
+      console.log('🔍 useAnalyticsData: Checking survey data for each survey...');
+      for (const survey of surveys) {
+        try {
+          const surveyData = await dataService.getSurveyData(survey.id, {}, { limit: 10 });
+          console.log(`🔍 Survey ${survey.id} (${survey.name}):`, {
+            hasData: surveyData.rows.length > 0,
+            rowCount: surveyData.rows.length,
+            firstRow: surveyData.rows[0] || 'No rows'
           });
-          
-          return; // Exit early with cached data
+        } catch (error) {
+          console.error(`❌ Failed to get data for survey ${survey.id}:`, error);
         }
       }
       
-      // Only show loading if we actually need to fetch data
-      setLoading(true);
-      setError(null);
-      startProgress(); // Start smooth progress animation
+      // Create new service instance (no singleton complexity)
+      const analyticsDataService = new AnalyticsDataService();
       
-      // FIXED: Always use legacy data fetching for now to ensure CF data displays
-      // The dynamic data path is not working correctly with existing data
-      // Reduced logging to prevent console spam
-      console.log('🔍 useAnalyticsData: Fetching analytics data with', selectedVariables.length, 'selected variables');
-      const allData = await analyticsDataService.getAnalyticsData({
+      // CRITICAL FIX: Always fetch ALL variables first, then filter in the UI
+      // This ensures data is always available, regardless of selectedVariables state
+      console.log('🔍 useAnalyticsData: Fetching ALL variables (no filtering at service level)');
+      const allData = await analyticsDataService.getAnalyticsDataByVariables({
         specialty: '',
         surveySource: '',
         geographicRegion: '',
         providerType: '',
         year: ''
-      });
+      }, []); // Empty filters and variables = process all data
       
-      // Reduced logging to prevent console spam
-      console.log('🔍 useAnalyticsData: Loaded', allData.length, 'records');
-      if (allData.length > 0) {
-        console.log('🔍 useAnalyticsData: Data format:', {
-          hasVariables: 'variables' in allData[0],
-          recordKeys: Object.keys(allData[0]).slice(0, 10) // Show first 10 keys only
-        });
-      }
+      console.log('🔍 useAnalyticsData: Loaded', allData.length, 'records from IndexedDB');
       
       // Also fetch mappings for filter options
-      const dataService = getDataService();
       const [specialtyMappings, colMappings, regMappings] = await Promise.all([
         dataService.getAllSpecialtyMappings(),
         dataService.getAllColumnMappings(),
@@ -120,13 +129,14 @@ const useAnalyticsData = (
       // Complete progress animation
       completeProgress();
     } catch (err) {
-      // Error logging removed for performance
-      setError(err instanceof Error ? err.message : 'Failed to load analytics data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load analytics data';
+      console.error('❌ useAnalyticsData: Error fetching data:', errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
       resetProgress();
     }
-  }, []); // Only fetch once on mount, don't refetch on variable changes
+  }, [startProgress, completeProgress, resetProgress]); // FIXED: Removed filters dependency - filtering happens at UI level
 
   // Export functions
   const exportToExcel = useCallback(() => {
@@ -207,74 +217,20 @@ const useAnalyticsData = (
     setFilters(newFilters);
   }, []);
 
-  // Force refresh function (on-demand) - FIXED: Remove fetchData dependency
+  // Force refresh function (on-demand)
   const forceRefresh = useCallback(async () => {
     console.log('🔄 Force refreshing analytics data (on-demand)');
-    const analyticsDataService = new AnalyticsDataService();
-    analyticsDataService.invalidateCache();
-    // Trigger a fresh fetch without dependency issues
     setLoading(true);
     setError(null);
-    setTimeout(() => {
-      fetchData();
-    }, 100);
-  }, []); // FIXED: Empty dependency array
+    await fetchData();
+  }, [fetchData]);
 
-  // Initial data fetch only - FIXED: Remove fetchData dependency to prevent infinite loop
+  // Initial data fetch on mount
   useEffect(() => {
-    console.log('🔍 useAnalyticsData: Initial data fetch triggered');
+    console.log('🔍 useAnalyticsData: Initial data fetch triggered on mount');
+    console.log('🔍 useAnalyticsData: fetchData function reference:', fetchData);
     fetchData();
-  }, []); // FIXED: Empty dependency array to fetch only once on mount
-
-  // TEMPORARILY DISABLED: Cache invalidation listeners to stop infinite loop
-  // TODO: Re-enable these once the infinite loop issue is resolved
-  /*
-  useEffect(() => {
-    const { cacheInvalidationManager, CacheInvalidationEvent } = require('../utils/cacheInvalidation');
-    
-    const unsubscribeMappingChanged = cacheInvalidationManager.onInvalidation(
-      CacheInvalidationEvent.MAPPING_CHANGED,
-      () => {
-        console.log('🔄 Mapping changed - refreshing analytics data');
-        setLoading(true);
-        setError(null);
-        setTimeout(() => {
-          fetchData();
-        }, 100);
-      }
-    );
-
-    const unsubscribeNewSurvey = cacheInvalidationManager.onInvalidation(
-      CacheInvalidationEvent.NEW_SURVEY_UPLOADED,
-      () => {
-        console.log('🔄 New survey uploaded - refreshing analytics data');
-        setLoading(true);
-        setError(null);
-        setTimeout(() => {
-          fetchData();
-        }, 100);
-      }
-    );
-
-    const unsubscribeDataCleared = cacheInvalidationManager.onInvalidation(
-      CacheInvalidationEvent.DATA_CLEARED,
-      () => {
-        console.log('🔄 Data cleared - refreshing analytics data');
-        setLoading(true);
-        setError(null);
-        setTimeout(() => {
-          fetchData();
-        }, 100);
-      }
-    );
-
-    return () => {
-      unsubscribeMappingChanged();
-      unsubscribeNewSurvey();
-      unsubscribeDataCleared();
-    };
-  }, []);
-  */
+  }, [fetchData]);
 
   // Return hook interface
   return {
@@ -286,7 +242,7 @@ const useAnalyticsData = (
     filters,
     setFilters: updateFilters,
     refetch: fetchData,
-    forceRefresh, // New: Force refresh on-demand
+    forceRefresh, // Force refresh on-demand
     exportToExcel,
     exportToCSV
   };

@@ -14,6 +14,8 @@ import { VariableCategory } from '../types/variables';
 export const formatVariableDisplayName = (normalizedName: string): string => {
   const displayMap: Record<string, string> = {
     'tcc': 'TCC (Total Cash Compensation)',
+    'tcc_excluding_premium': 'TCC Excluding Premium',
+    'tcc_excluding': 'TCC Excluding Premium',
     'work_rvus': 'Work RVUs',
     'work_rvu': 'Work RVUs',
     'wrvu': 'Work RVUs',
@@ -23,12 +25,32 @@ export const formatVariableDisplayName = (normalizedName: string): string => {
     'conversion_factor': 'CFs',
     'base_salary': 'Base Salary',
     'base_compensation': 'Base Salary',
+    'base_comp': 'Base Salary',
+    'salary': 'Base Salary',
+    'base_pay_hourly_rate': 'Base Pay Hourly Rate',
+    'hourly_rate': 'Base Pay Hourly Rate',
     'asa_units': 'ASA Units',
+    'asa': 'ASA Units',
+    'asa_unit': 'ASA Units',
     'panel_size': 'Panel Size',
+    'panel': 'Panel Size',
+    'patient_panel': 'Panel Size',
+    'patient_panel_size': 'Panel Size',
     'total_encounters': 'Total Encounters',
+    'encounters': 'Total Encounters',
+    'patient_encounters': 'Total Encounters',
+    'total_visits': 'Total Encounters',
+    'net_collections': 'Net Collections',
+    'collections': 'Net Collections',
     'tcc_per_encounter': 'TCC per Encounter',
     'tcc_to_net_collections': 'TCC to Net Collections',
-    'tcc_per_asa_unit': 'TCC per ASA Unit'
+    'tcc_per_asa_unit': 'TCC per ASA Unit',
+    'tcc_per_asa': 'TCC per ASA Unit',
+    'comp_per_encounter': 'TCC per Encounter',
+    'compensation_per_encounter': 'TCC per Encounter',
+    'tcc_to_collections': 'TCC to Net Collections',
+    'comp_to_collections': 'TCC to Net Collections',
+    'comp_per_asa': 'TCC per ASA Unit'
   };
 
   // Check for exact match first
@@ -93,7 +115,7 @@ export const formatVariableValue = (
   options: { showCurrency?: boolean; showDecimals?: number } = {}
 ): string => {
   if (value === 0 || isNaN(value)) {
-    return 'N/A';
+    return 'n/a';
   }
 
   const { showCurrency = false, showDecimals = 0 } = options;
@@ -104,8 +126,14 @@ export const formatVariableValue = (
   // Determine if this is a ratio variable (like TCC per Work RVU) that needs 2 decimals
   const isRatio = isRatioVariable(variableName);
   
-  // Use 2 decimals for ratio variables, otherwise use provided decimals
-  const actualDecimals = isRatio ? 2 : showDecimals;
+  // Determine if this is a percentage variable (like TCC to Net Collections)
+  const isPercentage = isPercentageVariable(variableName);
+  
+  // Debug logging
+  console.log('🔍 formatVariableValue: Variable:', variableName, 'isCurrency:', isCurrency, 'isRatio:', isRatio, 'isPercentage:', isPercentage);
+  
+  // Use 2 decimals for ratio variables, 1 decimal for percentages, otherwise use provided decimals
+  const actualDecimals = isRatio ? 2 : isPercentage ? 1 : showDecimals;
   
   if (isCurrency || showCurrency) {
     return new Intl.NumberFormat('en-US', {
@@ -114,6 +142,15 @@ export const formatVariableValue = (
       minimumFractionDigits: actualDecimals,
       maximumFractionDigits: actualDecimals,
     }).format(value);
+  }
+  
+  // Format as percentage if it's a percentage variable
+  if (isPercentage) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'percent',
+      minimumFractionDigits: actualDecimals,
+      maximumFractionDigits: actualDecimals,
+    }).format(value / 100); // Convert from decimal to percentage
   }
   
   // Format as number with appropriate decimals
@@ -135,11 +172,17 @@ const isCurrencyVariable = (variableName: string): boolean => {
     /total.*cash/,
     /compensation/,
     /salary/,
+    /base.*salary/,
+    /base.*comp/,
     /pay/,
     /bonus/,
     /cash/,
     /cf$/,  // Add CF variables as currency
-    /cfs$/  // Add CFS variables as currency
+    /cfs$/,  // Add CFS variables as currency
+    /hourly.*rate/,
+    /base.*pay.*hourly/,
+    /excluding.*premium/,
+    /tcc.*excluding/
   ];
   
   return currencyPatterns.some(pattern => pattern.test(lower));
@@ -165,6 +208,42 @@ const isRatioVariable = (variableName: string): boolean => {
   ];
   
   return ratioPatterns.some(pattern => pattern.test(lower));
+};
+
+/**
+ * Check if a variable represents percentage values (needs percentage formatting)
+ */
+const isPercentageVariable = (variableName: string): boolean => {
+  const lower = variableName.toLowerCase();
+  
+  // Debug logging to see what variable names we're getting
+  console.log('🔍 isPercentageVariable: Checking variable:', variableName, 'lowercase:', lower);
+  
+  // Percentage-related patterns - handle both display names and normalized names
+  const percentagePatterns = [
+    /as.*a.*percentage/,
+    /percentage.*of/,
+    /to.*net.*collections/,
+    /to.*collections/,
+    /ratio.*to/,
+    /percent$/,
+    /%$/,
+    /tcc.*excluding.*premium.*to.*net.*collections/,
+    /base.*salary.*as.*a.*percentage/,
+    /excluding.*premium.*to.*net.*collections/,
+    /tcc.*excluding.*premium.*to.*net.*collections/i
+  ];
+  
+  const isPercentage = percentagePatterns.some(pattern => {
+    const matches = pattern.test(lower);
+    if (matches) {
+      console.log('✅ isPercentageVariable: Pattern matched:', pattern.toString(), 'for variable:', variableName);
+    }
+    return matches;
+  });
+  
+  console.log('🔍 isPercentageVariable: Result for', variableName, ':', isPercentage);
+  return isPercentage;
 };
 
 /**
@@ -230,6 +309,8 @@ export const mapVariableNameToStandard = (normalizedName: string): string => {
     'total_cash_comp': 'tcc',
     'cash_compensation': 'tcc',
     'total_comp': 'tcc',
+    'tcc_excluding_premium': 'tcc_excluding_premium',
+    'tcc_excluding': 'tcc_excluding_premium',
     
     // Work RVU variations
     'work_rvus': 'work_rvus',
@@ -253,6 +334,9 @@ export const mapVariableNameToStandard = (normalizedName: string): string => {
     'base_compensation': 'base_salary',
     'base_comp': 'base_salary',
     'salary': 'base_salary',
+    'base_pay_hourly_rate': 'base_pay_hourly_rate',
+    'hourly_rate': 'base_pay_hourly_rate',
+    'base_pay_hourly': 'base_pay_hourly_rate',
     
     // ASA Units variations
     'asa_units': 'asa_units',
@@ -275,6 +359,11 @@ export const mapVariableNameToStandard = (normalizedName: string): string => {
     'tcc_per_encounter': 'tcc_per_encounter',
     'comp_per_encounter': 'tcc_per_encounter',
     'compensation_per_encounter': 'tcc_per_encounter',
+    
+    // Net Collections variations
+    'net_collections': 'net_collections',
+    'collections': 'net_collections',
+    'net_collection': 'net_collections',
     
     // TCC to Collections variations
     'tcc_to_net_collections': 'tcc_to_net_collections',

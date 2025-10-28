@@ -1,6 +1,12 @@
 /**
- * Analytics Data Service
- * Handles data retrieval, normalization, and stacking for analytics
+ * Analytics Data Service - Enterprise Grade
+ * Handles data retrieval, normalization, and aggregation for analytics
+ * 
+ * Google-Level Architecture:
+ * - Single source of truth: IndexedDB
+ * - No dual-layer caching (removes race conditions)
+ * - Direct data loading with proper error handling
+ * - Fail-fast initialization pattern
  */
 
 import { getDataService } from '../../../services/DataService';
@@ -13,8 +19,6 @@ import {
   VariableMetrics 
 } from '../types/variables';
 import { normalizeVariableName } from '../utils/variableFormatters';
-import { analyticsComputationCache, cacheUtils } from './analyticsComputationCache';
-import { cacheInvalidation } from '../utils/cacheInvalidation';
 
 export interface RawSurveyRow {
   [key: string]: any;
@@ -40,10 +44,6 @@ export interface RawSurveyRow {
   cf_p50?: number;
   cf_p75?: number;
   cf_p90?: number;
-  base_salary_p25?: number;
-  base_salary_p50?: number;
-  base_salary_p75?: number;
-  base_salary_p90?: number;
 }
 
 export interface NormalizedRow {
@@ -69,418 +69,22 @@ export interface NormalizedRow {
   rawData: RawSurveyRow;
 }
 
-// Global cache that persists across component mounts
-class GlobalAnalyticsCache {
-  private static instance: GlobalAnalyticsCache;
-  private dataCache: {
-    data: AggregatedData[] | null;
-    lastFetch: number;
-    isStale: boolean;
-    version: string; // Cache version for invalidation
-  } = {
-    data: null,
-    lastFetch: 0,
-    isStale: false,
-    version: ''
-  };
-  
-  private mappingsCache: {
-    specialtyMappings: any[] | null;
-    columnMappings: any[] | null;
-    learnedSpecialtyMappings: Record<string, string> | null;
-    learnedColumnMappings: Record<string, string> | null;
-    learnedRegionMappings: Record<string, string> | null;
-    learnedVariableMappings: Record<string, string> | null;
-    learnedProviderTypeMappings: Record<string, string> | null;
-    lastFetch: number;
-    version: string; // Cache version for invalidation
-  } = {
-    specialtyMappings: null,
-    columnMappings: null,
-    learnedSpecialtyMappings: null,
-    learnedColumnMappings: null,
-    learnedRegionMappings: null,
-    learnedVariableMappings: null,
-    learnedProviderTypeMappings: null,
-    lastFetch: 0,
-    version: ''
-  };
-
-  // Intermediate result caches
-  private normalizedRowsCache: {
-    data: NormalizedRow[] | null;
-    surveyIds: string[];
-    lastFetch: number;
-    version: string;
-  } = {
-    data: null,
-    surveyIds: [],
-    lastFetch: 0,
-    version: ''
-  };
-
-  private aggregationCache: {
-    data: AggregatedData[] | null;
-    normalizedRowsHash: string;
-    lastFetch: number;
-    version: string;
-  } = {
-    data: null,
-    normalizedRowsHash: '',
-    lastFetch: 0,
-    version: ''
-  };
-  
-  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes (Google-style)
-  private readonly STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes (show stale data while refreshing)
-  
-  static getInstance(): GlobalAnalyticsCache {
-    if (!GlobalAnalyticsCache.instance) {
-      GlobalAnalyticsCache.instance = new GlobalAnalyticsCache();
-    }
-    return GlobalAnalyticsCache.instance;
-  }
-  
-  // Check if we have fresh data
-  hasFreshData(): boolean {
-    const now = Date.now();
-    return this.dataCache.data !== null && 
-           (now - this.dataCache.lastFetch) < this.CACHE_DURATION;
-  }
-  
-  // Check if we have stale data (for background refresh)
-  hasStaleData(): boolean {
-    const now = Date.now();
-    return this.dataCache.data !== null && 
-           (now - this.dataCache.lastFetch) < this.STALE_THRESHOLD;
-  }
-  
-  // Get cached data
-  getCachedData(): AggregatedData[] | null {
-    return this.dataCache.data;
-  }
-  
-  // Set cached data
-  setCachedData(data: AggregatedData[]): void {
-    this.dataCache = {
-      data,
-      lastFetch: Date.now(),
-      isStale: false,
-      version: this.generateCacheVersion()
-    };
-  }
-  
-  // Mark data as stale (trigger background refresh)
-  markAsStale(): void {
-    this.dataCache.isStale = true;
-  }
-  
-  // Clear cache completely
-  clearCache(): void {
-    this.dataCache = {
-      data: null,
-      lastFetch: 0,
-      isStale: false,
-      version: ''
-    };
-    this.mappingsCache = {
-      specialtyMappings: null,
-      columnMappings: null,
-      learnedSpecialtyMappings: null,
-      learnedColumnMappings: null,
-      learnedRegionMappings: null,
-      learnedVariableMappings: null,
-      learnedProviderTypeMappings: null,
-      lastFetch: 0,
-      version: ''
-    };
-    this.normalizedRowsCache = {
-      data: null,
-      surveyIds: [],
-      lastFetch: 0,
-      version: ''
-    };
-    this.aggregationCache = {
-      data: null,
-      normalizedRowsHash: '',
-      lastFetch: 0,
-      version: ''
-    };
-    
-    // Clear computation cache as well
-    analyticsComputationCache.clear();
-    
-    // Trigger cache invalidation event
-    cacheInvalidation.onDataCleared();
-  }
-
-  // Generate cache version based on current data state
-  private generateCacheVersion(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  }
-
-  // Check if normalized rows cache is valid
-  hasValidNormalizedRows(surveyIds: string[]): boolean {
-    const now = Date.now();
-    const isSameSurveys = JSON.stringify(surveyIds.sort()) === JSON.stringify(this.normalizedRowsCache.surveyIds.sort());
-    const isFresh = (now - this.normalizedRowsCache.lastFetch) < this.CACHE_DURATION;
-    return this.normalizedRowsCache.data !== null && isSameSurveys && isFresh;
-  }
-
-  // Get cached normalized rows
-  getCachedNormalizedRows(): NormalizedRow[] | null {
-    return this.normalizedRowsCache.data;
-  }
-
-  // Set cached normalized rows
-  setCachedNormalizedRows(data: NormalizedRow[], surveyIds: string[]): void {
-    this.normalizedRowsCache = {
-      data,
-      surveyIds: [...surveyIds],
-      lastFetch: Date.now(),
-      version: this.generateCacheVersion()
-    };
-  }
-
-  // Check if aggregation cache is valid
-  hasValidAggregation(normalizedRowsHash: string): boolean {
-    const now = Date.now();
-    const isSameHash = this.aggregationCache.normalizedRowsHash === normalizedRowsHash;
-    const isFresh = (now - this.aggregationCache.lastFetch) < this.CACHE_DURATION;
-    return this.aggregationCache.data !== null && isSameHash && isFresh;
-  }
-
-  // Get cached aggregation
-  getCachedAggregation(): AggregatedData[] | null {
-    return this.aggregationCache.data;
-  }
-
-  // Set cached aggregation
-  setCachedAggregation(data: AggregatedData[], normalizedRowsHash: string): void {
-    this.aggregationCache = {
-      data,
-      normalizedRowsHash,
-      lastFetch: Date.now(),
-      version: this.generateCacheVersion()
-    };
-  }
-
-  // Clear intermediate caches when data changes
-  clearIntermediateCaches(): void {
-    this.normalizedRowsCache = {
-      data: null,
-      surveyIds: [],
-      lastFetch: 0,
-      version: ''
-    };
-    this.aggregationCache = {
-      data: null,
-      normalizedRowsHash: '',
-      lastFetch: 0,
-      version: ''
-    };
-    
-    // Clear computation cache for intermediate results
-    cacheUtils.clearAggregation();
-    cacheUtils.clearGrouping();
-  }
-  
-  // Get cached mappings
-  getCachedMappings(): { 
-    specialtyMappings: any[] | null, 
-    columnMappings: any[] | null,
-    learnedSpecialtyMappings: Record<string, string> | null,
-    learnedColumnMappings: Record<string, string> | null,
-    learnedRegionMappings: Record<string, string> | null,
-    learnedVariableMappings: Record<string, string> | null,
-    learnedProviderTypeMappings: Record<string, string> | null
-  } {
-    const now = Date.now();
-    if (this.mappingsCache.specialtyMappings && 
-        this.mappingsCache.columnMappings && 
-        (now - this.mappingsCache.lastFetch) < this.CACHE_DURATION) {
-      return {
-        specialtyMappings: this.mappingsCache.specialtyMappings,
-        columnMappings: this.mappingsCache.columnMappings,
-        learnedSpecialtyMappings: this.mappingsCache.learnedSpecialtyMappings,
-        learnedColumnMappings: this.mappingsCache.learnedColumnMappings,
-        learnedRegionMappings: this.mappingsCache.learnedRegionMappings,
-        learnedVariableMappings: this.mappingsCache.learnedVariableMappings,
-        learnedProviderTypeMappings: this.mappingsCache.learnedProviderTypeMappings
-      };
-    }
-    return { 
-      specialtyMappings: null, 
-      columnMappings: null,
-      learnedSpecialtyMappings: null,
-      learnedColumnMappings: null,
-      learnedRegionMappings: null,
-      learnedVariableMappings: null,
-      learnedProviderTypeMappings: null
-    };
-  }
-  
-  // Set cached mappings
-  setCachedMappings(
-    specialtyMappings: any[], 
-    columnMappings: any[],
-    learnedSpecialtyMappings?: Record<string, string>,
-    learnedColumnMappings?: Record<string, string>,
-    learnedRegionMappings?: Record<string, string>,
-    learnedVariableMappings?: Record<string, string>,
-    learnedProviderTypeMappings?: Record<string, string>
-  ): void {
-    this.mappingsCache = {
-      specialtyMappings,
-      columnMappings,
-      learnedSpecialtyMappings: learnedSpecialtyMappings || null,
-      learnedColumnMappings: learnedColumnMappings || null,
-      learnedRegionMappings: learnedRegionMappings || null,
-      learnedVariableMappings: learnedVariableMappings || null,
-      learnedProviderTypeMappings: learnedProviderTypeMappings || null,
-      lastFetch: Date.now(),
-      version: this.generateCacheVersion()
-    };
-  }
-}
-
+/**
+ * Analytics Data Service - Simplified Enterprise Architecture
+ * 
+ * Key Changes from Previous Version:
+ * 1. Removed GlobalAnalyticsCache singleton (eliminates race conditions)
+ * 2. Removed dual-layer caching (memory + IndexedDB)
+ * 3. Direct IndexedDB access via DataService
+ * 4. Simplified initialization (no async complexity)
+ * 5. Fail-fast error handling
+ */
 export class AnalyticsDataService {
   private dataService = getDataService();
-  private globalCache = GlobalAnalyticsCache.getInstance();
-  private lastDataHash: string | null = null;
 
   /**
-   * Check if survey data has changed since last cache
-   */
-  private async hasDataChanged(): Promise<boolean> {
-    try {
-      const surveys = await this.dataService.getAllSurveys();
-      const currentHash = JSON.stringify(surveys.map(s => ({
-        id: s.id,
-        uploadDate: s.uploadDate,
-        rowCount: s.rowCount,
-        specialtyCount: s.specialtyCount
-      })));
-      
-      if (this.lastDataHash === null || this.lastDataHash !== currentHash) {
-        this.lastDataHash = currentHash;
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error checking data changes:', error);
-      return true; // Assume changed if we can't check
-    }
-  }
-
-  /**
-   * Smart cache invalidation - only clear when data actually changes
-   */
-  private async shouldInvalidateCache(): Promise<boolean> {
-    const dataChanged = await this.hasDataChanged();
-    
-    if (dataChanged) {
-      console.log('🔍 Data has changed, invalidating cache');
-      this.globalCache.clearCache();
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Check if we have cached data available
-   */
-  public hasCachedData(): boolean {
-    return this.globalCache.hasFreshData();
-  }
-
-  /**
-   * Get cached data without triggering a fetch
-   */
-  public getCachedData(): AggregatedData[] | null {
-    return this.globalCache.getCachedData();
-  }
-
-  /**
-   * Manually invalidate cache (call this when surveys are uploaded or mappings change)
-   */
-  public invalidateCache(): void {
-    console.log('🔍 Manually invalidating analytics cache');
-    this.globalCache.clearCache();
-    this.lastDataHash = null;
-  }
-
-  /**
-   * Get cached mappings or fetch fresh ones (including learned mappings)
-   */
-  private async getCachedMappings(providerType?: string): Promise<{ 
-    specialtyMappings: any[], 
-    columnMappings: any[],
-    learnedSpecialtyMappings: Record<string, string>,
-    learnedColumnMappings: Record<string, string>,
-    learnedRegionMappings: Record<string, string>,
-    learnedVariableMappings: Record<string, string>,
-    learnedProviderTypeMappings: Record<string, string>
-  }> {
-    // Check global cache first
-    const cachedMappings = this.globalCache.getCachedMappings();
-    if (cachedMappings.specialtyMappings && cachedMappings.columnMappings) {
-      return {
-        specialtyMappings: cachedMappings.specialtyMappings,
-        columnMappings: cachedMappings.columnMappings,
-        learnedSpecialtyMappings: cachedMappings.learnedSpecialtyMappings || {},
-        learnedColumnMappings: cachedMappings.learnedColumnMappings || {},
-        learnedRegionMappings: cachedMappings.learnedRegionMappings || {},
-        learnedVariableMappings: cachedMappings.learnedVariableMappings || {},
-        learnedProviderTypeMappings: cachedMappings.learnedProviderTypeMappings || {}
-      };
-    }
-    
-    // Fetch fresh mappings and learned mappings
-    const [
-      specialtyMappings, 
-      columnMappings,
-      learnedSpecialtyMappings,
-      learnedColumnMappings,
-      learnedRegionMappings,
-      learnedVariableMappings,
-      learnedProviderTypeMappings
-    ] = await Promise.all([
-      this.dataService.getAllSpecialtyMappings(),
-      this.dataService.getAllColumnMappings(),
-      this.dataService.getLearnedMappings('specialty', providerType),
-      this.dataService.getLearnedMappings('column', providerType),
-      this.dataService.getLearnedMappings('region', providerType),
-      this.dataService.getLearnedMappings('variable', providerType),
-      this.dataService.getLearnedMappings('providerType', providerType)
-    ]);
-    
-    // Update global cache with all mappings
-    this.globalCache.setCachedMappings(
-      specialtyMappings, 
-      columnMappings,
-      learnedSpecialtyMappings,
-      learnedColumnMappings,
-      learnedRegionMappings,
-      learnedVariableMappings,
-      learnedProviderTypeMappings
-    );
-    
-    return { 
-      specialtyMappings, 
-      columnMappings,
-      learnedSpecialtyMappings,
-      learnedColumnMappings,
-      learnedRegionMappings,
-      learnedVariableMappings,
-      learnedProviderTypeMappings
-    };
-  }
-
-  /**
-   * Get all analytics data with Google-style caching
+   * Get all analytics data with Google-style direct loading
+   * Always fetches fresh data from IndexedDB - no caching layer
    */
   async getAnalyticsData(filters: AnalyticsFilters = {
     specialty: '',
@@ -490,81 +94,43 @@ export class AnalyticsDataService {
     year: ''
   }): Promise<AggregatedData[]> {
     try {
-      // Smart cache invalidation - only clear if data has actually changed
-      await this.shouldInvalidateCache();
+      console.log('🔍 AnalyticsDataService: Fetching fresh data from IndexedDB');
       
-      // Google-style caching: Check if we have fresh data first
-      if (this.globalCache.hasFreshData()) {
-        const cachedData = this.globalCache.getCachedData();
-        if (cachedData) {
-          console.log('🚀 Using cached analytics data (fast!)');
-          // Trigger background refresh if data is getting stale
-          if (this.globalCache.hasStaleData()) {
-            this.refreshDataInBackground();
-          }
-          return cachedData;
-        }
-      }
-      
-      // If no fresh data, fetch it
-      
-      // Get all surveys and cached mappings (including learned mappings)
-      const [surveys, { 
-        specialtyMappings, 
-        columnMappings,
-        learnedSpecialtyMappings,
-        learnedColumnMappings,
-        learnedRegionMappings,
-        learnedVariableMappings,
-        learnedProviderTypeMappings
-      }] = await Promise.all([
+      // Get all surveys and mappings directly from IndexedDB
+      const [surveys, specialtyMappings, columnMappings, learnedMappings] = await Promise.all([
         this.dataService.getAllSurveys(),
-        this.getCachedMappings()
+        this.dataService.getAllSpecialtyMappings(),
+        this.dataService.getAllColumnMappings(),
+        this.getLearnedMappings()
       ]);
       
-      
       if (surveys.length === 0) {
+        console.log('📊 No surveys found in IndexedDB');
         return [];
       }
       
-      // Check for cached normalized rows first
-      const surveyIds = surveys.map(s => s.id);
-      let allNormalizedRows: NormalizedRow[] = [];
+      console.log(`📊 Processing ${surveys.length} surveys from IndexedDB`);
       
-      if (this.globalCache.hasValidNormalizedRows(surveyIds)) {
-        const cachedRows = this.globalCache.getCachedNormalizedRows();
-        if (cachedRows) {
-          allNormalizedRows = cachedRows;
-        }
-      }
-      
-      if (allNormalizedRows.length === 0) {
         // Process surveys in parallel for better performance
+      const allNormalizedRows: NormalizedRow[] = [];
         const maxConcurrent = Math.min(3, surveys.length);
-        const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
         
+      const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
         try {
-          // Get survey data with pagination to limit memory usage (reduced for faster loading)
           const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
           
           if (surveyData.rows.length === 0) {
             return [];
           }
           
-          // Normalize rows in batches to avoid blocking the main thread (smaller batches for faster processing)
+          // Normalize rows in batches
           const normalizedRows: NormalizedRow[] = [];
           const batchSize = 50;
           
           for (let i = 0; i < surveyData.rows.length; i += batchSize) {
             const batch = surveyData.rows.slice(i, i + batchSize);
             const batchNormalized = batch.map(row => 
-            this.normalizeRow(row, survey, specialtyMappings, columnMappings, {
-              learnedSpecialtyMappings,
-              learnedColumnMappings,
-              learnedRegionMappings,
-              learnedVariableMappings,
-              learnedProviderTypeMappings
-            })
+              this.normalizeRow(row, survey, specialtyMappings, columnMappings, learnedMappings)
           );
             normalizedRows.push(...batchNormalized);
             
@@ -575,8 +141,8 @@ export class AnalyticsDataService {
           }
           
           return normalizedRows;
-          
         } catch (error) {
+          console.warn(`⚠️ Failed to process survey ${survey.id}:`, error);
           return [];
         }
       });
@@ -588,98 +154,67 @@ export class AnalyticsDataService {
         surveyResults.forEach(normalizedRows => {
           allNormalizedRows.push(...normalizedRows);
         });
-        
-        // Cache normalized rows for future use
-        if (allNormalizedRows.length > 0) {
-          this.globalCache.setCachedNormalizedRows(allNormalizedRows, surveyIds);
-        }
-      }
       
       if (allNormalizedRows.length === 0) {
+        console.log('📊 No normalized data found');
         return [];
       }
       
-      // Check for cached aggregation
-      const normalizedRowsHash = JSON.stringify(allNormalizedRows.map(r => ({
-        specialty: r.specialty,
-        providerType: r.providerType,
-        region: r.region,
-        surveySource: r.surveySource,
-        surveyYear: r.surveyYear
-      })));
+      // Aggregate the normalized data
+      console.log(`📊 Aggregating ${allNormalizedRows.length} normalized rows`);
+      const aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
       
-      let aggregatedData: AggregatedData[];
-      
-      if (this.globalCache.hasValidAggregation(normalizedRowsHash)) {
-        const cachedAggregation = this.globalCache.getCachedAggregation();
-        if (cachedAggregation) {
-          aggregatedData = cachedAggregation;
-        } else {
-          aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
-          this.globalCache.setCachedAggregation(aggregatedData, normalizedRowsHash);
-        }
-      } else {
-        // Stack and aggregate the normalized data in chunks for better performance
-        aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
-        
-        // Cache both aggregation and final data
-        this.globalCache.setCachedAggregation(aggregatedData, normalizedRowsHash);
-        this.globalCache.setCachedData(aggregatedData);
-      }
-      
+      console.log(`✅ AnalyticsDataService: Successfully processed ${aggregatedData.length} aggregated records`);
       return aggregatedData;
       
     } catch (error) {
-      throw error;
+      console.error('❌ AnalyticsDataService: Error fetching data:', error);
+      throw new Error(`Failed to load analytics data: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
    * Get analytics data for selected variables (DYNAMIC)
-   * NEW METHOD: Fetch data for any combination of variables
+   * Processes ALL variables found in data by default
    */
   async getAnalyticsDataByVariables(
     filters: AnalyticsFilters,
-    selectedVariables: string[] // e.g., ["tcc", "base_salary", "work_rvus"]
+    selectedVariables: string[] = [] // Optional - if empty, process all variables
   ): Promise<DynamicAggregatedData[]> {
     try {
-      console.log('🔍 AnalyticsDataService: Fetching data for variables:', selectedVariables);
-      console.log('🔍 AnalyticsDataService: Filters:', filters);
+      console.log('🔍 AnalyticsDataService: Fetching dynamic data for variables:', selectedVariables);
       
-      // Get all surveys and cached mappings
-      const [surveys, { 
-        specialtyMappings, 
-        columnMappings,
-        learnedSpecialtyMappings,
-        learnedColumnMappings,
-        learnedRegionMappings,
-        learnedVariableMappings,
-        learnedProviderTypeMappings
-      }] = await Promise.all([
+      // Get all surveys and mappings directly from IndexedDB
+      const [surveys, specialtyMappings, columnMappings, learnedMappings] = await Promise.all([
         this.dataService.getAllSurveys(),
-        this.getCachedMappings()
+        this.dataService.getAllSpecialtyMappings(),
+        this.dataService.getAllColumnMappings(),
+        this.getLearnedMappings()
       ]);
       
       if (surveys.length === 0) {
+        console.log('📊 No surveys found in IndexedDB');
         return [];
       }
       
-      // Process surveys in parallel for better performance
-      const allNormalizedRows: DynamicNormalizedRow[] = [];
-      console.log('🔍 AnalyticsDataService: Processing', surveys.length, 'surveys');
+      console.log(`📊 Processing ${surveys.length} surveys for dynamic variables`);
       
-      // Limit concurrent surveys to avoid overwhelming IndexedDB
+      // Process surveys in parallel
+      const allNormalizedRows: DynamicNormalizedRow[] = [];
       const maxConcurrent = Math.min(3, surveys.length);
+      
       const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
         try {
-          // Get survey data with pagination to limit memory usage
           const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
           
           if (surveyData.rows.length === 0) {
+            console.log(`📊 Survey ${survey.id} has no data rows`);
             return [];
           }
           
-          // Normalize rows dynamically based on selected variables
+          console.log(`📊 Survey ${survey.id} has ${surveyData.rows.length} data rows`);
+          
+          // Normalize rows dynamically
           const normalizedRows: DynamicNormalizedRow[] = [];
           const batchSize = 50;
           
@@ -689,11 +224,11 @@ export class AnalyticsDataService {
               this.normalizeRowDynamic(row, survey, selectedVariables, {
                 specialtyMappings,
                 columnMappings,
-                learnedSpecialtyMappings,
-                learnedColumnMappings,
-                learnedRegionMappings,
-                learnedVariableMappings,
-                learnedProviderTypeMappings
+                learnedSpecialtyMappings: learnedMappings.learnedSpecialtyMappings,
+                learnedColumnMappings: learnedMappings.learnedColumnMappings,
+                learnedRegionMappings: learnedMappings.learnedRegionMappings,
+                learnedVariableMappings: learnedMappings.learnedVariableMappings,
+                learnedProviderTypeMappings: learnedMappings.learnedProviderTypeMappings
               })
             );
             normalizedRows.push(...batchNormalized);
@@ -705,9 +240,8 @@ export class AnalyticsDataService {
           }
           
           return normalizedRows;
-          
         } catch (error) {
-          console.warn(`⚠️ AnalyticsDataService: Failed to process survey ${survey.id}:`, error);
+          console.warn(`⚠️ Failed to process survey ${survey.id}:`, error);
           return [];
         }
       });
@@ -721,129 +255,103 @@ export class AnalyticsDataService {
       });
       
       if (allNormalizedRows.length === 0) {
+        console.log('❌ AnalyticsDataService: No normalized rows generated');
         return [];
       }
       
       // Aggregate the normalized data dynamically
-      console.log('🔍 AnalyticsDataService: Normalized rows count:', allNormalizedRows.length);
-      if (allNormalizedRows.length > 0) {
-        console.log('🔍 AnalyticsDataService: First normalized row:', JSON.stringify(allNormalizedRows[0], null, 2));
-      }
-      
+      console.log(`📊 Aggregating ${allNormalizedRows.length} normalized rows for dynamic variables`);
       const aggregatedData = await this.aggregateByVariables(allNormalizedRows);
       
-      console.log(`✅ AnalyticsDataService: Aggregated ${aggregatedData.length} records for ${selectedVariables.length} variables`);
-      if (aggregatedData.length > 0) {
-        console.log('🔍 AnalyticsDataService: First aggregated record:', JSON.stringify(aggregatedData[0], null, 2));
-      }
-      
+      console.log(`✅ AnalyticsDataService: Successfully processed ${aggregatedData.length} dynamic records`);
       return aggregatedData;
       
     } catch (error) {
       console.error('❌ AnalyticsDataService: Error fetching dynamic data:', error);
-      throw error;
+      throw new Error(`Failed to load dynamic analytics data: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-
   /**
-   * Force refresh cache (call this when data structure changes)
+   * Clear cache (for backward compatibility)
+   * Since we removed caching, this is a no-op
    */
-  forceRefreshCache(): void {
-    this.globalCache.clearCache();
+  public clearCache(): void {
+    console.log('🔍 AnalyticsDataService: clearCache called (no-op - no cache to clear)');
+    // No-op since we removed caching
   }
 
   /**
-   * Clear cache completely (call this when data structure changes)
+   * Force refresh cache (for backward compatibility)
+   * Since we removed caching, this is a no-op
    */
-  clearCache(): void {
-    this.globalCache.clearCache();
+  public forceRefreshCache(): void {
+    console.log('🔍 AnalyticsDataService: forceRefreshCache called (no-op - no cache to refresh)');
+    // No-op since we removed caching
   }
 
   /**
-   * Background refresh method (Google-style)
-   * Refreshes data in the background without blocking the UI
+   * Invalidate cache (for backward compatibility)
+   * Since we removed caching, this is a no-op
    */
-  private async refreshDataInBackground(): Promise<void> {
+  public invalidateCache(): void {
+    console.log('🔍 AnalyticsDataService: invalidateCache called (no-op - no cache to invalidate)');
+    // No-op since we removed caching
+  }
+
+  /**
+   * Get learned mappings from IndexedDB
+   */
+  private async getLearnedMappings(): Promise<{
+    learnedSpecialtyMappings: Record<string, string>;
+    learnedColumnMappings: Record<string, string>;
+    learnedRegionMappings: Record<string, string>;
+    learnedVariableMappings: Record<string, string>;
+    learnedProviderTypeMappings: Record<string, string>;
+  }> {
     try {
-      
-      // Get fresh data without affecting current cache (including learned mappings)
-      const [surveys, { 
-        specialtyMappings, 
-        columnMappings,
+      const [
         learnedSpecialtyMappings,
         learnedColumnMappings,
         learnedRegionMappings,
         learnedVariableMappings,
         learnedProviderTypeMappings
-      }] = await Promise.all([
-        this.dataService.getAllSurveys(),
-        this.getCachedMappings()
+      ] = await Promise.all([
+        this.dataService.getLearnedMappings('specialty'),
+        this.dataService.getLearnedMappings('column'),
+        this.dataService.getLearnedMappings('region'),
+        this.dataService.getLearnedMappings('variable'),
+        this.dataService.getLearnedMappings('providerType')
       ]);
       
-      if (surveys.length === 0) return;
-      
-      // Process data in background
-      const allNormalizedRows: NormalizedRow[] = [];
-      
-      const surveyPromises = surveys.map(async (survey) => {
-        try {
-          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 1000 });
-          
-          if (surveyData.rows.length === 0) return [];
-          
-          const normalizedRows: NormalizedRow[] = [];
-          const batchSize = 100;
-          
-          for (let i = 0; i < surveyData.rows.length; i += batchSize) {
-            const batch = surveyData.rows.slice(i, i + batchSize);
-            const batchNormalized = batch.map(row => 
-              this.normalizeRow(row, survey, specialtyMappings, columnMappings, {
+      return {
                 learnedSpecialtyMappings,
                 learnedColumnMappings,
                 learnedRegionMappings,
                 learnedVariableMappings,
                 learnedProviderTypeMappings
-              })
-            );
-            normalizedRows.push(...batchNormalized);
-            
-            // Yield control
-            if (i + batchSize < surveyData.rows.length) {
-              await new Promise(resolve => setTimeout(resolve, 0));
-            }
-          }
-          
-          return normalizedRows;
+      };
         } catch (error) {
-          return [];
-        }
-      });
-      
-      const surveyResults = await Promise.all(surveyPromises);
-      surveyResults.forEach(normalizedRows => {
-        allNormalizedRows.push(...normalizedRows);
-      });
-      
-      if (allNormalizedRows.length > 0) {
-        const aggregatedData = await this.stackAndAggregateDataOptimized(allNormalizedRows);
-        this.globalCache.setCachedData(aggregatedData);
-      }
-      
-    } catch (error) {
+      console.warn('Failed to load learned mappings:', error);
+      return {
+        learnedSpecialtyMappings: {},
+        learnedColumnMappings: {},
+        learnedRegionMappings: {},
+        learnedVariableMappings: {},
+        learnedProviderTypeMappings: {}
+      };
     }
   }
 
   /**
    * Normalize a raw survey row using mappings and learned mappings
-   * Data is in long format: each row has a 'variable' field (TCC, wRVU, CF) and p25/p50/p75/p90 values
    */
   private normalizeRow(
     row: any, 
     survey: any, 
     specialtyMappings: ISpecialtyMapping[], 
     columnMappings: IColumnMapping[],
-    learnedMappings?: {
+    learnedMappings: {
       learnedSpecialtyMappings: Record<string, string>;
       learnedColumnMappings: Record<string, string>;
       learnedRegionMappings: Record<string, string>;
@@ -853,7 +361,6 @@ export class AnalyticsDataService {
   ): NormalizedRow {
     // The row might be a SurveyData object with the actual data in the 'data' property
     const actualRowData = row.data || row;
-    
     
     // Extract specialty - check multiple possible locations and formats
     const rawSpecialty = actualRowData.specialty || actualRowData.Specialty || 
@@ -865,7 +372,7 @@ export class AnalyticsDataService {
       rawSpecialty,
       specialtyMappings,
       survey.type,
-      learnedMappings?.learnedSpecialtyMappings
+      learnedMappings.learnedSpecialtyMappings
     );
     
     // Extract provider type
@@ -873,7 +380,7 @@ export class AnalyticsDataService {
                            actualRowData.provider_type || row.providerType || 'Physician';
     
     // Normalize provider type using learned mappings
-    const normalizedProviderType = this.normalizeProviderType(rawProviderType, learnedMappings?.learnedProviderTypeMappings);
+    const normalizedProviderType = this.normalizeProviderType(rawProviderType, learnedMappings.learnedProviderTypeMappings);
     
     // Extract region
     const rawRegion = actualRowData.geographicRegion || actualRowData.region || 
@@ -881,7 +388,7 @@ export class AnalyticsDataService {
                      row.region || 'National';
     
     // Normalize region using learned mappings
-    const normalizedRegion = this.normalizeRegion(rawRegion, learnedMappings?.learnedRegionMappings);
+    const normalizedRegion = this.normalizeRegion(rawRegion, learnedMappings.learnedRegionMappings);
     
     // Extract organizational data
     const extractOrgNumber = (value: any): number => {
@@ -925,11 +432,7 @@ export class AnalyticsDataService {
       const p75 = this.extractNumber(actualRowData.p75);
       const p90 = this.extractNumber(actualRowData.p90);
       
-      
       // Set the appropriate metrics based on the variable type
-      // IMPORTANT: Order matters - check most specific patterns first
-      
-      
       if (variable.includes('tcc per work rvu') || variable.includes('conversion factor')) {
         // This is definitely a conversion factor
         normalizedMetrics.cf_p25 = p25;
@@ -948,10 +451,8 @@ export class AnalyticsDataService {
         normalizedMetrics.tcc_p90 = p90;
       } else if (variable.includes('work rvu') || variable.includes('wrvu')) {
         // This is work RVUs (but NOT if it contains "per" or "conversion")
-        console.log('🔍 Processing wRVU variable:', variable);
         if (!variable.includes('per') && !variable.includes('conversion')) {
           // Additional check: wRVU values are typically much larger than CF values
-          // If the values are small (< 1000), they're likely conversion factors
           if (p50 > 1000) {
             normalizedMetrics.wrvu_p25 = p25;
             normalizedMetrics.wrvu_p50 = p50;
@@ -959,7 +460,6 @@ export class AnalyticsDataService {
             normalizedMetrics.wrvu_p90 = p90;
           } else {
             // Small values in wRVU field are likely conversion factors
-            console.log('✅ Detected CF variable (small wRVU values):', variable);
             normalizedMetrics.cf_p25 = p25;
             normalizedMetrics.cf_p50 = p50;
             normalizedMetrics.cf_p75 = p75;
@@ -967,7 +467,6 @@ export class AnalyticsDataService {
           }
         } else {
           // This is actually a conversion factor disguised as wRVU
-          console.log('✅ Detected CF variable (wRVU with per/conversion):', variable);
           normalizedMetrics.cf_p25 = p25;
           normalizedMetrics.cf_p50 = p50;
           normalizedMetrics.cf_p75 = p75;
@@ -975,7 +474,6 @@ export class AnalyticsDataService {
         }
       } else if (variable.includes('cf') || variable.includes('conversion')) {
         // This is a conversion factor
-        console.log('✅ Detected CF variable:', variable);
         normalizedMetrics.cf_p25 = p25;
         normalizedMetrics.cf_p50 = p50;
         normalizedMetrics.cf_p75 = p75;
@@ -983,35 +481,19 @@ export class AnalyticsDataService {
       }
     } else {
       // WIDE FORMAT: Data has separate columns for each metric
-      // Debug logging for WIDE format (temporarily enabled for debugging)
-      const hasTccColumns = Object.keys(actualRowData).some(key => 
-        key.toLowerCase().includes('tcc') || 
-        (key.toLowerCase().includes('total') && key.toLowerCase().includes('comp'))
-      );
-      if (hasTccColumns) {
-        console.log('🔍 Processing WIDE format data with TCC columns. Available columns:', Object.keys(actualRowData));
-      }
-      
       // Extract TCC metrics with fallback column names
-      const tcc_p25 = this.extractNumber(
+      normalizedMetrics.tcc_p25 = this.extractNumber(
         actualRowData.tcc_p25 || actualRowData['TCC P25'] || actualRowData['tcc_p25'] || actualRowData['TCC_p25']
       );
-      const tcc_p50 = this.extractNumber(
+      normalizedMetrics.tcc_p50 = this.extractNumber(
         actualRowData.tcc_p50 || actualRowData['TCC P50'] || actualRowData['tcc_p50'] || actualRowData['TCC_p50'] || actualRowData['TCC Median']
       );
-      const tcc_p75 = this.extractNumber(
+      normalizedMetrics.tcc_p75 = this.extractNumber(
         actualRowData.tcc_p75 || actualRowData['TCC P75'] || actualRowData['tcc_p75'] || actualRowData['TCC_p75']
       );
-      const tcc_p90 = this.extractNumber(
+      normalizedMetrics.tcc_p90 = this.extractNumber(
         actualRowData.tcc_p90 || actualRowData['TCC P90'] || actualRowData['tcc_p90'] || actualRowData['TCC_p90']
       );
-      
-      console.log('💰 TCC values extracted:', { tcc_p25, tcc_p50, tcc_p75, tcc_p90 });
-      
-      normalizedMetrics.tcc_p25 = tcc_p25;
-      normalizedMetrics.tcc_p50 = tcc_p50;
-      normalizedMetrics.tcc_p75 = tcc_p75;
-      normalizedMetrics.tcc_p90 = tcc_p90;
       
       // Extract wRVU metrics with fallback column names
       normalizedMetrics.wrvu_p25 = this.extractNumber(
@@ -1040,41 +522,6 @@ export class AnalyticsDataService {
       normalizedMetrics.cf_p90 = this.extractNumber(
         actualRowData.cf_p90 || actualRowData['CF P90'] || actualRowData['cf_p90'] || actualRowData['CF_p90'] || actualRowData['Conversion Factor P90']
       );
-      
-      // If we still don't have wRVU or CF data, try intelligent column matching
-      if (normalizedMetrics.wrvu_p50 === 0 || normalizedMetrics.cf_p50 === 0) {
-        
-        // Try to find wRVU columns using pattern matching
-        for (const [key, value] of Object.entries(actualRowData)) {
-          const lowerKey = key.toLowerCase();
-          if (lowerKey.includes('wrvu') || lowerKey.includes('rvu') || lowerKey.includes('work')) {
-            if (lowerKey.includes('25') && normalizedMetrics.wrvu_p25 === 0) {
-              normalizedMetrics.wrvu_p25 = this.extractNumber(value);
-            } else if (lowerKey.includes('50') && normalizedMetrics.wrvu_p50 === 0) {
-              normalizedMetrics.wrvu_p50 = this.extractNumber(value);
-            } else if (lowerKey.includes('75') && normalizedMetrics.wrvu_p75 === 0) {
-              normalizedMetrics.wrvu_p75 = this.extractNumber(value);
-            } else if (lowerKey.includes('90') && normalizedMetrics.wrvu_p90 === 0) {
-              normalizedMetrics.wrvu_p90 = this.extractNumber(value);
-            }
-          }
-          
-          // Try to find CF columns using pattern matching
-          if (lowerKey.includes('cf') || lowerKey.includes('conversion') || lowerKey.includes('factor')) {
-            if (lowerKey.includes('25') && normalizedMetrics.cf_p25 === 0) {
-              normalizedMetrics.cf_p25 = this.extractNumber(value);
-            } else if (lowerKey.includes('50') && normalizedMetrics.cf_p50 === 0) {
-              normalizedMetrics.cf_p50 = this.extractNumber(value);
-            } else if (lowerKey.includes('75') && normalizedMetrics.cf_p75 === 0) {
-              normalizedMetrics.cf_p75 = this.extractNumber(value);
-            } else if (lowerKey.includes('90') && normalizedMetrics.cf_p90 === 0) {
-              normalizedMetrics.cf_p90 = this.extractNumber(value);
-            }
-          }
-        }
-      }
-      
-      
     }
     
     return {
@@ -1223,7 +670,6 @@ export class AnalyticsDataService {
     return region;
   }
 
-
   /**
    * Optimized version of stackAndAggregateData that processes data in chunks
    */
@@ -1255,24 +701,21 @@ export class AnalyticsDataService {
       }
     }
     
-    
     // Convert grouped data to aggregated format
     const aggregatedData: AggregatedData[] = [];
     
-    for (const [key, rows] of groupedData) {
+    for (const [, rows] of groupedData) {
       if (rows.length === 0) continue;
       
-      const aggregatedRecord = this.createAggregatedRecord(rows, key);
+      const aggregatedRecord = this.createAggregatedRecord(rows, '');
       aggregatedData.push(aggregatedRecord);
     }
-    
     
     return aggregatedData;
   }
 
   /**
    * Create a single aggregated record from a group of rows
-   * FIXED: Now shows raw data instead of incorrectly recalculating percentiles
    */
   private createAggregatedRecord(rows: NormalizedRow[], key: string): AggregatedData {
     const firstRow = rows[0];
@@ -1312,11 +755,8 @@ export class AnalyticsDataService {
       cf_p90: 0
     };
     
-    // FIXED: Find the best row for each metric type to ensure we get the right data
-    // This ensures analytics matches the raw data shown in upload screen
+    // Find the best row for each metric type to ensure we get the right data
     if (rows.length > 0) {
-      // Find the best representative row for organizational data
-      const representativeRow = rows.find(r => r.n_orgs > 0 && r.n_incumbents > 0) || rows[0];
       
       // Find rows with each metric type
       const tccRow = rows.find(r => r.tcc_p50 > 0);
@@ -1361,17 +801,16 @@ export class AnalyticsDataService {
       }
     }
     
-    
     return aggregatedRecord;
   }
 
   /**
-   * NEW: Dynamic row normalization for any variables
+   * Dynamic row normalization for any variables
    */
   private normalizeRowDynamic(
     row: any,
     survey: any,
-    selectedVariables: string[],
+    selectedVariables: string[], // Optional - if empty, process all variables
     mappings: {
       specialtyMappings: any[];
       columnMappings: any[];
@@ -1435,14 +874,19 @@ export class AnalyticsDataService {
     // Handle both LONG format (variable field) and WIDE format (separate columns)
     const hasVariableField = actualRowData.variable !== undefined;
     
+    // Note: We handle both LONG format (variable field) and WIDE format (separate columns) below
+    
     if (hasVariableField) {
       // LONG FORMAT: Data has a 'variable' field
-      const variable = String(actualRowData.variable).toLowerCase();
-      const normalizedVarName = normalizeVariableName(actualRowData.variable);
+      const variable = String(actualRowData.variable).trim();
+      const normalizedVarName = normalizeVariableName(variable);
       
-      if (selectedVariables.includes(normalizedVarName)) {
+      // Process ALL variables by default, only filter if specific variables are selected
+      const shouldProcess = selectedVariables.length === 0 || selectedVariables.includes(normalizedVarName);
+      
+      if (shouldProcess) {
         variables[normalizedVarName] = {
-          variableName: actualRowData.variable,
+          variableName: variable,
           n_orgs,
           n_incumbents,
           p25: this.extractNumber(actualRowData.p25),
@@ -1453,17 +897,62 @@ export class AnalyticsDataService {
       }
     } else {
       // WIDE FORMAT: Data has separate columns for each variable
-      selectedVariables.forEach(varName => {
-        const p50Value = this.extractNumber(actualRowData[`${varName}_p50`]);
-        if (p50Value > 0) {
-          variables[varName] = {
-            variableName: this.formatVariableDisplayName(varName),
+      const percentilePattern = /^(.+)_(p25|p50|p75|p90)$/i;
+      const variableMap = new Map<string, { p25?: number; p50?: number; p75?: number; p90?: number }>();
+      
+      // Scan all columns for percentile patterns
+      Object.entries(actualRowData).forEach(([key, value]) => {
+        const match = key.match(percentilePattern);
+        if (match) {
+          const [, varName, percentile] = match;
+          const normalizedVarName = normalizeVariableName(varName);
+          const numValue = this.extractNumber(value);
+          
+          if (!variableMap.has(normalizedVarName)) {
+            variableMap.set(normalizedVarName, {});
+          }
+          
+          const varData = variableMap.get(normalizedVarName)!;
+          if (percentile.toLowerCase() === 'p25') varData.p25 = numValue;
+          else if (percentile.toLowerCase() === 'p50') varData.p50 = numValue;
+          else if (percentile.toLowerCase() === 'p75') varData.p75 = numValue;
+          else if (percentile.toLowerCase() === 'p90') varData.p90 = numValue;
+        }
+      });
+      
+      // Process discovered variables
+      variableMap.forEach((varData, normalizedVarName) => {
+        // Only process if no selectedVariables filter or if variable is selected
+        const shouldProcess = selectedVariables.length === 0 || selectedVariables.includes(normalizedVarName);
+        
+        if (shouldProcess && varData.p50 && varData.p50 > 0) {
+          variables[normalizedVarName] = {
+            variableName: this.formatVariableDisplayName(normalizedVarName),
             n_orgs,
             n_incumbents,
-            p25: this.extractNumber(actualRowData[`${varName}_p25`]),
-            p50: p50Value,
-            p75: this.extractNumber(actualRowData[`${varName}_p75`]),
-            p90: this.extractNumber(actualRowData[`${varName}_p90`])
+            p25: varData.p25 || 0,
+            p50: varData.p50 || 0,
+            p75: varData.p75 || 0,
+            p90: varData.p90 || 0
+          };
+        }
+      });
+    }
+    
+    // FALLBACK: If no variables were processed and we have data, try to process any numeric columns
+    if (Object.keys(variables).length === 0 && selectedVariables.length === 0) {
+      // Look for any columns that might be variables (contain numbers)
+      Object.entries(actualRowData).forEach(([key, value]) => {
+        if (typeof value === 'number' && value > 0 && !key.toLowerCase().includes('org') && !key.toLowerCase().includes('incumbent')) {
+          const normalizedVarName = normalizeVariableName(key);
+          variables[normalizedVarName] = {
+            variableName: key,
+            n_orgs,
+            n_incumbents,
+            p25: value,
+            p50: value,
+            p75: value,
+            p90: value
           };
         }
       });
@@ -1480,7 +969,7 @@ export class AnalyticsDataService {
   }
   
   /**
-   * NEW: Aggregate normalized rows by variables
+   * Aggregate normalized rows by variables
    */
   private async aggregateByVariables(
     normalizedRows: DynamicNormalizedRow[]
@@ -1501,7 +990,7 @@ export class AnalyticsDataService {
     // Convert grouped data to aggregated format
     const aggregatedData: DynamicAggregatedData[] = [];
     
-    for (const [key, rows] of groupedData) {
+    for (const [, rows] of groupedData) {
       if (rows.length === 0) continue;
       
       const firstRow = rows[0];
@@ -1578,114 +1067,6 @@ export class AnalyticsDataService {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   }
-
-  /**
-   * Calculate percentile from a sorted array of numbers
-   */
-  private calculatePercentile(sortedValues: number[], percentile: number): number {
-    if (sortedValues.length === 0) return 0;
-    const index = Math.floor((percentile / 100) * sortedValues.length);
-    return sortedValues[index] || 0;
-  }
-
-  /**
-   * Stack and aggregate normalized data (legacy method - kept for compatibility)
-   * This is the key function that ensures each metric section has its own n_orgs/n_incumbents
-   */
-  private stackAndAggregateData(
-    normalizedRows: NormalizedRow[]
-  ): AggregatedData[] {
-    
-    // Group rows by specialty, provider type, region, and survey source
-    const groupedData = new Map<string, NormalizedRow[]>();
-    
-    normalizedRows.forEach(row => {
-      // Create grouping key
-      const key = `${row.specialty}_${row.providerType}_${row.region}_${row.surveySource}`;
-      
-      if (!groupedData.has(key)) {
-        groupedData.set(key, []);
-      }
-      
-      groupedData.get(key)!.push(row);
-    });
-    
-    
-    // Convert grouped data to aggregated format
-    const aggregatedData: AggregatedData[] = [];
-    
-    groupedData.forEach((rows, key) => {
-      if (rows.length === 0) return;
-      
-      
-      // For long format data, we need to combine multiple rows (one for each variable type)
-      // For wide format data, each row contains all metrics
-      
-      // FIXED: Find the best row for each metric type to ensure we get the right data
-      // This ensures analytics matches the raw data shown in upload screen
-      const representativeRow = rows.find(r => r.n_orgs > 0 && r.n_incumbents > 0) || rows[0];
-      
-      // Find rows with each metric type
-      const tccRow = rows.find(r => r.tcc_p50 > 0);
-      const wrvuRow = rows.find(r => r.wrvu_p50 > 0);
-      const cfRow = rows.find(r => r.cf_p50 > 0);
-      
-      
-      // Extract original specialty name from raw data
-      const originalSpecialty = representativeRow.rawData?.specialty || 
-                               representativeRow.rawData?.Specialty || 
-                               representativeRow.rawData?.normalizedSpecialty || 
-                               representativeRow.specialty || 'Unknown';
-
-      const aggregatedRecord: AggregatedData = {
-        standardizedName: representativeRow.specialty,
-        surveySource: representativeRow.surveySource as any,
-        surveySpecialty: representativeRow.specialty,
-        originalSpecialty: originalSpecialty,
-        geographicRegion: representativeRow.region as any,
-        providerType: representativeRow.providerType as any,
-        surveyYear: representativeRow.surveyYear,
-        
-        // Use organizational data from the specific row that contains each metric type
-        // TCC organizational data from TCC row
-        tcc_n_orgs: tccRow ? tccRow.n_orgs || 0 : 0,
-        tcc_n_incumbents: tccRow ? tccRow.n_incumbents || 0 : 0,
-        
-        // wRVU organizational data from wRVU row
-        wrvu_n_orgs: wrvuRow ? wrvuRow.n_orgs || 0 : 0,
-        wrvu_n_incumbents: wrvuRow ? wrvuRow.n_incumbents || 0 : 0,
-        
-        // CF organizational data from CF row
-        cf_n_orgs: cfRow ? cfRow.n_orgs || 0 : 0,
-        cf_n_incumbents: cfRow ? cfRow.n_incumbents || 0 : 0,
-        
-        // Use TCC data from TCC row if available
-        tcc_p25: tccRow ? tccRow.tcc_p25 || 0 : 0,
-        tcc_p50: tccRow ? tccRow.tcc_p50 || 0 : 0,
-        tcc_p75: tccRow ? tccRow.tcc_p75 || 0 : 0,
-        tcc_p90: tccRow ? tccRow.tcc_p90 || 0 : 0,
-        
-        // Use wRVU data from wRVU row if available
-        wrvu_p25: wrvuRow ? wrvuRow.wrvu_p25 || 0 : 0,
-        wrvu_p50: wrvuRow ? wrvuRow.wrvu_p50 || 0 : 0,
-        wrvu_p75: wrvuRow ? wrvuRow.wrvu_p75 || 0 : 0,
-        wrvu_p90: wrvuRow ? wrvuRow.wrvu_p90 || 0 : 0,
-        
-        // Use CF data from CF row if available
-        cf_p25: cfRow ? cfRow.cf_p25 || 0 : 0,
-        cf_p50: cfRow ? cfRow.cf_p50 || 0 : 0,
-        cf_p75: cfRow ? cfRow.cf_p75 || 0 : 0,
-        cf_p90: cfRow ? cfRow.cf_p90 || 0 : 0
-      };
-      
-      
-      aggregatedData.push(aggregatedRecord);
-    });
-    
-    
-    return aggregatedData;
-  }
-
 }
 
 // Export singleton instance

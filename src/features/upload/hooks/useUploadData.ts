@@ -291,10 +291,22 @@ export const useUploadData = (
   // Data loading
   const loadSurveys = useCallback(async () => {
     try {
+      console.log('📥 useUploadData: Loading surveys from IndexedDB...');
       setIsLoading(true);
       setError(null);
       
-              const surveys = await dataService.getAllSurveys();
+      const surveys = await dataService.getAllSurveys();
+      console.log('📊 useUploadData: Loaded surveys from IndexedDB:', {
+        surveyCount: surveys.length,
+        surveys: surveys.map(s => ({
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          year: s.year,
+          rowCount: s.rowCount,
+          specialtyCount: s.specialtyCount
+        }))
+      });
       
       const processedSurveys = surveys.map((survey: any) => ({
         id: survey.id,
@@ -311,6 +323,17 @@ export const useUploadData = (
         },
         columnMappings: {}
       }));
+
+      console.log('✅ useUploadData: Processed surveys:', {
+        processedCount: processedSurveys.length,
+        processedSurveys: processedSurveys.map(s => ({
+          id: s.id,
+          fileName: s.fileName,
+          surveyType: s.surveyType,
+          surveyYear: s.surveyYear,
+          stats: s.stats
+        }))
+      });
 
       setUploadedSurveys(processedSurveys);
       
@@ -443,6 +466,14 @@ export const useUploadData = (
           const surveyYear = parseInt(formState.surveyYear);
           const providerType = formState.providerType;
           
+          console.log('📤 useUploadData: Starting survey upload:', {
+            fileName: file.name,
+            surveyYear,
+            surveyType,
+            providerType,
+            fileSize: file.size
+          });
+
           const uploadedSurvey = await dataService.uploadSurvey(
             file,
             file.name,
@@ -450,6 +481,11 @@ export const useUploadData = (
             surveyType,
             providerType
           );
+
+          console.log('✅ useUploadData: Survey upload completed:', {
+            surveyId: uploadedSurvey.surveyId,
+            rowCount: uploadedSurvey.rowCount
+          });
           
           // Verify upload
           setUploadState(prev => ({

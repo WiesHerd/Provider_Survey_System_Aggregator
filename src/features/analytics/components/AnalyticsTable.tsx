@@ -35,17 +35,13 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   loadingProgress,
   error,
   onExport,
-  selectedVariables = [] // Default to empty array for backward compatibility
+  onFormatVariables,
+  selectedVariables = [], // Default to empty array for backward compatibility
+  formattingRules = [] // Default to empty array for backward compatibility
 }) => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
-  // Freeze state for left columns
-  const [freezeLeftColumns, setFreezeLeftColumns] = useState(true);
-  
-  // Debug logging
-  console.log('🔍 AnalyticsTable: freezeLeftColumns state:', freezeLeftColumns);
   
   // Production-grade: All data is in dynamic format
   // No conditional logic needed - unified data structure
@@ -144,8 +140,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
       {/* Control buttons */}
       <AnalyticsTableControls
         onExport={onExport}
-        freezeLeftColumns={freezeLeftColumns}
-        onToggleFreeze={() => setFreezeLeftColumns(!freezeLeftColumns)}
+        onFormatVariables={onFormatVariables}
       />
 
       {/* HTML Table with frozen headers */}
@@ -170,7 +165,6 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         >
           <AnalyticsTableHeader
             columnGroups={columnGroups}
-            freezeLeftColumns={freezeLeftColumns}
             selectedVariables={selectedVariables}
           />
           <tbody>
@@ -184,8 +178,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     key={`${row.surveySource}-${row.geographicRegion}-${index}`}
                     row={row}
                     selectedVariables={selectedVariables}
-                    freezeLeftColumns={freezeLeftColumns}
                     index={index}
+                    formattingRules={formattingRules}
                   />
                 ))}
 
@@ -194,7 +188,6 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                   specialty={specialty}
                   summaryData={getSummaryRows(specialty)}
                   selectedVariables={selectedVariables}
-                  freezeLeftColumns={freezeLeftColumns}
                 />
               </React.Fragment>
               );

@@ -31,7 +31,6 @@ interface SurveyData {
   tcc?: number;
   cf?: number;
   wrvu?: number;
-  base_salary?: number;
   count?: number;
   // Percentile-specific compensation data
   tcc_p25?: number;
@@ -46,10 +45,6 @@ interface SurveyData {
   wrvu_p50?: number;
   wrvu_p75?: number;
   wrvu_p90?: number;
-  base_salary_p25?: number;
-  base_salary_p50?: number;
-  base_salary_p75?: number;
-  base_salary_p90?: number;
   n_orgs?: number;
   n_incumbents?: number;
 }
@@ -61,7 +56,7 @@ interface SurveyData {
 export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
-  private readonly DB_VERSION = 6;
+  private readonly DB_VERSION = 7;
   private isInitializing = false;
   private isReady = false;
   private initializationPromise: Promise<void> | null = null;
@@ -235,6 +230,13 @@ export class IndexedDBService {
           blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
           blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
         }
+
+        // Create cache store for analytics
+        if (!db.objectStoreNames.contains('cache')) {
+          console.log('📊 Creating cache object store...');
+          const cacheStore = db.createObjectStore('cache', { keyPath: 'key' });
+          cacheStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
         
         console.log('✅ Database upgrade completed, all object stores created');
       };
@@ -246,8 +248,15 @@ export class IndexedDBService {
       throw new Error('Database not opened');
     }
 
-    const requiredStores = ['surveys', 'surveyData', 'specialtyMappings'];
+    const requiredStores = ['surveys', 'surveyData', 'specialtyMappings', 'cache'];
+    const existingStores = Array.from(this.db!.objectStoreNames);
     const missingStores = requiredStores.filter(storeName => !this.db!.objectStoreNames.contains(storeName));
+    
+    console.log('🔍 IndexedDB Object Stores:', {
+      existing: existingStores,
+      required: requiredStores,
+      missing: missingStores
+    });
     
     if (missingStores.length > 0) {
       console.warn('⚠️ Missing object stores detected:', missingStores);
@@ -330,9 +339,27 @@ export class IndexedDBService {
   }
 
   /**
-   * Get database health status
+   * Get database health status with detailed diagnostics
+   * Enterprise-grade health monitoring with comprehensive checks
    */
-  async getHealthStatus(): Promise<{ status: 'healthy' | 'unhealthy' | 'unknown'; details: string }> {
+  async getHealthStatus(): Promise<{ 
+    status: 'healthy' | 'unhealthy' | 'unknown'; 
+    details: string;
+    diagnostics?: {
+      isInitialized: boolean;
+      isReady: boolean;
+      hasDatabase: boolean;
+      objectStores: string[];
+      requiredStores: string[];
+      missingStores: string[];
+      surveyCount: number;
+      dataCount: number;
+      lastError?: string;
+      browserSupport: boolean;
+      storageQuota?: number;
+      storageUsage?: number;
+    }
+  }> {
     // Return cached result if recent (within 5 seconds)
     if (this.healthCheckCache && Date.now() - this.healthCheckCache.timestamp < 5000) {
       return {
@@ -341,49 +368,164 @@ export class IndexedDBService {
       };
     }
 
+    const diagnostics: any = {
+      isInitialized: this.isInitializing || this.isReady,
+      isReady: this.isReady,
+      hasDatabase: !!this.db,
+      objectStores: [],
+      requiredStores: ['surveys', 'surveyData', 'specialtyMappings', 'cache'],
+      missingStores: [],
+      surveyCount: 0,
+      dataCount: 0,
+      browserSupport: !!window.indexedDB
+    };
+
     try {
-      if (!this.isReady || !this.db) {
-        return { status: 'unhealthy', details: 'Database not initialized' };
+      // Check browser support
+      if (!window.indexedDB) {
+        this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+        return { 
+          status: 'unhealthy', 
+          details: 'IndexedDB is not supported in this browser',
+          diagnostics: { ...diagnostics, lastError: 'IndexedDB not supported' }
+        };
       }
 
-      // Test basic operations
-      const transaction = this.db.transaction(['surveys'], 'readonly');
-      const store = transaction.objectStore('surveys');
-      
-      await new Promise<void>((resolve, reject) => {
-        const request = store.count();
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
+      // Check initialization state
+      if (!this.isReady || !this.db) {
+        this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+        return { 
+          status: 'unhealthy', 
+          details: 'Database not initialized',
+          diagnostics: { ...diagnostics, lastError: 'Database not initialized' }
+        };
+      }
+
+      // Get object store names
+      diagnostics.objectStores = Array.from(this.db.objectStoreNames);
+      diagnostics.missingStores = diagnostics.requiredStores.filter((store: string) => 
+        !this.db!.objectStoreNames.contains(store)
+      );
+
+      // Check for missing critical stores
+      if (diagnostics.missingStores.length > 0) {
+        this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+        return { 
+          status: 'unhealthy', 
+          details: `Missing critical object stores: ${diagnostics.missingStores.join(', ')}`,
+          diagnostics: { ...diagnostics, lastError: 'Missing object stores' }
+        };
+      }
+
+      // Test basic operations on each critical store
+      const storeTests = [
+        { name: 'surveys', operation: 'count' },
+        { name: 'surveyData', operation: 'count' },
+        { name: 'specialtyMappings', operation: 'count' },
+        { name: 'cache', operation: 'count' }
+      ];
+
+      for (const storeTest of storeTests) {
+        try {
+          const transaction = this.db.transaction([storeTest.name], 'readonly');
+          const store = transaction.objectStore(storeTest.name);
+          
+          await new Promise<void>((resolve, reject) => {
+            const request = store.count();
+            request.onsuccess = () => {
+              if (storeTest.name === 'surveys') diagnostics.surveyCount = request.result;
+              if (storeTest.name === 'surveyData') diagnostics.dataCount = request.result;
+              resolve();
+            };
+            request.onerror = () => reject(request.error);
+          });
+        } catch (error) {
+          this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+          return { 
+            status: 'unhealthy', 
+            details: `Store ${storeTest.name} is not accessible: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            diagnostics: { ...diagnostics, lastError: `Store ${storeTest.name} error` }
+          };
+        }
+      }
+
+      // Check storage quota if available
+      if ('storage' in navigator && 'estimate' in navigator.storage) {
+        try {
+          const estimate = await navigator.storage.estimate();
+          diagnostics.storageQuota = estimate.quota;
+          diagnostics.storageUsage = estimate.usage;
+        } catch (error) {
+          // Storage quota check failed, but not critical
+          console.warn('Storage quota check failed:', error);
+        }
+      }
 
       this.healthCheckCache = { status: 'healthy', timestamp: Date.now() };
-      return { status: 'healthy', details: 'Database is operational' };
+      return { 
+        status: 'healthy', 
+        details: `Database is operational (${diagnostics.surveyCount} surveys, ${diagnostics.dataCount} data rows)`,
+        diagnostics
+      };
     } catch (error) {
       this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
       return { 
         status: 'unhealthy', 
-        details: `Database health check failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        details: `Database health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        diagnostics: { ...diagnostics, lastError: error instanceof Error ? error.message : 'Unknown error' }
       };
     }
   }
 
   /**
    * Repair database if corrupted
+   * Enterprise-grade repair with multiple recovery strategies
    */
   async repairDatabase(): Promise<void> {
-    console.log('🔧 Attempting to repair database...');
+    console.log('🔧 Starting database repair process...');
     
     try {
-      // Force reinitialization
+      // Step 1: Force reinitialization
+      console.log('🔧 Step 1: Forcing reinitialization...');
       this.isReady = false;
       this.initializationPromise = null;
       this.healthCheckCache = null;
       
+      // Step 2: Close existing database connection
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+      
+      // Step 3: Try to reinitialize
+      console.log('🔧 Step 2: Reinitializing database...');
       await this.initialize();
-      console.log('✅ Database repair completed successfully');
+      
+      // Step 4: Verify repair was successful
+      console.log('🔧 Step 3: Verifying repair...');
+      const healthStatus = await this.getHealthStatus();
+      
+      if (healthStatus.status === 'healthy') {
+        console.log('✅ Database repair completed successfully');
+        return;
+      }
+      
+      // Step 5: If still unhealthy, try database recreation
+      console.log('🔧 Step 4: Attempting database recreation...');
+      await this._recreateDatabase();
+      
+      // Step 6: Final verification
+      const finalHealthStatus = await this.getHealthStatus();
+      if (finalHealthStatus.status === 'healthy') {
+        console.log('✅ Database repair completed successfully after recreation');
+        return;
+      }
+      
+      throw new Error('Database repair failed - all recovery strategies exhausted');
+      
     } catch (error) {
       console.error('❌ Database repair failed:', error);
-      throw new Error('Failed to repair database. Please refresh the page.');
+      throw new Error(`Failed to repair database: ${error instanceof Error ? error.message : 'Unknown error'}. Please refresh the page or clear browser data.`);
     }
   }
 
@@ -525,30 +667,103 @@ export class IndexedDBService {
   }
 
   async deleteSurvey(id: string): Promise<void> {
-    const db = await this.ensureDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['surveys', 'surveyData'], 'readwrite');
+    console.log('🗑️ IndexedDBService: Starting delete survey:', id);
+    
+    try {
+      const db = await this.ensureDB();
       
-      // Delete survey
-      const surveyStore = transaction.objectStore('surveys');
-      surveyStore.delete(id);
+      return new Promise((resolve, reject) => {
+        // Set up timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+          console.error('❌ IndexedDBService: Delete survey timed out after 5 seconds');
+          reject(new Error('Delete survey operation timed out after 5 seconds'));
+        }, 5000);
+        
+        // Include cache store in transaction to clear analytics cache
+        const transaction = db.transaction(['surveys', 'surveyData', 'cache'], 'readwrite');
+        
+        // Delete survey
+        const surveyStore = transaction.objectStore('surveys');
+        const surveyDeleteRequest = surveyStore.delete(id);
+        
+        // Delete associated data
+        const dataStore = transaction.objectStore('surveyData');
+        const dataIndex = dataStore.index('surveyId');
+        const dataRequest = dataIndex.openCursor(IDBKeyRange.only(id));
+        
+        // Clear analytics cache since data has changed
+        const cacheStore = transaction.objectStore('cache');
+        const cacheClearRequest = cacheStore.clear();
+        
+        let dataDeletedCount = 0;
+        let surveyDeleted = false;
+        let cacheCleared = false;
+        
+        const checkCompletion = () => {
+          if (surveyDeleted && cacheCleared) {
+            clearTimeout(timeoutId);
+            console.log(`✅ IndexedDBService: Survey ${id} deleted successfully (${dataDeletedCount} data rows removed, cache cleared)`);
+            resolve();
+          }
+        };
+        
+        surveyDeleteRequest.onsuccess = () => {
+          console.log('✅ IndexedDBService: Survey record deleted');
+          surveyDeleted = true;
+          checkCompletion();
+        };
+        
+        surveyDeleteRequest.onerror = () => {
+          console.error('❌ IndexedDBService: Failed to delete survey record:', surveyDeleteRequest.error);
+          clearTimeout(timeoutId);
+          reject(surveyDeleteRequest.error);
+        };
 
-      // Delete associated data
-      const dataStore = transaction.objectStore('surveyData');
-      const dataIndex = dataStore.index('surveyId');
-      const dataRequest = dataIndex.openCursor(IDBKeyRange.only(id));
+        dataRequest.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest).result;
+          if (cursor) {
+            dataStore.delete(cursor.primaryKey);
+            dataDeletedCount++;
+            cursor.continue();
+          } else {
+            // No more data to delete
+            console.log(`✅ IndexedDBService: Deleted ${dataDeletedCount} data rows for survey ${id}`);
+            checkCompletion();
+          }
+        };
+        
+        dataRequest.onerror = () => {
+          console.error('❌ IndexedDBService: Failed to delete survey data:', dataRequest.error);
+          clearTimeout(timeoutId);
+          reject(dataRequest.error);
+        };
+        
+        cacheClearRequest.onsuccess = () => {
+          console.log('✅ IndexedDBService: Analytics cache cleared');
+          cacheCleared = true;
+          checkCompletion();
+        };
+        
+        cacheClearRequest.onerror = () => {
+          console.error('❌ IndexedDBService: Failed to clear cache:', cacheClearRequest.error);
+          clearTimeout(timeoutId);
+          reject(cacheClearRequest.error);
+        };
 
-      dataRequest.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
-        if (cursor) {
-          dataStore.delete(cursor.primaryKey);
-          cursor.continue();
-        }
-      };
-
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
+        transaction.oncomplete = () => {
+          console.log('✅ IndexedDBService: Delete survey transaction completed');
+        };
+        
+        transaction.onerror = () => {
+          console.error('❌ IndexedDBService: Delete survey transaction failed:', transaction.error);
+          clearTimeout(timeoutId);
+          reject(transaction.error);
+        };
+      });
+    } catch (error) {
+      console.error('❌ IndexedDBService: Error in deleteSurvey:', error);
+      throw error;
+    }
   }
 
   /**
@@ -742,20 +957,146 @@ export class IndexedDBService {
     }
   }
 
-  async deleteAllSurveys(): Promise<void> {
-    const db = await this.ensureDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['surveys', 'surveyData'], 'readwrite');
+  /**
+   * Force clear entire IndexedDB database (nuclear option)
+   * Use this if deleteAllSurveys fails or times out
+   */
+  async forceClearDatabase(): Promise<void> {
+    console.log('💥 IndexedDBService: Force clearing entire database...');
+    
+    try {
+      // Close existing connection
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
       
-      const surveyStore = transaction.objectStore('surveys');
-      const dataStore = transaction.objectStore('surveyData');
+      // Delete the entire database
+      const deleteRequest = indexedDB.deleteDatabase(this.DB_NAME);
       
-      surveyStore.clear();
-      dataStore.clear();
+      return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          console.error('❌ IndexedDBService: Force clear timed out after 5 seconds');
+          reject(new Error('Force clear operation timed out after 5 seconds'));
+        }, 5000);
+        
+        deleteRequest.onsuccess = () => {
+          clearTimeout(timeoutId);
+          console.log('✅ IndexedDBService: Database force cleared successfully');
+          // Reinitialize the database
+          this.ensureDB().then(() => {
+            console.log('✅ IndexedDBService: Database reinitialized after force clear');
+            resolve();
+          }).catch(reject);
+        };
+        
+        deleteRequest.onerror = () => {
+          clearTimeout(timeoutId);
+          console.error('❌ IndexedDBService: Failed to force clear database:', deleteRequest.error);
+          reject(deleteRequest.error);
+        };
+        
+        deleteRequest.onblocked = () => {
+          console.warn('⚠️ IndexedDBService: Database deletion blocked - close other tabs');
+          // Still resolve as the database will be cleared when the last tab closes
+          clearTimeout(timeoutId);
+          resolve();
+        };
+      });
+    } catch (error) {
+      console.error('❌ IndexedDBService: Error in forceClearDatabase:', error);
+      throw error;
+    }
+  }
 
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
+  async deleteAllSurveys(): Promise<void> {
+    console.log('🗑️ IndexedDBService: Starting delete all surveys...');
+    
+    try {
+      const db = await this.ensureDB();
+      
+      return new Promise((resolve, reject) => {
+        // Set up timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+          console.error('❌ IndexedDBService: Delete all surveys timed out after 10 seconds');
+          reject(new Error('Delete operation timed out after 10 seconds'));
+        }, 10000); // 10 second timeout instead of 15
+        
+        // Include cache store in transaction to clear analytics cache
+        const transaction = db.transaction(['surveys', 'surveyData', 'cache'], 'readwrite');
+        
+        const surveyStore = transaction.objectStore('surveys');
+        const dataStore = transaction.objectStore('surveyData');
+        const cacheStore = transaction.objectStore('cache');
+        
+        console.log('🗑️ IndexedDBService: Clearing surveys table...');
+        const surveyClearRequest = surveyStore.clear();
+        
+        console.log('🗑️ IndexedDBService: Clearing surveyData table...');
+        const dataClearRequest = dataStore.clear();
+        
+        console.log('🗑️ IndexedDBService: Clearing analytics cache...');
+        const cacheClearRequest = cacheStore.clear();
+        
+        let completedOperations = 0;
+        const totalOperations = 3;
+        
+        const checkCompletion = () => {
+          completedOperations++;
+          if (completedOperations === totalOperations) {
+            clearTimeout(timeoutId);
+            console.log('✅ IndexedDBService: All surveys and cache deleted successfully');
+            resolve();
+          }
+        };
+        
+        surveyClearRequest.onsuccess = () => {
+          console.log('✅ IndexedDBService: Surveys table cleared');
+          checkCompletion();
+        };
+        
+        surveyClearRequest.onerror = () => {
+          console.error('❌ IndexedDBService: Failed to clear surveys table:', surveyClearRequest.error);
+          clearTimeout(timeoutId);
+          reject(surveyClearRequest.error);
+        };
+        
+        dataClearRequest.onsuccess = () => {
+          console.log('✅ IndexedDBService: SurveyData table cleared');
+          checkCompletion();
+        };
+        
+        dataClearRequest.onerror = () => {
+          console.error('❌ IndexedDBService: Failed to clear surveyData table:', dataClearRequest.error);
+          clearTimeout(timeoutId);
+          reject(dataClearRequest.error);
+        };
+        
+        cacheClearRequest.onsuccess = () => {
+          console.log('✅ IndexedDBService: Analytics cache cleared');
+          checkCompletion();
+        };
+        
+        cacheClearRequest.onerror = () => {
+          console.error('❌ IndexedDBService: Failed to clear cache table:', cacheClearRequest.error);
+          clearTimeout(timeoutId);
+          reject(cacheClearRequest.error);
+        };
+        
+        transaction.oncomplete = () => {
+          console.log('✅ IndexedDBService: Delete transaction completed');
+        };
+        
+        transaction.onerror = () => {
+          console.error('❌ IndexedDBService: Delete transaction failed:', transaction.error);
+          clearTimeout(timeoutId);
+          reject(transaction.error);
+        };
+      });
+    } catch (error) {
+      console.error('❌ IndexedDBService: Error in deleteAllSurveys:', error);
+      throw error;
+    }
   }
 
   async uploadSurvey(
@@ -767,46 +1108,76 @@ export class IndexedDBService {
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
     try {
+      console.log('📤 IndexedDBService: Starting survey upload:', {
+        fileName: file.name,
+        surveyName,
+        surveyYear,
+        surveyType,
+        providerType,
+        fileSize: file.size
+      });
+
       // Parse CSV file
       const text = await file.text();
-              const rows = this.parseCSV(text);
+      const rows = this.parseCSV(text);
       
+      console.log('📊 IndexedDBService: Parsed CSV data:', {
+        rowCount: rows.length,
+        firstRowKeys: rows.length > 0 ? Object.keys(rows[0]) : [],
+        sampleData: rows.length > 0 ? rows[0] : null
+      });
 
+      // Create survey record
+      const surveyId = crypto.randomUUID();
+      const survey = {
+        id: surveyId,
+        name: surveyName,
+        year: surveyYear.toString(),
+        type: surveyType,
+        providerType: providerType, // ENTERPRISE FIX: Add provider type to survey
+        uploadDate: new Date(),
+        rowCount: rows.length,
+        specialtyCount: 0, // Will be calculated
+        dataPoints: rows.length,
+        colorAccent: '#6366F1',
+        metadata: {}
+      };
+
+      console.log('💾 IndexedDBService: Creating survey record:', survey);
+
+      // Save survey
+      await this.createSurvey(survey);
+      console.log('✅ IndexedDBService: Survey record created successfully');
       
-              // Create survey record
-        const surveyId = crypto.randomUUID();
-        const survey = {
-          id: surveyId,
-          name: surveyName,
-          year: surveyYear.toString(),
-          type: surveyType,
-          providerType: providerType, // ENTERPRISE FIX: Add provider type to survey
-          uploadDate: new Date(),
-          rowCount: rows.length,
-          specialtyCount: 0, // Will be calculated
-          dataPoints: rows.length,
-          colorAccent: '#6366F1',
-          metadata: {}
-        };
+      // Save survey data
+      console.log('💾 IndexedDBService: Saving survey data...');
+      await this.saveSurveyData(surveyId, rows);
+      console.log('✅ IndexedDBService: Survey data saved successfully');
+      
+      // Calculate specialty count
+      const uniqueSpecialties = new Set<string>();
+      rows.forEach((row: any) => {
+        const specialty = row.specialty || row.Specialty || row['Provider Type'];
+        if (specialty) uniqueSpecialties.add(specialty);
+      });
+      
+      console.log('🔍 IndexedDBService: Calculated specialties:', {
+        uniqueSpecialties: Array.from(uniqueSpecialties),
+        specialtyCount: uniqueSpecialties.size
+      });
+      
+      // Update survey with specialty count
+      const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
+      await this.updateSurvey(updatedSurvey);
+      console.log('✅ IndexedDBService: Survey updated with specialty count');
 
-        // Save survey
-        await this.createSurvey(survey);
-        
-        // Save survey data
-        await this.saveSurveyData(surveyId, rows);
-        
-        // Calculate specialty count
-        const uniqueSpecialties = new Set<string>();
-        rows.forEach((row: any) => {
-          const specialty = row.specialty || row.Specialty || row['Provider Type'];
-          if (specialty) uniqueSpecialties.add(specialty);
-          });
-        
-        // Update survey with specialty count
-        const updatedSurvey = { ...survey, specialtyCount: uniqueSpecialties.size };
-        await this.updateSurvey(updatedSurvey);
+      console.log('🎉 IndexedDBService: Survey upload completed successfully:', {
+        surveyId,
+        rowCount: rows.length,
+        specialtyCount: uniqueSpecialties.size
+      });
 
-        return { surveyId, rowCount: rows.length };
+      return { surveyId, rowCount: rows.length };
     } catch (error) {
       throw error;
     }
@@ -1388,16 +1759,12 @@ export class IndexedDBService {
       // CF patterns
       /cf.*p\d+/i, /p\d+.*cf/i, /conversion.*factor.*\d+/i, /\d+.*conversion.*factor/i,
       
-      // Base Salary patterns
-      /base.*salary.*p\d+/i, /p\d+.*base.*salary/i, /base.*pay.*p\d+/i, /p\d+.*base.*pay/i,
-      /salary.*p\d+/i, /p\d+.*salary/i, /base.*comp.*p\d+/i, /p\d+.*base.*comp/i,
-      
       // Technical fields
       /n_orgs?$/i, /n_incumbents?$/i, /number.*org/i, /number.*incumbent/i,
       /organization.*count/i, /incumbent.*count/i,
       
       // Direct percentile matches
-      /^tcc_p\d+$/i, /^wrvu_p\d+$/i, /^cf_p\d+$/i, /^base_salary_p\d+$/i,
+      /^tcc_p\d+$/i, /^wrvu_p\d+$/i, /^cf_p\d+$/i,
       
       // Basic percentile patterns (p25, p50, p75, p90)
       /^p\d+$/i, /^p25$/i, /^p50$/i, /^p75$/i, /^p90$/i,
@@ -1423,7 +1790,6 @@ export class IndexedDBService {
     if (/tcc|total.*cash|total.*comp/i.test(name)) return 'Total Cash Compensation';
     if (/wrvu|work.*rvu|rvu/i.test(name)) return 'Work RVUs'; 
     if (/cf|conversion.*factor/i.test(name)) return 'Conversion Factor';
-    if (/base.*salary|base.*pay|salary/i.test(name) && !/total/i.test(name)) return 'Base Salary';
     if (/n_orgs?|organization|number.*org/i.test(name)) return 'Organization Count';
     if (/n_incumbents?|incumbent|number.*incumbent/i.test(name)) return 'Incumbent Count';
     
@@ -2593,6 +2959,87 @@ export class IndexedDBService {
       
       request.onerror = () => {
         console.error('❌ Error deleting blend template:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  // Cache Methods for Analytics
+  async saveToCache(key: string, data: any): Promise<void> {
+    await this.ensureDB();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['cache'], 'readwrite');
+      const store = transaction.objectStore('cache');
+      
+      const cacheItem = {
+        key,
+        data,
+        timestamp: Date.now()
+      };
+      
+      const request = store.put(cacheItem);
+      
+      request.onsuccess = () => {
+        console.log('✅ Cache saved:', key);
+        resolve();
+      };
+      
+      request.onerror = () => {
+        console.error('❌ Error saving cache:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  async getFromCache(key: string): Promise<any> {
+    await this.ensureDB();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['cache'], 'readonly');
+      const store = transaction.objectStore('cache');
+      
+      const request = store.get(key);
+      
+      request.onsuccess = () => {
+        const result = request.result;
+        if (result) {
+          console.log('✅ Cache retrieved:', key);
+          resolve(result.data);
+        } else {
+          resolve(null);
+        }
+      };
+      
+      request.onerror = () => {
+        console.error('❌ Error retrieving cache:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  async clearCache(key?: string): Promise<void> {
+    await this.ensureDB();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['cache'], 'readwrite');
+      const store = transaction.objectStore('cache');
+      
+      let request: IDBRequest;
+      
+      if (key) {
+        request = store.delete(key);
+      } else {
+        request = store.clear();
+      }
+      
+      request.onsuccess = () => {
+        console.log('✅ Cache cleared:', key || 'all');
+        resolve();
+      };
+      
+      request.onerror = () => {
+        console.error('❌ Error clearing cache:', request.error);
         reject(request.error);
       };
     });

@@ -70,7 +70,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 		{
 			name: 'Analysis Tools',
 			items: [
-				{ name: 'Benchmarking', icon: PresentationChartLineIcon, path: '/analytics' },
+				{ name: 'Benchmarking', icon: PresentationChartLineIcon, path: '/benchmarking' },
 				{ name: 'Regional Data', icon: MapIcon, path: '/regional-analytics' },
 				{ name: 'Custom Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
 				{ name: 'Report Builder', icon: DocumentChartBarIcon, path: '/custom-reports' },
@@ -89,7 +89,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	// Check if current path is in Analytics & Reports section
 	const isAnalyticsRoute = (path: string) => {
 		const analyticsRoutes = [
-			'/analytics', 
+			'/benchmarking', 
 			'/regional-analytics',
 			'/specialty-blending',
 			'/custom-reports',

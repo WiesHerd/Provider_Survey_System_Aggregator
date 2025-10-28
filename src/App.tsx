@@ -392,7 +392,7 @@ const PageContent = () => {
           title: 'Normalized Data',
           description: 'View processed and standardized survey data'
         };
-      case '/analytics':
+      case '/benchmarking':
         return {
           title: 'Benchmarking',
           description: 'Comprehensive analysis of your compensation data'
@@ -446,7 +446,7 @@ const PageContent = () => {
           <PageHeader 
             title={headerContent.title} 
             description={headerContent.description} 
-            className={location.pathname === '/analytics' ? 'mb-0' : undefined}
+            className={location.pathname === '/benchmarking' ? 'mb-0' : undefined}
           />
         )}
         <main className={`bg-gray-50 flex-1 ${isDashboard ? '' : 'px-8'}`}>
@@ -462,7 +462,7 @@ const PageContent = () => {
               <Route path="/region-mapping" element={<RegionMapping />} />
               <Route path="/variable-mapping" element={<VariableMapping />} />
               <Route path="/column-mapping" element={<ColumnMapping />} />
-              <Route path="/analytics" element={<SurveyAnalytics />} />
+              <Route path="/benchmarking" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
               <Route path="/custom-reports" element={<CustomReports />} />

@@ -20,6 +20,7 @@ import {
   getVariableColor,
   validateVariableSelection 
 } from '../utils/variableFormatters';
+import { MAX_SELECTED_VARIABLES } from '../types/variables';
 
 /**
  * AnalyticsFilters component for filtering analytics data
@@ -70,6 +71,14 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   
   // NEW: Variable selection handler
   const handleVariableChange = useCallback((event: any, newValue: string[]) => {
+    // Enforce maximum 5 variables limit
+    if (newValue.length > MAX_SELECTED_VARIABLES) {
+      // If trying to add more than 5, keep only the first 5
+      const limitedValue = newValue.slice(0, MAX_SELECTED_VARIABLES);
+      onVariablesChange(limitedValue);
+      return;
+    }
+    
     // Validate selection (max 5 variables)
     const validation = validateVariableSelection(newValue);
     if (validation.isValid) {
@@ -182,12 +191,12 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
                 label="Display Variables (Select 1-5)"
                 placeholder="Choose variables to display..."
                 size="small"
-                helperText={`${selectedVariables.length}/5 selected`}
+                helperText={`${selectedVariables.length}/${MAX_SELECTED_VARIABLES} selected`}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     backgroundColor: 'white',
                     borderRadius: '8px',
-                    height: '40px',
+                    minHeight: '60px', // Increased height to accommodate multiple rows
                     border: '1px solid #d1d5db !important',
                     '&:hover': { 
                       borderColor: '#9ca3af !important',
@@ -227,8 +236,17 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
                     backgroundColor: getVariableColor(option, index),
                     color: 'white',
                     fontWeight: 500,
+                    maxWidth: '200px', // Limit chip width
+                    margin: '2px', // Add margin between chips
+                    '& .MuiChip-label': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      padding: '0 8px'
+                    },
                     '& .MuiChip-deleteIcon': {
-                      color: 'white'
+                      color: 'white',
+                      fontSize: '16px'
                     }
                   }}
                 />
@@ -238,6 +256,15 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
             disableCloseOnSelect
             noOptionsText="No variables found"
             loadingText="Loading variables..."
+            sx={{
+              '& .MuiAutocomplete-inputRoot': {
+                padding: '4px 8px',
+                minHeight: '60px',
+                flexWrap: 'wrap',
+                alignItems: 'flex-start', // Align chips to top
+                paddingTop: '8px' // Add top padding for better spacing
+              }
+            }}
           />
         </FormControl>
       </div>
