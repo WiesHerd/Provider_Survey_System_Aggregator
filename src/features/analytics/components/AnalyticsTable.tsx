@@ -11,7 +11,6 @@ import React, { memo, useState, useMemo, useCallback } from 'react';
 import { AnalyticsTableProps } from '../types/analytics';
 import { calculateSummaryRows } from '../utils/analyticsCalculations';
 import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
-import { EmptyState } from '../../mapping/components/shared/EmptyState';
 import { BoltIcon } from '@heroicons/react/24/outline';
 import { useMemoizedGrouping, useMemoizedColumnGroups } from '../hooks/useMemoizedCalculations';
 import { AnalyticsTableControls } from './AnalyticsTableControls';
@@ -103,18 +102,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <BoltIcon className="w-8 h-8 text-gray-500" />
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <BoltIcon className="h-6 w-6 text-gray-500" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Benchmarking Data Available</h3>
-          <p className="text-gray-500 mb-4">All specialties are mapped, or no survey data is available.</p>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Benchmarking Data Available</h3>
+          <p className="text-gray-600 mb-4">All specialties are mapped, or no survey data is available.</p>
           <button
             onClick={() => window.location.reload()}
-            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            <BoltIcon className="w-4 h-4 mr-2" />
+            <BoltIcon className="h-4 w-4 mr-2" />
             Refresh Data
           </button>
         </div>
@@ -124,18 +123,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <BoltIcon className="w-8 h-8 text-gray-500" />
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <BoltIcon className="h-6 w-6 text-gray-500" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Benchmarking Data Available</h3>
-          <p className="text-gray-500 mb-4">All specialties are mapped, or no survey data is available.</p>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Benchmarking Data Available</h3>
+          <p className="text-gray-600 mb-4">All specialties are mapped, or no survey data is available.</p>
           <button
             onClick={() => window.location.reload()}
-            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            <BoltIcon className="w-4 h-4 mr-2" />
+            <BoltIcon className="h-4 w-4 mr-2" />
             Refresh Data
           </button>
         </div>
