@@ -141,24 +141,39 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         
         return metrics ? (
           <React.Fragment key={varName}>
-            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', padding: '8px', fontSize: '15px', borderRight: '2px solid #D1D5DB' }}>{metrics.n_orgs.toLocaleString()}</td>
-            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', padding: '8px', fontSize: '15px', borderRight: '2px solid #D1D5DB' }}>{metrics.n_incumbents.toLocaleString()}</td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', padding: '8px', fontSize: '15px' }}>{metrics.n_orgs.toLocaleString()}</td>
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', padding: '8px', fontSize: '15px', borderRight: '1px solid #E5E7EB' }}>{metrics.n_incumbents.toLocaleString()}</td>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
               {VariableFormattingService.getInstance().formatVariableValue(metrics.p25, varName, { rules: formattingRules })}
             </td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
               {VariableFormattingService.getInstance().formatVariableValue(metrics.p50, varName, { rules: formattingRules })}
             </td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
               {VariableFormattingService.getInstance().formatVariableValue(metrics.p75, varName, { rules: formattingRules })}
             </td>
-            <td style={{ backgroundColor: lightColor, borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
+            <td style={{ backgroundColor: 'white', borderRight: '1px solid #E0E0E0', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
               {VariableFormattingService.getInstance().formatVariableValue(metrics.p90, varName, { rules: formattingRules })}
             </td>
           </React.Fragment>
         ) : (
           <React.Fragment key={varName}>
-            <td style={{ backgroundColor: lightColor, textAlign: 'center', color: '#9ca3af', padding: '8px', fontSize: '15px' }} colSpan={6}>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              n/a
+            </td>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              n/a
+            </td>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              n/a
+            </td>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              n/a
+            </td>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              n/a
+            </td>
+            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E0E0E0' }}>
               n/a
             </td>
           </React.Fragment>
