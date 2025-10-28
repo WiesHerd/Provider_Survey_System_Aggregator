@@ -141,8 +141,8 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         
         return metrics ? (
           <React.Fragment key={varName}>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>{metrics.n_orgs.toLocaleString()}</td>
-            <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>{metrics.n_incumbents.toLocaleString()}</td>
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', padding: '8px', fontSize: '15px', borderRight: '2px solid #D1D5DB' }}>{metrics.n_orgs.toLocaleString()}</td>
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', padding: '8px', fontSize: '15px', borderRight: '2px solid #D1D5DB' }}>{metrics.n_incumbents.toLocaleString()}</td>
             <td style={{ backgroundColor: lightColor, textAlign: 'right', padding: '8px', fontSize: '15px' }}>
               {VariableFormattingService.getInstance().formatVariableValue(metrics.p25, varName, { rules: formattingRules })}
             </td>

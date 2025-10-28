@@ -210,13 +210,14 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
             <th 
               style={{ 
                 fontWeight: 'bold', 
-                backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                backgroundColor: '#F8F9FA', // Slightly different background for sample size columns
                 position: 'sticky',
                 top: '48px',
                 zIndex: 11,
                 padding: '8px',
                 textAlign: 'right',
-                borderBottom: 'none'
+                borderBottom: 'none',
+                borderRight: '2px solid #D1D5DB' // Visual separator between sample size and percentiles
               }}
             >
               # Orgs
@@ -224,13 +225,14 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
             <th 
               style={{ 
                 fontWeight: 'bold', 
-                backgroundColor: getVariableLightBackgroundColor(group.normalizedName, index),
+                backgroundColor: '#F8F9FA', // Slightly different background for sample size columns
                 position: 'sticky',
                 top: '48px',
                 zIndex: 11,
                 padding: '8px',
                 textAlign: 'right',
-                borderBottom: 'none'
+                borderBottom: 'none',
+                borderRight: '2px solid #D1D5DB' // Visual separator between sample size and percentiles
               }}
             >
               # Inc
@@ -299,24 +301,24 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
         {columnGroups.length === 0 && (
           <>
             {/* TCC Sub-headers */}
-            <th style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}># Orgs</th>
-            <th style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}># Incumbents</th>
+            <th style={{ fontWeight: 'bold', backgroundColor: '#F8F9FA', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none', borderRight: '2px solid #D1D5DB' }}># Orgs</th>
+            <th style={{ fontWeight: 'bold', backgroundColor: '#F8F9FA', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none', borderRight: '2px solid #D1D5DB' }}># Incumbents</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>TCC P25</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>TCC P50</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>TCC P75</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E3F2FD', borderRight: '1px solid #E0E0E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>TCC P90</th>
             
             {/* wRVU Sub-headers */}
-            <th style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}># Orgs</th>
-            <th style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}># Incumbents</th>
+            <th style={{ fontWeight: 'bold', backgroundColor: '#F8F9FA', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none', borderRight: '2px solid #D1D5DB' }}># Orgs</th>
+            <th style={{ fontWeight: 'bold', backgroundColor: '#F8F9FA', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none', borderRight: '2px solid #D1D5DB' }}># Incumbents</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>wRVU P25</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>wRVU P50</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>wRVU P75</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#E8F5E8', borderRight: '1px solid #E0E0E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>wRVU P90</th>
             
             {/* CF Sub-headers */}
-            <th style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}># Orgs</th>
-            <th style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}># Incumbents</th>
+            <th style={{ fontWeight: 'bold', backgroundColor: '#F8F9FA', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none', borderRight: '2px solid #D1D5DB' }}># Orgs</th>
+            <th style={{ fontWeight: 'bold', backgroundColor: '#F8F9FA', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none', borderRight: '2px solid #D1D5DB' }}># Incumbents</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>CF P25</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>CF P50</th>
             <th style={{ fontWeight: 'bold', backgroundColor: '#FFF3E0', position: 'sticky', top: '48px', zIndex: 11, padding: '8px', textAlign: 'right', borderBottom: 'none' }}>CF P75</th>
