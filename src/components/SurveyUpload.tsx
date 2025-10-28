@@ -1062,6 +1062,7 @@ const SurveyUpload: React.FC = () => {
                     recordCount={uploadedSurveys.length}
                     progress={progress}
                     showProgress={uploadedSurveys.length > 0}
+                    overlay={true}
                   />
                 ) : uploadedSurveys.length === 0 ? (
                   <EmptyState
