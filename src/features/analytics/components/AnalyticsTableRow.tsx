@@ -152,7 +152,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           metrics = dynamicRow.variables[normalizedVarName];
           
           // Debug logging for dynamic format
-          if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan'))) {
+          if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan') || legacyRow.surveySource?.toLowerCase().includes('gallagher'))) {
             console.log('🔍 Dynamic Format TCC per Work RVU Debug:', {
               surveySource: legacyRow.surveySource,
               varName,
@@ -196,7 +196,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           const p90 = legacyRow[`${legacyPrefix}_p90`] || 0;
           
           // Debug logging for TCC per Work RVU data
-          if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan'))) {
+          if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan') || legacyRow.surveySource?.toLowerCase().includes('gallagher'))) {
             console.log('🔍 TCC per Work RVU Debug:', {
               surveySource: legacyRow.surveySource,
               varName,
