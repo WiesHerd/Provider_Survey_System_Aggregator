@@ -979,7 +979,9 @@ export class AnalyticsDataService {
     const groupedData = new Map<string, DynamicNormalizedRow[]>();
     
     normalizedRows.forEach(row => {
-      const key = `${row.standardizedSpecialty}_${row.providerType}_${row.region}_${row.surveySource}`;
+      // Group by standardized specialty, provider type, and region only
+      // This ensures all surveys mapping to the same standardized specialty are combined
+      const key = `${row.standardizedSpecialty}_${row.providerType}_${row.region}`;
       
       if (!groupedData.has(key)) {
         groupedData.set(key, []);
@@ -996,19 +998,23 @@ export class AnalyticsDataService {
       
       const firstRow = rows[0];
       
+      // Get unique survey sources for this group
+      const surveySources = [...new Set(rows.map(row => row.surveySource))];
+      const surveyYears = [...new Set(rows.map(row => row.surveyYear))];
+      
       // Initialize aggregated record
       const aggregatedRecord: DynamicAggregatedData = {
         standardizedName: firstRow.standardizedSpecialty, // Mapped standardized specialty name
-        surveySource: firstRow.surveySource,
-        surveySpecialty: firstRow.specialty, // Original specialty name from survey
+        surveySource: surveySources.length === 1 ? surveySources[0] : `Combined (${surveySources.join(', ')})`, // Combined survey sources
+        surveySpecialty: firstRow.specialty, // Original specialty name from first survey (for display)
         originalSpecialty: firstRow.specialty, // Same as surveySpecialty for consistency
         geographicRegion: firstRow.region,
         providerType: firstRow.providerType,
-        surveyYear: firstRow.surveyYear,
+        surveyYear: surveyYears.length === 1 ? surveyYears[0] : `Combined (${surveyYears.join(', ')})`, // Combined years
         variables: {}
       };
       
-      // Aggregate variables from all rows
+      // Aggregate variables from all rows (weighted by n_incumbents)
       const variableMap = new Map<string, VariableMetrics[]>();
       
       rows.forEach(row => {
@@ -1020,19 +1026,41 @@ export class AnalyticsDataService {
         });
       });
       
-      // Create aggregated metrics for each variable
+      // Create aggregated metrics for each variable using weighted averages
       variableMap.forEach((metricsList, varName) => {
         if (metricsList.length > 0) {
-          // Use the first metrics as base (they should all be the same for same variable)
-          const baseMetrics = metricsList[0];
+          // Calculate weighted averages across all surveys
+          let totalIncumbents = 0;
+          let totalOrgs = 0;
+          let weightedP25 = 0;
+          let weightedP50 = 0;
+          let weightedP75 = 0;
+          let weightedP90 = 0;
+          
+          metricsList.forEach(metrics => {
+            const weight = metrics.n_incumbents || 1; // Use n_incumbents as weight
+            totalIncumbents += weight;
+            totalOrgs += metrics.n_orgs || 0;
+            weightedP25 += (metrics.p25 || 0) * weight;
+            weightedP50 += (metrics.p50 || 0) * weight;
+            weightedP75 += (metrics.p75 || 0) * weight;
+            weightedP90 += (metrics.p90 || 0) * weight;
+          });
+          
+          // Calculate final weighted averages
+          const finalP25 = totalIncumbents > 0 ? weightedP25 / totalIncumbents : 0;
+          const finalP50 = totalIncumbents > 0 ? weightedP50 / totalIncumbents : 0;
+          const finalP75 = totalIncumbents > 0 ? weightedP75 / totalIncumbents : 0;
+          const finalP90 = totalIncumbents > 0 ? weightedP90 / totalIncumbents : 0;
+          
           aggregatedRecord.variables[varName] = {
-            variableName: baseMetrics.variableName,
-            n_orgs: baseMetrics.n_orgs,
-            n_incumbents: baseMetrics.n_incumbents,
-            p25: baseMetrics.p25,
-            p50: baseMetrics.p50,
-            p75: baseMetrics.p75,
-            p90: baseMetrics.p90
+            variableName: metricsList[0].variableName,
+            n_orgs: totalOrgs,
+            n_incumbents: totalIncumbents,
+            p25: Math.round(finalP25),
+            p50: Math.round(finalP50),
+            p75: Math.round(finalP75),
+            p90: Math.round(finalP90)
           };
         }
       });
