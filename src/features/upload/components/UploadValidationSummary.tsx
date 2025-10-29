@@ -25,7 +25,8 @@ import {
   Divider,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  Tooltip
 } from '@mui/material';
 import {
   CheckCircleIcon,
@@ -279,12 +280,20 @@ export const UploadValidationSummary: React.FC<UploadValidationSummaryProps> = (
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
               Sample Data Preview
             </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200 }}>
-              <Table size="small">
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, overflowX: 'auto' }}>
+              <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 650 }}>
                 <TableHead>
                   <TableRow>
                     {validationResults[0].detectedColumns.slice(0, 5).map((column, index) => (
-                      <TableCell key={index}>
+                      <TableCell 
+                        key={index}
+                        sx={{ 
+                          minWidth: column.toLowerCase().includes('specialty') ? 200 : 
+                                   column.toLowerCase().includes('provider') ? 180 : 
+                                   column.toLowerCase().includes('region') ? 150 : 100,
+                          maxWidth: 250
+                        }}
+                      >
                         <Typography variant="caption" fontWeight="bold">
                           {column}
                         </Typography>
@@ -304,9 +313,20 @@ export const UploadValidationSummary: React.FC<UploadValidationSummaryProps> = (
                     <TableRow key={rowIndex}>
                       {validationResults[0].detectedColumns.slice(0, 5).map((column, colIndex) => (
                         <TableCell key={colIndex}>
-                          <Typography variant="caption" noWrap sx={{ maxWidth: 120 }}>
-                            {row[column] || '-'}
-                          </Typography>
+                          <Tooltip title={row[column] || '-'} placement="top" arrow>
+                            <Typography 
+                              variant="caption" 
+                              noWrap 
+                              sx={{ 
+                                display: 'block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                cursor: 'help'
+                              }}
+                            >
+                              {row[column] || '-'}
+                            </Typography>
+                          </Tooltip>
                         </TableCell>
                       ))}
                       {validationResults[0].detectedColumns.length > 5 && (
