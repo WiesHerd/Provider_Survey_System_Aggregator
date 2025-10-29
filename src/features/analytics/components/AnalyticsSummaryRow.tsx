@@ -41,34 +41,7 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
       {/* Simple Average Row */}
       <tr style={{ backgroundColor: '#f5f5f5', borderTop: '1px solid #d1d5db' }}>
         <td 
-          style={{ 
-            fontWeight: '600',
-            position: 'static',
-            left: 'auto',
-            backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #e0e0e0',
-            zIndex: 'auto',
-            padding: '8px',
-            fontSize: '15px'
-          }}
-        >
-          {showSpecialty ? 'Simple Average' : ''}
-        </td>
-        <td 
-          style={{ 
-            fontWeight: '600',
-            position: 'static',
-            left: 'auto',
-            backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #e0e0e0',
-            zIndex: 'auto',
-            padding: '8px',
-            fontSize: '15px'
-          }}
-        >
-          {showSurveySource ? '' : ''}
-        </td>
-        <td 
+          colSpan={3}
           style={{ 
             fontWeight: '600',
             position: 'static',
@@ -139,34 +112,7 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
       {/* Weighted Average Row */}
       <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '1px solid #d1d5db' }}>
         <td 
-          style={{ 
-            fontWeight: '600',
-            position: 'static',
-            left: 'auto',
-            backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #e0e0e0',
-            zIndex: 'auto',
-            padding: '8px',
-            fontSize: '15px'
-          }}
-        >
-          {showSpecialty ? 'Weighted Average' : ''}
-        </td>
-        <td 
-          style={{ 
-            fontWeight: '600',
-            position: 'static',
-            left: 'auto',
-            backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #e0e0e0',
-            zIndex: 'auto',
-            padding: '8px',
-            fontSize: '15px'
-          }}
-        >
-          {showSurveySource ? '' : ''}
-        </td>
-        <td 
+          colSpan={3}
           style={{ 
             fontWeight: '600',
             position: 'static',

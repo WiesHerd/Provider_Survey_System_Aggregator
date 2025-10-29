@@ -191,8 +191,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     selectedVariables={selectedVariables}
                     index={index}
                     formattingRules={formattingRules}
-                    showSpecialty={index === 0} // Only show specialty on first row
-                    showSurveySource={index === 0} // Only show survey source on first row
+                    showSpecialty={true} // Show specialty on all rows
+                    showSurveySource={true} // Show survey source on all rows
                     specialty={specialty}
                     surveySource={surveySource}
                   />
