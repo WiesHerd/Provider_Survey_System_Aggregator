@@ -238,6 +238,13 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     
     // Apply provider type filtering
     let providerFilteredData = allData;
+    
+    // TEMPORARILY DISABLED: Provider type filtering to show all data
+    console.log('🔍 SurveyAnalytics: Provider type filtering TEMPORARILY DISABLED');
+    console.log('🔍 SurveyAnalytics: effectiveProviderType:', effectiveProviderType);
+    console.log('🔍 SurveyAnalytics: Showing all data regardless of provider type');
+    
+    /*
     if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
       providerFilteredData = allData.filter(row => {
         if (!row.providerType) return false;
@@ -252,6 +259,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     } else {
       console.log('🔍 SurveyAnalytics: Provider type filtering disabled - showing all data');
     }
+    */
     /*
     if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
       console.log('🔍 SurveyAnalytics: Applying provider type filter:', effectiveProviderType);
