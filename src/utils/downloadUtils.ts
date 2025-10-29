@@ -5,7 +5,14 @@
 /**
  * Download a sample file with proper error handling
  */
-export const downloadSampleFile = async (filename: string = 'sample-survey.csv') => {
+export const downloadSampleFile = async (format: 'sullivan-cotter' | 'mgma' | 'gallagher' = 'sullivan-cotter') => {
+  const fileMap = {
+    'sullivan-cotter': 'sample-survey-sullivan-cotter.csv',
+    'mgma': 'sample-survey-mgma.csv',
+    'gallagher': 'sample-survey-gallagher.csv'
+  };
+  
+  const filename = fileMap[format];
   try {
     // Create a proper URL for the file
     const fileUrl = `${window.location.origin}/${filename}`;

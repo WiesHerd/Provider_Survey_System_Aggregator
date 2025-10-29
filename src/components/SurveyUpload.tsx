@@ -162,6 +162,9 @@ const SurveyUpload: React.FC = () => {
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
   
+  // Add state for sample format selection
+  const [selectedSampleFormat, setSelectedSampleFormat] = useState<'sullivan-cotter' | 'mgma' | 'gallagher'>('sullivan-cotter');
+  
 
   // Filter survey options based on selected provider type
   const availableSurveyTypes = useMemo(() => {
@@ -756,6 +759,8 @@ const SurveyUpload: React.FC = () => {
                   <button
                     onClick={() => setError('')}
                     className="text-red-400 hover:text-red-600"
+                    aria-label="Close error message"
+                    title="Dismiss error"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -783,12 +788,24 @@ const SurveyUpload: React.FC = () => {
                 </button>
                 <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedSampleFormat}
+                  onChange={(e) => setSelectedSampleFormat(e.target.value as 'sullivan-cotter' | 'mgma' | 'gallagher')}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  aria-label="Select sample format"
+                  title="Choose the format that matches your survey source"
+                >
+                  <option value="sullivan-cotter">Sullivan Cotter Format</option>
+                  <option value="mgma">MGMA Format</option>
+                  <option value="gallagher">Gallagher Format</option>
+                </select>
                 <button
                   onClick={async () => {
                     try {
-                      await downloadSampleFile();
+                      await downloadSampleFile(selectedSampleFormat);
                     } catch (error) {
+                      console.error('Download failed:', error);
                     }
                   }}
                   className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 border border-gray-300"

@@ -120,7 +120,7 @@ const UploadForm: React.FC<UploadFormProps> = ({
 
   const handleDownloadSample = async () => {
     try {
-      await downloadSampleFile();
+      await downloadSampleFile('sullivan-cotter'); // Default to Sullivan Cotter format
     } catch (error) {
       console.error('Download failed:', error);
     }
