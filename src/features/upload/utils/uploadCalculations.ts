@@ -294,6 +294,11 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
     detectedColumns.includes(col)
   );
 
+  // Detect if this is a wide format with variable-specific columns (like Sullivan Cotter)
+  const isWideVariableFormat = detectedColumns.some(col => 
+    col.includes('tcc_p') || col.includes('wrvu_p') || col.includes('cf_p')
+  ) && detectedColumns.includes('specialty') && detectedColumns.includes('provider_type');
+
   if (isNormalizedFormat) {
     // This is a normalized format file - validate against normalized columns
     NORMALIZED_REQUIRED_COLUMNS.forEach(requiredColumn => {
@@ -313,6 +318,39 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       suggestions,
       errors,
       format: 'normalized'
+    };
+  }
+
+  if (isWideVariableFormat) {
+    // This is a wide format with variable-specific columns (Sullivan Cotter style)
+    // Check for required base columns
+    const requiredBaseColumns = ['specialty', 'provider_type', 'geographic_region'];
+    const missingBaseColumns = requiredBaseColumns.filter(col => 
+      !detectedColumns.some(header => header.toLowerCase().includes(col.toLowerCase()))
+    );
+
+    if (missingBaseColumns.length > 0) {
+      missingColumns.push(...missingBaseColumns);
+      errors.push(`Missing required columns: ${missingBaseColumns.join(', ')}`);
+    }
+
+    // Check for at least one variable column set
+    const hasTccColumns = detectedColumns.some(col => col.includes('tcc_p'));
+    const hasWrvuColumns = detectedColumns.some(col => col.includes('wrvu_p'));
+    const hasCfColumns = detectedColumns.some(col => col.includes('cf_p'));
+
+    if (!hasTccColumns && !hasWrvuColumns && !hasCfColumns) {
+      errors.push('No variable columns found (expected tcc_p*, wrvu_p*, or cf_p* columns)');
+    }
+
+    return {
+      isValid: missingColumns.length === 0 && errors.length === 0,
+      detectedColumns,
+      missingColumns,
+      mappedColumns,
+      suggestions,
+      errors,
+      format: 'wide_variable'
     };
   }
 
