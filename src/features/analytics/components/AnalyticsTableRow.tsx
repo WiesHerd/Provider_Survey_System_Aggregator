@@ -168,6 +168,23 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           const p75 = legacyRow[`${legacyPrefix}_p75`] || 0;
           const p90 = legacyRow[`${legacyPrefix}_p90`] || 0;
           
+          // Debug logging for TCC per Work RVU data
+          if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan'))) {
+            console.log('🔍 TCC per Work RVU Debug:', {
+              surveySource: legacyRow.surveySource,
+              varName,
+              normalizedVarName,
+              legacyPrefix,
+              nOrgs,
+              nIncumbents,
+              p25,
+              p50,
+              p75,
+              p90,
+              allFields: Object.keys(legacyRow).filter(key => key.includes('cf') || key.includes('tcc') || key.includes('per')).slice(0, 10)
+            });
+          }
+          
           if (p50 > 0) {
             metrics = {
               variableName: varName,
