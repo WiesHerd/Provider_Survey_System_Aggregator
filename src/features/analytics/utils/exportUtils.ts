@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx';
 import { AggregatedData, AnalyticsFilters } from '../types/analytics';
+import { DynamicAggregatedData } from '../types/variables';
+import { mapVariableNameToStandard } from './variableFormatters';
 
 interface ExportOptions {
   includeFilters?: boolean;
@@ -8,11 +10,12 @@ interface ExportOptions {
 }
 
 /**
- * Export analytics data to Excel
+ * Export analytics data to Excel with dynamic variable support
  */
 export const exportToExcel = (
-  data: AggregatedData[],
+  data: AggregatedData[] | DynamicAggregatedData[],
   filters: AnalyticsFilters,
+  selectedVariables: string[],
   options: ExportOptions = {}
 ) => {
   const {
@@ -24,58 +27,133 @@ export const exportToExcel = (
   // Create workbook
   const workbook = XLSX.utils.book_new();
 
-  // Prepare data for export
-  const exportData = data.map(row => ({
-    'Survey Source': row.surveySource,
-    'Survey Specialty': row.surveySpecialty,
-    'Geographic Region': row.geographicRegion,
-    'Provider Type': row.providerType,
-    'Survey Year': row.surveyYear,
-    'TCC # Orgs': row.tcc_n_orgs,
-    'TCC # Incumbents': row.tcc_n_incumbents,
-    'wRVU # Orgs': row.wrvu_n_orgs,
-    'wRVU # Incumbents': row.wrvu_n_incumbents,
-    'CF # Orgs': row.cf_n_orgs,
-    'CF # Incumbents': row.cf_n_incumbents,
-    'TCC P25': row.tcc_p25,
-    'TCC P50': row.tcc_p50,
-    'TCC P75': row.tcc_p75,
-    'TCC P90': row.tcc_p90,
-    'wRVU P25': row.wrvu_p25,
-    'wRVU P50': row.wrvu_p50,
-    'wRVU P75': row.wrvu_p75,
-    'wRVU P90': row.wrvu_p90,
-    'CF P25': row.cf_p25,
-    'CF P50': row.cf_p50,
-    'CF P75': row.cf_p75,
-    'CF P90': row.cf_p90
-  }));
+  // Helper function to safely get variable metrics from dynamic data structure
+  const getVariableMetrics = (row: any, variableName: string) => {
+    // Check if this is the new dynamic format
+    if (row.variables && typeof row.variables === 'object') {
+      // Normalize variable name to match the stored key
+      const normalizedVarName = mapVariableNameToStandard(variableName);
+      const metrics = row.variables[normalizedVarName];
+      
+      if (metrics) {
+        return metrics;
+      }
+      
+      // Try alternative names for CFs
+      if (variableName === 'cf' || variableName === 'cfs') {
+        const altMetrics = row.variables['tcc_per_work_rvu'] || row.variables['conversion_factor'];
+        if (altMetrics) {
+          return altMetrics;
+        }
+      }
+      
+      return { n_orgs: 0, n_incumbents: 0, p25: 0, p50: 0, p75: 0, p90: 0 };
+    }
+    
+    // Fallback to old format properties with proper variable name mapping
+    const legacyFieldMap: Record<string, string> = {
+      'tcc': 'tcc',
+      'work_rvus': 'wrvu',
+      'wrvu': 'wrvu',
+      'cf': 'cf',
+      'cfs': 'cf',
+      'conversion_factor': 'cf',
+      'tcc_per_work_rvu': 'cf',
+      'base_salary': 'base_salary',
+      'panel_size': 'panel_size',
+      'total_encounters': 'total_encounters',
+      'asa_units': 'asa_units',
+      'net_collections': 'net_collections'
+    };
+    
+    const legacyPrefix = legacyFieldMap[variableName] || variableName;
+    
+    return {
+      n_orgs: row[`${legacyPrefix}_n_orgs`] || 0,
+      n_incumbents: row[`${legacyPrefix}_n_incumbents`] || 0,
+      p25: row[`${legacyPrefix}_p25`] || 0,
+      p50: row[`${legacyPrefix}_p50`] || 0,
+      p75: row[`${legacyPrefix}_p75`] || 0,
+      p90: row[`${legacyPrefix}_p90`] || 0
+    };
+  };
+
+  // Helper function to map variable names to display names
+  const getVariableDisplayName = (varName: string): string => {
+    const displayNames: Record<string, string> = {
+      'tcc': 'TCC (Total Cash Compensation)',
+      'work_rvus': 'Work RVUs',
+      'wrvu': 'Work RVUs',
+      'cf': 'CFs',
+      'conversion_factor': 'CFs',
+      'tcc_per_work_rvu': 'CFs',
+      'cfs': 'CFs',
+      'base_salary': 'Base Salary',
+      'base_compensation': 'Base Salary',
+      'salary': 'Base Salary',
+      'panel_size': 'Panel Size',
+      'total_encounters': 'Total Encounters',
+      'encounters': 'Total Encounters',
+      'asa_units': 'ASA Units',
+      'asa': 'ASA Units',
+      'net_collections': 'Net Collections',
+      'collections': 'Net Collections'
+    };
+    return displayNames[varName] || varName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  // Prepare data for export with dynamic variables
+  const exportData = data.map(row => {
+    const baseRow = {
+      'Survey Source': row.surveySource || '',
+      'Survey Specialty': row.surveySpecialty || '',
+      'Geographic Region': row.geographicRegion || '',
+      'Provider Type': row.providerType || '',
+      'Survey Year': row.surveyYear || ''
+    };
+
+    // Add dynamic variable columns
+    const variableColumns: Record<string, any> = {};
+    
+    selectedVariables.forEach(varName => {
+      const metrics = getVariableMetrics(row, varName);
+      const displayName = getVariableDisplayName(varName);
+      
+      variableColumns[`${displayName} # Orgs`] = metrics.n_orgs;
+      variableColumns[`${displayName} # Incumbents`] = metrics.n_incumbents;
+      variableColumns[`${displayName} P25`] = metrics.p25;
+      variableColumns[`${displayName} P50`] = metrics.p50;
+      variableColumns[`${displayName} P75`] = metrics.p75;
+      variableColumns[`${displayName} P90`] = metrics.p90;
+    });
+
+    return { ...baseRow, ...variableColumns };
+  });
 
   // Create main data worksheet
   const dataWorksheet = XLSX.utils.json_to_sheet(exportData);
 
-  // Set column widths
+  // Set column widths dynamically based on selected variables
   const columnWidths = [
     { wch: 15 }, // Survey Source
     { wch: 20 }, // Survey Specialty
     { wch: 15 }, // Geographic Region
     { wch: 15 }, // Provider Type
-    { wch: 12 }, // Survey Year
-    { wch: 15 }, // # Organizations
-    { wch: 15 }, // # Incumbents
-    { wch: 12 }, // TCC P25
-    { wch: 12 }, // TCC P50
-    { wch: 12 }, // TCC P75
-    { wch: 12 }, // TCC P90
-    { wch: 12 }, // wRVU P25
-    { wch: 12 }, // wRVU P50
-    { wch: 12 }, // wRVU P75
-    { wch: 12 }, // wRVU P90
-    { wch: 12 }, // CF P25
-    { wch: 12 }, // CF P50
-    { wch: 12 }, // CF P75
-    { wch: 12 }  // CF P90
+    { wch: 12 }  // Survey Year
   ];
+
+  // Add column widths for each selected variable (6 columns per variable)
+  selectedVariables.forEach(() => {
+    columnWidths.push(
+      { wch: 15 }, // # Organizations
+      { wch: 15 }, // # Incumbents
+      { wch: 12 }, // P25
+      { wch: 12 }, // P50
+      { wch: 12 }, // P75
+      { wch: 12 }  // P90
+    );
+  });
+
   dataWorksheet['!cols'] = columnWidths;
 
   // Add data worksheet
@@ -97,30 +175,29 @@ export const exportToExcel = (
   // Add summary worksheet if requested
   if (includeSummary) {
     const totalRecords = data.length;
-    const totalTccOrgs = data.reduce((sum, row) => sum + row.tcc_n_orgs, 0);
-    const totalTccIncumbents = data.reduce((sum, row) => sum + row.tcc_n_incumbents, 0);
-    const totalWrvuOrgs = data.reduce((sum, row) => sum + row.wrvu_n_orgs, 0);
-    const totalWrvuIncumbents = data.reduce((sum, row) => sum + row.wrvu_n_incumbents, 0);
-    const totalCfOrgs = data.reduce((sum, row) => sum + row.cf_n_orgs, 0);
-    const totalCfIncumbents = data.reduce((sum, row) => sum + row.cf_n_incumbents, 0);
-    const avgTccP50 = data.reduce((sum, row) => sum + row.tcc_p50, 0) / data.length;
-    const avgWrvuP50 = data.reduce((sum, row) => sum + row.wrvu_p50, 0) / data.length;
-
+    
+    // Calculate totals for each selected variable
     const summaryData = [
       { 'Metric': 'Total Records', 'Value': totalRecords },
-      { 'Metric': 'Total TCC Organizations', 'Value': totalTccOrgs },
-      { 'Metric': 'Total TCC Incumbents', 'Value': totalTccIncumbents },
-      { 'Metric': 'Total wRVU Organizations', 'Value': totalWrvuOrgs },
-      { 'Metric': 'Total wRVU Incumbents', 'Value': totalWrvuIncumbents },
-      { 'Metric': 'Total CF Organizations', 'Value': totalCfOrgs },
-      { 'Metric': 'Total CF Incumbents', 'Value': totalCfIncumbents },
-      { 'Metric': 'Average TCC P50', 'Value': Math.round(avgTccP50) },
-      { 'Metric': 'Average wRVU P50', 'Value': Math.round(avgWrvuP50) },
       { 'Metric': 'Report Generated', 'Value': new Date().toLocaleString() }
     ];
 
+    // Add summary for each selected variable
+    selectedVariables.forEach(varName => {
+      const displayName = getVariableDisplayName(varName);
+      const totalOrgs = (data as any[]).reduce((sum: number, row: any) => sum + getVariableMetrics(row, varName).n_orgs, 0);
+      const totalIncumbents = (data as any[]).reduce((sum: number, row: any) => sum + getVariableMetrics(row, varName).n_incumbents, 0);
+      const avgP50 = data.length > 0 ? (data as any[]).reduce((sum: number, row: any) => sum + getVariableMetrics(row, varName).p50, 0) / data.length : 0;
+
+      summaryData.push(
+        { 'Metric': `Total ${displayName} Organizations`, 'Value': totalOrgs },
+        { 'Metric': `Total ${displayName} Incumbents`, 'Value': totalIncumbents },
+        { 'Metric': `Average ${displayName} P50`, 'Value': Math.round(avgP50) }
+      );
+    });
+
     const summaryWorksheet = XLSX.utils.json_to_sheet(summaryData);
-    summaryWorksheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
+    summaryWorksheet['!cols'] = [{ wch: 30 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'Summary');
   }
 
@@ -129,69 +206,140 @@ export const exportToExcel = (
 };
 
 /**
- * Export to CSV (simpler alternative)
+ * Export to CSV (simpler alternative) with dynamic variable support
  */
 export const exportToCSV = (
-  data: AggregatedData[],
+  data: AggregatedData[] | DynamicAggregatedData[],
   filters: AnalyticsFilters,
+  selectedVariables: string[],
   options: ExportOptions = {}
 ) => {
   const {
     filename = `survey-analytics-${new Date().toISOString().split('T')[0]}.csv`
   } = options;
 
-  // Prepare CSV data
+  // Helper function to safely get variable metrics (reused from Excel export)
+  const getVariableMetrics = (row: any, variableName: string) => {
+    // Check if this is the new dynamic format
+    if (row.variables && typeof row.variables === 'object') {
+      // Normalize variable name to match the stored key
+      const normalizedVarName = mapVariableNameToStandard(variableName);
+      const metrics = row.variables[normalizedVarName];
+      
+      if (metrics) {
+        return metrics;
+      }
+      
+      // Try alternative names for CFs
+      if (variableName === 'cf' || variableName === 'cfs') {
+        const altMetrics = row.variables['tcc_per_work_rvu'] || row.variables['conversion_factor'];
+        if (altMetrics) {
+          return altMetrics;
+        }
+      }
+      
+      return { n_orgs: 0, n_incumbents: 0, p25: 0, p50: 0, p75: 0, p90: 0 };
+    }
+    
+    // Fallback to old format properties with proper variable name mapping
+    const legacyFieldMap: Record<string, string> = {
+      'tcc': 'tcc',
+      'work_rvus': 'wrvu',
+      'wrvu': 'wrvu',
+      'cf': 'cf',
+      'cfs': 'cf',
+      'conversion_factor': 'cf',
+      'tcc_per_work_rvu': 'cf',
+      'base_salary': 'base_salary',
+      'panel_size': 'panel_size',
+      'total_encounters': 'total_encounters',
+      'asa_units': 'asa_units',
+      'net_collections': 'net_collections'
+    };
+    
+    const legacyPrefix = legacyFieldMap[variableName] || variableName;
+    
+    return {
+      n_orgs: row[`${legacyPrefix}_n_orgs`] || 0,
+      n_incumbents: row[`${legacyPrefix}_n_incumbents`] || 0,
+      p25: row[`${legacyPrefix}_p25`] || 0,
+      p50: row[`${legacyPrefix}_p50`] || 0,
+      p75: row[`${legacyPrefix}_p75`] || 0,
+      p90: row[`${legacyPrefix}_p90`] || 0
+    };
+  };
+
+  // Helper function to map variable names to display names
+  const getVariableDisplayName = (varName: string): string => {
+    const displayNames: Record<string, string> = {
+      'tcc': 'TCC (Total Cash Compensation)',
+      'work_rvus': 'Work RVUs',
+      'wrvu': 'Work RVUs',
+      'cf': 'CFs',
+      'conversion_factor': 'CFs',
+      'tcc_per_work_rvu': 'CFs',
+      'cfs': 'CFs',
+      'base_salary': 'Base Salary',
+      'base_compensation': 'Base Salary',
+      'salary': 'Base Salary',
+      'panel_size': 'Panel Size',
+      'total_encounters': 'Total Encounters',
+      'encounters': 'Total Encounters',
+      'asa_units': 'ASA Units',
+      'asa': 'ASA Units',
+      'net_collections': 'Net Collections',
+      'collections': 'Net Collections'
+    };
+    return displayNames[varName] || varName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  // Prepare CSV headers dynamically
   const headers = [
     'Survey Source',
     'Survey Specialty',
     'Geographic Region',
     'Provider Type',
-    'Survey Year',
-    'TCC # Orgs',
-    'TCC # Incumbents',
-    'wRVU # Orgs',
-    'wRVU # Incumbents',
-    'CF # Orgs',
-    'CF # Incumbents',
-    'TCC P25',
-    'TCC P50',
-    'TCC P75',
-    'TCC P90',
-    'wRVU P25',
-    'wRVU P50',
-    'wRVU P75',
-    'wRVU P90',
-    'CF P25',
-    'CF P50',
-    'CF P75',
-    'CF P90'
+    'Survey Year'
   ];
 
-  const csvData = data.map(row => [
-    row.surveySource,
-    row.surveySpecialty,
-    row.geographicRegion,
-    row.providerType,
-    row.surveyYear,
-    row.tcc_n_orgs,
-    row.tcc_n_incumbents,
-    row.wrvu_n_orgs,
-    row.wrvu_n_incumbents,
-    row.cf_n_orgs,
-    row.cf_n_incumbents,
-    row.tcc_p25,
-    row.tcc_p50,
-    row.tcc_p75,
-    row.tcc_p90,
-    row.wrvu_p25,
-    row.wrvu_p50,
-    row.wrvu_p75,
-    row.wrvu_p90,
-    row.cf_p25,
-    row.cf_p50,
-    row.cf_p75,
-    row.cf_p90
-  ]);
+  // Add headers for each selected variable
+  selectedVariables.forEach(varName => {
+    const displayName = getVariableDisplayName(varName);
+    headers.push(
+      `${displayName} # Orgs`,
+      `${displayName} # Incumbents`,
+      `${displayName} P25`,
+      `${displayName} P50`,
+      `${displayName} P75`,
+      `${displayName} P90`
+    );
+  });
+
+  const csvData = data.map(row => {
+    const baseRow = [
+      row.surveySource || '',
+      row.surveySpecialty || '',
+      row.geographicRegion || '',
+      row.providerType || '',
+      row.surveyYear || ''
+    ];
+
+    // Add data for each selected variable
+    const variableData: any[] = [];
+    selectedVariables.forEach(varName => {
+      const metrics = getVariableMetrics(row, varName);
+      variableData.push(
+        metrics.n_orgs,
+        metrics.n_incumbents,
+        metrics.p25,
+        metrics.p50,
+        metrics.p75,
+        metrics.p90
+      );
+    });
+
+    return [...baseRow, ...variableData];
+  });
 
   // Add headers
   csvData.unshift(headers);

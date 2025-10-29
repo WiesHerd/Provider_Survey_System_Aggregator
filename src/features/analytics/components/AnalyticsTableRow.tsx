@@ -19,6 +19,10 @@ interface AnalyticsTableRowProps {
   selectedVariables: string[];
   index: number;
   formattingRules?: any[]; // User-defined formatting rules
+  showSpecialty?: boolean; // Whether to show specialty column
+  showSurveySource?: boolean; // Whether to show survey source column
+  specialty?: string; // Group specialty name
+  surveySource?: string; // Group survey source
 }
 
 /**
@@ -32,11 +36,15 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
   row,
   selectedVariables,
   index,
-  formattingRules = []
+  formattingRules = [],
+  showSpecialty = true,
+  showSurveySource = true,
+  specialty,
+  surveySource
 }) => {
   return (
     <tr key={`${row.surveySource}-${row.geographicRegion}-${index}`} className="hover:bg-gray-50">
-      {/* Survey Data Columns (Frozen) - Reordered: Specialty, Region, Survey Source */}
+      {/* Survey Data Columns - Reordered: Specialty, Survey Source, Region */}
       <td 
         style={{ 
           position: 'static',
@@ -49,7 +57,21 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           fontSize: '15px'
         }}
       >
-        {formatSpecialtyForDisplay(row.originalSpecialty)}
+        {showSpecialty ? (specialty ? formatSpecialtyForDisplay(specialty) : formatSpecialtyForDisplay(row.originalSpecialty)) : ''}
+      </td>
+      <td 
+        style={{ 
+          position: 'static',
+          left: 'auto',
+          backgroundColor: 'white',
+          borderRight: '1px solid #e0e0e0',
+          zIndex: 'auto',
+          padding: '8px',
+          boxShadow: 'none',
+          fontSize: '15px'
+        }}
+      >
+        {showSurveySource ? (surveySource || row.surveySource) : ''}
       </td>
       <td 
         style={{ 
@@ -64,20 +86,6 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         }}
       >
         {formatRegionForDisplay(row.geographicRegion)}
-      </td>
-      <td 
-        style={{ 
-          position: 'static',
-          left: 'auto',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e0e0e0',
-          zIndex: 'auto',
-          padding: '8px',
-          boxShadow: 'none',
-          fontSize: '15px'
-        }}
-      >
-        {row.surveySource}
       </td>
       
       {/* Dynamic Variable Columns */}

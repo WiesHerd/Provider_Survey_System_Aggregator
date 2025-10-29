@@ -7,11 +7,12 @@
 
 import { useState, useCallback } from 'react';
 import { AggregatedData, AnalyticsFilters } from '../types/analytics';
+import { DynamicAggregatedData } from '../types/variables';
 import { exportToCSV, exportToExcel } from '../utils/exportUtils';
 
 interface UseAnalyticsExportReturn {
-  exportToCSV: (data: AggregatedData[], filters: AnalyticsFilters) => void;
-  exportToExcel: (data: AggregatedData[], filters: AnalyticsFilters) => void;
+  exportToCSV: (data: AggregatedData[] | DynamicAggregatedData[], filters: AnalyticsFilters, selectedVariables: string[]) => void;
+  exportToExcel: (data: AggregatedData[] | DynamicAggregatedData[], filters: AnalyticsFilters, selectedVariables: string[]) => void;
   isExporting: boolean;
 }
 
@@ -24,7 +25,7 @@ export const useAnalyticsExport = (): UseAnalyticsExportReturn => {
   const [isExporting, setIsExporting] = useState(false);
 
   // CSV export handler
-  const handleExportToCSV = useCallback(async (data: AggregatedData[], filters: AnalyticsFilters) => {
+  const handleExportToCSV = useCallback(async (data: AggregatedData[] | DynamicAggregatedData[], filters: AnalyticsFilters, selectedVariables: string[]) => {
     if (data.length === 0) {
       console.warn('No data to export');
       return;
@@ -32,7 +33,7 @@ export const useAnalyticsExport = (): UseAnalyticsExportReturn => {
 
     try {
       setIsExporting(true);
-      exportToCSV(data, filters);
+      exportToCSV(data, filters, selectedVariables);
     } catch (error) {
       console.error('Failed to export CSV:', error);
     } finally {
@@ -41,7 +42,7 @@ export const useAnalyticsExport = (): UseAnalyticsExportReturn => {
   }, []);
 
   // Excel export handler
-  const handleExportToExcel = useCallback(async (data: AggregatedData[], filters: AnalyticsFilters) => {
+  const handleExportToExcel = useCallback(async (data: AggregatedData[] | DynamicAggregatedData[], filters: AnalyticsFilters, selectedVariables: string[]) => {
     if (data.length === 0) {
       console.warn('No data to export');
       return;
@@ -49,7 +50,7 @@ export const useAnalyticsExport = (): UseAnalyticsExportReturn => {
 
     try {
       setIsExporting(true);
-      exportToExcel(data, filters);
+      exportToExcel(data, filters, selectedVariables);
     } catch (error) {
       console.error('Failed to export Excel:', error);
     } finally {

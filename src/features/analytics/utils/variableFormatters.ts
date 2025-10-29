@@ -19,10 +19,10 @@ export const formatVariableDisplayName = (normalizedName: string): string => {
     'work_rvus': 'Work RVUs',
     'work_rvu': 'Work RVUs',
     'wrvu': 'Work RVUs',
-    'tcc_per_work_rvu': 'CFs',
-    'tcc_per_work_rvus': 'CFs',
-    'cf': 'CFs',
-    'conversion_factor': 'CFs',
+    'tcc_per_work_rvu': 'TCC per wRVUs (CFs)',
+    'tcc_per_work_rvus': 'TCC per wRVUs (CFs)',
+    'cf': 'TCC per wRVUs (CFs)',
+    'conversion_factor': 'TCC per wRVUs (CFs)',
     'base_salary': 'Base Salary',
     'base_compensation': 'Base Salary',
     'base_comp': 'Base Salary',
@@ -79,7 +79,7 @@ const formatVariableNameFromPattern = (normalizedName: string): string => {
     .replace(/\bRvus\b/g, 'RVUs')
     .replace(/\bAsa\b/g, 'ASA')
     .replace(/\bCf\b/g, 'CF')
-    .replace(/\bCfs\b/g, 'CFs');
+    .replace(/\bCfs\b/g, 'TCC per wRVUs (CFs)');
 };
 
 /**

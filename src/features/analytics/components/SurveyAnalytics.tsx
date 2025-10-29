@@ -15,7 +15,7 @@ import { useProviderContext } from '../../../contexts/ProviderContext';
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
 import { VariableDiscoveryService } from '../services/variableDiscoveryService';
 import { VariableFormattingService } from '../services/variableFormattingService';
-import { VariableFormattingControls } from './VariableFormattingControls';
+import { VariableFormattingDialog } from './VariableFormattingDialog';
 import { DEFAULT_VARIABLES } from '../types/variables';
 
 interface SurveyAnalyticsProps {
@@ -71,7 +71,16 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         // Keep pre-selected common variables, but update available variables
         console.log('🔍 SurveyAnalytics: Discovered variables:', variableNames);
         console.log('🔍 SurveyAnalytics: Keeping pre-selected common variables:', selectedVariables);
-        // Don't override selectedVariables - keep the common ones we pre-selected
+        
+        // Filter selectedVariables to only include those that were actually discovered
+        const validSelectedVariables = selectedVariables.filter(variable => 
+          variableNames.includes(variable)
+        );
+        
+        if (validSelectedVariables.length !== selectedVariables.length) {
+          console.log('🔍 SurveyAnalytics: Updating selectedVariables to match discovered variables');
+          setSelectedVariables(validSelectedVariables);
+        }
         
         // If no variables were discovered, try to get them from the data directly
         if (variableNames.length === 0) {
@@ -435,16 +444,16 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         </div>
       </div>
       
-      {/* Variable Formatting Modal */}
-      <VariableFormattingControls
-        variables={availableVariables}
+      {/* Variable Formatting Dialog */}
+      <VariableFormattingDialog
+        open={showFormatDialog}
+        onClose={() => setShowFormatDialog(false)}
+        variables={selectedVariables}
         onFormattingChange={useCallback(async (rules) => {
           setFormattingRules(rules);
           await formattingService.saveRules(rules);
         }, [formattingService])}
         currentRules={formattingRules}
-        open={showFormatDialog}
-        onClose={() => setShowFormatDialog(false)}
       />
     </AnalyticsErrorBoundary>
   );

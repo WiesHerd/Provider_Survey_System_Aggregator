@@ -17,6 +17,7 @@ import { AnalyticsTableControls } from './AnalyticsTableControls';
 import { AnalyticsTableHeader } from './AnalyticsTableHeader';
 import { AnalyticsTableRow } from './AnalyticsTableRow';
 import { AnalyticsSummaryRow } from './AnalyticsSummaryRow';
+import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 // formatRegionForDisplay is now imported from shared utils
 
@@ -177,6 +178,9 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           <tbody>
             {paginatedSpecialties.map((specialty) => {
               const rows = groupedData[specialty];
+              const firstRow = rows[0];
+              const surveySource = firstRow?.surveySource || '';
+              
               return (
                 <React.Fragment key={specialty}>
                 {/* Data Rows */}
@@ -187,6 +191,10 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     selectedVariables={selectedVariables}
                     index={index}
                     formattingRules={formattingRules}
+                    showSpecialty={index === 0} // Only show specialty on first row
+                    showSurveySource={index === 0} // Only show survey source on first row
+                    specialty={specialty}
+                    surveySource={surveySource}
                   />
                 ))}
 
@@ -195,6 +203,9 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                   specialty={specialty}
                   summaryData={getSummaryRows(specialty)}
                   selectedVariables={selectedVariables}
+                  formattingRules={formattingRules}
+                  showSpecialty={false}
+                  showSurveySource={false}
                 />
               </React.Fragment>
               );
