@@ -18,6 +18,7 @@ import {
   filterMappedSpecialties,
   filterLearnedMappings
 } from '../utils/mappingCalculations';
+import { flexibleWordMatch } from '../../../shared/utils/specialtyMatching';
 
 interface UseOptimizedMappingDataReturn {
   // State
@@ -117,7 +118,7 @@ export const useOptimizedMappingData = (): UseOptimizedMappingDataReturn => {
   const filteredUnmapped = useMemo(() => {
     if (!searchTerm) return unmappedSpecialties;
     return unmappedSpecialties.filter(specialty => 
-      specialty.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      flexibleWordMatch(specialty.name || '', searchTerm)
     );
   }, [unmappedSpecialties, searchTerm]);
 

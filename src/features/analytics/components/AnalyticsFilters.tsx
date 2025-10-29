@@ -148,6 +148,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
           placeholder="Search specialties..."
           getOptionLabel={formatSpecialtyForDisplay}
           variant="autocomplete"
+          useAdvancedSearch={true}
           size="small"
         />
 

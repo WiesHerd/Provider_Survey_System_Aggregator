@@ -19,6 +19,8 @@ interface AnalyticsSummaryRowProps {
   formattingRules?: any[]; // User-defined formatting rules
   showSpecialty?: boolean; // Whether to show specialty column
   showSurveySource?: boolean; // Whether to show survey source column
+  showRegion?: boolean; // Whether to show region column
+  showProviderType?: boolean; // Whether to show provider type column
 }
 
 /**
@@ -34,14 +36,16 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
   selectedVariables,
   formattingRules = [],
   showSpecialty = true,
-  showSurveySource = true
+  showSurveySource = true,
+  showRegion = true,
+  showProviderType = true
 }) => {
   return (
     <>
       {/* Simple Average Row */}
       <tr style={{ backgroundColor: '#f5f5f5', borderTop: '1px solid #d1d5db' }}>
         <td 
-          colSpan={3}
+          colSpan={[showSpecialty, showSurveySource, showRegion, showProviderType].filter(Boolean).length}
           style={{ 
             fontWeight: '600',
             position: 'static',
@@ -112,7 +116,7 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
       {/* Weighted Average Row */}
       <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '1px solid #d1d5db' }}>
         <td 
-          colSpan={3}
+          colSpan={[showSpecialty, showSurveySource, showRegion, showProviderType].filter(Boolean).length}
           style={{ 
             fontWeight: '600',
             position: 'static',

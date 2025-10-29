@@ -43,6 +43,14 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   
+  // Column visibility state
+  const [columnVisibility, setColumnVisibility] = useState({
+    specialty: true,
+    surveySource: true,
+    region: true,
+    providerType: true
+  });
+  
   // Production-grade: All data is in dynamic format
   // No conditional logic needed - unified data structure
   
@@ -89,6 +97,14 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   const handleItemsPerPageChange = useCallback((newPageSize: number) => {
     setItemsPerPage(newPageSize);
     setCurrentPage(1); // Reset to first page
+  }, []);
+  
+  // Handle column visibility toggle
+  const handleColumnToggle = useCallback((column: keyof typeof columnVisibility) => {
+    setColumnVisibility(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
   }, []);
 
   if (loading) {
@@ -150,6 +166,65 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         onExport={onExport}
         onFormatVariables={onFormatVariables}
       />
+      
+      {/* Column Visibility Controls */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-medium text-gray-700">Column Visibility</h4>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setColumnVisibility({ specialty: true, surveySource: true, region: true, providerType: true })}
+              className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+            >
+              Show All
+            </button>
+            <button
+              onClick={() => setColumnVisibility({ specialty: false, surveySource: false, region: false, providerType: false })}
+              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+            >
+              Hide All
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={columnVisibility.specialty}
+              onChange={() => handleColumnToggle('specialty')}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Specialty</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={columnVisibility.surveySource}
+              onChange={() => handleColumnToggle('surveySource')}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Survey Source</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={columnVisibility.region}
+              onChange={() => handleColumnToggle('region')}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Region</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={columnVisibility.providerType}
+              onChange={() => handleColumnToggle('providerType')}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Provider Type</span>
+          </label>
+        </div>
+      </div>
 
       {/* HTML Table with frozen headers */}
       <div 
@@ -165,7 +240,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         <table 
           className="w-full border-collapse"
           style={{ 
-            minWidth: '1200px',
+            minWidth: `${400 + (Object.values(columnVisibility).filter(Boolean).length * 150) + (selectedVariables.length * 100)}px`,
+            width: 'auto',
             borderSpacing: '0',
             borderCollapse: 'collapse',
             position: 'relative'
@@ -174,15 +250,21 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           <AnalyticsTableHeader
             columnGroups={columnGroups}
             selectedVariables={selectedVariables}
+            columnVisibility={columnVisibility}
           />
           <tbody>
-            {paginatedSpecialties.map((specialty) => {
-              const rows = groupedData[specialty];
+            {paginatedSpecialties.map((specialtyKey) => {
+              const rows = groupedData[specialtyKey];
               const firstRow = rows[0];
               const surveySource = firstRow?.surveySource || '';
               
+              // Extract just the specialty name (remove survey source suffix)
+              const specialty = specialtyKey.includes('_') 
+                ? specialtyKey.split('_').slice(0, -1).join('_') 
+                : specialtyKey;
+              
               return (
-                <React.Fragment key={specialty}>
+                <React.Fragment key={specialtyKey}>
                 {/* Data Rows */}
                 {rows.map((row, index) => (
                   <AnalyticsTableRow
@@ -191,8 +273,10 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                     selectedVariables={selectedVariables}
                     index={index}
                     formattingRules={formattingRules}
-                    showSpecialty={true} // Show specialty on all rows
-                    showSurveySource={true} // Show survey source on all rows
+                    showSpecialty={columnVisibility.specialty}
+                    showSurveySource={columnVisibility.surveySource}
+                    showRegion={columnVisibility.region}
+                    showProviderType={columnVisibility.providerType}
                     specialty={specialty}
                     surveySource={surveySource}
                   />
@@ -201,11 +285,13 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                 {/* Summary Rows */}
                 <AnalyticsSummaryRow
                   specialty={specialty}
-                  summaryData={getSummaryRows(specialty)}
+                  summaryData={getSummaryRows(specialtyKey)}
                   selectedVariables={selectedVariables}
                   formattingRules={formattingRules}
                   showSpecialty={false}
                   showSurveySource={false}
+                  showRegion={false}
+                  showProviderType={false}
                 />
               </React.Fragment>
               );

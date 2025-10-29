@@ -45,18 +45,20 @@ export const formatCurrency = (value: number, decimals: number = 0): string => {
 };
 
 /**
- * Groups analytics data by specialty
+ * Groups analytics data by specialty and survey source
+ * This keeps different survey sources separate even when they have the same specialty
  * 
  * @param data - Array of aggregated data
- * @returns Object with specialty as key and data array as value
+ * @returns Object with specialty+source as key and data array as value
  */
 export const groupBySpecialty = (data: AggregatedData[]): Record<string, AggregatedData[]> => {
   return data.reduce((acc, row) => {
-    const specialty = row.surveySpecialty;
-    if (!acc[specialty]) {
-      acc[specialty] = [];
+    // Group by both specialty and survey source to keep them separate
+    const specialtyKey = `${row.surveySpecialty}_${row.surveySource}`;
+    if (!acc[specialtyKey]) {
+      acc[specialtyKey] = [];
     }
-    acc[specialty].push(row);
+    acc[specialtyKey].push(row);
     return acc;
   }, {} as Record<string, AggregatedData[]>);
 };

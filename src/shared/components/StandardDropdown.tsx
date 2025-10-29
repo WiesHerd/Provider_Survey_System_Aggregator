@@ -11,6 +11,7 @@ import {
   Autocomplete,
   TextField
 } from '@mui/material';
+import { filterSpecialtyOptions } from '../utils/specialtyMatching';
 
 export interface StandardDropdownProps {
   /** Current selected value */
@@ -33,6 +34,8 @@ export interface StandardDropdownProps {
   filterOptions?: (options: string[], inputValue: string) => string[];
   /** Whether to use Autocomplete (searchable) or Select (simple dropdown) */
   variant?: 'autocomplete' | 'select';
+  /** Whether to use advanced search (flexible word matching) */
+  useAdvancedSearch?: boolean;
   /** Additional CSS classes */
   className?: string;
   /** Size of the dropdown */
@@ -52,6 +55,7 @@ export interface StandardDropdownProps {
  * @param getOptionLabel - Custom formatter for option display
  * @param filterOptions - Custom filter function for options
  * @param variant - Whether to use Autocomplete or Select
+ * @param useAdvancedSearch - Whether to use advanced search (flexible word matching)
  * @param className - Additional CSS classes
  * @param size - Size of the dropdown
  */
@@ -66,6 +70,7 @@ export const StandardDropdown: React.FC<StandardDropdownProps> = memo(({
   getOptionLabel = (option: string) => option,
   filterOptions,
   variant = 'autocomplete',
+  useAdvancedSearch = false,
   className = '',
   size = 'small'
 }) => {
@@ -122,7 +127,9 @@ export const StandardDropdown: React.FC<StandardDropdownProps> = memo(({
           />
         )}
         filterOptions={filterOptions ? (options: string[], { inputValue }: { inputValue: string }) => 
-          filterOptions(options, inputValue) : undefined}
+          filterOptions(options, inputValue) : 
+          useAdvancedSearch ? (options: string[], { inputValue }: { inputValue: string }) => 
+            filterSpecialtyOptions(options, inputValue, 20) : undefined}
         clearOnBlur={false}
         blurOnSelect={true}
         noOptionsText="No options found"

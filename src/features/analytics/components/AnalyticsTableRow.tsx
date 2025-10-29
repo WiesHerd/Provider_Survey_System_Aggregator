@@ -21,6 +21,8 @@ interface AnalyticsTableRowProps {
   formattingRules?: any[]; // User-defined formatting rules
   showSpecialty?: boolean; // Whether to show specialty column
   showSurveySource?: boolean; // Whether to show survey source column
+  showRegion?: boolean; // Whether to show region column
+  showProviderType?: boolean; // Whether to show provider type column
   specialty?: string; // Group specialty name
   surveySource?: string; // Group survey source
 }
@@ -39,54 +41,86 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
   formattingRules = [],
   showSpecialty = true,
   showSurveySource = true,
+  showRegion = true,
+  showProviderType = true,
   specialty,
   surveySource
 }) => {
   return (
     <tr key={`${row.surveySource}-${row.geographicRegion}-${index}`} className="hover:bg-gray-50">
-      {/* Survey Data Columns - Reordered: Specialty, Survey Source, Region */}
-      <td 
-        style={{ 
-          position: 'static',
-          left: 'auto',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e0e0e0',
-          zIndex: 'auto',
-          padding: '8px',
-          boxShadow: 'none',
-          fontSize: '15px'
-        }}
-      >
-        {showSpecialty ? (specialty ? formatSpecialtyForDisplay(specialty) : formatSpecialtyForDisplay(row.originalSpecialty)) : ''}
-      </td>
-      <td 
-        style={{ 
-          position: 'static',
-          left: 'auto',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e0e0e0',
-          zIndex: 'auto',
-          padding: '8px',
-          boxShadow: 'none',
-          fontSize: '15px'
-        }}
-      >
-        {showSurveySource ? (surveySource || row.surveySource) : ''}
-      </td>
-      <td 
-        style={{ 
-          position: 'static',
-          left: 'auto',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e0e0e0',
-          zIndex: 'auto',
-          padding: '8px',
-          boxShadow: 'none',
-          fontSize: '15px'
-        }}
-      >
-        {formatRegionForDisplay(row.geographicRegion)}
-      </td>
+      {/* Survey Data Columns - Conditionally rendered */}
+      {showSpecialty && (
+        <td 
+          style={{ 
+            position: 'static',
+            left: 'auto',
+            backgroundColor: 'white',
+            borderRight: '1px solid #e0e0e0',
+            zIndex: 'auto',
+            padding: '8px',
+            boxShadow: 'none',
+            fontSize: '15px',
+            width: 'auto',
+            minWidth: '150px'
+          }}
+        >
+          {specialty ? formatSpecialtyForDisplay(specialty) : formatSpecialtyForDisplay(row.originalSpecialty)}
+        </td>
+      )}
+      {showSurveySource && (
+        <td 
+          style={{ 
+            position: 'static',
+            left: 'auto',
+            backgroundColor: 'white',
+            borderRight: '1px solid #e0e0e0',
+            zIndex: 'auto',
+            padding: '8px',
+            boxShadow: 'none',
+            fontSize: '15px',
+            width: 'auto',
+            minWidth: '120px'
+          }}
+        >
+          {surveySource || row.surveySource}
+        </td>
+      )}
+      {showRegion && (
+        <td 
+          style={{ 
+            position: 'static',
+            left: 'auto',
+            backgroundColor: 'white',
+            borderRight: '1px solid #e0e0e0',
+            zIndex: 'auto',
+            padding: '8px',
+            boxShadow: 'none',
+            fontSize: '15px',
+            width: 'auto',
+            minWidth: '100px'
+          }}
+        >
+          {formatRegionForDisplay(row.geographicRegion)}
+        </td>
+      )}
+      {showProviderType && (
+        <td 
+          style={{ 
+            position: 'static',
+            left: 'auto',
+            backgroundColor: 'white',
+            borderRight: '1px solid #e0e0e0',
+            zIndex: 'auto',
+            padding: '8px',
+            boxShadow: 'none',
+            fontSize: '15px',
+            width: 'auto',
+            minWidth: '120px'
+          }}
+        >
+          {row.providerType || 'Unknown'}
+        </td>
+      )}
       
       {/* Dynamic Variable Columns */}
       {selectedVariables.map((varName, varIndex) => {

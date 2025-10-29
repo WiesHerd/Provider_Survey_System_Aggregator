@@ -90,7 +90,99 @@ export const findBestSpecialtyMatch = (
 };
 
 /**
- * Filter specialty options based on search text with similarity scoring
+ * Check if search text matches specialty with flexible word order
+ * Returns true if all search words are found in the specialty (order independent)
+ */
+export const flexibleWordMatch = (specialty: string, searchText: string): boolean => {
+  if (!searchText.trim()) return true;
+  
+  const normalizedSpecialty = normalizeSpecialty(specialty);
+  const normalizedSearch = normalizeSpecialty(searchText);
+  
+  // Split into words and filter out short words (less than 2 characters)
+  const specialtyWords = normalizedSpecialty.split(/\s+/).filter(word => word.length >= 2);
+  const searchWords = normalizedSearch.split(/\s+/).filter(word => word.length >= 2);
+  
+  if (searchWords.length === 0) return true;
+  
+  // Check if all search words are found in specialty words
+  return searchWords.every(searchWord => 
+    specialtyWords.some(specialtyWord => 
+      specialtyWord.includes(searchWord) || searchWord.includes(specialtyWord)
+    )
+  );
+};
+
+/**
+ * Calculate flexible similarity score for word-order independent matching
+ */
+export const calculateFlexibleSimilarity = (specialty: string, searchText: string): number => {
+  if (!searchText.trim()) return 1;
+  
+  const normalizedSpecialty = normalizeSpecialty(specialty);
+  const normalizedSearch = normalizeSpecialty(searchText);
+  
+  // Split into words
+  const specialtyWords = normalizedSpecialty.split(/\s+/).filter(word => word.length >= 2);
+  const searchWords = normalizedSearch.split(/\s+/).filter(word => word.length >= 2);
+  
+  if (searchWords.length === 0) return 1;
+  if (specialtyWords.length === 0) return 0;
+  
+  // Count matching words
+  let matchedWords = 0;
+  const usedSpecialtyWords = new Set<number>();
+  
+  searchWords.forEach(searchWord => {
+    const matchIndex = specialtyWords.findIndex((specialtyWord, index) => 
+      !usedSpecialtyWords.has(index) && 
+      (specialtyWord.includes(searchWord) || searchWord.includes(specialtyWord))
+    );
+    
+    if (matchIndex !== -1) {
+      matchedWords++;
+      usedSpecialtyWords.add(matchIndex);
+    }
+  });
+  
+  // Base score from word matches
+  let score = matchedWords / searchWords.length;
+  
+  // Boost for exact word matches
+  const exactMatches = searchWords.filter(searchWord =>
+    specialtyWords.some(specialtyWord => specialtyWord === searchWord)
+  ).length;
+  
+  if (exactMatches > 0) {
+    score += (exactMatches / searchWords.length) * 0.3;
+  }
+  
+  // Boost for medical term matches
+  const medicalTerms = [
+    'neonatal', 'perinatal', 'pediatric', 'cardiology', 'neurology', 
+    'orthopedic', 'dermatology', 'oncology', 'hematology', 'endocrinology',
+    'gastroenterology', 'nephrology', 'pulmonology', 'rheumatology',
+    'allergy', 'immunology', 'infectious', 'critical', 'care', 'medicine',
+    'surgery', 'radiology', 'pathology', 'anesthesiology', 'psychiatry',
+    'ophthalmology', 'urology', 'gynecology', 'obstetrics', 'emergency',
+    'family', 'internal', 'hospitalist', 'nocturnist', 'general'
+  ];
+  
+  const medicalMatches = searchWords.filter(searchWord =>
+    medicalTerms.some(term => 
+      searchWord.includes(term) || term.includes(searchWord)
+    )
+  ).length;
+  
+  if (medicalMatches > 0) {
+    score += (medicalMatches / searchWords.length) * 0.2;
+  }
+  
+  return Math.min(1, score);
+};
+
+/**
+ * Filter specialty options based on search text with flexible word order matching
  */
 export const filterSpecialtyOptions = (
   options: string[],
@@ -101,17 +193,11 @@ export const filterSpecialtyOptions = (
     return options.slice(0, maxResults);
   }
   
-  const normalizedSearch = normalizeSpecialty(searchText);
-  
   return options
-    .filter(option => {
-      const normalizedOption = normalizeSpecialty(option);
-      return normalizedOption.includes(normalizedSearch) ||
-             normalizedSearch.includes(normalizedOption);
-    })
+    .filter(option => flexibleWordMatch(option, searchText))
     .sort((a, b) => {
-      const aScore = calculateSimilarity(a, searchText);
-      const bScore = calculateSimilarity(b, searchText);
+      const aScore = calculateFlexibleSimilarity(a, searchText);
+      const bScore = calculateFlexibleSimilarity(b, searchText);
       return bScore - aScore;
     })
     .slice(0, maxResults);

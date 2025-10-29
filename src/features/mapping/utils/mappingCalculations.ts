@@ -3,6 +3,7 @@ import {
   ISpecialtyMapping, 
   MappingFilters
 } from '../types/mapping';
+import { flexibleWordMatch } from '../../../shared/utils/specialtyMatching';
 
 /**
  * Survey source color mapping
@@ -17,19 +18,18 @@ export const SURVEY_SOURCE_COLORS: Record<string, string> = {
 };
 
 /**
- * Filter unmapped specialties based on search criteria
+ * Filter unmapped specialties based on search criteria with flexible word matching
  */
 export const filterUnmappedSpecialties = (
   specialties: IUnmappedSpecialty[],
   filters: MappingFilters
 ): IUnmappedSpecialty[] => {
   return specialties.filter(specialty => {
-    // Search term filter
+    // Search term filter with flexible word order matching
     if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
       const matchesSearch = 
-        specialty.name.toLowerCase().includes(searchLower) ||
-        specialty.surveySource.toLowerCase().includes(searchLower);
+        flexibleWordMatch(specialty.name, filters.searchTerm) ||
+        flexibleWordMatch(specialty.surveySource, filters.searchTerm);
       if (!matchesSearch) return false;
     }
 
@@ -67,7 +67,7 @@ export const groupSpecialtiesBySurvey = (
 };
 
 /**
- * Filter mapped specialties based on search criteria
+ * Filter mapped specialties based on search criteria with flexible word matching
  */
 export const filterMappedSpecialties = (
   mappings: ISpecialtyMapping[],
@@ -75,17 +75,16 @@ export const filterMappedSpecialties = (
 ): ISpecialtyMapping[] => {
   if (!searchTerm) return mappings;
   
-  const searchLower = searchTerm.toLowerCase();
   return mappings.filter(mapping => 
-    mapping.standardizedName.toLowerCase().includes(searchLower) ||
+    flexibleWordMatch(mapping.standardizedName, searchTerm) ||
     mapping.sourceSpecialties.some(specialty => 
-      specialty.specialty.toLowerCase().includes(searchLower)
+      flexibleWordMatch(specialty.specialty, searchTerm)
     )
   );
 };
 
 /**
- * Filter learned mappings based on search criteria
+ * Filter learned mappings based on search criteria with flexible word matching
  */
 export const filterLearnedMappings = (
   learnedMappings: Record<string, string>,
@@ -93,13 +92,12 @@ export const filterLearnedMappings = (
 ): Record<string, string> => {
   if (!searchTerm) return learnedMappings;
   
-  const searchLower = searchTerm.toLowerCase();
   const filtered: Record<string, string> = {};
   
   Object.entries(learnedMappings).forEach(([original, corrected]) => {
     if (
-      original.toLowerCase().includes(searchLower) ||
-      corrected.toLowerCase().includes(searchLower)
+      flexibleWordMatch(original, searchTerm) ||
+      flexibleWordMatch(corrected, searchTerm)
     ) {
       filtered[original] = corrected;
     }

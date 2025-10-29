@@ -117,11 +117,29 @@ export class AnalyticsDataService {
         
       const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
         try {
+          console.log('🔍 Processing survey:', {
+            id: survey.id,
+            name: survey.name,
+            type: survey.type,
+            providerType: survey.providerType
+          });
+          
           const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
           
           if (surveyData.rows.length === 0) {
+            console.log('⚠️ No data rows for survey:', survey.name);
             return [];
           }
+          
+          console.log('📊 Survey data loaded:', {
+            surveyName: survey.name,
+            rowCount: surveyData.rows.length,
+            sampleRow: surveyData.rows[0] ? {
+              specialty: surveyData.rows[0].specialty,
+              surveySpecialty: surveyData.rows[0].surveySpecialty,
+              providerType: surveyData.rows[0].providerType || surveyData.rows[0].provider_type
+            } : 'No rows'
+          });
           
           // Normalize rows in batches
           const normalizedRows: NormalizedRow[] = [];
@@ -524,6 +542,21 @@ export class AnalyticsDataService {
       );
     }
     
+    const finalSurveySource = survey.type || survey.name || 'Unknown';
+    
+    // Debug logging for MGMA data
+    if (survey.name && survey.name.toLowerCase().includes('mgma')) {
+      console.log('🎯 MGMA Data Normalization:', {
+        surveyName: survey.name,
+        surveyType: survey.type,
+        finalSurveySource,
+        rawSpecialty,
+        normalizedSpecialty,
+        rawProviderType,
+        normalizedProviderType
+      });
+    }
+    
     return {
       specialty: normalizedSpecialty,
       providerType: normalizedProviderType,
@@ -531,7 +564,7 @@ export class AnalyticsDataService {
       n_orgs,
       n_incumbents,
       ...normalizedMetrics,
-      surveySource: survey.type || survey.name || 'Unknown',
+      surveySource: finalSurveySource,
       surveyYear: survey.year?.toString() || 'Unknown',
       rawData: actualRowData
     };
@@ -687,6 +720,19 @@ export class AnalyticsDataService {
       // Process chunk
       chunk.forEach(row => {
         const key = `${row.specialty}_${row.providerType}_${row.region}_${row.surveySource}`;
+        
+        // Debug MGMA data grouping
+        if (row.surveySource && row.surveySource.toLowerCase().includes('mgma')) {
+          console.log('🎯 MGMA Data Grouping:', {
+            key,
+            specialty: row.specialty,
+            providerType: row.providerType,
+            region: row.region,
+            surveySource: row.surveySource,
+            n_orgs: row.n_orgs,
+            n_incumbents: row.n_incumbents
+          });
+        }
         
         if (!groupedData.has(key)) {
           groupedData.set(key, []);

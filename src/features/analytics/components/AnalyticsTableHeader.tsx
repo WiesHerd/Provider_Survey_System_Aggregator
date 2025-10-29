@@ -18,6 +18,12 @@ interface ColumnGroup {
 interface AnalyticsTableHeaderProps {
   columnGroups: ColumnGroup[];
   selectedVariables: string[];
+  columnVisibility: {
+    specialty: boolean;
+    surveySource: boolean;
+    region: boolean;
+    providerType: boolean;
+  };
 }
 
 /**
@@ -28,7 +34,8 @@ interface AnalyticsTableHeaderProps {
  */
 export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
   columnGroups,
-  selectedVariables
+  selectedVariables,
+  columnVisibility
 }) => {
   return (
     <thead style={{ 
@@ -53,12 +60,12 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
             left: 'auto',
             top: 0,
             zIndex: 'auto',
-            minWidth: '440px',
+            minWidth: `${Object.values(columnVisibility).filter(Boolean).length * 120}px`,
             padding: '12px 8px',
             boxShadow: 'none',
             fontSize: '15px'
           }} 
-          colSpan={3}
+          colSpan={Object.values(columnVisibility).filter(Boolean).length}
         >
           Survey Data
         </th>
@@ -150,59 +157,84 @@ export const AnalyticsTableHeader: React.FC<AnalyticsTableHeaderProps> = memo(({
         marginTop: '0',
         marginBottom: '0'
       }}>
-        {/* Survey Data Sub-headers */}
-        <th 
-          style={{ 
-            fontWeight: 'bold', 
-            backgroundColor: '#F5F5F5',
-            position: 'static',
-            left: 'auto',
-            top: 'auto',
-            zIndex: 'auto',
-            minWidth: '180px',
-            padding: '8px',
-            textAlign: 'left',
-            borderBottom: 'none',
-            boxShadow: 'none'
-          }}
-        >
-          Specialty
-        </th>
-        <th 
-          style={{ 
-            fontWeight: 'bold', 
-            backgroundColor: '#F5F5F5',
-            position: 'static',
-            left: 'auto',
-            top: 'auto',
-            zIndex: 'auto',
-            minWidth: '140px',
-            padding: '8px',
-            textAlign: 'left',
-            borderBottom: 'none',
-            boxShadow: 'none'
-          }}
-        >
-          Survey Source
-        </th>
-        <th 
-          style={{ 
-            fontWeight: 'bold', 
-            backgroundColor: '#F5F5F5',
-            position: 'static',
-            left: 'auto',
-            top: 'auto',
-            zIndex: 'auto',
-            minWidth: '120px',
-            borderRight: '1px solid #E0E0E0',
-            padding: '8px',
-            textAlign: 'left',
-            borderBottom: 'none',
-            boxShadow: 'none'
-          }}
-        >
-          Region
-        </th>
+        {/* Survey Data Sub-headers - Conditionally rendered */}
+        {columnVisibility.specialty && (
+          <th 
+            style={{ 
+              fontWeight: 'bold', 
+              backgroundColor: '#F5F5F5',
+              position: 'static',
+              left: 'auto',
+              top: 'auto',
+              zIndex: 'auto',
+              minWidth: '180px',
+              padding: '8px',
+              textAlign: 'left',
+              borderBottom: 'none',
+              boxShadow: 'none'
+            }}
+          >
+            Specialty
+          </th>
+        )}
+        {columnVisibility.surveySource && (
+          <th 
+            style={{ 
+              fontWeight: 'bold', 
+              backgroundColor: '#F5F5F5',
+              position: 'static',
+              left: 'auto',
+              top: 'auto',
+              zIndex: 'auto',
+              minWidth: '140px',
+              padding: '8px',
+              textAlign: 'left',
+              borderBottom: 'none',
+              boxShadow: 'none'
+            }}
+          >
+            Survey Source
+          </th>
+        )}
+        {columnVisibility.region && (
+          <th 
+            style={{ 
+              fontWeight: 'bold', 
+              backgroundColor: '#F5F5F5',
+              position: 'static',
+              left: 'auto',
+              top: 'auto',
+              zIndex: 'auto',
+              minWidth: '120px',
+              padding: '8px',
+              textAlign: 'left',
+              borderBottom: 'none',
+              boxShadow: 'none'
+            }}
+          >
+            Region
+          </th>
+        )}
+        {columnVisibility.providerType && (
+          <th 
+            style={{ 
+              fontWeight: 'bold', 
+              backgroundColor: '#F5F5F5',
+              position: 'static',
+              left: 'auto',
+              top: 'auto',
+              zIndex: 'auto',
+              minWidth: '120px',
+              borderRight: '1px solid #E0E0E0',
+              padding: '8px',
+              textAlign: 'left',
+              borderBottom: 'none',
+              boxShadow: 'none'
+            }}
+          >
+            Provider Type
+          </th>
+        )}
          
         {/* DYNAMIC: Generate sub-headers for selected variables */}
         {columnGroups.length > 0 && columnGroups.map((group, index) => (
