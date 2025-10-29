@@ -44,21 +44,79 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
     <>
       {/* Simple Average Row */}
       <tr style={{ backgroundColor: '#f5f5f5', borderTop: '1px solid #d1d5db' }}>
-        <td 
-          colSpan={[showSpecialty, showSurveySource, showRegion, showProviderType].filter(Boolean).length}
-          style={{ 
-            fontWeight: '600',
-            position: 'static',
-            left: 'auto',
-            backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #e0e0e0',
-            zIndex: 'auto',
-            padding: '8px',
-            fontSize: '15px'
-          }}
-        >
-          Simple Average
-        </td>
+        {/* Survey Data Columns - Conditionally rendered to match data rows */}
+        {showSpecialty && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '150px'
+            }}
+          >
+            Simple Average
+          </td>
+        )}
+        {showSurveySource && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '120px'
+            }}
+          >
+            {/* Empty for survey source */}
+          </td>
+        )}
+        {showRegion && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '100px'
+            }}
+          >
+            {/* Empty for region */}
+          </td>
+        )}
+        {showProviderType && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '120px'
+            }}
+          >
+            {/* Empty for provider type */}
+          </td>
+        )}
         
         {/* Unified variable summary data */}
         {selectedVariables.map((varName, varIndex) => {
@@ -115,21 +173,79 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
       
       {/* Weighted Average Row */}
       <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '1px solid #d1d5db' }}>
-        <td 
-          colSpan={[showSpecialty, showSurveySource, showRegion, showProviderType].filter(Boolean).length}
-          style={{ 
-            fontWeight: '600',
-            position: 'static',
-            left: 'auto',
-            backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #e0e0e0',
-            zIndex: 'auto',
-            padding: '8px',
-            fontSize: '15px'
-          }}
-        >
-          Weighted Average
-        </td>
+        {/* Survey Data Columns - Conditionally rendered to match data rows */}
+        {showSpecialty && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '150px'
+            }}
+          >
+            Weighted Average
+          </td>
+        )}
+        {showSurveySource && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '120px'
+            }}
+          >
+            {/* Empty for survey source */}
+          </td>
+        )}
+        {showRegion && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '100px'
+            }}
+          >
+            {/* Empty for region */}
+          </td>
+        )}
+        {showProviderType && (
+          <td 
+            style={{ 
+              fontWeight: '600',
+              position: 'static',
+              left: 'auto',
+              backgroundColor: '#f5f5f5',
+              borderRight: '1px solid #e0e0e0',
+              zIndex: 'auto',
+              padding: '8px',
+              fontSize: '15px',
+              width: 'auto',
+              minWidth: '120px'
+            }}
+          >
+            {/* Empty for provider type */}
+          </td>
+        )}
         
         {/* Unified variable weighted summary data */}
         {selectedVariables.map((varName, varIndex) => {

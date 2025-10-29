@@ -12,7 +12,7 @@ import { AnalyticsFilters } from './AnalyticsFilters';
 import { AnalyticsErrorBoundary } from './AnalyticsErrorBoundary';
 import { useYear } from '../../../contexts/YearContext';
 import { useProviderContext } from '../../../contexts/ProviderContext';
-import { filterAnalyticsData } from '../utils/analyticsCalculations';
+import { filterAnalyticsData, normalizeSpecialtyName } from '../utils/analyticsCalculations';
 import { VariableDiscoveryService } from '../services/variableDiscoveryService';
 import { VariableFormattingService } from '../services/variableFormattingService';
 import { VariableFormattingDialog } from './VariableFormattingDialog';
@@ -360,7 +360,12 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     
     // If specialty is selected, filter by specialty
     if (filters.specialty) {
-      cascadingData = cascadingData.filter(row => row.standardizedName === filters.specialty);
+      // Use the same normalization logic as the main filtering
+      const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
+      
+      cascadingData = cascadingData.filter(row => 
+        normalizeSpecialtyName(row.standardizedName || '') === normalizedFilterSpecialty
+      );
     }
     
     // If survey source is selected, filter by survey source

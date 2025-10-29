@@ -288,10 +288,10 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
                   summaryData={getSummaryRows(specialtyKey)}
                   selectedVariables={selectedVariables}
                   formattingRules={formattingRules}
-                  showSpecialty={false}
-                  showSurveySource={false}
-                  showRegion={false}
-                  showProviderType={false}
+                  showSpecialty={columnVisibility.specialty}
+                  showSurveySource={columnVisibility.surveySource}
+                  showRegion={columnVisibility.region}
+                  showProviderType={columnVisibility.providerType}
                 />
               </React.Fragment>
               );

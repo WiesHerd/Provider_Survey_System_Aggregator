@@ -145,7 +145,7 @@ export const transformSurveyData = (
 /**
  * Normalize specialty name for fuzzy matching (same logic as AnalyticsDataService)
  */
-const normalizeSpecialtyName = (specialty: string): string => {
+export const normalizeSpecialtyName = (specialty: string): string => {
   if (!specialty) return '';
   
   return specialty
@@ -203,6 +203,16 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       specialtyIndex.set(specialtyKey, []);
     }
     specialtyIndex.get(specialtyKey)!.push(row);
+    
+    // Debug logging for MGMA data
+    if (row.surveySource && row.surveySource.toLowerCase().includes('mgma')) {
+      console.log('🔍 MGMA Data Index Building:', {
+        surveySource: row.surveySource,
+        standardizedName: row.standardizedName,
+        normalizedKey: specialtyKey,
+        surveySpecialty: row.surveySpecialty
+      });
+    }
 
     // Source index
     if (!sourceIndex.has(row.surveySource)) {
@@ -245,7 +255,21 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       selectedSpecialty: filters.specialty,
       normalizedFilterSpecialty,
       specialtyMatchesCount: specialtyMatches.length,
-      totalRowsBeforeFilter: filteredData.length
+      totalRowsBeforeFilter: filteredData.length,
+      availableSpecialtyKeys: Array.from(specialtyIndex.keys())
+    });
+    
+    // Debug: Check if MGMA data is in the specialty matches
+    const mgmaMatches = specialtyMatches.filter(row => 
+      row.surveySource && row.surveySource.toLowerCase().includes('mgma')
+    );
+    console.log('🔍 MGMA in specialty matches:', {
+      mgmaMatchesCount: mgmaMatches.length,
+      mgmaMatches: mgmaMatches.map(row => ({
+        surveySource: row.surveySource,
+        standardizedName: row.standardizedName,
+        surveySpecialty: row.surveySpecialty
+      }))
     });
     
     filteredData = filteredData.filter(row => specialtyMatches.includes(row));
