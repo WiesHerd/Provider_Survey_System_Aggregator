@@ -46,6 +46,54 @@ export class ProviderDetectionService {
   };
 
   /**
+   * Extract provider types from survey data rows
+   */
+  public static extractProviderTypesFromData(rows: any[]): {
+    providerTypes: string[];
+    dominantType: 'PHYSICIAN' | 'APP' | 'MIXED';
+    confidence: number;
+  } {
+    const providerTypes = new Set<string>();
+    
+    rows.forEach(row => {
+      const providerType = row.provider_type || row.providerType || row['Provider Type'];
+      if (providerType) {
+        providerTypes.add(providerType);
+      }
+    });
+    
+    const types = Array.from(providerTypes);
+    const physicianTypes = types.filter(t => 
+      t.toLowerCase().includes('physician') || 
+      t.toLowerCase().includes('md') || 
+      t.toLowerCase().includes('do')
+    );
+    
+    const appTypes = types.filter(t =>
+      t.toLowerCase().includes('np') ||
+      t.toLowerCase().includes('pa') ||
+      t.toLowerCase().includes('crna') ||
+      t.toLowerCase().includes('nurse practitioner') ||
+      t.toLowerCase().includes('physician assistant')
+    );
+    
+    let dominantType: 'PHYSICIAN' | 'APP' | 'MIXED';
+    if (physicianTypes.length > 0 && appTypes.length === 0) {
+      dominantType = 'PHYSICIAN';
+    } else if (appTypes.length > 0 && physicianTypes.length === 0) {
+      dominantType = 'APP';
+    } else {
+      dominantType = 'MIXED';
+    }
+    
+    return {
+      providerTypes: types,
+      dominantType,
+      confidence: types.length > 0 ? 1.0 : 0.0
+    };
+  }
+
+  /**
    * Detect provider type from raw survey data
    */
   public static detectProviderType(data: RawSurveyData): ProviderDetectionResult {

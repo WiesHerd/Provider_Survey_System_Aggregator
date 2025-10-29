@@ -60,6 +60,44 @@ const getShortenedSurveyType = (surveyType: string, providerType: ProviderType):
   return shortenedType;
 };
 
+// Function to validate provider type match between form selection and data
+const validateProviderTypeMatch = (formProviderType: string, dataProviderTypes: string[]): {
+  isValid: boolean;
+  warning?: string;
+} => {
+  const formIsPhysician = formProviderType === 'PHYSICIAN';
+  const formIsApp = formProviderType === 'APP';
+  
+  const dataHasPhysician = dataProviderTypes.some(t => 
+    t.toLowerCase().includes('physician') || 
+    t.toLowerCase().includes('md') || 
+    t.toLowerCase().includes('do')
+  );
+  const dataHasApp = dataProviderTypes.some(t =>
+    t.toLowerCase().includes('np') || 
+    t.toLowerCase().includes('pa') || 
+    t.toLowerCase().includes('crna') ||
+    t.toLowerCase().includes('nurse practitioner') ||
+    t.toLowerCase().includes('physician assistant')
+  );
+  
+  if (formIsPhysician && dataHasApp && !dataHasPhysician) {
+    return {
+      isValid: false,
+      warning: 'Data appears to contain APP provider types, but you selected PHYSICIAN. Please verify your selection.'
+    };
+  }
+  
+  if (formIsApp && dataHasPhysician && !dataHasApp) {
+    return {
+      isValid: false,
+      warning: 'Data appears to contain PHYSICIAN provider types, but you selected APP. Please verify your selection.'
+    };
+  }
+  
+  return { isValid: true };
+};
+
 // Provider type enum for type safety
 type ProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'CUSTOM';
 
@@ -464,6 +502,23 @@ const SurveyUpload: React.FC = () => {
 
       // Progress is handled by useSmoothProgress hook
 
+      // Extract provider types from data for validation
+      const uniqueProviderTypes = new Set(
+        parsedRows
+          .map(row => row.provider_type || row.providerType || row['Provider Type'])
+          .filter(Boolean)
+      );
+
+      const detectedProviderTypes = Array.from(uniqueProviderTypes);
+      console.log('🔍 Detected provider types in data:', detectedProviderTypes);
+
+      // Validate form selection matches data
+      const providerTypeValidation = validateProviderTypeMatch(providerType, detectedProviderTypes);
+      if (!providerTypeValidation.isValid && providerTypeValidation.warning) {
+        console.warn('⚠️ Provider type mismatch:', providerTypeValidation.warning);
+        // Could show warning to user in the future
+      }
+
       // Create survey object
       const surveyId = crypto.randomUUID();
       const defaultSurveyName = file.name.replace('.csv', '');
@@ -486,6 +541,7 @@ const SurveyUpload: React.FC = () => {
           uniqueSpecialties: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
           uniqueProviderTypes: new Set(parsedRows.map(row => row.providerType || row['Provider Type']).filter(Boolean)).size,
           uniqueRegions: new Set(parsedRows.map(row => row.region || row.Region || row.geographicRegion).filter(Boolean)).size,
+          detectedProviderTypes: detectedProviderTypes,
           columnMappings: {}
         }
       };

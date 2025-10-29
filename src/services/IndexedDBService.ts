@@ -1127,6 +1127,21 @@ export class IndexedDBService {
         sampleData: rows.length > 0 ? rows[0] : null
       });
 
+      // Extract provider types from data for better detection
+      const uniqueProviderTypes = new Set(
+        rows
+          .map(row => row.providerType || row['Provider Type'] || row.provider_type)
+          .filter(Boolean)
+      );
+      
+      const detectedProviderTypes = Array.from(uniqueProviderTypes);
+      console.log('🔍 IndexedDBService: Detected provider types in data:', detectedProviderTypes);
+      
+      // Use detected provider type if available, otherwise fall back to form selection
+      const effectiveProviderType = detectedProviderTypes.length > 0 
+        ? detectedProviderTypes[0] // Use first detected type as primary
+        : providerType; // Fall back to form selection
+
       // Create survey record
       const surveyId = crypto.randomUUID();
       const survey = {
@@ -1134,13 +1149,16 @@ export class IndexedDBService {
         name: surveyName,
         year: surveyYear.toString(),
         type: surveyType,
-        providerType: providerType, // ENTERPRISE FIX: Add provider type to survey
+        providerType: effectiveProviderType, // Use detected provider type
         uploadDate: new Date(),
         rowCount: rows.length,
         specialtyCount: 0, // Will be calculated
         dataPoints: rows.length,
         colorAccent: '#6366F1',
-        metadata: {}
+        metadata: {
+          detectedProviderTypes: detectedProviderTypes,
+          formProviderType: providerType
+        }
       };
 
       console.log('💾 IndexedDBService: Creating survey record:', survey);

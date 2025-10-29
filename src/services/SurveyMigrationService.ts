@@ -106,10 +106,9 @@ export class SurveyMigrationService {
                     needsUpdate = true;
                     console.log(`🔧 Setting Sullivan survey provider type for "${survey.name}": undefined → PHYSICIAN`);
                   } else {
-                    // Default to PHYSICIAN for surveys without clear indication
-                    newProviderType = 'PHYSICIAN';
-                    needsUpdate = true;
-                    console.log(`🔧 Setting default provider type for "${survey.name}": undefined → PHYSICIAN`);
+                    // DO NOT default to PHYSICIAN - only update if we have clear evidence
+                    console.log(`ℹ️ Skipping provider type assignment for "${survey.name}" - no clear indication`);
+                    needsUpdate = false;
                   }
                 }
                 
