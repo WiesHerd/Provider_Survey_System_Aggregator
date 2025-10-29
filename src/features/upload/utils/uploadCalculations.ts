@@ -273,7 +273,7 @@ export interface ColumnValidationResult {
   mappedColumns: Record<string, string>;
   suggestions: string[];
   errors: string[];
-  format?: 'normalized' | 'wide';
+  format?: 'normalized' | 'wide' | 'wide_variable';
 }
 
 /**
