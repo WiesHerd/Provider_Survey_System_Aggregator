@@ -80,7 +80,22 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
             </React.Fragment>
           ) : (
             <React.Fragment key={varName}>
-              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'center', color: '#9ca3af', padding: '8px', fontSize: '15px' }} colSpan={6}>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E5E7EB' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E0E0E0' }}>
                 ***
               </td>
             </React.Fragment>
@@ -136,7 +151,22 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
             </React.Fragment>
           ) : (
             <React.Fragment key={varName}>
-              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'center', color: '#9ca3af', padding: '8px', fontSize: '15px' }} colSpan={6}>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E5E7EB' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+                ***
+              </td>
+              <td style={{ backgroundColor: '#f5f5f5', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E0E0E0' }}>
                 ***
               </td>
             </React.Fragment>
