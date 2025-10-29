@@ -239,12 +239,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     // Apply provider type filtering
     let providerFilteredData = allData;
     
-    // TEMPORARILY DISABLED: Provider type filtering to show all data
-    console.log('🔍 SurveyAnalytics: Provider type filtering TEMPORARILY DISABLED');
-    console.log('🔍 SurveyAnalytics: effectiveProviderType:', effectiveProviderType);
-    console.log('🔍 SurveyAnalytics: Showing all data regardless of provider type');
-    
-    /*
     if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
       providerFilteredData = allData.filter(row => {
         if (!row.providerType) return false;
@@ -259,21 +253,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     } else {
       console.log('🔍 SurveyAnalytics: Provider type filtering disabled - showing all data');
     }
-    */
-    /*
-    if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
-      console.log('🔍 SurveyAnalytics: Applying provider type filter:', effectiveProviderType);
-      providerFilteredData = allData.filter(row => {
-        const category = categorizeProviderType(row.providerType || '');
-        const matches = category === effectiveProviderType;
-        if (!matches && allData.length <= 5) {
-          console.log(`🔍 Row filtered out: providerType="${row.providerType}" -> category="${category}" (looking for "${effectiveProviderType}")`);
-        }
-        return matches;
-      });
-      console.log('🔍 SurveyAnalytics: After provider filtering:', providerFilteredData.length);
-    }
-    */
     
     // Apply UI filters to the provider-filtered data
     const uiFilteredData = filterAnalyticsData(providerFilteredData, filters);
