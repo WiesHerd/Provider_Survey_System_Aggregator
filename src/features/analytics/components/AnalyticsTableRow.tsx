@@ -132,10 +132,37 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         const normalizedVarName = mapVariableNameToStandard(varName);
         let metrics: any = null;
         
+        // General debug logging for first few rows
+        if (index < 3 && varName === 'Total Cash Compensation Per Work RVUs') {
+          console.log('🔍 General Data Structure Debug:', {
+            index,
+            surveySource: legacyRow.surveySource,
+            varName,
+            normalizedVarName,
+            hasVariables: !!dynamicRow.variables,
+            variablesKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables) : [],
+            isLegacyFormat: !dynamicRow.variables,
+            sampleLegacyFields: Object.keys(legacyRow).filter(key => key.includes('cf') || key.includes('tcc') || key.includes('per')).slice(0, 5)
+          });
+        }
+        
         // Check if this is dynamic format (has variables property)
         if (dynamicRow.variables && typeof dynamicRow.variables === 'object') {
           // Dynamic format: use variables object directly
           metrics = dynamicRow.variables[normalizedVarName];
+          
+          // Debug logging for dynamic format
+          if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan'))) {
+            console.log('🔍 Dynamic Format TCC per Work RVU Debug:', {
+              surveySource: legacyRow.surveySource,
+              varName,
+              normalizedVarName,
+              hasVariables: !!dynamicRow.variables,
+              variablesKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables) : [],
+              metrics,
+              allFields: Object.keys(legacyRow).filter(key => key.includes('cf') || key.includes('tcc') || key.includes('per')).slice(0, 10)
+            });
+          }
         } else {
           // Legacy format: use expanded field mapping
           const legacyFieldMap: Record<string, string> = {
