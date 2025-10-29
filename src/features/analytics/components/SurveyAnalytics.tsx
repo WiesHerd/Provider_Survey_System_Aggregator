@@ -222,7 +222,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     
     // Apply provider type filtering
     let providerFilteredData = allData;
-    if (effectiveProviderType && effectiveProviderType !== 'ALL') {
+    if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
       providerFilteredData = allData.filter(row => {
         if (!row.providerType) return false;
         const category = categorizeProviderType(row.providerType);
