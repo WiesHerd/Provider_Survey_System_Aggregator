@@ -210,7 +210,19 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
         surveySource: row.surveySource,
         standardizedName: row.standardizedName,
         normalizedKey: specialtyKey,
-        surveySpecialty: row.surveySpecialty
+        surveySpecialty: row.surveySpecialty,
+        geographicRegion: row.geographicRegion
+      });
+    }
+    
+    // Debug logging for SullivanCotter data
+    if (row.surveySource && row.surveySource.toLowerCase().includes('sullivan')) {
+      console.log('🔍 SullivanCotter Data Index Building:', {
+        surveySource: row.surveySource,
+        standardizedName: row.standardizedName,
+        normalizedKey: specialtyKey,
+        surveySpecialty: row.surveySpecialty,
+        geographicRegion: row.geographicRegion
       });
     }
 

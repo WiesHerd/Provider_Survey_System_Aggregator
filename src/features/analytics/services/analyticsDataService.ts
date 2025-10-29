@@ -553,7 +553,24 @@ export class AnalyticsDataService {
         rawSpecialty,
         normalizedSpecialty,
         rawProviderType,
-        normalizedProviderType
+        normalizedProviderType,
+        rawRegion,
+        normalizedRegion
+      });
+    }
+    
+    // Debug logging for SullivanCotter data
+    if (survey.name && survey.name.toLowerCase().includes('sullivan')) {
+      console.log('🎯 SullivanCotter Data Normalization:', {
+        surveyName: survey.name,
+        surveyType: survey.type,
+        finalSurveySource,
+        rawSpecialty,
+        normalizedSpecialty,
+        rawProviderType,
+        normalizedProviderType,
+        rawRegion,
+        normalizedRegion
       });
     }
     
