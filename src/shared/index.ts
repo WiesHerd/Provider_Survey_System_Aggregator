@@ -28,3 +28,6 @@ export {
   formatSpecialtyForDisplay,
   sortSpecialtiesForDisplay
 } from './utils';
+
+// Re-export commonly used components for convenience
+export { ConfirmationDialog } from './components';
