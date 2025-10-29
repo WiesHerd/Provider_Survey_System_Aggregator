@@ -57,36 +57,26 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   // Use memoized column groups for dynamic variables
   const columnGroups = useMemoizedColumnGroups(selectedVariables, true);
   
-  // Use memoized grouping to avoid recalculation
-  const groupedData = useMemoizedGrouping(data);
+  // No grouping - use data directly for global averaging
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return data.slice(startIndex, endIndex);
+  }, [data, currentPage, itemsPerPage]);
   
   // Pagination calculations
-  const totalSpecialties = Object.keys(groupedData).length;
-  const totalPages = Math.ceil(totalSpecialties / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  
-  // Get paginated specialties
-  const paginatedSpecialties = useMemo(() => {
-    const specialties = Object.keys(groupedData);
-    return specialties.slice(startIndex, endIndex);
-  }, [groupedData, startIndex, endIndex]);
+  const totalRows = data.length;
+  const totalPages = Math.ceil(totalRows / itemsPerPage);
 
-  // Production-grade: Unified summary calculation for all specialties
-  const summaryRowsCache = useMemo(() => {
-    const cache: Record<string, any> = {};
-    Object.keys(groupedData).forEach(specialty => {
-      const rows = groupedData[specialty];
-      // Single calculation function for all data
-      cache[specialty] = calculateSummaryRows(rows, selectedVariables);
-    });
-    return cache;
-  }, [groupedData, selectedVariables]);
+  // Global summary calculation for all visible data
+  const globalSummaryData = useMemo(() => {
+    return calculateSummaryRows(data, selectedVariables);
+  }, [data, selectedVariables]);
 
-  // Helper function to get cached summary rows
-  const getSummaryRows = useCallback((specialty: string) => {
-    return summaryRowsCache[specialty] || { simple: {}, weighted: {} };
-  }, [summaryRowsCache]);
+  // Helper function to get global summary rows
+  const getGlobalSummaryRows = useCallback((rows: any[]) => {
+    return calculateSummaryRows(rows, selectedVariables);
+  }, [selectedVariables]);
   
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
@@ -253,49 +243,42 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
             columnVisibility={columnVisibility}
           />
           <tbody>
-            {paginatedSpecialties.map((specialtyKey) => {
-              const rows = groupedData[specialtyKey];
-              const firstRow = rows[0];
-              const surveySource = firstRow?.surveySource || '';
-              
-              // Extract just the specialty name (remove survey source suffix)
-              const specialty = specialtyKey.includes('_') 
-                ? specialtyKey.split('_').slice(0, -1).join('_') 
-                : specialtyKey;
+            {/* All Data Rows - No grouping */}
+            {paginatedData.map((row, index) => {
+              // Extract specialty name for display
+              const specialty = row.standardizedName || row.surveySpecialty || 'Unknown';
+              const surveySource = row.surveySource || '';
               
               return (
-                <React.Fragment key={specialtyKey}>
-                {/* Data Rows */}
-                {rows.map((row, index) => (
-                  <AnalyticsTableRow
-                    key={`${row.surveySource}-${row.geographicRegion}-${index}`}
-                    row={row}
-                    selectedVariables={selectedVariables}
-                    index={index}
-                    formattingRules={formattingRules}
-                    showSpecialty={columnVisibility.specialty}
-                    showSurveySource={columnVisibility.surveySource}
-                    showRegion={columnVisibility.region}
-                    showProviderType={columnVisibility.providerType}
-                    specialty={specialty}
-                    surveySource={surveySource}
-                  />
-                ))}
-
-                {/* Summary Rows */}
-                <AnalyticsSummaryRow
-                  specialty={specialty}
-                  summaryData={getSummaryRows(specialtyKey)}
+                <AnalyticsTableRow
+                  key={`${row.surveySource}-${row.geographicRegion}-${index}`}
+                  row={row}
                   selectedVariables={selectedVariables}
+                  index={index}
                   formattingRules={formattingRules}
                   showSpecialty={columnVisibility.specialty}
                   showSurveySource={columnVisibility.surveySource}
                   showRegion={columnVisibility.region}
                   showProviderType={columnVisibility.providerType}
+                  specialty={specialty}
+                  surveySource={surveySource}
                 />
-              </React.Fragment>
               );
             })}
+
+            {/* Global Summary Rows - One set for all visible data */}
+            {paginatedData.length > 0 && (
+              <AnalyticsSummaryRow
+                specialty="All Data"
+                summaryData={getGlobalSummaryRows(paginatedData)}
+                selectedVariables={selectedVariables}
+                formattingRules={formattingRules}
+                showSpecialty={columnVisibility.specialty}
+                showSurveySource={columnVisibility.surveySource}
+                showRegion={columnVisibility.region}
+                showProviderType={columnVisibility.providerType}
+              />
+            )}
           </tbody>
         </table>
       </div>
@@ -307,7 +290,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
             currentPage={currentPage}
             totalPages={totalPages}
             pageSize={itemsPerPage}
-            totalRows={totalSpecialties}
+            totalRows={totalRows}
             onPageChange={handlePageChange}
             onPageSizeChange={handleItemsPerPageChange}
             pageSizeOptions={[5, 10, 25, 50]}
