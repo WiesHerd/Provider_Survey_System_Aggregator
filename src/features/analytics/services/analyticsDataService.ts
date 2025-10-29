@@ -574,6 +574,25 @@ export class AnalyticsDataService {
       });
     }
     
+    // Debug logging for Gallagher data
+    if (survey.name && survey.name.toLowerCase().includes('gallagher')) {
+      console.log('🎯 Gallagher Data Normalization:', {
+        surveyName: survey.name,
+        surveyType: survey.type,
+        finalSurveySource,
+        rawSpecialty,
+        normalizedSpecialty,
+        rawProviderType,
+        normalizedProviderType,
+        rawRegion,
+        normalizedRegion,
+        cf_p25: normalizedMetrics.cf_p25,
+        cf_p50: normalizedMetrics.cf_p50,
+        cf_p75: normalizedMetrics.cf_p75,
+        cf_p90: normalizedMetrics.cf_p90
+      });
+    }
+    
     return {
       specialty: normalizedSpecialty,
       providerType: normalizedProviderType,
