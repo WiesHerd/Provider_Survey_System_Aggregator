@@ -52,7 +52,8 @@ export interface DynamicAggregatedData {
  * Normalized row with dynamic variables
  */
 export interface DynamicNormalizedRow {
-  specialty: string;
+  specialty: string; // Original specialty name from survey
+  standardizedSpecialty: string; // Mapped standardized specialty name
   providerType: string;
   region: string;
   surveySource: string;

@@ -197,6 +197,22 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         setAvailableVariables(variableNames); // Update available variables
         // Don't override selectedVariables - keep the common ones we pre-selected
       }
+      
+      // DEBUG: Check specialty mapping data structure (simplified)
+      console.log('🔍 SurveyAnalytics: DEBUG - Checking specialty mapping data...');
+      const familyMedicineData = allData.filter(row => 
+        row.surveySpecialty?.toLowerCase().includes('family') || 
+        row.standardizedName?.toLowerCase().includes('family')
+      );
+      
+      console.log('🔍 SurveyAnalytics: DEBUG - Family Medicine related data:');
+      familyMedicineData.forEach((row, index) => {
+        console.log(`Family Medicine ${index + 1}:`, {
+          surveySource: row.surveySource,
+          surveySpecialty: row.surveySpecialty,
+          standardizedName: row.standardizedName
+        });
+      });
     }
   }, [allData, selectedVariables]);
 

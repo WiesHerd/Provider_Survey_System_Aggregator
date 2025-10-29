@@ -959,7 +959,8 @@ export class AnalyticsDataService {
     }
     
     return {
-      specialty: normalizedSpecialty,
+      specialty: rawSpecialty, // Original specialty name from survey
+      standardizedSpecialty: normalizedSpecialty, // Mapped standardized specialty name
       providerType: normalizedProviderType,
       region: normalizedRegion,
       surveySource: survey.type || survey.name || 'Unknown',
@@ -978,7 +979,7 @@ export class AnalyticsDataService {
     const groupedData = new Map<string, DynamicNormalizedRow[]>();
     
     normalizedRows.forEach(row => {
-      const key = `${row.specialty}_${row.providerType}_${row.region}_${row.surveySource}`;
+      const key = `${row.standardizedSpecialty}_${row.providerType}_${row.region}_${row.surveySource}`;
       
       if (!groupedData.has(key)) {
         groupedData.set(key, []);
@@ -995,15 +996,12 @@ export class AnalyticsDataService {
       
       const firstRow = rows[0];
       
-      // Extract original specialty name from raw data
-      const originalSpecialty = firstRow.specialty || 'Unknown';
-      
       // Initialize aggregated record
       const aggregatedRecord: DynamicAggregatedData = {
-        standardizedName: firstRow.specialty,
+        standardizedName: firstRow.standardizedSpecialty, // Mapped standardized specialty name
         surveySource: firstRow.surveySource,
-        surveySpecialty: firstRow.specialty,
-        originalSpecialty: originalSpecialty,
+        surveySpecialty: firstRow.specialty, // Original specialty name from survey
+        originalSpecialty: firstRow.specialty, // Same as surveySpecialty for consistency
         geographicRegion: firstRow.region,
         providerType: firstRow.providerType,
         surveyYear: firstRow.surveyYear,

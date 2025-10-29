@@ -238,7 +238,24 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   if (filters.specialty && filters.specialty !== '') {
     const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
     const specialtyMatches = specialtyIndex.get(normalizedFilterSpecialty) || [];
+    
+    console.log('🔍 filterAnalyticsData: DEBUG - Specialty filtering:', {
+      selectedSpecialty: filters.specialty,
+      normalizedFilterSpecialty,
+      specialtyMatchesCount: specialtyMatches.length,
+      totalRowsBeforeFilter: filteredData.length
+    });
+    
     filteredData = filteredData.filter(row => specialtyMatches.includes(row));
+    
+    console.log('🔍 filterAnalyticsData: DEBUG - After specialty filtering:', {
+      remainingRows: filteredData.length,
+      sampleRows: filteredData.slice(0, 3).map(row => ({
+        surveySource: row.surveySource,
+        surveySpecialty: row.surveySpecialty,
+        standardizedName: row.standardizedName
+      }))
+    });
   }
 
   // Survey source filter
