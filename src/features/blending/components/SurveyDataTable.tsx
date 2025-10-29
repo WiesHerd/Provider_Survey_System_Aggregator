@@ -433,13 +433,13 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                     </div>
                   </td>
                   <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.tcc}px` }}>
-                    {row.tcc_p50 ? `$${parseFloat(row.tcc_p50.toString()).toLocaleString()}` : 'n/a'}
+                    {row.tcc_p50 ? `$${parseFloat(row.tcc_p50.toString()).toLocaleString()}` : '***'}
                   </td>
                   <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.wrvu}px` }}>
-                    {row.wrvu_p50 ? parseFloat(row.wrvu_p50.toString()).toLocaleString() : 'n/a'}
+                    {row.wrvu_p50 ? parseFloat(row.wrvu_p50.toString()).toLocaleString() : '***'}
                   </td>
                   <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.cf}px` }}>
-                    {row.cf_p50 ? `$${parseFloat(row.cf_p50.toString()).toLocaleString()}` : 'n/a'}
+                    {row.cf_p50 ? `$${parseFloat(row.cf_p50.toString()).toLocaleString()}` : '***'}
                   </td>
                   <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.records}px` }}>
                     {(row.tcc_n_orgs || 0).toLocaleString()}

@@ -158,23 +158,23 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           </React.Fragment>
         ) : (
           <React.Fragment key={varName}>
-            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
-              n/a
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              ***
             </td>
-            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
-              n/a
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E5E7EB' }}>
+              ***
             </td>
-            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
-              n/a
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              ***
             </td>
-            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
-              n/a
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              ***
             </td>
-            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
-              n/a
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px' }}>
+              ***
             </td>
-            <td style={{ backgroundColor: 'white', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E0E0E0' }}>
-              n/a
+            <td style={{ backgroundColor: '#F8F9FA', textAlign: 'right', color: '#9ca3af', padding: '8px', fontSize: '15px', borderRight: '1px solid #E0E0E0' }}>
+              ***
             </td>
           </React.Fragment>
         );

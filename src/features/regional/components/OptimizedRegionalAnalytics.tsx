@@ -302,13 +302,13 @@ export const OptimizedRegionalAnalytics: React.FC = () => {
                       {region.count.toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {region.tcc_p50 > 0 ? `$${region.tcc_p50.toLocaleString()}` : 'n/a'}
+                      {region.tcc_p50 > 0 ? `$${region.tcc_p50.toLocaleString()}` : '***'}
                     </TableCell>
                     <TableCell>
-                      {region.cf_p50 > 0 ? region.cf_p50.toFixed(2) : 'n/a'}
+                      {region.cf_p50 > 0 ? region.cf_p50.toFixed(2) : '***'}
                     </TableCell>
                     <TableCell>
-                      {region.wrvu_p50 > 0 ? region.wrvu_p50.toLocaleString() : 'n/a'}
+                      {region.wrvu_p50 > 0 ? region.wrvu_p50.toLocaleString() : '***'}
                     </TableCell>
                   </TableRow>
                 ))}

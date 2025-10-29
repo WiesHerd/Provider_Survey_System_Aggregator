@@ -21,9 +21,9 @@ interface AnalyticsSummaryRowProps {
 /**
  * AnalyticsSummaryRow component for summary calculations
  * 
- * @param specialty - Specialty name for display
- * @param summaryData - Calculated summary data
- * @param selectedVariables - Selected variables for dynamic rendering
+ * @param specialty *** Specialty name for display
+ * @param summaryData *** Calculated summary data
+ * @param selectedVariables *** Selected variables for dynamic rendering
  */
 export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
   specialty,
@@ -78,7 +78,7 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
           ) : (
             <React.Fragment key={varName}>
               <td style={{ backgroundColor: '#f5f5f5', textAlign: 'center', color: '#9ca3af', padding: '8px', fontSize: '15px' }} colSpan={6}>
-                n/a
+                ***
               </td>
             </React.Fragment>
           );
@@ -131,7 +131,7 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
           ) : (
             <React.Fragment key={varName}>
               <td style={{ backgroundColor: '#f5f5f5', textAlign: 'center', color: '#9ca3af', padding: '8px', fontSize: '15px' }} colSpan={6}>
-                n/a
+                ***
               </td>
             </React.Fragment>
           );

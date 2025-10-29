@@ -115,7 +115,7 @@ export const formatVariableValue = (
   options: { showCurrency?: boolean; showDecimals?: number } = {}
 ): string => {
   if (value === 0 || isNaN(value)) {
-    return 'n/a';
+    return '***';
   }
 
   const { showCurrency = false, showDecimals = 0 } = options;

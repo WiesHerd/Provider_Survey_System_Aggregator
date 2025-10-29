@@ -79,7 +79,7 @@ export class VariableFormattingService {
     options: FormattingOptions
   ): string {
     if (value === 0 || isNaN(value)) {
-      return 'n/a';
+      return '***';
     }
 
     // Try to find a specific rule for this variable

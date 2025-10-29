@@ -54,7 +54,7 @@ export const ColumnCard: React.FC<ColumnCardProps> = ({
             {column.name}
           </Typography>
           <Typography variant="caption" className="text-gray-500 text-xs">
-            Frequency: {(column as any).frequency || 'N/A'}
+            Frequency: {(column as any).frequency || '***'}
           </Typography>
         </div>
         <div className="ml-2">
