@@ -54,7 +54,10 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
         {selectedVariables.map((varName, varIndex) => {
           const summary = summaryData.simple[varName];
           
-          return summary ? (
+          // Check if summary exists and has valid data (p50 > 0 indicates real data)
+          const hasValidData = summary && summary.p50 > 0;
+          
+          return hasValidData ? (
             <React.Fragment key={varName}>
               <td style={{ backgroundColor: '#f5f5f5', fontWeight: '600', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
                 {summary.n_orgs.toLocaleString()}
@@ -107,7 +110,10 @@ export const AnalyticsSummaryRow: React.FC<AnalyticsSummaryRowProps> = memo(({
         {selectedVariables.map((varName, varIndex) => {
           const summary = summaryData.weighted[varName];
           
-          return summary ? (
+          // Check if summary exists and has valid data (p50 > 0 indicates real data)
+          const hasValidData = summary && summary.p50 > 0;
+          
+          return hasValidData ? (
             <React.Fragment key={varName}>
               <td style={{ backgroundColor: '#f5f5f5', fontWeight: '600', textAlign: 'right', padding: '8px', fontSize: '15px' }}>
                 {summary.n_orgs.toLocaleString()}
