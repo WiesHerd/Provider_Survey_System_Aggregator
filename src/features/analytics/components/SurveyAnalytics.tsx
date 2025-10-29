@@ -39,7 +39,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   // NEW: Variable selection state - Start with common variables selected
   const [selectedVariables, setSelectedVariables] = useState<string[]>(() => {
     console.log('🔍 SurveyAnalytics: Initializing selectedVariables with common variables');
-    return ['tcc', 'work_rvus', 'cf']; // Start with most common variables selected
+    return ['tcc', 'work_rvus', 'tcc_per_work_rvu']; // Include TCC per Work RVU by default
   });
   
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
