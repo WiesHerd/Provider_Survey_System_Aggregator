@@ -648,7 +648,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                   }}
                 />
               )}
-              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
+              filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue, 100)}
               clearOnBlur={false}
               blurOnSelect={true}
             />

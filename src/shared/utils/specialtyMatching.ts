@@ -92,6 +92,7 @@ export const findBestSpecialtyMatch = (
 /**
  * Check if search text matches specialty with flexible word order
  * Returns true if all search words are found in the specialty (order independent)
+ * Handles colon-separated specialties (e.g., "pediatrics:surgery")
  */
 export const flexibleWordMatch = (specialty: string, searchText: string): boolean => {
   if (!searchText.trim()) return true;
@@ -100,15 +101,16 @@ export const flexibleWordMatch = (specialty: string, searchText: string): boolea
   const normalizedSearch = normalizeSpecialty(searchText);
   
   // Split into words and filter out short words (less than 2 characters)
-  const specialtyWords = normalizedSpecialty.split(/\s+/).filter(word => word.length >= 2);
+  // Also split by colons to handle colon-separated specialties
+  const specialtyParts = normalizedSpecialty.split(/[\s:]+/).filter(word => word.length >= 2);
   const searchWords = normalizedSearch.split(/\s+/).filter(word => word.length >= 2);
   
   if (searchWords.length === 0) return true;
   
-  // Check if all search words are found in specialty words
+  // Check if all search words are found in specialty parts (including colon-separated parts)
   return searchWords.every(searchWord => 
-    specialtyWords.some(specialtyWord => 
-      specialtyWord.includes(searchWord) || searchWord.includes(specialtyWord)
+    specialtyParts.some(specialtyPart => 
+      specialtyPart.includes(searchWord) || searchWord.includes(specialtyPart)
     )
   );
 };
@@ -122,39 +124,59 @@ export const calculateFlexibleSimilarity = (specialty: string, searchText: strin
   const normalizedSpecialty = normalizeSpecialty(specialty);
   const normalizedSearch = normalizeSpecialty(searchText);
   
-  // Split into words
-  const specialtyWords = normalizedSpecialty.split(/\s+/).filter(word => word.length >= 2);
+  // Handle colon-separated specialties (e.g., "pediatrics:surgery")
+  // Split by both spaces and colons to capture all parts
+  const specialtyParts = normalizedSpecialty.split(/[\s:]+/).filter(word => word.length >= 2);
   const searchWords = normalizedSearch.split(/\s+/).filter(word => word.length >= 2);
   
   if (searchWords.length === 0) return 1;
-  if (specialtyWords.length === 0) return 0;
+  if (specialtyParts.length === 0) return 0;
   
   // Count matching words
   let matchedWords = 0;
-  const usedSpecialtyWords = new Set<number>();
+  let exactMatches = 0;
+  const usedSpecialtyParts = new Set<number>();
   
   searchWords.forEach(searchWord => {
-    const matchIndex = specialtyWords.findIndex((specialtyWord, index) => 
-      !usedSpecialtyWords.has(index) && 
-      (specialtyWord.includes(searchWord) || searchWord.includes(specialtyWord))
+    // First try to find exact match
+    const exactMatchIndex = specialtyParts.findIndex((specialtyPart, index) => 
+      !usedSpecialtyParts.has(index) && specialtyPart === searchWord
     );
     
-    if (matchIndex !== -1) {
+    if (exactMatchIndex !== -1) {
       matchedWords++;
-      usedSpecialtyWords.add(matchIndex);
+      exactMatches++;
+      usedSpecialtyParts.add(exactMatchIndex);
+    } else {
+      // Then try partial match
+      const partialMatchIndex = specialtyParts.findIndex((specialtyPart, index) => 
+        !usedSpecialtyParts.has(index) && 
+        (specialtyPart.includes(searchWord) || searchWord.includes(specialtyPart))
+      );
+      
+      if (partialMatchIndex !== -1) {
+        matchedWords++;
+        usedSpecialtyParts.add(partialMatchIndex);
+      }
     }
   });
   
   // Base score from word matches
   let score = matchedWords / searchWords.length;
   
-  // Boost for exact word matches
-  const exactMatches = searchWords.filter(searchWord =>
-    specialtyWords.some(specialtyWord => specialtyWord === searchWord)
-  ).length;
-  
+  // Strong boost for exact word matches (more important than partial)
   if (exactMatches > 0) {
-    score += (exactMatches / searchWords.length) * 0.3;
+    score += (exactMatches / searchWords.length) * 0.4;
+  }
+  
+  // Boost for specialties with multiple matching words (e.g., both "pediatrics" and "surgery" match)
+  if (matchedWords === searchWords.length && specialtyParts.length > 1) {
+    const allPartsMatched = searchWords.every(searchWord =>
+      specialtyParts.some(part => part.includes(searchWord) || searchWord.includes(part))
+    );
+    if (allPartsMatched) {
+      score += 0.2; // Boost for multi-part specialties that match all search words
+    }
   }
   
   // Boost for medical term matches

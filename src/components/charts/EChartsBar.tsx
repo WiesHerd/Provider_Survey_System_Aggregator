@@ -43,15 +43,33 @@ export const EChartsBar: React.FC<EChartsBarProps> = ({
     const tccMetrics = metrics.filter(m => m.includes('tcc'));
     const wrvuMetrics = metrics.filter(m => m.includes('wrvu'));
     
+    // Sort TCC metrics by percentile order (25th, 50th, 75th, 90th)
+    const sortedTccMetrics = tccMetrics.sort((a, b) => {
+      const percentileOrder = { 'p25': 1, 'p50': 2, 'p75': 3, 'p90': 4 };
+      const aPercentile = a.match(/p\d+/)?.[0] || '';
+      const bPercentile = b.match(/p\d+/)?.[0] || '';
+      return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+             (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+    });
+    
+    // Sort wRVU metrics by percentile order (25th, 50th, 75th, 90th)
+    const sortedWrvuMetrics = wrvuMetrics.sort((a, b) => {
+      const percentileOrder = { 'p25': 1, 'p50': 2, 'p75': 3, 'p90': 4 };
+      const aPercentile = a.match(/p\d+/)?.[0] || '';
+      const bPercentile = b.match(/p\d+/)?.[0] || '';
+      return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+             (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+    });
+    
     // Only render TCC and wRVU in this chart (CF gets separate chart)
-    const chartMetrics = [...tccMetrics, ...wrvuMetrics];
+    const chartMetrics = [...sortedTccMetrics, ...sortedWrvuMetrics];
     
     // Calculate max values for fixed scaling (zero baseline with intelligent max)
     const tccValues = data.flatMap(item => 
-      tccMetrics.map(m => item.metricValues?.[m] || 0)
+      sortedTccMetrics.map(m => item.metricValues?.[m] || 0)
     ).filter(v => v > 0);
     const wrvuValues = data.flatMap(item =>
-      wrvuMetrics.map(m => item.metricValues?.[m] || 0)
+      sortedWrvuMetrics.map(m => item.metricValues?.[m] || 0)
     ).filter(v => v > 0);
     
     const maxTcc = tccValues.length > 0 ? Math.max(...tccValues) : 100000;
@@ -79,7 +97,7 @@ export const EChartsBar: React.FC<EChartsBarProps> = ({
         },
         barMaxWidth: 60,
         label: {
-          show: true,
+          show: chartMetrics.length === 1, // Only show labels when there's a single metric
           position: 'top',
           formatter: (params: any) => {
             const isWRVU = params.seriesName.includes('wRVU');

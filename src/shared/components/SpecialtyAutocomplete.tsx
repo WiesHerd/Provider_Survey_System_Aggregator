@@ -53,7 +53,7 @@ export const SpecialtyAutocomplete: React.FC<SpecialtyAutocompleteProps> = ({
             }}
           />
         )}
-        filterOptions={(opts: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(opts, inputValue)}
+        filterOptions={(opts: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(opts, inputValue, 100)}
         clearOnBlur={false}
         blurOnSelect={true}
       />

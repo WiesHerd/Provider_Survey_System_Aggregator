@@ -156,7 +156,7 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
                         }}
                       />
                     )}
-                    filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
+                    filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue, 100)}
                     clearOnBlur={false}
                     blurOnSelect={true}
                   />

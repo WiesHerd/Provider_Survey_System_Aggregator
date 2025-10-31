@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { FormControl, Autocomplete, TextField } from '@mui/material';
+import { FormControl, Autocomplete, TextField, Drawer, Typography, List, ListItem, ListItemText, Divider } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
@@ -29,6 +29,8 @@ export const RegionalAnalytics: React.FC = () => {
   const [mappings, setMappings] = useState<any[]>([]);
   const [regionMappings, setRegionMappings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [provenanceOpen, setProvenanceOpen] = useState(false);
+  const [provenanceRegion, setProvenanceRegion] = useState<string>('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -204,16 +206,13 @@ export const RegionalAnalytics: React.FC = () => {
     const uniqueRegions = Array.from(new Set(filtered.map(r => r.geographicRegion)));
     console.log(`🔍 Unique regions in filtered data:`, uniqueRegions);
     
-    // Get standardized region names from mappings or use parent region names from Region Mapping screen
-    // National should be first, then others alphabetically
-    const standardizedRegions = regionMappings.length > 0 
-      ? regionMappings.map(m => m.standardizedName).sort()
-      : ['national', 'northeast', 'midwest', 'south', 'west'];
-    
-    // Ensure National is first
-    const orderedRegions = ['national', ...standardizedRegions.filter(r => r !== 'national')];
-    
-    console.log(`🌍 Using ordered regions:`, orderedRegions);
+    // Debug: Show detailed region information
+    console.log(`🔍 Detailed region analysis:`, filtered.slice(0, 10).map(r => ({
+      standardizedName: r.standardizedName,
+      geographicRegion: r.geographicRegion,
+      surveySource: r.surveySource,
+      tcc_p50: r.tcc_p50
+    })));
     
     // Filter out any rows with invalid data - more lenient check
     const validRows = filtered.filter(r => {
@@ -229,21 +228,51 @@ export const RegionalAnalytics: React.FC = () => {
     const mapToParentRegion = (region: string): string => {
       if (!region || region.toLowerCase() === 'national') return 'national';
       
-      const lower = region.toLowerCase();
+      const lower = region.toLowerCase().trim();
+      
+      console.log(`🔍 Mapping region "${region}" to parent region...`);
       
       // Map to parent region names from Region Mapping screen
-      if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || lower.includes('north central')) {
+      if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || 
+          lower.includes('north central') || lower.includes('new england') || lower.includes('atlantic')) {
+        console.log(`  → Mapped to northeast`);
         return 'northeast';
-      } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se') || lower.includes('south central')) {
+      } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se') || 
+                 lower.includes('south central') || lower.includes('south') || lower.includes('gulf')) {
+        console.log(`  → Mapped to south`);
         return 'south';
-      } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('nc') || lower.includes('great lakes')) {
+      } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('nc') || 
+                 lower.includes('great lakes') || lower.includes('central') || lower.includes('plains')) {
+        console.log(`  → Mapped to midwest`);
         return 'midwest';
-      } else if (lower.includes('west') || lower.includes('western') || lower.includes('southwest') || lower.includes('sw')) {
+      } else if (lower.includes('west') || lower.includes('western') || lower.includes('southwest') || 
+                 lower.includes('sw') || lower.includes('pacific') || lower.includes('mountain')) {
+        console.log(`  → Mapped to west`);
         return 'west';
       }
       
-      return region.toLowerCase(); // Return lowercase original if no match
+      console.log(`  → No mapping found, returning original: ${lower}`);
+      return lower; // Return lowercase original if no match
     };
+    
+    // Get standardized region names from mappings or use parent region names from Region Mapping screen
+    // National should be first, then others alphabetically
+    let standardizedRegions: string[] = [];
+    
+    if (regionMappings.length > 0) {
+      standardizedRegions = regionMappings.map(m => m.standardizedName).sort();
+      console.log(`🔍 Using region mappings:`, standardizedRegions);
+    } else {
+      // Fallback: try to determine regions from the actual data
+      const dataRegions = Array.from(new Set(validRows.map(r => mapToParentRegion(r.geographicRegion))));
+      console.log(`🔍 No region mappings found, using data regions:`, dataRegions);
+      standardizedRegions = dataRegions.filter(r => r !== 'national').sort();
+    }
+    
+    // Ensure National is first
+    const orderedRegions = ['national', ...standardizedRegions.filter(r => r !== 'national')];
+    
+    console.log(`🌍 Using ordered regions:`, orderedRegions);
     
     const result = orderedRegions.map(regionName => {
       // For 'national' (lowercase), use all valid filtered rows
@@ -251,16 +280,19 @@ export const RegionalAnalytics: React.FC = () => {
         ? validRows
         : validRows.filter(r => {
           const parentRegion = mapToParentRegion(r.geographicRegion);
-          return parentRegion === regionName.toLowerCase();
+          // Map the regionName to its parent region for comparison
+          const targetParentRegion = mapToParentRegion(regionName);
+          return parentRegion === targetParentRegion;
         });
       
       console.log(`🔍 Filtering for region "${regionName}": found ${regionRows.length} rows`);
       console.log(`🔍 Available regions in data:`, Array.from(new Set(validRows.map(r => r.geographicRegion).filter(Boolean))));
-      console.log(`🔍 Region mapping for ${regionName}:`, validRows.slice(0, 3).map(r => ({
+      const targetParentRegion = mapToParentRegion(regionName);
+      console.log(`🔍 Region mapping for ${regionName} (target parent: ${targetParentRegion}):`, validRows.slice(0, 3).map(r => ({
         original: r.geographicRegion,
         parentRegion: mapToParentRegion(r.geographicRegion),
-        target: regionName.toLowerCase(),
-        matches: mapToParentRegion(r.geographicRegion) === regionName.toLowerCase()
+        target: targetParentRegion,
+        matches: mapToParentRegion(r.geographicRegion) === targetParentRegion
       })));
       if (regionRows.length > 0) {
         console.log(`🔍 Sample rows for ${regionName}:`, regionRows.slice(0, 2).map(r => ({
@@ -321,6 +353,94 @@ export const RegionalAnalytics: React.FC = () => {
     console.log(`✅ Regional comparison data calculated:`, result);
     return result;
   }, [filtered, regionMappings]);
+
+  // Build provenance (mapping summary) for tooltips and drawer
+  const { regionTooltips, provenanceDetails } = useMemo(() => {
+    const tooltips: Record<string, string> = {};
+    const details: Record<string, { total: number; bySource: Record<string, number>; sourceRegions: Record<string, number>; bySourceRegions: Record<string, Record<string, number>> } > = {};
+
+    if (!regionalComparisonData || regionalComparisonData.length === 0) {
+      return { regionTooltips: tooltips, provenanceDetails: details };
+    }
+
+    // Recreate validRows and orderedRegions logic for consistent grouping
+    const validRows = filtered.filter(r => {
+      const hasValidTCC = Number(r.tcc_p50) > 0 || Number(r.tcc_p25) > 0 || Number(r.tcc_p75) > 0 || Number(r.tcc_p90) > 0;
+      const hasValidCF = Number(r.cf_p50) > 0 || Number(r.cf_p25) > 0 || Number(r.cf_p75) > 0 || Number(r.cf_p90) > 0;
+      const hasValidWRVU = Number(r.wrvu_p50) > 0 || Number(r.wrvu_p25) > 0 || Number(r.wrvu_p75) > 0 || Number(r.wrvu_p90) > 0;
+      return hasValidTCC || hasValidCF || hasValidWRVU;
+    });
+
+    const mapToParentRegion = (region: string): string => {
+      if (!region || region.toLowerCase() === 'national') return 'national';
+      const lower = region.toLowerCase().trim();
+      if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || lower.includes('north central') || lower.includes('new england') || lower.includes('atlantic')) {
+        return 'northeast';
+      } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se') || lower.includes('south central') || lower.includes('south') || lower.includes('gulf')) {
+        return 'south';
+      } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('nc') || lower.includes('great lakes') || lower.includes('central') || lower.includes('plains')) {
+        return 'midwest';
+      } else if (lower.includes('west') || lower.includes('western') || lower.includes('southwest') || lower.includes('sw') || lower.includes('pacific') || lower.includes('mountain')) {
+        return 'west';
+      }
+      return lower;
+    };
+
+    // Build defined mapping lookup: parent -> source -> Set(sourceRegion)
+    const definedByParent: Record<string, Record<string, Set<string>>> = {};
+    (regionMappings || []).forEach((m: any) => {
+      // Normalize parent to our parent-region vocabulary (midwestern -> midwest, etc.)
+      const parent = mapToParentRegion(String(m.standardizedName || ''));
+      if (!definedByParent[parent]) definedByParent[parent] = {};
+      (m.sourceRegions || []).forEach((sr: any) => {
+        const src = String(sr.surveySource || 'Unknown');
+        const name = String(sr.name || sr.region || '').toLowerCase();
+        if (!definedByParent[parent][src]) definedByParent[parent][src] = new Set<string>();
+        if (name) definedByParent[parent][src].add(name);
+      });
+    });
+
+    const regions = regionalComparisonData.map(r => r.region);
+    regions.forEach(regionName => {
+      const parent = mapToParentRegion(regionName);
+      const rows = parent === 'national' ? validRows : validRows.filter(r => mapToParentRegion(r.geographicRegion) === parent);
+      const bySource: Record<string, number> = {};
+      const srcRegions: Record<string, number> = {};
+      const bySourceRegions: Record<string, Record<string, number>> = {};
+      rows.forEach(r => {
+        const src = String(r.surveySource || 'Unknown');
+        bySource[src] = (bySource[src] || 0) + 1;
+        const rg = String(r.geographicRegion || 'Unknown');
+        srcRegions[rg] = (srcRegions[rg] || 0) + 1;
+        if (!bySourceRegions[src]) bySourceRegions[src] = {};
+        bySourceRegions[src][rg] = (bySourceRegions[src][rg] || 0) + 1;
+      });
+
+      // Merge in defined mappings with zero counts where missing
+      const definedForParent = definedByParent[parent] || {};
+      Object.entries(definedForParent).forEach(([src, set]) => {
+        if (!bySource[src]) bySource[src] = 0;
+        if (!bySourceRegions[src]) bySourceRegions[src] = {};
+        Array.from(set).forEach(regionLabel => {
+          const prettyKey = regionLabel; // already lowercased in defined map
+          if (bySourceRegions[src][prettyKey] === undefined) {
+            bySourceRegions[src][prettyKey] = 0;
+          }
+        });
+      });
+
+      const topSources = Object.entries(bySource)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+
+      tooltips[regionName] = rows.length > 0 ? `Sources • ${topSources}` : 'No mapped rows';
+      details[regionName] = { total: rows.length, bySource, sourceRegions: srcRegions, bySourceRegions };
+    });
+
+    return { regionTooltips: tooltips, provenanceDetails: details };
+  }, [regionalComparisonData, filtered, regionMappings]);
 
   if (loading) {
     return (
@@ -473,7 +593,7 @@ export const RegionalAnalytics: React.FC = () => {
                     }}
                   />
                 )}
-                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue)}
+                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue, 100)}
                 sx={{
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -643,7 +763,11 @@ export const RegionalAnalytics: React.FC = () => {
         {/* Regional Comparison Data */}
         {selectedSpecialty && regionalComparisonData.length > 0 && (
           <div className="mt-6">
-            <RegionalComparison data={regionalComparisonData} />
+            <RegionalComparison 
+              data={regionalComparisonData}
+              regionTooltips={regionTooltips}
+              onRegionInfoClick={(region) => { setProvenanceRegion(region); setProvenanceOpen(true); }}
+            />
           </div>
         )}
 
@@ -659,6 +783,71 @@ export const RegionalAnalytics: React.FC = () => {
             <p className="text-gray-600">No compensation data available for {formatSpecialtyForDisplay(selectedSpecialty)} across the selected regions.</p>
           </div>
         )}
+        {/* Provenance Drawer */}
+        <Drawer anchor="right" open={provenanceOpen} onClose={() => setProvenanceOpen(false)}>
+          <div style={{ width: 380 }} className="p-4">
+            {(() => {
+              const pretty = (s: string) => s
+                ? s.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+                : '';
+              const label = pretty(provenanceRegion);
+              const isNational = (label || '').toLowerCase() === 'national';
+              return (
+                <>
+                  <Typography 
+                    variant="h6" 
+                    className="mb-1" 
+                    sx={{ fontWeight: 700, color: isNational ? '#7C3AED' : undefined }}
+                  >
+                    {label}
+                  </Typography>
+                  <Typography variant="body2" className="text-gray-600 mb-4">Region mapping details</Typography>
+                </>
+              );
+            })()}
+            <Divider />
+            <div className="mt-4">
+              {provenanceRegion && provenanceDetails[provenanceRegion] ? (
+                <>
+                  <Typography variant="subtitle2" className="mb-2">Survey → Source Regions</Typography>
+                  <List dense>
+                    {Object.entries(provenanceDetails[provenanceRegion].bySource)
+                      .sort((a,b)=> b[1]-a[1])
+                      .map(([src, total]) => (
+                        <li key={src} className="mb-2">
+                          <Typography variant="body2" className="font-medium">{src} • Rows: {total}</Typography>
+                          <List dense>
+                            {Object.entries(provenanceDetails[provenanceRegion].bySourceRegions?.[src] || {})
+                              .sort((a,b)=> b[1]-a[1])
+                              .slice(0,15)
+                              .map(([rg, count]) => {
+                                const totalAll = provenanceDetails[provenanceRegion].total || 0;
+                                const pct = totalAll > 0 ? Math.round((count / totalAll) * 100) : 0;
+                                const prettyRg = rg.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                                const isNational = rg.toLowerCase() === 'national';
+                                const isZero = count === 0;
+                                return (
+                                  <ListItem key={`${src}-${rg}`} sx={{ py: 0 }}>
+                                    <ListItemText 
+                                      primaryTypographyProps={{ fontWeight: isNational ? 700 : 500, color: isZero ? '#6B7280' : undefined }}
+                                      primary={prettyRg}
+                                      secondary={`Rows: ${count}${pct ? ` (${pct}%)` : ''}`}
+                                    />
+                                </ListItem>
+                                );
+                              })}
+                          </List>
+                          <Divider className="my-1" />
+                        </li>
+                      ))}
+                  </List>
+                </>
+              ) : (
+                <Typography variant="body2" className="text-gray-600">No mapping details available.</Typography>
+              )}
+            </div>
+          </div>
+        </Drawer>
       </div>
     </div>
   );

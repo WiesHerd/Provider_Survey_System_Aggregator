@@ -85,6 +85,43 @@ interface ChartDataItem {
 
 const COLORS = ['#6A5ACD', '#8B7DD6', '#A89DE0', '#C5BDE9', '#E2D1F2'];
 
+// Helper functions for safe field access with multiple possible field names
+const getSpecialtyField = (row: any): string => {
+  return String(row.specialty || row.normalizedSpecialty || row.Specialty || '');
+};
+
+const getRegionField = (row: any): string => {
+  return String(
+    row.geographicRegion || 
+    row.geographic_region || 
+    row.Region || 
+    row.region || 
+    row.Geographic_Region || 
+    row['Geographic Region'] || 
+    ''
+  );
+};
+
+const getProviderTypeField = (row: any): string => {
+  return String(
+    row.providerType || 
+    row.provider_type || 
+    row.ProviderType || 
+    row.Provider_Type || 
+    row['Provider Type'] || 
+    row.Type || 
+    ''
+  );
+};
+
+const getSurveySourceField = (row: any): string => {
+  return String(row.surveySource || row.type || row.surveyProvider || '');
+};
+
+const getYearField = (row: any): string => {
+  return String(row.surveyYear || row.year || '');
+};
+
 const CustomReports: React.FC<CustomReportsProps> = ({ 
   data: propData, 
   title = 'Custom Reports' 
@@ -152,6 +189,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log('🔍 Custom Reports: Starting data load...');
         setLoading(true);
         
         // Load specialty mappings first
@@ -160,6 +198,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         
         // Get all surveys first
         const surveys = await dataService.getAllSurveys();
+        console.log('🔍 Custom Reports: Loaded surveys:', surveys.length);
         
         // Collect all data from all surveys with survey source information
         const allData: ISurveyRow[] = [];
@@ -167,26 +206,22 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         for (const survey of surveys) {
           try {
             const surveyData = await dataService.getSurveyData(survey.id);
-            if (surveyData.rows) {
+            if (surveyData.rows && surveyData.rows.length > 0) {
               const surveySource = (survey as any).type || 'Unknown';
+              const surveyYear = (survey as any).year || (survey as any).surveyYear || 'Unknown';
               
-              // Apply the same variable-based transformation as RegionalAnalytics
-              const transformedRows = surveyData.rows.map(row => {
+              // Transform data with proper TCC field population based on variable type
+              const transformedRows = surveyData.rows.map((row: any) => {
                 const transformedRow: any = {
                   ...row,
                   surveySource: surveySource,
+                  surveyYear: surveyYear,
                   specialty: row.specialty || row.normalizedSpecialty || '',
                   geographicRegion: row.geographic_region || row.region || row.geographicRegion || 
                                   row.Geographic_Region || row.Region || row['Geographic Region'] || '',
                   providerType: row.providerType || row.provider_type || row.ProviderType || 
                               row.Provider_Type || row['Provider Type'] || row.Type || '',
-                  // Preserve variable field for variable-based data
-                  variable: row.variable || '',
-                  p25: row.p25 || 0,
-                  p50: row.p50 || 0,
-                  p75: row.p75 || 0,
-                  p90: row.p90 || 0,
-                  // Initialize compensation fields (will be populated based on variable)
+                  // Initialize all fields to 0
                   tcc_p25: 0,
                   tcc_p50: 0,
                   tcc_p75: 0,
@@ -199,77 +234,128 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   wrvu_p50: 0,
                   wrvu_p75: 0,
                   wrvu_p90: 0,
-                  n_orgs: 0,
-                  n_incumbents: 0
                 };
 
-                // Handle variable-based data structure
-                // NEW APPROACH: Keep variable-based rows separate instead of flattening
+                // If we have variable-based data, populate the appropriate fields
                 if (row.variable) {
                   const variable = String(row.variable).toLowerCase();
-                  const p25 = Number(row.p25) || 0;
-                  const p50 = Number(row.p50) || 0;
-                  const p75 = Number(row.p75) || 0;
-                  const p90 = Number(row.p90) || 0;
+                  // Parse currency values (remove $ and commas)
+                  const p25 = parseFloat(String(row.p25 || 0).replace(/[$,]/g, '')) || 0;
+                  const p50 = parseFloat(String(row.p50 || 0).replace(/[$,]/g, '')) || 0;
+                  const p75 = parseFloat(String(row.p75 || 0).replace(/[$,]/g, '')) || 0;
+                  const p90 = parseFloat(String(row.p90 || 0).replace(/[$,]/g, '')) || 0;
                   
-                  // Debug variable classification
-                  if (Math.random() < 0.1) { // Log 10% of rows for debugging
-                    // Debug logging removed for performance
+                  // Skip this row entirely if values are too small (conversion factors, not compensation)
+                  if (p50 < 1000) {
+                    return transformedRow; // Return empty row, will be filtered out later
                   }
                   
-                  // For variable-based data, populate the appropriate fields based on variable type
-                  // This preserves the original row structure instead of flattening
+                  // Debug raw percentile values
+                  if (Math.random() < 0.01) { // Log 1% of rows for debugging
+                    console.log('🔍 Custom Reports: Raw percentile values:', { p25, p50, p75, p90, variable, row });
+                    console.log('🔍 Custom Reports: Variable classification check:', {
+                      variable,
+                      isTCC: (variable.includes('tcc') || variable.includes('total') || variable.includes('cash') || variable.includes('salary') || variable.includes('compensation') || variable.includes('base salary') || variable.includes('base pay')) && !variable.includes('per') && !variable.includes('/') && !variable.includes('ratio') && !variable.includes('conversion'),
+                      isCF: variable.includes('conversion') || variable.includes(' cf ') || variable.includes('_cf_') || variable.includes('factor') || variable.includes('conversion factor') || variable.includes('per rvu') || variable.includes('per work rvu') || variable.includes('per wrvu') || variable.includes('/rvu') || variable.includes('/ rvu') || variable.includes('/wrvu') || variable.includes('/ wrvu') || (variable.includes('tcc') && (variable.includes('per') || variable.includes('/'))) || variable.includes('tcc per') || variable.includes('tcc/') || variable.includes('compensation per') || variable.includes('dollars per'),
+                      isWRVU: variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work'),
+                      hasPerOrSlash: variable.includes('per') || variable.includes('/'),
+                      hasRatioOrConversion: variable.includes('ratio') || variable.includes('conversion')
+                    });
+                  }
                   
                   // Check CF patterns FIRST (most specific) - TCC per wRVU ratios
-                  if (variable.toLowerCase().includes('conversion') || 
-                      variable.toLowerCase().includes(' cf ') ||
-                      variable.toLowerCase().includes('_cf_') ||
-                      variable.toLowerCase().includes('factor') || 
-                      variable.toLowerCase().includes('conversion factor') ||
-                      variable.toLowerCase().includes('per rvu') || 
-                      variable.toLowerCase().includes('per work rvu') || 
-                      variable.toLowerCase().includes('per wrvu') ||
-                      variable.toLowerCase().includes('/rvu') ||
-                      variable.toLowerCase().includes('/ rvu') ||
-                      variable.toLowerCase().includes('/wrvu') ||
-                      variable.toLowerCase().includes('/ wrvu') ||
-                      // CRITICAL: Catch TCC per wRVU patterns that were being misclassified
-                      (variable.toLowerCase().includes('tcc') && (variable.toLowerCase().includes('per') || variable.toLowerCase().includes('/'))) ||
-                      variable.toLowerCase().includes('tcc per') ||
-                      variable.toLowerCase().includes('tcc/') ||
-                      variable.toLowerCase().includes('compensation per') ||
-                      variable.toLowerCase().includes('dollars per')) {
+                  if (variable.includes('conversion') || 
+                      variable.includes(' cf ') ||
+                      variable.includes('_cf_') ||
+                      variable.includes('factor') || 
+                      variable.includes('conversion factor') ||
+                      variable.includes('per rvu') || 
+                      variable.includes('per work rvu') || 
+                      variable.includes('per wrvu') ||
+                      variable.includes('/rvu') ||
+                      variable.includes('/ rvu') ||
+                      variable.includes('/wrvu') ||
+                      variable.includes('/ wrvu') ||
+                      (variable.includes('tcc') && (variable.includes('per') || variable.includes('/'))) ||
+                      variable.includes('tcc per') ||
+                      variable.includes('tcc/') ||
+                      variable.includes('compensation per') ||
+                      variable.includes('dollars per')) {
                     transformedRow.cf_p25 = p25;
                     transformedRow.cf_p50 = p50;
                     transformedRow.cf_p75 = p75;
                     transformedRow.cf_p90 = p90;
                   }
                   // Check wRVU patterns SECOND - Work RVUs (before TCC to avoid conflicts)
-                  else if (variable.toLowerCase().includes('wrvu') || variable.toLowerCase().includes('rvu') || variable.toLowerCase().includes('work')) {
+                  else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
                     transformedRow.wrvu_p25 = p25;
                     transformedRow.wrvu_p50 = p50;
                     transformedRow.wrvu_p75 = p75;
                     transformedRow.wrvu_p90 = p90;
                   }
                   // Check TCC patterns LAST (least specific) - Raw TCC compensation
-                  else if (variable.toLowerCase().includes('tcc') || variable.toLowerCase().includes('total') || variable.toLowerCase().includes('cash')) {
+                  // BUT exclude conversion factor patterns that contain 'per' or ratios
+                  // AND ensure values are in reasonable compensation range (not ratios)
+                  else if ((variable.includes('tcc') || 
+                           variable.includes('total') || 
+                           variable.includes('cash') ||
+                           variable.includes('salary') ||
+                           variable.includes('compensation') ||
+                           variable.includes('base salary') ||
+                           variable.includes('base pay')) &&
+                           !variable.includes('per') && 
+                           !variable.includes('/') &&
+                           !variable.includes('ratio') &&
+                           !variable.includes('conversion') &&
+                           p50 > 1000) { // Only process if P50 is > $1000 (reasonable compensation)
                     transformedRow.tcc_p25 = p25;
                     transformedRow.tcc_p50 = p50;
                     transformedRow.tcc_p75 = p75;
                     transformedRow.tcc_p90 = p90;
                   }
+                } else {
+                  // If no variable, try direct field access (for pre-processed data)
+                  // But only use values that are in reasonable compensation range
+                  const tcc_p50 = Number(row.tcc_p50) || 0;
+                  if (tcc_p50 > 1000) { // Only use if reasonable compensation amount
+                    transformedRow.tcc_p25 = row.tcc_p25 || 0;
+                    transformedRow.tcc_p50 = row.tcc_p50 || 0;
+                    transformedRow.tcc_p75 = row.tcc_p75 || 0;
+                    transformedRow.tcc_p90 = row.tcc_p90 || 0;
+                  }
+                  
+                  transformedRow.cf_p25 = row.cf_p25 || 0;
+                  transformedRow.cf_p50 = row.cf_p50 || 0;
+                  transformedRow.cf_p75 = row.cf_p75 || 0;
+                  transformedRow.cf_p90 = row.cf_p90 || 0;
+                  transformedRow.wrvu_p25 = row.wrvu_p25 || 0;
+                  transformedRow.wrvu_p50 = row.wrvu_p50 || 0;
+                  transformedRow.wrvu_p75 = row.wrvu_p75 || 0;
+                  transformedRow.wrvu_p90 = row.wrvu_p90 || 0;
                 }
 
                 return transformedRow;
               });
               
-              allData.push(...transformedRows);
+              // Filter out empty rows (conversion factors with small values)
+              const validRows = transformedRows.filter(row => 
+                (row.tcc_p50 && row.tcc_p50 > 1000) || 
+                (row.cf_p50 && row.cf_p50 > 0) || 
+                (row.wrvu_p50 && row.wrvu_p50 > 0)
+              );
+              allData.push(...validRows);
             }
           } catch (error) {
           }
         }
         
         if (allData.length > 0) {
+          console.log('🔍 Custom Reports: Loaded data rows:', allData.length);
+          console.log('🔍 Custom Reports: Sample TCC data:', allData.slice(0, 3).map(row => ({
+            specialty: row.specialty,
+            tcc_p50: row.tcc_p50,
+            region: row.geographicRegion
+          })));
           
           setSurveyData(allData);
           
@@ -396,91 +482,176 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Generate chart data based on current configuration
   const chartData = useMemo((): ChartDataItem[] => {
+    console.log('🔍 Custom Reports: Starting chartData generation');
+    console.log('🔍 Custom Reports: Current config:', currentConfig);
+    console.log('🔍 Custom Reports: Survey data length:', surveyData.length);
+    console.log('📊 Initial surveyData count:', surveyData.length);
+    console.log('⚙️ Current config:', {
+      dimension: currentConfig.dimension,
+      metric: currentConfig.metric,
+      metrics: currentConfig.metrics,
+      filters: currentConfig.filters
+    });
     
     if (!surveyData.length) {
+      console.log('❌ No survey data available');
       return [];
     }
 
     // Check if we have metrics selected
     if (!currentConfig.metrics.length && !currentConfig.metric) {
+      console.log('❌ No metrics selected');
       return [];
     }
 
     // Use the first metric for chart display, but collect all metrics for table
     const primaryMetric = currentConfig.metrics.length > 0 ? currentConfig.metrics[0] : currentConfig.metric;
+    console.log('🎯 Primary metric:', primaryMetric);
 
     // Apply filters
     let filteredData = surveyData;
+    console.log('📋 Starting with', filteredData.length, 'rows');
     
     if (currentConfig.filters.specialties.length > 0) {
       const beforeSpecialtyFilter = filteredData.length;
+      console.log('🔍 Applying specialty filter:', currentConfig.filters.specialties);
       
       // Direct raw specialty filtering (NO mapping)
       filteredData = filteredData.filter(row => {
-        const rowSpecialty = String(row.specialty || row.normalizedSpecialty || '');
+        const rowSpecialty = getSpecialtyField(row);
         const matches = currentConfig.filters.specialties.includes(rowSpecialty);
         
+        if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
+          console.log('❌ Specialty filter miss:', { 
+            rowSpecialty, 
+            lookingFor: currentConfig.filters.specialties,
+            row: { specialty: row.specialty, normalizedSpecialty: row.normalizedSpecialty }
+          });
+        }
         
         return matches;
       });
+      
+      console.log('📊 After specialty filter:', beforeSpecialtyFilter, '->', filteredData.length);
     }
     
     if (currentConfig.filters.regions.length > 0) {
       const beforeRegionFilter = filteredData.length;
+      console.log('🔍 Applying region filter:', currentConfig.filters.regions);
+      
       filteredData = filteredData.filter(row => {
-        const region = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
+        const region = getRegionField(row);
         const matches = currentConfig.filters.regions.includes(region);
         
+        if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
+          console.log('❌ Region filter miss:', { 
+            region, 
+            lookingFor: currentConfig.filters.regions,
+            row: { 
+              geographicRegion: row.geographicRegion, 
+              geographic_region: row.geographic_region, 
+              Region: row.Region, 
+              region: row.region 
+            }
+          });
+        }
         
         return matches;
       });
+      
+      console.log('📊 After region filter:', beforeRegionFilter, '->', filteredData.length);
     }
     
     if (currentConfig.filters.surveySources.length > 0) {
       const beforeSourceFilter = filteredData.length;
+      console.log('🔍 Applying survey source filter:', currentConfig.filters.surveySources);
+      
       filteredData = filteredData.filter(row => {
-        const surveySource = String((row as any).surveySource || '');
+        const surveySource = getSurveySourceField(row);
         const matches = currentConfig.filters.surveySources.includes(surveySource);
         
+        if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
+          console.log('❌ Survey source filter miss:', { 
+            surveySource, 
+            lookingFor: currentConfig.filters.surveySources,
+            row: { surveySource: row.surveySource, type: row.type, surveyProvider: row.surveyProvider }
+          });
+        }
         
         return matches;
       });
+      
+      console.log('📊 After survey source filter:', beforeSourceFilter, '->', filteredData.length);
     }
     
     if (currentConfig.filters.providerTypes.length > 0) {
       const beforeProviderTypeFilter = filteredData.length;
+      console.log('🔍 Applying provider type filter:', currentConfig.filters.providerTypes);
+      
       filteredData = filteredData.filter(row => {
-        const providerType = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
+        const providerType = getProviderTypeField(row);
         const matches = currentConfig.filters.providerTypes.includes(providerType);
         
+        if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
+          console.log('❌ Provider type filter miss:', { 
+            providerType, 
+            lookingFor: currentConfig.filters.providerTypes,
+            row: { 
+              providerType: row.providerType, 
+              provider_type: row.provider_type, 
+              ProviderType: row.ProviderType 
+            }
+          });
+        }
         
         return matches;
       });
+      
+      console.log('📊 After provider type filter:', beforeProviderTypeFilter, '->', filteredData.length);
     }
     
     if (currentConfig.filters.years.length > 0) {
       const beforeYearFilter = filteredData.length;
+      console.log('🔍 Applying year filter:', currentConfig.filters.years);
+      
       filteredData = filteredData.filter(row => {
-        const year = String(row.surveyYear || '');
+        const year = getYearField(row);
         // If year is empty, include it (don't filter out data without year info)
-        if (!year || year === '') {
+        if (!year || year === '' || year === 'Unknown') {
           return true;
         }
         const matches = currentConfig.filters.years.includes(year);
         
+        if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
+          console.log('❌ Year filter miss:', { 
+            year, 
+            lookingFor: currentConfig.filters.years,
+            row: { surveyYear: row.surveyYear, year: row.year }
+          });
+        }
         
         return matches;
       });
+      
+      console.log('📊 After year filter:', beforeYearFilter, '->', filteredData.length);
     }
 
     // CRITICAL FIX: Handle multiple metrics by including ALL relevant data types
     const beforeVariableFilter = filteredData.length;
+    console.log('🔍 Applying variable/metric filter. Before:', beforeVariableFilter);
     
     // Check if we have multiple metrics that require different data types
     const hasTccMetrics = currentConfig.metrics.some(m => m.includes('tcc') && !m.includes('cf'));
     const hasWrvuMetrics = currentConfig.metrics.some(m => m.includes('wrvu'));
     const hasCfMetrics = currentConfig.metrics.some(m => m.includes('cf'));
     
+    console.log('📊 Metric requirements:', { hasTccMetrics, hasWrvuMetrics, hasCfMetrics });
+    
+    // Log sample variables to understand data structure
+    if (filteredData.length > 0) {
+      const sampleVariables = [...new Set(filteredData.slice(0, 10).map(row => String((row as any).variable || '').toLowerCase()))];
+      console.log('📊 Sample variables in filtered data:', sampleVariables);
+    }
     
     if (hasTccMetrics || hasWrvuMetrics || hasCfMetrics) {
       // Include ALL relevant data types when multiple metrics are selected
@@ -489,8 +660,21 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         const p50Value = (row as any).p50 || row.tcc_p50 || 0;
         
         // Check if this row matches any of the required data types
-        const isTccData = hasTccMetrics && (variable === 'tcc' || variable === 'total cash compensation' || variable === 'compensation')
-                          && !variable.includes('per') && !variable.includes('/') && !variable.includes('work rvu');
+        const isTccData = hasTccMetrics && (
+          variable === 'tcc' || 
+          variable === 'total cash compensation' || 
+          variable === 'compensation' ||
+          variable === 'base salary' ||
+          variable === 'total compensation' ||
+          variable === 'total cash comp' ||
+          variable === 'salary' ||
+          variable === 'base pay' ||
+          variable === 'total pay' ||
+          variable.includes('tcc') ||
+          variable.includes('total cash') ||
+          variable.includes('compensation') ||
+          variable.includes('salary')
+        ) && !variable.includes('per') && !variable.includes('/') && !variable.includes('work rvu') && !variable.includes('benefits');
         
         const isWrvuData = hasWrvuMetrics && (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work'));
         
@@ -499,29 +683,45 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         
         const matches = isTccData || isWrvuData || isCfData;
         
+        if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
+          console.log('❌ Variable filter miss:', { 
+            variable, 
+            isTccData, 
+            isWrvuData, 
+            isCfData, 
+            hasTccMetrics, 
+            hasWrvuMetrics, 
+            hasCfMetrics,
+            p50Value
+          });
+        }
         
         return matches;
       });
+      
+      console.log('📊 After variable filter:', beforeVariableFilter, '->', filteredData.length);
     }
 
     
 
     // Group by dimension and aggregate metric
+    let rowCount = 0;
     const grouped = filteredData.reduce((acc, row) => {
+      rowCount++;
       let dimensionValue = 'Unknown';
       
-      // Handle special cases for field name mapping
+      // Handle special cases for field name mapping using helper functions
       if (currentConfig.dimension === 'region') {
-        dimensionValue = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || 'Unknown');
+        dimensionValue = getRegionField(row) || 'Unknown';
       } else if (currentConfig.dimension === 'surveySource') {
-        dimensionValue = String((row as any).surveySource || 'Unknown');
+        dimensionValue = getSurveySourceField(row) || 'Unknown';
       } else if (currentConfig.dimension === 'specialty') {
         // Create composite key for specialty to ensure uniqueness when filters are applied
-        const specialty = String(row.specialty || row.normalizedSpecialty || 'Unknown');
-        const surveySource = String((row as any).surveySource || '');
-        const region = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
-        const providerType = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
-        const year = String(row.surveyYear || '');
+        const specialty = getSpecialtyField(row) || 'Unknown';
+        const surveySource = getSurveySourceField(row);
+        const region = getRegionField(row);
+        const providerType = getProviderTypeField(row);
+        const year = getYearField(row);
         const variable = String((row as any).variable || '');
         
         // Create composite key that includes all relevant dimensions INCLUDING variable
@@ -535,11 +735,11 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       if (currentConfig.secondaryDimension) {
         let secondaryValue = '';
         if (currentConfig.secondaryDimension === 'region') {
-          secondaryValue = String((row as any).geographic_region || (row as any).Region || row.region || row.geographicRegion || '');
+          secondaryValue = getRegionField(row);
         } else if (currentConfig.secondaryDimension === 'surveySource') {
-          secondaryValue = String((row as any).surveySource || '');
+          secondaryValue = getSurveySourceField(row);
         } else if (currentConfig.secondaryDimension === 'providerType') {
-          secondaryValue = String((row as any).providerType || (row as any).provider_type || (row as any).ProviderType || (row as any).Provider_Type || (row as any)['Provider Type'] || (row as any).Type || '');
+          secondaryValue = getProviderTypeField(row);
         } else {
           secondaryValue = String(row[currentConfig.secondaryDimension as keyof ISurveyRow] || '');
         }
@@ -566,30 +766,25 @@ const CustomReports: React.FC<CustomReportsProps> = ({
         };
       }
       
-      // Process each selected metric with proper data type matching
+      // Process each selected metric using direct field access (same as benchmarking screen)
       selectedMetrics.forEach(metric => {
-        const variable = String((row as any).variable || '').toLowerCase();
-        let metricValue = 0;
+        // Direct access to pre-populated fields - no variable matching needed
+        const metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
         
-        // Match the metric to the correct data type
-        if (metric.includes('tcc') && !metric.includes('cf')) {
-          // TCC metrics should only use TCC compensation data
-          if (variable === 'tcc' || variable === 'total cash compensation' || variable === 'compensation') {
-            metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
-          }
-        } else if (metric.includes('wrvu')) {
-          // wRVU metrics should only use Work RVU data
-          if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
-            metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
-          }
-        } else if (metric.includes('cf')) {
-          // CF metrics should only use conversion factor data
-          if (variable.includes('per') || variable.includes('/') || variable.includes('conversion') || variable.includes('factor')) {
-            metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
-          }
-        } else {
-          // Fallback to direct value
-          metricValue = Number(row[metric as keyof ISurveyRow]) || 0;
+        // Debug logging for metric processing
+        if (rowCount < 5) {
+          console.log(`🔍 Processing metric: ${metric} = ${metricValue}`, 'Raw row data:', row);
+          console.log(`🔍 Available fields in row:`, Object.keys(row));
+          console.log(`🔍 TCC fields check:`, {
+            tcc_p25: row.tcc_p25,
+            tcc_p50: row.tcc_p50,
+            tcc_p75: row.tcc_p75,
+            tcc_p90: row.tcc_p90,
+            p25: row.p25,
+            p50: row.p50,
+            p75: row.p75,
+            p90: row.p90
+          });
         }
       
         if (metricValue > 0) {
@@ -708,7 +903,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
           metricValues: metricValues
         };
       })
-      .filter(item => item.value > 0);
+      .filter(item => item.value > 1000); // Only show items with reasonable compensation values
 
     // CRITICAL FIX: Proper aggregation that combines metrics from different data types
     // Group by specialty name only (not composite key) to aggregate all metrics for each specialty
@@ -757,21 +952,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
     const allData = Object.values(aggregatedData)
       .sort((a, b) => b.value - a.value);
     
-    
-    
-    
+    console.log('📊 Final chart data count:', allData.length);
+    console.log('📊 Sample chart data:', allData.slice(0, 3));
     
     // For specialty dimension, require at least one specialty to be selected
     if (currentConfig.dimension === 'specialty') {
       if (currentConfig.filters.specialties.length === 0) {
+        console.log('❌ No specialty filter applied - returning empty data');
         return []; // Return empty data when no specialty filter is applied
       } else {
+        console.log('✅ Returning filtered specialty data:', allData.length, 'items');
         return allData; // Show filtered specialties
       }
     } else {
+      console.log('✅ Returning other dimension data:', allData.slice(0, 20).length, 'items (limited to 20)');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
-  }, [surveyData, currentConfig, specialtyMappings]);
+  }, [surveyData, currentConfig]);
 
   // Table sort: default to value desc for table-first clarity
   const [tableSortDesc, setTableSortDesc] = useState(true);
@@ -1045,8 +1242,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </Typography>
             </div>
             <EChartsBar 
+              key={`chart-${currentConfig.metrics.join('-')}`} // Force re-render when metrics change
               data={chartData}
-              metrics={currentConfig.metrics}
+              metrics={currentConfig.metrics} // Show all selected metrics
               chartHeight={600}
             />
           </div>
@@ -1064,8 +1262,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </Typography>
             </div>
             <EChartsCF 
+              key={`cf-chart-${currentConfig.metrics.join('-')}`} // Force re-render when metrics change
               data={chartData}
-              metrics={currentConfig.metrics}
+              metrics={currentConfig.metrics} // Show all selected metrics
               chartHeight={600}
             />
         </div>

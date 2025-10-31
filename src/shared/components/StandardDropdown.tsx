@@ -129,7 +129,7 @@ export const StandardDropdown: React.FC<StandardDropdownProps> = memo(({
         filterOptions={filterOptions ? (options: string[], { inputValue }: { inputValue: string }) => 
           filterOptions(options, inputValue) : 
           useAdvancedSearch ? (options: string[], { inputValue }: { inputValue: string }) => 
-            filterSpecialtyOptions(options, inputValue, 20) : undefined}
+            filterSpecialtyOptions(options, inputValue, 100) : undefined}
         clearOnBlur={false}
         blurOnSelect={true}
         noOptionsText="No options found"
