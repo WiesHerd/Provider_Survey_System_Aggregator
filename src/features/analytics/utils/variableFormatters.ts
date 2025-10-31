@@ -330,6 +330,19 @@ export const mapVariableNameToStandard = (normalizedName: string): string => {
     'compensation_per_wrvu': 'tcc_per_work_rvu',
     'total_cash_compensation_per_work_rvus': 'tcc_per_work_rvu',  // CRITICAL: Add Gallagher mapping
     'total_cash_compensation_per_work_rvu': 'tcc_per_work_rvu',   // CRITICAL: Add Gallagher mapping
+    // MGMA "to" patterns - CRITICAL for MGMA CF detection
+    'compensation_to_work_rvus': 'tcc_per_work_rvu',
+    'compensation_to_work_rvu': 'tcc_per_work_rvu',
+    'compensation_to_wrvu': 'tcc_per_work_rvu',
+    'compensation_to_wrvus': 'tcc_per_work_rvu',
+    'comp_to_work_rvu': 'tcc_per_work_rvu',
+    'comp_to_wrvu': 'tcc_per_work_rvu',
+    'comp_to_work_rvus': 'tcc_per_work_rvu',
+    'total_compensation_to_work_rvus': 'tcc_per_work_rvu',
+    'total_comp_to_work_rvus': 'tcc_per_work_rvu',
+    'tcc_to_work_rvu': 'tcc_per_work_rvu',
+    'compensation_to_work_rvus_ratio': 'tcc_per_work_rvu', // MGMA specific
+    'compensation_work_rvus_ratio': 'tcc_per_work_rvu', // MGMA specific
     
     // Base Salary variations
     'base_salary': 'base_salary',

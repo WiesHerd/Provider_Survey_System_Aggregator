@@ -17,6 +17,7 @@ import { VariableDiscoveryService } from '../services/variableDiscoveryService';
 import { VariableFormattingService } from '../services/variableFormattingService';
 import { VariableFormattingDialog } from './VariableFormattingDialog';
 import { DEFAULT_VARIABLES } from '../types/variables';
+import { logMGMA } from '../utils/diagnostics';
 
 interface SurveyAnalyticsProps {
   providerTypeFilter?: 'PHYSICIAN' | 'APP';
@@ -67,6 +68,15 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         const discovered = await service.discoverAllVariables();
         const variableNames = discovered.map(v => v.normalizedName);
         setAvailableVariables(variableNames);
+        
+        // Run MGMA diagnostic if requested (can be triggered from console or URL)
+        if (window.location.search.includes('diagnose=mgma')) {
+          console.log('🔍 Running MGMA diagnostic...');
+          await logMGMA();
+        }
+        
+        // Make diagnostic available globally for easy console access
+        (window as any).diagnoseMGMA = logMGMA;
         
         // Keep pre-selected common variables, but update available variables
         console.log('🔍 SurveyAnalytics: Discovered variables:', variableNames);

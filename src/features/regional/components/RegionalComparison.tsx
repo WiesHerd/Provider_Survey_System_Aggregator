@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Typography, Alert } from '@mui/material';
+import { Box, Typography, Alert, Tooltip, IconButton } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { RegionalComparisonProps, RegionalData } from '../types/regional';
 import { REGIONAL_METRICS, PERCENTILES } from '../utils/regionalCalculations';
 
@@ -15,6 +16,8 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
   data,
   onRegionClick,
   onMetricClick,
+  regionTooltips,
+  onRegionInfoClick,
   className = ''
 }) => {
   const regionNames = data.map(region => region.region);
@@ -78,7 +81,14 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
                   </th>
                   {regionNames.map(region => (
                     <th key={region} className="text-center py-4 px-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                      {region}
+                      <div className="inline-flex items-center justify-center space-x-1">
+                        <span>{region}</span>
+                        <Tooltip title={regionTooltips?.[region] || ''} placement="top" arrow>
+                          <IconButton size="small" onClick={() => onRegionInfoClick?.(region)}>
+                            <InfoOutlinedIcon fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      </div>
                     </th>
                   ))}
                 </tr>

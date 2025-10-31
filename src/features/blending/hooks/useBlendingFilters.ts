@@ -170,7 +170,14 @@ export const useBlendingFilters = (allData: any[]) => {
         }
       }
 
-      const matchesSpecialty = !specialtySearch || specialtyValue.toLowerCase().includes(specialtySearch.toLowerCase());
+      const matchesSpecialty = !specialtySearch || (() => {
+        // Use flexible word matching for specialty search
+        const searchTerms = specialtySearch.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
+        if (searchTerms.length === 0) return true;
+        
+        const specialtyText = specialtyValue.toLowerCase();
+        return searchTerms.every(term => specialtyText.includes(term));
+      })();
 
       return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
     });

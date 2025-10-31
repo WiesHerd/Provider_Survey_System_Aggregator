@@ -274,6 +274,11 @@ export interface ColumnValidationResult {
   suggestions: string[];
   errors: string[];
   format?: 'normalized' | 'wide' | 'wide_variable';
+  // Exception-gating diagnostics
+  ambiguousTargets?: Record<string, string[]>;
+  duplicateTargets?: string[];
+  unknownHeaders?: string[];
+  unitWarnings?: string[];
 }
 
 /**
@@ -288,6 +293,17 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
   const mappedColumns: Record<string, string> = {};
   const suggestions: string[] = [];
   const errors: string[] = [];
+  const ambiguousTargets: Record<string, string[]> = {};
+  const duplicateTargets: string[] = [];
+  const unitWarnings: string[] = [];
+
+  // Heuristic: flag headers with currency/unit hints that may need confirmation
+  detectedColumns.forEach(col => {
+    const lower = col.toLowerCase();
+    if (col.includes('$') || lower.includes(' usd') || lower.includes('(usd)') || lower.includes('/wrvu')) {
+      unitWarnings.push(col);
+    }
+  });
 
   // First, detect if this is a normalized format file
   const isNormalizedFormat = NORMALIZED_REQUIRED_COLUMNS.every(col => 
@@ -310,6 +326,10 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       }
     });
 
+    // Unknown headers = those not part of normalized schema
+    const normalizedSet = new Set<string>([...NORMALIZED_REQUIRED_COLUMNS]);
+    const unknownHeaders = detectedColumns.filter(h => !normalizedSet.has(h));
+
     return {
       isValid: missingColumns.length === 0,
       detectedColumns,
@@ -317,7 +337,11 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       mappedColumns,
       suggestions,
       errors,
-      format: 'normalized'
+      format: 'normalized',
+      ambiguousTargets,
+      duplicateTargets,
+      unknownHeaders,
+      unitWarnings
     };
   }
 
@@ -343,6 +367,14 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       errors.push('No variable columns found (expected tcc_p*, wrvu_p*, or cf_p* columns)');
     }
 
+    // Identify unknown headers for wide-variable pattern (permit variable families)
+    const knownPrefixes = ['tcc_p', 'wrvu_p', 'cf_p'];
+    const knownBase = new Set<string>(['specialty','provider_type','geographic_region']);
+    const unknownHeaders = detectedColumns.filter(h => {
+      const lower = h.toLowerCase();
+      return !knownBase.has(lower) && !knownPrefixes.some(p => lower.startsWith(p));
+    });
+
     return {
       isValid: missingColumns.length === 0 && errors.length === 0,
       detectedColumns,
@@ -350,7 +382,11 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       mappedColumns,
       suggestions,
       errors,
-      format: 'wide_variable'
+      format: 'wide_variable',
+      ambiguousTargets,
+      duplicateTargets,
+      unknownHeaders,
+      unitWarnings
     };
   }
 
@@ -399,6 +435,9 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
       
       if (compensationColumns.length > 0) {
         mappedColumns[requiredColumn] = compensationColumns[0]; // Use first compensation column
+        if (compensationColumns.length > 1) {
+          ambiguousTargets[requiredColumn] = compensationColumns;
+        }
         return;
       }
     }
@@ -419,6 +458,26 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
     }
   });
 
+  // Derive duplicateTargets if multiple required keys resolve to same source (defensive)
+  const reverseMap: Record<string, string[]> = {};
+  Object.entries(mappedColumns).forEach(([target, source]) => {
+    const key = source.toLowerCase();
+    if (!reverseMap[key]) reverseMap[key] = [];
+    reverseMap[key].push(target);
+  });
+  Object.entries(reverseMap).forEach(([, targets]) => {
+    if (targets.length > 1) {
+      duplicateTargets.push(...targets);
+    }
+  });
+
+  // Unknown headers = those that didn't map to required or alias
+  const knownRequired = new Set<string>(REQUIRED_COLUMNS as unknown as string[]);
+  const knownAliasKeys = new Set<string>(Object.keys(COLUMN_ALIASES));
+  const unknownHeaders = detectedColumns.filter(h => 
+    !knownRequired.has(h) && !knownAliasKeys.has(h)
+  );
+
   return {
     isValid: missingColumns.length === 0,
     detectedColumns,
@@ -426,7 +485,11 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
     mappedColumns,
     suggestions,
     errors,
-    format: 'wide'
+    format: 'wide',
+    ambiguousTargets,
+    duplicateTargets,
+    unknownHeaders,
+    unitWarnings
   };
 };
 

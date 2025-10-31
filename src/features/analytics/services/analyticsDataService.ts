@@ -203,12 +203,41 @@ export class AnalyticsDataService {
       console.log('🔍 AnalyticsDataService: Fetching dynamic data for variables:', selectedVariables);
       
       // Get all surveys and mappings directly from IndexedDB
-      const [surveys, specialtyMappings, columnMappings, learnedMappings] = await Promise.all([
+      // CRITICAL: Include variable mappings that user created in mapping screen
+      const [surveys, specialtyMappings, columnMappings, variableMappings, learnedMappings] = await Promise.all([
         this.dataService.getAllSurveys(),
         this.dataService.getAllSpecialtyMappings(),
         this.dataService.getAllColumnMappings(),
+        this.dataService.getVariableMappings(), // CRITICAL: Get user-created variable mappings
         this.getLearnedMappings()
       ]);
+      
+      // Build lookup map: variable name + survey source -> standardized name
+      // This handles MGMA's "Compensation to Work RVU Ratio" -> "total_cash_compensation_per_work_rvus"
+      const variableMappingLookup = new Map<string, string>();
+      variableMappings.forEach((mapping: any) => {
+        const standardizedName = mapping.standardizedName;
+        mapping.sourceVariables?.forEach((source: any) => {
+          // Key: surveySource + originalVariableName -> standardizedName
+          // Handle both exact match and case-insensitive
+          const key = `${source.surveySource}::${source.originalVariableName}`.toLowerCase().trim();
+          variableMappingLookup.set(key, standardizedName);
+          
+          // Also add a more flexible key without exact survey source match
+          // This handles variations in survey source naming
+          const flexibleKey = `::${source.originalVariableName}`.toLowerCase().trim();
+          if (!variableMappingLookup.has(flexibleKey)) {
+            variableMappingLookup.set(flexibleKey, standardizedName);
+          }
+        });
+      });
+      
+      console.log('🔍 Variable Mapping Lookup built:', {
+        totalMappings: variableMappings.length,
+        lookupEntries: variableMappingLookup.size,
+        sampleEntries: Array.from(variableMappingLookup.entries()).slice(0, 5),
+        mgmaEntries: Array.from(variableMappingLookup.entries()).filter(([key]) => key.toLowerCase().includes('mgma')).slice(0, 3)
+      });
       
       if (surveys.length === 0) {
         console.log('📊 No surveys found in IndexedDB');
@@ -242,6 +271,7 @@ export class AnalyticsDataService {
               this.normalizeRowDynamic(row, survey, selectedVariables, {
                 specialtyMappings,
                 columnMappings,
+                variableMappingLookup, // CRITICAL: Pass user-created variable mappings
                 learnedSpecialtyMappings: learnedMappings.learnedSpecialtyMappings,
                 learnedColumnMappings: learnedMappings.learnedColumnMappings,
                 learnedRegionMappings: learnedMappings.learnedRegionMappings,
@@ -450,13 +480,83 @@ export class AnalyticsDataService {
       const p75 = this.extractNumber(actualRowData.p75);
       const p90 = this.extractNumber(actualRowData.p90);
       
+      // CRITICAL: Apply learned variable mappings FIRST before pattern matching
+      // This handles cases like MGMA's "compensation to work rvus ratio" 
+      let mappedVariable = variable;
+      const originalVariable = variable;
+      if (learnedMappings.learnedVariableMappings && learnedMappings.learnedVariableMappings[variable]) {
+        mappedVariable = learnedMappings.learnedVariableMappings[variable].toLowerCase();
+        console.log('🔍 Applied learned variable mapping:', variable, '->', mappedVariable);
+      }
+      
+      // Enhanced logging for MGMA data
+      if (survey.name && survey.name.toLowerCase().includes('mgma') && 
+          (variable.toLowerCase().includes('compensation') || variable.toLowerCase().includes('cf') || variable.toLowerCase().includes('rvu'))) {
+        console.log('🔍 MGMA Variable Processing:', {
+          surveyName: survey.name,
+          originalVariable,
+          mappedVariable,
+          hasLearnedMapping: !!learnedMappings.learnedVariableMappings?.[originalVariable],
+          learnedMappings: learnedMappings.learnedVariableMappings,
+          p25, p50, p75, p90
+        });
+      }
+      
       // Set the appropriate metrics based on the variable type
-      if (variable.includes('tcc per work rvu') || variable.includes('conversion factor')) {
+      // Check for CF/conversion factor patterns FIRST (most specific)
+      // CRITICAL: Include "to" patterns for MGMA (e.g., "compensation to work rvus ratio")
+      const isCF = mappedVariable.includes('tcc per work rvu') || 
+                   mappedVariable.includes('tcc per wrvu') ||
+                   mappedVariable.includes('total comp per work rvu') ||
+                   mappedVariable.includes('total comp per wrvu') ||
+                   mappedVariable.includes('total compensation per work rvu') ||
+                   mappedVariable.includes('total compensation per wrvu') ||
+                   mappedVariable.includes('compensation per work rvu') ||
+                   mappedVariable.includes('compensation per wrvu') ||
+                   mappedVariable.includes('compensation to work rvu') || // MGMA pattern
+                   mappedVariable.includes('compensation to wrvu') || // MGMA pattern
+                   mappedVariable.includes('compensation to work rvus') || // MGMA pattern
+                   mappedVariable.includes('comp to work rvu') || // MGMA pattern
+                   mappedVariable.includes('comp to wrvu') || // MGMA pattern
+                   mappedVariable.includes('total comp to work rvu') || // MGMA pattern
+                   mappedVariable.includes('tcc to work rvu') || // MGMA pattern
+                   mappedVariable.includes('comp per work rvu') ||
+                   mappedVariable.includes('comp per wrvu') ||
+                   mappedVariable.includes('conversion factor') ||
+                   mappedVariable.includes('conversion') ||
+                   mappedVariable.includes(' cf ') ||
+                   mappedVariable.includes('_cf_') ||
+                   mappedVariable.includes(' per rvu') ||
+                   mappedVariable.includes(' per wrvu') ||
+                   mappedVariable.includes(' to rvu') || // MGMA "to" pattern
+                   mappedVariable.includes(' to wrvu') || // MGMA "to" pattern
+                   mappedVariable.includes('/rvu') ||
+                   mappedVariable.includes('/wrvu') ||
+                   mappedVariable.includes('dollars per rvu') ||
+                   mappedVariable.includes('dollars per wrvu') ||
+                   mappedVariable.includes('$ per rvu') ||
+                   mappedVariable.includes('$ per wrvu') ||
+                   mappedVariable.includes('ratio') && (mappedVariable.includes('rvu') || mappedVariable.includes('wrvu')); // MGMA ratio pattern
+      
+      if (isCF) {
         // This is definitely a conversion factor
         normalizedMetrics.cf_p25 = p25;
         normalizedMetrics.cf_p50 = p50;
         normalizedMetrics.cf_p75 = p75;
         normalizedMetrics.cf_p90 = p90;
+        
+        // Enhanced logging for MGMA CF detection
+        if (survey.name && survey.name.toLowerCase().includes('mgma')) {
+          console.log('✅ MGMA CF Detected:', {
+            surveyName: survey.name,
+            variable: originalVariable,
+            mappedVariable,
+            cf_p25: p25,
+            cf_p50: p50,
+            cf_p75: p75,
+            cf_p90: p90
+          });
+        }
       } else if (variable === 'tcc' || 
                  variable.includes('total cash compensation') || 
                  variable.includes('total compensation') ||
@@ -490,13 +590,8 @@ export class AnalyticsDataService {
           normalizedMetrics.cf_p75 = p75;
           normalizedMetrics.cf_p90 = p90;
         }
-      } else if (variable.includes('cf') || variable.includes('conversion')) {
-        // This is a conversion factor
-        normalizedMetrics.cf_p25 = p25;
-        normalizedMetrics.cf_p50 = p50;
-        normalizedMetrics.cf_p75 = p75;
-        normalizedMetrics.cf_p90 = p90;
       }
+      // Note: CF detection is now handled above in the isCF check
     } else {
       // WIDE FORMAT: Data has separate columns for each metric
       // Extract TCC metrics with fallback column names
@@ -528,6 +623,7 @@ export class AnalyticsDataService {
       );
       
       // Extract CF metrics with fallback column names
+      // First try standard column names
       normalizedMetrics.cf_p25 = this.extractNumber(
         actualRowData.cf_p25 || actualRowData['CF P25'] || actualRowData['cf_p25'] || actualRowData['CF_p25'] || actualRowData['Conversion Factor P25']
       );
@@ -540,6 +636,109 @@ export class AnalyticsDataService {
       normalizedMetrics.cf_p90 = this.extractNumber(
         actualRowData.cf_p90 || actualRowData['CF P90'] || actualRowData['cf_p90'] || actualRowData['CF_p90'] || actualRowData['Conversion Factor P90']
       );
+      
+      // If CF values are still 0, try to find CF columns dynamically (for MGMA and other surveys)
+      // This handles variations like "TCC per Work RVU P25", "Total Comp per wRVU P50", etc.
+      if (!normalizedMetrics.cf_p25 && !normalizedMetrics.cf_p50 && !normalizedMetrics.cf_p75 && !normalizedMetrics.cf_p90) {
+        const allColumns = Object.keys(actualRowData);
+        
+        // Enhanced logging for MGMA WIDE format
+        if (survey.name && survey.name.toLowerCase().includes('mgma')) {
+          const cfRelatedColumns = allColumns.filter(col => 
+            col.toLowerCase().includes('compensation') && 
+            (col.toLowerCase().includes('rvu') || col.toLowerCase().includes('ratio') || col.toLowerCase().includes('cf'))
+          );
+          if (cfRelatedColumns.length > 0) {
+            console.log('🔍 MGMA WIDE Format - CF Related Columns Found:', {
+              surveyName: survey.name,
+              allColumns: allColumns.length,
+              cfRelatedColumns,
+              sampleValues: cfRelatedColumns.slice(0, 2).map(col => ({ column: col, value: actualRowData[col] }))
+            });
+          }
+        }
+        const cfColumnPatterns = [
+          // Standard CF patterns
+          /cf.*p25/i, /conversion.*factor.*p25/i, /cf.*25th/i,
+          // TCC per Work RVU patterns (MGMA, Gallagher, etc.)
+          /tcc.*per.*work.*rvu.*p25/i, /tcc.*per.*wrvu.*p25/i,
+          /total.*comp.*per.*work.*rvu.*p25/i, /total.*comp.*per.*wrvu.*p25/i,
+          /comp.*per.*work.*rvu.*p25/i, /comp.*per.*wrvu.*p25/i,
+          /total.*cash.*per.*work.*rvu.*p25/i, /total.*cash.*per.*wrvu.*p25/i,
+          // MGMA "to" patterns (e.g., "compensation to work rvus ratio")
+          /compensation.*to.*work.*rvu.*p25/i, /compensation.*to.*wrvu.*p25/i,
+          /comp.*to.*work.*rvu.*p25/i, /comp.*to.*wrvu.*p25/i,
+          /tcc.*to.*work.*rvu.*p25/i, /tcc.*to.*wrvu.*p25/i,
+          /ratio.*p25/i, // MGMA ratio pattern
+          // Dollar per RVU patterns
+          /\$.*per.*rvu.*p25/i, /\$.*per.*work.*rvu.*p25/i
+        ];
+        
+        const p25Column = allColumns.find(col => cfColumnPatterns.some(pattern => pattern.test(col)));
+        if (p25Column) {
+          normalizedMetrics.cf_p25 = this.extractNumber(actualRowData[p25Column]);
+        }
+        
+        const p50Patterns = [
+          /cf.*p50/i, /conversion.*factor.*p50/i, /cf.*median/i, /cf.*50th/i,
+          /tcc.*per.*work.*rvu.*p50/i, /tcc.*per.*wrvu.*p50/i,
+          /total.*comp.*per.*work.*rvu.*p50/i, /total.*comp.*per.*wrvu.*p50/i,
+          /total.*comp.*per.*work.*rvu.*median/i, /total.*comp.*per.*wrvu.*median/i,
+          /comp.*per.*work.*rvu.*p50/i, /comp.*per.*wrvu.*p50/i,
+          /comp.*per.*work.*rvu.*median/i, /comp.*per.*wrvu.*median/i,
+          /total.*cash.*per.*work.*rvu.*p50/i, /total.*cash.*per.*wrvu.*p50/i,
+          // MGMA "to" patterns
+          /compensation.*to.*work.*rvu.*p50/i, /compensation.*to.*wrvu.*p50/i,
+          /comp.*to.*work.*rvu.*p50/i, /comp.*to.*wrvu.*p50/i,
+          /comp.*to.*work.*rvu.*median/i, /comp.*to.*wrvu.*median/i,
+          /tcc.*to.*work.*rvu.*p50/i, /tcc.*to.*wrvu.*p50/i,
+          /ratio.*p50/i, /ratio.*median/i, // MGMA ratio pattern
+          /\$.*per.*rvu.*p50/i, /\$.*per.*work.*rvu.*p50/i, /\$.*per.*rvu.*median/i
+        ];
+        
+        const p50Column = allColumns.find(col => p50Patterns.some(pattern => pattern.test(col)));
+        if (p50Column) {
+          normalizedMetrics.cf_p50 = this.extractNumber(actualRowData[p50Column]);
+        }
+        
+        const p75Patterns = [
+          /cf.*p75/i, /conversion.*factor.*p75/i, /cf.*75th/i,
+          /tcc.*per.*work.*rvu.*p75/i, /tcc.*per.*wrvu.*p75/i,
+          /total.*comp.*per.*work.*rvu.*p75/i, /total.*comp.*per.*wrvu.*p75/i,
+          /comp.*per.*work.*rvu.*p75/i, /comp.*per.*wrvu.*p75/i,
+          /total.*cash.*per.*work.*rvu.*p75/i, /total.*cash.*per.*wrvu.*p75/i,
+          // MGMA "to" patterns
+          /compensation.*to.*work.*rvu.*p75/i, /compensation.*to.*wrvu.*p75/i,
+          /comp.*to.*work.*rvu.*p75/i, /comp.*to.*wrvu.*p75/i,
+          /tcc.*to.*work.*rvu.*p75/i, /tcc.*to.*wrvu.*p75/i,
+          /ratio.*p75/i, // MGMA ratio pattern
+          /\$.*per.*rvu.*p75/i, /\$.*per.*work.*rvu.*p75/i
+        ];
+        
+        const p75Column = allColumns.find(col => p75Patterns.some(pattern => pattern.test(col)));
+        if (p75Column) {
+          normalizedMetrics.cf_p75 = this.extractNumber(actualRowData[p75Column]);
+        }
+        
+        const p90Patterns = [
+          /cf.*p90/i, /conversion.*factor.*p90/i, /cf.*90th/i,
+          /tcc.*per.*work.*rvu.*p90/i, /tcc.*per.*wrvu.*p90/i,
+          /total.*comp.*per.*work.*rvu.*p90/i, /total.*comp.*per.*wrvu.*p90/i,
+          /comp.*per.*work.*rvu.*p90/i, /comp.*per.*wrvu.*p90/i,
+          /total.*cash.*per.*work.*rvu.*p90/i, /total.*cash.*per.*wrvu.*p90/i,
+          // MGMA "to" patterns
+          /compensation.*to.*work.*rvu.*p90/i, /compensation.*to.*wrvu.*p90/i,
+          /comp.*to.*work.*rvu.*p90/i, /comp.*to.*wrvu.*p90/i,
+          /tcc.*to.*work.*rvu.*p90/i, /tcc.*to.*wrvu.*p90/i,
+          /ratio.*p90/i, // MGMA ratio pattern
+          /\$.*per.*rvu.*p90/i, /\$.*per.*work.*rvu.*p90/i
+        ];
+        
+        const p90Column = allColumns.find(col => p90Patterns.some(pattern => pattern.test(col)));
+        if (p90Column) {
+          normalizedMetrics.cf_p90 = this.extractNumber(actualRowData[p90Column]);
+        }
+      }
     }
     
     const finalSurveySource = survey.type || survey.name || 'Unknown';
@@ -896,6 +1095,7 @@ export class AnalyticsDataService {
     mappings: {
       specialtyMappings: any[];
       columnMappings: any[];
+      variableMappingLookup: Map<string, string>; // CRITICAL: User-created variable mappings
       learnedSpecialtyMappings: Record<string, string>;
       learnedColumnMappings: Record<string, string>;
       learnedRegionMappings: Record<string, string>;
@@ -960,7 +1160,54 @@ export class AnalyticsDataService {
     
     if (hasVariableField) {
       // LONG FORMAT: Data has a 'variable' field
-      const variable = String(actualRowData.variable).trim();
+      let variable = String(actualRowData.variable).trim();
+      const originalVariable = variable;
+      
+      // CRITICAL STEP 1: Check user-created variable mappings FIRST (from mapping screen)
+      // This handles MGMA's "Compensation to Work RVU Ratio" -> "total_cash_compensation_per_work_rvus"
+      const surveySource = survey.type || survey.name || '';
+      const exactMappingKey = `${surveySource}::${originalVariable}`.toLowerCase().trim();
+      const flexibleMappingKey = `::${originalVariable}`.toLowerCase().trim();
+      
+      // Try exact match first, then flexible match
+      let standardizedNameFromMapping = mappings.variableMappingLookup?.get(exactMappingKey);
+      if (!standardizedNameFromMapping) {
+        standardizedNameFromMapping = mappings.variableMappingLookup?.get(flexibleMappingKey);
+      }
+      
+      if (standardizedNameFromMapping) {
+        // Use the standardized name from user-created mapping
+        variable = standardizedNameFromMapping;
+        console.log('✅ Applied user-created variable mapping:', {
+          surveySource,
+          originalVariable,
+          standardizedName: standardizedNameFromMapping,
+          exactKey: exactMappingKey,
+          flexibleKey: flexibleMappingKey,
+          matchedKey: mappings.variableMappingLookup?.has(exactMappingKey) ? exactMappingKey : flexibleMappingKey
+        });
+      } else if (mappings.learnedVariableMappings && mappings.learnedVariableMappings[originalVariable]) {
+        // FALLBACK: Apply learned variable mappings if no user mapping exists
+        const mappedName = mappings.learnedVariableMappings[originalVariable];
+        console.log('🔍 Applied learned variable mapping:', originalVariable, '->', mappedName);
+        variable = mappedName;
+      }
+      
+      // Enhanced logging for MGMA
+      if (survey.name && survey.name.toLowerCase().includes('mgma') && 
+          (originalVariable.toLowerCase().includes('compensation') || originalVariable.toLowerCase().includes('rvu') || originalVariable.toLowerCase().includes('ratio'))) {
+        console.log('🔍 MGMA Dynamic Processing:', {
+          surveyName: survey.name,
+          originalVariable,
+          mappedVariable: variable,
+          hasUserMapping: !!standardizedNameFromMapping,
+          hasLearnedMapping: !!mappings.learnedVariableMappings?.[originalVariable],
+          exactKey: exactMappingKey,
+          flexibleKey: flexibleMappingKey,
+          normalizedVarName: normalizeVariableName(variable)
+        });
+      }
+      
       const normalizedVarName = normalizeVariableName(variable);
       
       // Process ALL variables by default, only filter if specific variables are selected

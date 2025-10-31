@@ -152,7 +152,14 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       }
       
       const matchesSpecialty = !specialtySearch || 
-        (row.surveySpecialty && row.surveySpecialty.toLowerCase().includes(specialtySearch.toLowerCase()));
+        (row.surveySpecialty && (() => {
+          // Use flexible word matching for specialty search
+          const searchTerms = specialtySearch.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
+          if (searchTerms.length === 0) return true;
+          
+          const specialtyText = row.surveySpecialty.toLowerCase();
+          return searchTerms.every(term => specialtyText.includes(term));
+        })());
       
       return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
     });

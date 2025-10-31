@@ -52,9 +52,9 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	// Define all menu groups with ChatGPT-style organization
 	const allMenuGroups: MenuGroup[] = [
 		{
-			name: 'Quick Actions',
+			name: 'Surveys',
 			items: [
-				{ name: 'New Survey', icon: PlusIcon, path: '/upload' },
+				{ name: 'Add / View', icon: PlusIcon, path: '/upload' },
 			]
 		},
 		{
@@ -178,7 +178,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			isOpen ? 'w-64' : 'w-16'
 		}`}>
 			{/* Header */}
-			<div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+			<div className="flex items-center justify-between px-4 py-3">
 				{isOpen && (
 					<button 
 						onClick={() => handleNavigation('/dashboard')}
@@ -293,8 +293,8 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
 			{/* Provider Type Selector - Hidden in Analytics & Reports sections */}
 			{isOpen && !isAnalyticsRoute(currentPath) && (
-				<div className="px-3 py-4 border-b border-gray-100">
-					<div className="mb-2">
+				<div className="px-3 py-2 border-b border-gray-100">
+					<div className="mb-1">
 						<h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
 							Data View
 						</h3>

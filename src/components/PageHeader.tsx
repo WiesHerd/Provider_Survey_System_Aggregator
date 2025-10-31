@@ -41,7 +41,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
         <div className="relative group">
           {/* Modern dropdown button with clear visual cues */}
           <div className="
-            inline-flex items-center px-3 py-2 rounded-xl text-sm font-medium
+            inline-flex items-center px-3 h-8 rounded-xl text-sm font-medium
             transition-all duration-200 shadow-sm border
             hover:shadow-md cursor-pointer
             bg-white text-gray-700 border-gray-200 
@@ -75,7 +75,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
   };
 
   return (
-    <header className={`h-16 border-b border-gray-100 bg-white flex items-center justify-between px-8 mb-6 ${className || ''}`}>
+    <header className={`min-h-[80px] py-3 border-b border-gray-100 bg-white flex items-center justify-between pl-8 pr-24 mb-6 ${className || ''}`}>
       <div>
         <h1 className={`${titleClassName ?? 'text-xl'} font-semibold bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent`}>
           {title}
@@ -83,7 +83,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
       </div>
       
       {/* Right side actions */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 flex-shrink-0">
         {/* Year Selector */}
         <YearSelector />
         

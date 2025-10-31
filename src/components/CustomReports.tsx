@@ -1707,9 +1707,17 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 }}
                 noOptionsText="No specialties found"
                 filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                  const filtered = options.filter((option: string) =>
-                    formatSpecialtyForDisplay(option).toLowerCase().includes(inputValue.toLowerCase())
-                  );
+                  const searchTerms = inputValue.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
+                  const filtered = options.filter((option: string) => {
+                    const displayName = formatSpecialtyForDisplay(option).toLowerCase();
+                    
+                    // If no search terms, show all options
+                    if (searchTerms.length === 0) return true;
+                    
+                    // Check if all search terms are found in the display name (order doesn't matter)
+                    // This allows "pediatric general" to match "General: Pediatrics"
+                    return searchTerms.every(term => displayName.includes(term));
+                  });
                   return filtered;
                 }}
                 freeSolo={false}

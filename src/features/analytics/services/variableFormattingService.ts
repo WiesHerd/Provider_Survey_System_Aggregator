@@ -83,11 +83,15 @@ export class VariableFormattingService {
     }
 
     // Try to find a specific rule for this variable
-    const rule = options.rules.find(r => 
-      r.variableName === variableName && r.enabled
-    );
+    // Use case-insensitive matching to handle variations
+    const rule = options.rules.find(r => {
+      const ruleVarLower = r.variableName.toLowerCase().trim();
+      const inputVarLower = variableName.toLowerCase().trim();
+      return ruleVarLower === inputVarLower && r.enabled;
+    });
 
     if (rule) {
+      console.log('✅ Found formatting rule for:', variableName, rule);
       return this.applyFormattingRule(value, rule);
     }
 
@@ -260,7 +264,8 @@ export class VariableFormattingService {
    */
   private detectCurrency(variableName: string): boolean {
     const lower = variableName.toLowerCase();
-    return lower.match(/tcc|compensation|salary|cash|pay|base/) !== null;
+    // Include CF/Conversion Factor patterns - they're currency values
+    return lower.match(/tcc|compensation|salary|cash|pay|base|cf$|conversion_factor|per.*rvu/) !== null;
   }
 
   /**

@@ -183,6 +183,9 @@ export interface RegionalComparisonProps {
   data: RegionalData[];
   onRegionClick?: (region: string) => void;
   onMetricClick?: (metric: string, region: string) => void;
+  // Optional provenance support
+  regionTooltips?: Record<string, string>;
+  onRegionInfoClick?: (region: string) => void;
   className?: string;
 }
 

@@ -5,12 +5,13 @@
  * Following enterprise patterns for component composition and reusability.
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { 
   FormControl,
   Autocomplete,
   TextField,
-  Chip
+  Chip,
+  Typography
 } from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
@@ -21,6 +22,7 @@ import {
   validateVariableSelection 
 } from '../utils/variableFormatters';
 import { MAX_SELECTED_VARIABLES } from '../types/variables';
+import { SavedViews } from './SavedViews';
 
 /**
  * AnalyticsFilters component for filtering analytics data
@@ -47,6 +49,8 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   availableVariables,
   onVariablesChange
 }) => {
+  // View name state for saving views
+  const [viewName, setViewName] = useState('');
   // Handler for standard filter changes (specialty, region, etc.)
   const handleFilterChange = useCallback((field: keyof typeof filters, value: string) => {
     // For geographic region, convert formatted display value back to original value
@@ -86,6 +90,14 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
     }
   }, [onVariablesChange]);
 
+  // Handle loading a saved view
+  const handleLoadView = useCallback((view: any) => {
+    // Update filters from saved view
+    onFiltersChange(view.filters);
+    // Update variables from saved view
+    onVariablesChange(view.selectedVariables);
+  }, [onFiltersChange, onVariablesChange]);
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
@@ -93,26 +105,58 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
           <h3 className="text-lg font-semibold text-gray-900">Benchmarking Filters</h3>
         </div>
         
-        {/* Clear Filters Button */}
-        {(filters.specialty || filters.surveySource || filters.geographicRegion || filters.providerType || filters.year) && (
-          <button
-            onClick={clearAllFilters}
-            className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            title="Clear all filters"
-          >
-            <div className="relative w-4 h-4 mr-2">
-              {/* Funnel Icon */}
-              <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
-              </svg>
-              {/* X Overlay - Only show when filters are active */}
-              <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <span className="text-xs">Clear Filters</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Saved Views - Matches CustomReports pattern */}
+          <SavedViews
+            filters={filters}
+            selectedVariables={selectedVariables}
+            onLoadView={handleLoadView}
+            viewName={viewName}
+            onViewNameChange={setViewName}
+          />
+          
+          {/* Clear Filters Button */}
+          {(filters.specialty || filters.surveySource || filters.geographicRegion || filters.providerType || filters.year) && (
+            <button
+              onClick={clearAllFilters}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              title="Clear all filters"
+            >
+              <div className="relative w-4 h-4 mr-2">
+                {/* Funnel Icon */}
+                <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+                </svg>
+                {/* X Overlay - Only show when filters are active */}
+                <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <span className="text-xs">Clear Filters</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* View Name Input - Matches CustomReports pattern */}
+      <div className="mb-4">
+        <FormControl size="small" sx={{ width: '100%', maxWidth: '300px' }}>
+          <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
+            View Name
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Enter view name to save..."
+            value={viewName}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setViewName(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+              }
+            }}
+          />
+        </FormControl>
       </div>
 
       {/* Cascading Filters - Responsive Layout with Natural Width */}
