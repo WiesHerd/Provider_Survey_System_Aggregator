@@ -26,6 +26,10 @@ interface BaseMappingHeaderProps {
   isBulkSelected: boolean;
   allUnmappedCount: number;
   
+  // Cross-category mapping toggle (for Specialty, Provider Type, Region)
+  showAllCategories?: boolean;
+  onToggleCategoryFilter?: () => void;
+  
   // Actions
   onShowHelp: () => void;
   onToggleSelectAll: () => void;
@@ -75,6 +79,8 @@ export const BaseMappingHeader: React.FC<BaseMappingHeaderProps> = ({
   selectedCount,
   isBulkSelected,
   allUnmappedCount,
+  showAllCategories,
+  onToggleCategoryFilter,
   onShowHelp,
   onToggleSelectAll,
   onCreateMapping,
@@ -92,34 +98,36 @@ export const BaseMappingHeader: React.FC<BaseMappingHeaderProps> = ({
   ];
 
   return (
-    <div className="border-b border-gray-200 mb-4 flex items-center justify-between">
-      <div className="flex items-center">
-        <button
-          onClick={onShowHelp}
-          className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-all duration-200"
-          aria-label="Show help"
-        >
-          <LightBulbIcon className="h-5 w-5 text-indigo-600" />
-        </button>
-        <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => onTabChange(tab.key as 'unmapped' | 'mapped' | 'learned')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                activeTab === tab.key
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex items-center space-x-3 mb-4">
+    <div className="border-b border-gray-200 mb-4">
+      {/* Top row: Tabs on left, Action Buttons on right */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center">
+          <button
+            onClick={onShowHelp}
+            className="p-2 mr-3 hover:bg-gray-100 rounded-lg transition-all duration-200"
+            aria-label="Show help"
+          >
+            <LightBulbIcon className="h-5 w-5 text-indigo-600" />
+          </button>
+          <nav className="-mb-px flex space-x-8">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => onTabChange(tab.key as 'unmapped' | 'mapped' | 'learned')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
+                  activeTab === tab.key
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+        
+        {/* Action Buttons - Right side */}
+        <div className="flex items-center space-x-3">
         {activeTab === 'unmapped' && (
           <>
             {selectedCount === 1 ? (
@@ -198,6 +206,31 @@ export const BaseMappingHeader: React.FC<BaseMappingHeaderProps> = ({
         )}
         {activeTab === 'mapped' && children}
       </div>
+      </div>
+
+      {/* Cross-Category Mapping Toggle (Call Pay, Physician, APP) - Only show if toggle provided */}
+      {onToggleCategoryFilter !== undefined && (
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAllCategories ?? false}
+                onChange={onToggleCategoryFilter}
+                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Show All Survey Types
+              </span>
+            </label>
+            <span className="text-xs text-gray-500">
+              {showAllCategories 
+                ? `Showing ${entityName.toLowerCase()}s from all survey types (Call Pay, Physician, APP)`
+                : 'Filtered by current Data View selection'}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -95,13 +95,25 @@ export const UnmappedRegions: React.FC<UnmappedRegionsProps> = ({
         </div>
       )}
 
-      {/* Regions Grid - Consistent Fixed Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from(regionsBySurvey.entries()).map(([source, regions]) => {
-          const color = getSurveySourceColor(source);
-          
-          return (
-            <Paper key={source} className="p-3 relative overflow-hidden">
+      {/* Regions Grid - Intelligent flexible layout that adapts to any number of columns */}
+      {/* Fixed column width (320px) ensures consistent appearance regardless of number of columns */}
+      {/* Uses flexbox for optimal horizontal scrolling with fixed-width columns */}
+      <div className="w-full overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Responsive: On mobile (flex-col), vertical stack; on larger screens (sm:flex-row), horizontal row with scroll */}
+          {/* Columns grow to fill space when few columns exist, but maintain minimum width and scroll when many */}
+          {Array.from(regionsBySurvey.entries()).map(([source, regions]) => {
+            const color = getSurveySourceColor(source);
+            
+            return (
+              <Paper 
+                key={source} 
+                className="p-3 relative overflow-hidden flex-shrink-0 sm:flex-1"
+                style={{ 
+                  minWidth: '320px',
+                  maxWidth: '500px' // Prevent columns from becoming too wide on very large screens
+                }}
+              >
               <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
                 <span style={{ color }}>{source}</span>
                 <Typography variant="caption" color="textSecondary" className="text-xs">
@@ -122,6 +134,7 @@ export const UnmappedRegions: React.FC<UnmappedRegionsProps> = ({
             </Paper>
           );
         })}
+        </div>
       </div>
 
       {/* Empty State - Consistent enterprise pattern */}

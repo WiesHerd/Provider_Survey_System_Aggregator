@@ -50,7 +50,11 @@ export const formatVariableDisplayName = (normalizedName: string): string => {
     'compensation_per_encounter': 'TCC per Encounter',
     'tcc_to_collections': 'TCC to Net Collections',
     'comp_to_collections': 'TCC to Net Collections',
-    'comp_per_asa': 'TCC per ASA Unit'
+    'comp_per_asa': 'TCC per ASA Unit',
+    'on_call_compensation': 'Daily Rate On-Call Compensation',
+    'oncall_compensation': 'Daily Rate On-Call Compensation',
+    'daily_rate_on_call': 'Daily Rate On-Call Compensation',
+    'on_call_rate': 'Daily Rate On-Call Compensation'
   };
 
   // Check for exact match first
@@ -88,13 +92,15 @@ const formatVariableNameFromPattern = (normalizedName: string): string => {
 export const detectVariableCategory = (variableName: string): VariableCategory => {
   const lower = variableName.toLowerCase();
   
-  // Ratio detection (has "per" or "/" or "rate")
-  if (lower.includes('per ') || lower.includes('/') || lower.includes('rate')) {
+  // Ratio detection (has "per" or "/" or "rate" but NOT on-call compensation)
+  // On-call compensation has "rate" but is still compensation, not a ratio
+  if ((lower.includes('per ') || lower.includes('/') || (lower.includes('rate') && !lower.includes('on') && !lower.includes('call'))) &&
+      !(lower.includes('on') && lower.includes('call'))) {
     return 'ratio';
   }
   
   // Compensation detection (money-related keywords)
-  if (lower.match(/compensation|salary|tcc|cash|bonus|pay|base/)) {
+  if (lower.match(/compensation|salary|tcc|cash|bonus|pay|base|on.call|oncall/)) {
     return 'compensation';
   }
   
@@ -182,7 +188,10 @@ const isCurrencyVariable = (variableName: string): boolean => {
     /hourly.*rate/,
     /base.*pay.*hourly/,
     /excluding.*premium/,
-    /tcc.*excluding/
+    /tcc.*excluding/,
+    /on.call/i,
+    /oncall/i,
+    /daily.*rate.*on.call/i
   ];
   
   return currencyPatterns.some(pattern => pattern.test(lower));
@@ -299,6 +308,7 @@ export const normalizeVariableName = (variableName: string): string => {
 /**
  * Map variable name variations to standard names
  * Handles different naming conventions across surveys
+ * Uses pattern-based matching as fallback for unknown variations
  */
 export const mapVariableNameToStandard = (normalizedName: string): string => {
   // Comprehensive mapping of variable name variations to standard names
@@ -388,11 +398,48 @@ export const mapVariableNameToStandard = (normalizedName: string): string => {
     // TCC per ASA Unit variations
     'tcc_per_asa_unit': 'tcc_per_asa_unit',
     'tcc_per_asa': 'tcc_per_asa_unit',
-    'comp_per_asa': 'tcc_per_asa_unit'
+    'comp_per_asa': 'tcc_per_asa_unit',
+    
+    // On-Call Compensation variations
+    'on_call_compensation': 'on_call_compensation',
+    'oncall_compensation': 'on_call_compensation',
+    'daily_rate_on_call': 'on_call_compensation',
+    'daily_rate_oncall': 'on_call_compensation',
+    'daily_rate_on_call_compensation': 'on_call_compensation',
+    'daily_rate_oncall_compensation': 'on_call_compensation',
+    'on_call_rate': 'on_call_compensation',
+    'oncall_rate': 'on_call_compensation',
+    'on_call': 'on_call_compensation',
+    'oncall': 'on_call_compensation',
+    'daily_on_call': 'on_call_compensation',
+    'daily_oncall': 'on_call_compensation'
   };
   
-  // Return mapped name if exists, otherwise return original normalized name
-  return variableMapping[normalizedName] || normalizedName;
+  // Check exact mapping first
+  if (variableMapping[normalizedName]) {
+    return variableMapping[normalizedName];
+  }
+  
+  // Pattern-based fallback for on-call compensation variations
+  // This handles cases where CSV uses slightly different naming
+  const lower = normalizedName.toLowerCase();
+  const hasOn = lower.includes('on');
+  const hasCall = lower.includes('call');
+  
+  // If contains both "on" and "call" (in any order), and contains rate/compensation/pay keywords
+  if (hasOn && hasCall && (
+    lower.includes('rate') || 
+    lower.includes('compensation') || 
+    lower.includes('comp') || 
+    lower.includes('pay') ||
+    lower.includes('daily')
+  )) {
+    console.log(`🔍 Variable normalization: Pattern-matched "${normalizedName}" -> "on_call_compensation"`);
+    return 'on_call_compensation';
+  }
+  
+  // Return original normalized name if no match found
+  return normalizedName;
 };
 
 /**

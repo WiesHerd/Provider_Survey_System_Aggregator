@@ -66,6 +66,7 @@ export interface NormalizedRow {
   cf_p90: number;
   surveySource: string;
   surveyYear: string;
+  dataCategory?: string; // NEW: Data category from survey (COMPENSATION, CALL_PAY, MOONLIGHTING, CUSTOM)
   rawData: RawSurveyRow;
 }
 
@@ -111,11 +112,12 @@ export class AnalyticsDataService {
       
       console.log(`📊 Processing ${surveys.length} surveys from IndexedDB`);
       
-        // Process surveys in parallel for better performance
+      // CRITICAL FIX: Process ALL surveys, not just first 3
+      // Process surveys in parallel for better performance
       const allNormalizedRows: NormalizedRow[] = [];
-        const maxConcurrent = Math.min(3, surveys.length);
-        
-      const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
+      
+      // Process all surveys in parallel
+      const surveyPromises = surveys.map(async (survey) => {
         try {
           console.log('🔍 Processing survey:', {
             id: survey.id,
@@ -212,6 +214,20 @@ export class AnalyticsDataService {
         this.getLearnedMappings()
       ]);
       
+      // CRITICAL DEBUG: Log all surveys to verify MGMA Physician exists
+      console.log('🔍 AnalyticsDataService: All surveys from IndexedDB:', {
+        totalSurveys: surveys.length,
+        surveys: surveys.map(s => ({
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          providerType: s.providerType,
+          source: (s as any).source,
+          dataCategory: (s as any).dataCategory,
+          year: s.year
+        }))
+      });
+      
       // Build lookup map: variable name + survey source -> standardized name
       // This handles MGMA's "Compensation to Work RVU Ratio" -> "total_cash_compensation_per_work_rvus"
       const variableMappingLookup = new Map<string, string>();
@@ -246,20 +262,32 @@ export class AnalyticsDataService {
       
       console.log(`📊 Processing ${surveys.length} surveys for dynamic variables`);
       
-      // Process surveys in parallel
+      // CRITICAL FIX: Process ALL surveys, not just first 3
+      // Process all surveys in parallel for better performance
       const allNormalizedRows: DynamicNormalizedRow[] = [];
-      const maxConcurrent = Math.min(3, surveys.length);
       
-      const surveyPromises = surveys.slice(0, maxConcurrent).map(async (survey) => {
+      // Process all surveys
+      const surveyPromises = surveys.map(async (survey) => {
         try {
+          // CRITICAL DEBUG: Log survey info before processing
+          console.log('🔍 Processing survey for analytics:', {
+            id: survey.id,
+            name: survey.name,
+            type: survey.type,
+            providerType: survey.providerType,
+            source: (survey as any).source,
+            dataCategory: (survey as any).dataCategory,
+            year: survey.year
+          });
+          
           const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
           
           if (surveyData.rows.length === 0) {
-            console.log(`📊 Survey ${survey.id} has no data rows`);
+            console.log(`📊 Survey ${survey.id} (${survey.name}) has no data rows - SKIPPED`);
             return [];
           }
           
-          console.log(`📊 Survey ${survey.id} has ${surveyData.rows.length} data rows`);
+          console.log(`📊 Survey ${survey.id} (${survey.name}) has ${surveyData.rows.length} data rows`);
           
           // Normalize rows dynamically
           const normalizedRows: DynamicNormalizedRow[] = [];
@@ -424,8 +452,17 @@ export class AnalyticsDataService {
     );
     
     // Extract provider type
-    const rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
-                           actualRowData.provider_type || row.providerType || 'Physician';
+    // ENTERPRISE FIX: For Call Pay surveys, use survey's providerType first
+    // This ensures Call Pay surveys are correctly identified even if data rows don't have providerType
+    let rawProviderType: string;
+    if (survey.providerType === 'CALL') {
+      // Call Pay surveys should use 'CALL' as providerType
+      rawProviderType = 'CALL';
+    } else {
+      // For other surveys, extract from data row
+      rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
+                       actualRowData.provider_type || row.providerType || survey.providerType || 'Physician';
+    }
     
     // Normalize provider type using learned mappings
     const normalizedProviderType = this.normalizeProviderType(rawProviderType, learnedMappings.learnedProviderTypeMappings);
@@ -536,7 +573,7 @@ export class AnalyticsDataService {
                    mappedVariable.includes('dollars per wrvu') ||
                    mappedVariable.includes('$ per rvu') ||
                    mappedVariable.includes('$ per wrvu') ||
-                   mappedVariable.includes('ratio') && (mappedVariable.includes('rvu') || mappedVariable.includes('wrvu')); // MGMA ratio pattern
+                   (mappedVariable.includes('ratio') && (mappedVariable.includes('rvu') || mappedVariable.includes('wrvu'))); // MGMA ratio pattern
       
       if (isCF) {
         // This is definitely a conversion factor
@@ -567,6 +604,19 @@ export class AnalyticsDataService {
         normalizedMetrics.tcc_p50 = p50;
         normalizedMetrics.tcc_p75 = p75;
         normalizedMetrics.tcc_p90 = p90;
+      } else if ((variable.includes('on') && variable.includes('call')) || 
+                 variable.includes('oncall') ||
+                 variable.includes('daily rate on call') ||
+                 variable.includes('daily rate oncall')) {
+        // This is on-call compensation - will be handled by dynamic variable system
+        // We don't need to set normalizedMetrics here as dynamic variables handle it
+        // This check is primarily for logging/debugging purposes
+        console.log('🔍 On-Call Compensation detected in LONG format:', {
+          surveyName: survey.name,
+          variable: originalVariable,
+          mappedVariable,
+          p25, p50, p75, p90
+        });
       } else if (variable.includes('work rvu') || variable.includes('wrvu')) {
         // This is work RVUs (but NOT if it contains "per" or "conversion")
         if (!variable.includes('per') && !variable.includes('conversion')) {
@@ -596,7 +646,7 @@ export class AnalyticsDataService {
       // WIDE FORMAT: Data has separate columns for each metric
       // Extract TCC metrics with fallback column names
       normalizedMetrics.tcc_p25 = this.extractNumber(
-        actualRowData.tcc_p25 || actualRowData['TCC P25'] || actualRowData['tcc_p25'] || actualRowData['TCC_p25']
+        (actualRowData.tcc_p25 || actualRowData['TCC P25'] || actualRowData['tcc_p25'] || actualRowData['TCC_p25'])
       );
       normalizedMetrics.tcc_p50 = this.extractNumber(
         actualRowData.tcc_p50 || actualRowData['TCC P50'] || actualRowData['tcc_p50'] || actualRowData['TCC_p50'] || actualRowData['TCC Median']
@@ -741,7 +791,103 @@ export class AnalyticsDataService {
       }
     }
     
-    const finalSurveySource = survey.type || survey.name || 'Unknown';
+    // NEW: Use survey.source and survey.dataCategory if available (new architecture)
+    // Fallback to old logic for backward compatibility
+    let finalSurveySource: string;
+    if ((survey as any).source && (survey as any).dataCategory) {
+      // New architecture: Construct surveySource from source + dataCategory
+      const source = (survey as any).source;
+      const dataCategory = (survey as any).dataCategory;
+      const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
+        : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+        : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+        : dataCategory;
+      finalSurveySource = `${source} ${categoryDisplay}`;
+      
+      console.log('🔍 Survey Source Construction (New Architecture):', {
+        surveyName: survey.name,
+        source,
+        dataCategory,
+        providerType: survey.providerType,
+        categoryDisplay,
+        finalSurveySource
+      });
+    } else {
+      // Backward compatibility: Use old logic
+      // CRITICAL FIX: Handle MGMA surveys properly - check if name contains "Physician" or "Call Pay"
+      if (survey.name && survey.name.includes('MGMA')) {
+        // Extract "MGMA Physician" or "MGMA Call Pay" from the name
+        // Survey name format: "MGMA Physician 2025" or "MGMA Call Pay 2025"
+        const nameWithoutYear = survey.name.replace(/\s+\d{4}$/, '').trim(); // Remove year suffix
+        finalSurveySource = nameWithoutYear;
+        
+        console.log('🔍 Survey Source Construction (Old Architecture - MGMA):', {
+          surveyName: survey.name,
+          surveyType: survey.type,
+          providerType: survey.providerType,
+          nameWithoutYear,
+          finalSurveySource
+        });
+      } else {
+        // Backward compatibility: Use old logic
+        // CRITICAL FIX: Better handling for surveys without source/dataCategory
+        // Try multiple fallback strategies to ensure we get the correct survey source
+        let sourceFromType = survey.type || '';
+        let sourceFromName = survey.name ? survey.name.replace(/\s+\d{4}$/, '').trim() : '';
+        
+        // Priority 1: Use type if it contains both source and category (e.g., "MGMA Physician")
+        if (sourceFromType && sourceFromType.includes(' ')) {
+          finalSurveySource = sourceFromType;
+        }
+        // Priority 2: Use name without year if available
+        else if (sourceFromName) {
+          finalSurveySource = sourceFromName;
+        }
+        // Priority 3: Fallback to type as-is
+        else {
+          finalSurveySource = sourceFromType || 'Unknown';
+        }
+        
+        // Special handling for Call Pay: ensure we preserve "Call Pay" in the name
+        if (survey.providerType === 'CALL' || (survey.name && survey.name.toLowerCase().includes('call pay'))) {
+          if (survey.name && survey.name.includes('Call Pay')) {
+            finalSurveySource = survey.name.replace(/\s+\d{4}$/, '').trim();
+          } else if (!finalSurveySource.includes('Call Pay')) {
+            // If we got a source but it doesn't have "Call Pay", add it
+            finalSurveySource = sourceFromType && sourceFromType.includes('Physician')
+              ? sourceFromType.replace('Physician', 'Call Pay')
+              : `${sourceFromType || sourceFromName} Call Pay`;
+          }
+        }
+        
+        console.log('🔍 Survey Source Construction (Old Architecture):', {
+          surveyName: survey.name,
+          surveyType: survey.type,
+          providerType: survey.providerType,
+          sourceFromType,
+          sourceFromName,
+          finalSurveySource
+        });
+      }
+    }
+    
+    // Debug logging for Call Pay surveys
+    // FIXED: Check for Call Pay using dataCategory OR old providerType for backward compatibility
+    if ((survey as any).dataCategory === 'CALL_PAY' || survey.providerType === 'CALL') {
+      console.log('🎯 Call Pay Data Normalization:', {
+        surveyName: survey.name,
+        surveyType: survey.type,
+        surveyProviderType: survey.providerType,
+        nameIncludesCallPay: survey.name && survey.name.includes('Call Pay'),
+        finalSurveySource,
+        finalSurveySourceLength: finalSurveySource.length,
+        finalSurveySourceChars: finalSurveySource.split('').map((c: string) => `${c}(${c.charCodeAt(0)})`).join(''),
+        rawSpecialty,
+        normalizedSpecialty,
+        rawProviderType,
+        normalizedProviderType
+      });
+    }
     
     // Debug logging for MGMA data
     if (survey.name && survey.name.toLowerCase().includes('mgma')) {
@@ -801,6 +947,8 @@ export class AnalyticsDataService {
       ...normalizedMetrics,
       surveySource: finalSurveySource,
       surveyYear: survey.year?.toString() || 'Unknown',
+      // NEW: Include dataCategory if available from survey
+      dataCategory: (survey as any).dataCategory,
       rawData: actualRowData
     };
   }
@@ -883,16 +1031,21 @@ export class AnalyticsDataService {
    * Normalize provider type using learned mappings
    */
   private normalizeProviderType(providerType: string, learnedMappings?: Record<string, string>): string {
-    if (!providerType || providerType === 'Staff Physician') return 'Staff Physician';
+    if (!providerType) return 'Staff Physician';
     
-    // First, try learned mappings (highest priority for enterprise scalability)
-    if (learnedMappings && learnedMappings[providerType.toLowerCase()]) {
-      return learnedMappings[providerType.toLowerCase()];
+    // ENTERPRISE FIX: Handle 'CALL' provider type explicitly first
+    // This ensures Call Pay surveys are correctly identified
+    const lower = providerType.toLowerCase();
+    if (providerType === 'CALL' || lower === 'call') {
+      return 'CALL';
     }
     
-    const lower = providerType.toLowerCase();
+    // First, try learned mappings (highest priority for enterprise scalability)
+    if (learnedMappings && learnedMappings[lower]) {
+      return learnedMappings[lower];
+    }
     
-    // Handle PhD roles first
+    // Handle PhD roles
     if (lower.includes('phd') || lower.includes('doctor of philosophy')) {
       return 'PhD';
     } else if (lower.includes('physician') || lower.includes('md') || lower.includes('do')) {
@@ -1016,6 +1169,7 @@ export class AnalyticsDataService {
       geographicRegion: firstRow.region,
       providerType: firstRow.providerType,
       surveyYear: firstRow.surveyYear,
+      dataCategory: firstRow.dataCategory, // NEW: Include dataCategory from normalized row
       tcc_n_orgs: 0,
       tcc_n_incumbents: 0,
       tcc_p25: 0,
@@ -1118,8 +1272,17 @@ export class AnalyticsDataService {
       mappings.learnedSpecialtyMappings
     );
     
-    const rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
-                           actualRowData.provider_type || row.providerType || 'Physician';
+    // ENTERPRISE FIX: For Call Pay surveys, use survey's providerType first
+    // This ensures Call Pay surveys are correctly identified even if data rows don't have providerType
+    let rawProviderType: string;
+    if (survey.providerType === 'CALL') {
+      // Call Pay surveys should use 'CALL' as providerType
+      rawProviderType = 'CALL';
+    } else {
+      // For other surveys, extract from data row
+      rawProviderType = actualRowData.providerType || actualRowData['Provider Type'] ||
+                       actualRowData.provider_type || row.providerType || survey.providerType || 'Physician';
+    }
     
     const normalizedProviderType = this.normalizeProviderType(rawProviderType, mappings.learnedProviderTypeMappings);
     
@@ -1165,7 +1328,54 @@ export class AnalyticsDataService {
       
       // CRITICAL STEP 1: Check user-created variable mappings FIRST (from mapping screen)
       // This handles MGMA's "Compensation to Work RVU Ratio" -> "total_cash_compensation_per_work_rvus"
-      const surveySource = survey.type || survey.name || '';
+      // NEW: Use survey.source and survey.dataCategory if available (new architecture)
+      // Fallback to old logic for backward compatibility
+      let surveySource: string;
+      if ((survey as any).source && (survey as any).dataCategory) {
+        // New architecture: Construct surveySource from source + dataCategory
+        const source = (survey as any).source;
+        const dataCategory = (survey as any).dataCategory;
+        const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
+          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+          : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+          : dataCategory;
+        surveySource = `${source} ${categoryDisplay}`;
+      } else {
+          // Backward compatibility: Use old logic
+          // CRITICAL FIX: Better handling for surveys without source/dataCategory
+          // Try multiple fallback strategies to ensure we get the correct survey source
+          let sourceFromType = survey.type || '';
+          let sourceFromName = survey.name ? survey.name.replace(/\s+\d{4}$/, '').trim() : '';
+          
+          // Priority 1: Use type if it contains both source and category (e.g., "MGMA Physician")
+          if (sourceFromType && sourceFromType.includes(' ')) {
+            surveySource = sourceFromType;
+          }
+          // Priority 2: Use name without year if available (for MGMA surveys)
+          else if (survey.name && survey.name.includes('MGMA')) {
+            surveySource = sourceFromName;
+          }
+          // Priority 3: Fallback to name without year
+          else if (sourceFromName) {
+            surveySource = sourceFromName;
+          }
+          // Priority 4: Fallback to type as-is
+          else {
+            surveySource = sourceFromType || '';
+          }
+          
+          // Special handling for Call Pay: ensure we preserve "Call Pay" in the name
+          if (survey.providerType === 'CALL' || (survey.name && survey.name.toLowerCase().includes('call pay'))) {
+            if (survey.name && survey.name.includes('Call Pay')) {
+              surveySource = survey.name.replace(/\s+\d{4}$/, '').trim();
+            } else if (!surveySource.includes('Call Pay')) {
+              // If we got a source but it doesn't have "Call Pay", add it
+              surveySource = sourceFromType && sourceFromType.includes('Physician')
+                ? sourceFromType.replace('Physician', 'Call Pay')
+                : `${sourceFromType || sourceFromName} Call Pay`;
+            }
+          }
+        }
       const exactMappingKey = `${surveySource}::${originalVariable}`.toLowerCase().trim();
       const flexibleMappingKey = `::${originalVariable}`.toLowerCase().trim();
       
@@ -1214,15 +1424,64 @@ export class AnalyticsDataService {
       const shouldProcess = selectedVariables.length === 0 || selectedVariables.includes(normalizedVarName);
       
       if (shouldProcess) {
+        // Extract percentiles with fallback to handle column name variations
+        // Handles mapped column names like "25th%", "p25", etc.
+        const p25 = this.extractNumber(
+          actualRowData.p25 || actualRowData['25th%'] || actualRowData['25th'] || 
+          actualRowData['P25'] || actualRowData['p25'] || 0
+        );
+        const p50 = this.extractNumber(
+          actualRowData.p50 || actualRowData['50th%'] || actualRowData['50th'] || 
+          actualRowData['P50'] || actualRowData['p50'] || actualRowData['Median'] || 0
+        );
+        const p75 = this.extractNumber(
+          actualRowData.p75 || actualRowData['75th%'] || actualRowData['75th'] || 
+          actualRowData['P75'] || actualRowData['p75'] || 0
+        );
+        const p90 = this.extractNumber(
+          actualRowData.p90 || actualRowData['90th%'] || actualRowData['90th'] || 
+          actualRowData['P90'] || actualRowData['p90'] || 0
+        );
+        
         variables[normalizedVarName] = {
           variableName: variable,
           n_orgs,
           n_incumbents,
-          p25: this.extractNumber(actualRowData.p25),
-          p50: this.extractNumber(actualRowData.p50),
-          p75: this.extractNumber(actualRowData.p75),
-          p90: this.extractNumber(actualRowData.p90)
+          p25,
+          p50,
+          p75,
+          p90
         };
+        
+        // Enhanced logging for Call Pay variables
+        const isCallPayVariable = normalizedVarName === 'on_call_compensation' || 
+                                  normalizedVarName.includes('on_call') || 
+                                  normalizedVarName.includes('oncall');
+        // FIXED: Check for Call Pay using dataCategory OR old providerType for backward compatibility
+        const isCallPaySurvey = (survey as any).dataCategory === 'CALL_PAY' || 
+                                survey.providerType === 'CALL' ||
+                                (survey.name && survey.name.toLowerCase().includes('call pay'));
+        
+        if (isCallPayVariable || (isCallPaySurvey && (originalVariable.toLowerCase().includes('on') && originalVariable.toLowerCase().includes('call')))) {
+          console.log('🔍 Call Pay variable extracted in normalizeRowDynamic:', {
+            surveyId: survey.id,
+            surveyName: survey.name,
+            originalVariable,
+            mappedVariable: variable,
+            normalizedVarName,
+            hasUserMapping: !!standardizedNameFromMapping,
+            hasLearnedMapping: !!mappings.learnedVariableMappings?.[originalVariable],
+            n_orgs,
+            n_incumbents,
+            p25,
+            p50,
+            p75,
+            p90,
+            hasP25: !!actualRowData.p25 || !!actualRowData['25th%'],
+            hasP50: !!actualRowData.p50 || !!actualRowData['50th%'],
+            rowKeys: Object.keys(actualRowData).slice(0, 10)
+          });
+        }
       }
     } else {
       // WIDE FORMAT: Data has separate columns for each variable
@@ -1287,13 +1546,68 @@ export class AnalyticsDataService {
       });
     }
     
+    // NEW: Use survey.source and survey.dataCategory if available (new architecture)
+    // Fallback to old logic for backward compatibility
+    let finalSurveySource: string;
+    if ((survey as any).source && (survey as any).dataCategory) {
+      // New architecture: Construct surveySource from source + dataCategory
+      const source = (survey as any).source;
+      const dataCategory = (survey as any).dataCategory;
+      const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
+        : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+        : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+        : dataCategory;
+      finalSurveySource = `${source} ${categoryDisplay}`;
+    } else {
+      // Backward compatibility: Use old logic
+      // ENTERPRISE FIX: Use survey.name if it includes "Call Pay" to ensure proper distinction
+      finalSurveySource = (survey.providerType === 'CALL' && survey.name && survey.name.includes('Call Pay')) 
+        ? survey.name 
+        : (survey.type || survey.name || 'Unknown');
+    }
+    
+    // Debug logging for Call Pay surveys in dynamic normalization
+    // FIXED: Check for Call Pay using dataCategory OR old providerType for backward compatibility
+    if ((survey as any).dataCategory === 'CALL_PAY' || survey.providerType === 'CALL') {
+      console.log('🎯 Call Pay Dynamic Normalization:', {
+        surveyName: survey.name,
+        surveyType: survey.type,
+        surveyProviderType: survey.providerType,
+        nameIncludesCallPay: survey.name && survey.name.includes('Call Pay'),
+        dataCategory: (survey as any).dataCategory,
+        source: (survey as any).source,
+        finalSurveySource,
+        finalSurveySourceLength: finalSurveySource.length,
+        variablesCount: Object.keys(variables).length,
+        variableNames: Object.keys(variables)
+      });
+    }
+    
+    // CRITICAL FIX: Ensure dataCategory is set correctly, especially for Call Pay surveys
+    // If survey doesn't have dataCategory but it's a Call Pay survey, infer it
+    let rowDataCategory = (survey as any).dataCategory;
+    if (!rowDataCategory) {
+      // Infer from survey properties for backward compatibility
+      if ((survey.providerType === 'CALL') || 
+          (survey.name && survey.name.toLowerCase().includes('call pay')) ||
+          (finalSurveySource && finalSurveySource.toLowerCase().includes('call pay'))) {
+        rowDataCategory = 'CALL_PAY';
+      } else if (survey.name && survey.name.toLowerCase().includes('moonlighting')) {
+        rowDataCategory = 'MOONLIGHTING';
+      } else {
+        rowDataCategory = 'COMPENSATION'; // Default
+      }
+    }
+    
     return {
       specialty: rawSpecialty, // Original specialty name from survey
       standardizedSpecialty: normalizedSpecialty, // Mapped standardized specialty name
       providerType: normalizedProviderType,
       region: normalizedRegion,
-      surveySource: survey.type || survey.name || 'Unknown',
+      surveySource: finalSurveySource,
       surveyYear: survey.year?.toString() || 'Unknown',
+      // NEW: Include dataCategory if available from survey, with fallback inference
+      dataCategory: rowDataCategory,
       variables
     };
   }
@@ -1327,6 +1641,21 @@ export class AnalyticsDataService {
       
       const firstRow = rows[0];
       
+      // CRITICAL FIX: Ensure dataCategory is set on aggregated record
+      // Use firstRow.dataCategory, but fallback to inference if missing
+      let aggregatedDataCategory = firstRow.dataCategory;
+      if (!aggregatedDataCategory) {
+        // Infer from surveySource for backward compatibility
+        const surveySource = firstRow.surveySource || '';
+        if (surveySource.toLowerCase().includes('call pay')) {
+          aggregatedDataCategory = 'CALL_PAY';
+        } else if (surveySource.toLowerCase().includes('moonlighting')) {
+          aggregatedDataCategory = 'MOONLIGHTING';
+        } else {
+          aggregatedDataCategory = 'COMPENSATION'; // Default
+        }
+      }
+      
       // Initialize aggregated record - each group now represents a single survey
       const aggregatedRecord: DynamicAggregatedData = {
         standardizedName: firstRow.standardizedSpecialty, // Mapped standardized specialty name
@@ -1336,6 +1665,7 @@ export class AnalyticsDataService {
         geographicRegion: firstRow.region,
         providerType: firstRow.providerType,
         surveyYear: firstRow.surveyYear, // Individual survey year
+        dataCategory: aggregatedDataCategory, // NEW: Include dataCategory from normalized row with fallback
         variables: {}
       };
       
@@ -1389,7 +1719,10 @@ export class AnalyticsDataService {
       'base_salary': 'Base Salary',
       'asa_units': 'ASA Units',
       'panel_size': 'Panel Size',
-      'total_encounters': 'Total Encounters'
+      'total_encounters': 'Total Encounters',
+      'on_call_compensation': 'Daily Rate On-Call Compensation',
+      'oncall_compensation': 'Daily Rate On-Call Compensation',
+      'daily_rate_on_call': 'Daily Rate On-Call Compensation'
     };
     
     return displayMap[normalizedName] || normalizedName

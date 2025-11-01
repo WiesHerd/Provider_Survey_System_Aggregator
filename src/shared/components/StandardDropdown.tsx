@@ -76,12 +76,29 @@ export const StandardDropdown: React.FC<StandardDropdownProps> = memo(({
 }) => {
   
   // Always use Autocomplete - EXACT match to upload screen
+  // ENTERPRISE FIX: Map empty string to "All Categories"/"All Types"/etc. for display
+  const displayValue = value === '' && options.includes('All Categories') ? 'All Categories' :
+                       value === '' && options.includes('All Types') ? 'All Types' :
+                       value === '' && options.includes('All Sources') ? 'All Sources' :
+                       value === '' && options.includes('All Years') ? 'All Years' :
+                       value || null;
+  
   return (
     <FormControl fullWidth size={size} className={className}>
       <Autocomplete
-        value={value}
+        value={displayValue}
         onChange={(event: any, newValue: string | null) => {
-          onChange(newValue || '');
+          // ENTERPRISE FIX: Convert "All Categories", "All Types", "All Sources", etc. to empty string
+          // This ensures consistent filtering logic - empty string means "show all"
+          const normalizedValue = newValue === 'All Categories' || 
+                                  newValue === 'All Types' || 
+                                  newValue === 'All Sources' || 
+                                  newValue === 'All Years' || 
+                                  newValue === null ||
+                                  newValue === ''
+            ? '' 
+            : newValue || '';
+          onChange(normalizedValue);
         }}
         options={options}
         getOptionLabel={getOptionLabel}

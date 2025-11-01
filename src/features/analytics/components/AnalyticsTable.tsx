@@ -6,7 +6,7 @@
  * Following enterprise patterns for component composition and performance.
  */
 
-import React, { memo, useState, useMemo, useCallback } from 'react';
+import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 // Removed Material-UI table imports - using HTML table instead
 import { AnalyticsTableProps } from '../types/analytics';
 import { calculateSummaryRows } from '../utils/analyticsCalculations';
@@ -57,16 +57,33 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   // Use memoized column groups for dynamic variables
   const columnGroups = useMemoizedColumnGroups(selectedVariables, true);
   
+  // CRITICAL FIX: Reset pagination to page 1 when data changes (e.g., filters change)
+  // This ensures that when switching between "Call Pay" and "All Categories", 
+  // the user sees data from the beginning instead of staying on a page that might not have Call Pay data
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [data.length]); // Reset when data length changes (which happens when filters change)
+  
   // No grouping - use data directly for global averaging
+  // ENTERPRISE PERFORMANCE: Cap at 500 rows per page for optimal performance when "All" is selected
+  // Rendering more than 500 rows in a standard HTML table causes significant performance degradation
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
+    // CRITICAL FIX: For "All" option, use 500 rows per page and allow pagination through all data
+    // This allows users to see all data while maintaining performance
+    const effectiveItemsPerPage = itemsPerPage >= data.length ? 500 : itemsPerPage;
+    const safeItemsPerPage = effectiveItemsPerPage > 0 ? effectiveItemsPerPage : 10;
+    const startIndex = (currentPage - 1) * safeItemsPerPage;
+    const endIndex = startIndex + safeItemsPerPage;
     return data.slice(startIndex, endIndex);
   }, [data, currentPage, itemsPerPage]);
   
   // Pagination calculations
   const totalRows = data.length;
-  const totalPages = Math.ceil(totalRows / itemsPerPage);
+  // ENTERPRISE FIX: Prevent division by zero and handle edge cases
+  // CRITICAL FIX: For "All" option, use 500 rows per page for pagination calculation
+  const effectiveItemsPerPage = itemsPerPage >= totalRows ? 500 : itemsPerPage;
+  const safeItemsPerPage = effectiveItemsPerPage > 0 ? effectiveItemsPerPage : 10;
+  const totalPages = Math.ceil(totalRows / safeItemsPerPage);
 
   // Global summary calculation for all visible data
   const globalSummaryData = useMemo(() => {
@@ -85,7 +102,10 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   
   // Handle items per page change
   const handleItemsPerPageChange = useCallback((newPageSize: number) => {
-    setItemsPerPage(newPageSize);
+    // CRITICAL FIX: Allow "All" option - set to totalRows to show all data
+    // Remove artificial 1000 limit - users should be able to see all their data
+    const validPageSize = newPageSize > 0 ? newPageSize : 10;
+    setItemsPerPage(validPageSize);
     setCurrentPage(1); // Reset to first page
   }, []);
   
@@ -244,14 +264,19 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           />
           <tbody>
             {/* All Data Rows - No grouping */}
+            {/* ENTERPRISE PERFORMANCE: Use stable keys and memoization for better rendering */}
             {paginatedData.map((row, index) => {
               // Extract specialty name for display
               const specialty = row.standardizedName || row.surveySpecialty || 'Unknown';
               const surveySource = row.surveySource || '';
               
+              // CRITICAL: Use stable, unique key for React optimization
+              // Use actual row data for key, not index-based
+              const stableKey = `${row.surveySource || 'unknown'}-${row.geographicRegion || 'unknown'}-${row.providerType || 'unknown'}-${specialty}-${index}`;
+              
               return (
                 <AnalyticsTableRow
-                  key={`${row.surveySource}-${row.geographicRegion}-${index}`}
+                  key={stableKey}
                   row={row}
                   selectedVariables={selectedVariables}
                   index={index}
@@ -283,20 +308,18 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
         </table>
       </div>
 
-      {/* Modern Pagination - Consistent with other screens */}
-      {totalPages > 1 && (
-        <div className="pagination-container">
-          <ModernPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            pageSize={itemsPerPage}
-            totalRows={totalRows}
-            onPageChange={handlePageChange}
-            onPageSizeChange={handleItemsPerPageChange}
-            pageSizeOptions={[5, 10, 25, 50]}
-          />
-        </div>
-      )}
+      {/* Modern Pagination - Always show so users can change page size even when showing all */}
+      <div className="pagination-container">
+        <ModernPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={itemsPerPage}
+          totalRows={totalRows}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handleItemsPerPageChange}
+            pageSizeOptions={[10, 25, 50, 100, 250, 500]}
+        />
+      </div>
     </div>
   );
 });

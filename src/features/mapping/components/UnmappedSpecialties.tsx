@@ -111,13 +111,26 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
           </div>
         )}
 
-      {/* Specialties Grid - Consistent Fixed Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
-          const color = getSurveySourceColor(source);
-          
-          return (
-            <Paper key={source} className="p-3 relative overflow-hidden">
+      {/* Specialties Grid - Intelligent flexible layout that adapts to any number of columns */}
+      {/* Fixed column width (320px) ensures consistent appearance regardless of number of columns */}
+      {/* Automatically fits as many columns as screen width allows, horizontal scroll for overflow */}
+      {/* Uses flexbox for optimal horizontal scrolling with fixed-width columns */}
+      <div className="w-full overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Responsive: On mobile (flex-col), vertical stack; on larger screens (sm:flex-row), horizontal row with scroll */}
+          {/* Columns grow to fill space when few columns exist, but maintain minimum width and scroll when many */}
+          {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
+            const color = getSurveySourceColor(source);
+            
+            return (
+              <Paper 
+                key={source} 
+                className="p-3 relative overflow-hidden flex-shrink-0 sm:flex-1"
+                style={{ 
+                  minWidth: '320px',
+                  maxWidth: '500px' // Prevent columns from becoming too wide on very large screens
+                }}
+              >
               <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
                 <span style={{ color }}>{source}</span>
                 <Typography variant="caption" color="textSecondary" className="text-xs">
@@ -139,6 +152,7 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
             </Paper>
           );
         })}
+        </div>
       </div>
 
       {/* Empty State - Consistent enterprise pattern */}

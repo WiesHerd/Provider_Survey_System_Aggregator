@@ -16,11 +16,11 @@ import { filterAnalyticsData, normalizeSpecialtyName } from '../utils/analyticsC
 import { VariableDiscoveryService } from '../services/variableDiscoveryService';
 import { VariableFormattingService } from '../services/variableFormattingService';
 import { VariableFormattingDialog } from './VariableFormattingDialog';
-import { DEFAULT_VARIABLES } from '../types/variables';
+// import { DEFAULT_VARIABLES } from '../types/variables'; // Not used currently
 import { logMGMA } from '../utils/diagnostics';
 
 interface SurveyAnalyticsProps {
-  providerTypeFilter?: 'PHYSICIAN' | 'APP';
+  providerTypeFilter?: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
 }
 
 /**
@@ -44,7 +44,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   });
   
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
-  const [isDiscoveringVariables, setIsDiscoveringVariables] = useState(false);
+  // const [isDiscoveringVariables, setIsDiscoveringVariables] = useState(false); // Not used currently
   
   // Variable formatting state
   const [formattingRules, setFormattingRules] = useState<any[]>([]);
@@ -56,17 +56,64 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     setShowFormatDialog(true);
   }, []);
   
+  // CRITICAL FIX: Benchmarking screen should show ALL data regardless of sidebar selection
+  // Check if we're on benchmarking route - if so, ignore provider type filtering
+  const isBenchmarkingScreen = typeof window !== 'undefined' && window.location.pathname.includes('/benchmarking');
+  
   // Use the provider type from context (sidebar selection) or fallback to prop
-  const effectiveProviderType = selectedProviderType || providerTypeFilter;
+  // BUT: For benchmarking screen, always use 'BOTH' to show all data
+  const effectiveProviderType = isBenchmarkingScreen 
+    ? 'BOTH' 
+    : (selectedProviderType || providerTypeFilter);
   
   // NEW: Discover variables on mount
   useEffect(() => {
     const discoverVariables = async () => {
       try {
-        setIsDiscoveringVariables(true);
+        // setIsDiscoveringVariables(true); // Not used currently
         const service = VariableDiscoveryService.getInstance();
+        // CRITICAL: Clear cache to ensure we get fresh discovery after code changes
+        service.clearCache();
+        // Expose service globally for debugging
+        (window as any).VariableDiscoveryService = VariableDiscoveryService;
+        (window as any).refreshVariables = async () => {
+          service.clearCache();
+          const vars = await service.discoverAllVariables();
+          console.log('🔄 Refreshed variables:', vars.map(v => v.normalizedName));
+          return vars;
+        };
         const discovered = await service.discoverAllVariables();
         const variableNames = discovered.map(v => v.normalizedName);
+        console.log('🔍 SurveyAnalytics: All discovered variables:', variableNames);
+        console.log('🔍 SurveyAnalytics: Available variables count:', variableNames.length);
+        
+        // Check specifically for ASA
+        const asaVars = discovered.filter(v => v.normalizedName.includes('asa'));
+        if (asaVars.length > 0) {
+          console.log('✅ SurveyAnalytics: Found ASA variables:', asaVars.map(v => v.normalizedName));
+        } else {
+          console.log('❌ SurveyAnalytics: NO ASA variables found');
+        }
+        
+        // DEBUG: Check specifically for on-call compensation variables
+        const onCallVars = discovered.filter(v => 
+          v.normalizedName.includes('on_call') || 
+          v.normalizedName.includes('oncall') ||
+          v.name.toLowerCase().includes('on call') ||
+          v.name.toLowerCase().includes('oncall')
+        );
+        if (onCallVars.length > 0) {
+          console.log('✅ SurveyAnalytics: Found On-Call Compensation variables:', onCallVars.map(v => ({
+            name: v.name,
+            normalizedName: v.normalizedName,
+            sources: v.availableSources,
+            recordCount: v.recordCount
+          })));
+        } else {
+          console.warn('⚠️ SurveyAnalytics: NO On-Call Compensation variables found in discovered variables');
+          console.log('🔍 SurveyAnalytics: This may indicate Call Pay surveys are not being processed correctly');
+        }
+        
         setAvailableVariables(variableNames);
         
         // Run MGMA diagnostic if requested (can be triggered from console or URL)
@@ -102,8 +149,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         console.error('Failed to discover variables:', error);
         setAvailableVariables([]);
         setSelectedVariables([]);
-      } finally {
-        setIsDiscoveringVariables(false);
       }
     };
     
@@ -151,13 +196,19 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   }, []);
   */
   
-  // Helper function to categorize provider types into PHYSICIAN/APP categories
-  const categorizeProviderType = (providerType: string): 'PHYSICIAN' | 'APP' | 'OTHER' => {
+  // Helper function to categorize provider types into PHYSICIAN/APP/CALL categories
+  const categorizeProviderType = (providerType: string): 'PHYSICIAN' | 'APP' | 'CALL' | 'OTHER' => {
     if (!providerType) return 'OTHER';
     
     const lower = providerType.toLowerCase();
     
-    // APP categories (check these first to avoid conflicts with "Physician Assistant")
+    // Call Pay categories (check first)
+    if (lower === 'call' || lower.includes('call pay') || lower.includes('on-call') || 
+        lower.includes('oncall') || lower.includes('call compensation')) {
+      return 'CALL';
+    }
+    
+    // APP categories (check these second to avoid conflicts with "Physician Assistant")
     if (lower.includes('nurse practitioner') || lower.includes('np') || 
         lower.includes('physician assistant') || lower.includes('pa') || 
         lower.includes('crna') || lower.includes('advanced practice') || 
@@ -191,21 +242,29 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     year: ''
   }, selectedVariables); // NEW: Pass selected variables to hook
 
-  // FIXED: Also discover variables from the analytics data when it loads
+  // FIXED: Don't overwrite discovered variables - they should show ALL available variables
+  // from all surveys, not just ones with data in current filtered results
+  // CRITICAL FIX: The discovered variables from VariableDiscoveryService should be the source of truth
+  // This ensures variables like ASA are available even if they don't appear in current filtered data
   useEffect(() => {
     if (allData.length > 0) {
-      console.log('🔍 SurveyAnalytics: Data loaded, extracting variables from data...');
+      console.log('🔍 SurveyAnalytics: Data loaded, checking variables in current data...');
       
-      // Extract variables from the first data row
+      // Extract variables from the first data row for validation/debugging only
       const firstRow = allData[0] as any; // Type assertion for dynamic data
       if (firstRow && firstRow.variables) {
-        const variableNames = Object.keys(firstRow.variables);
-        console.log('🔍 SurveyAnalytics: Extracted variables from data:', variableNames);
+        const dataVariableNames = Object.keys(firstRow.variables);
+        console.log('🔍 SurveyAnalytics: Variables in current filtered data:', dataVariableNames);
+        console.log('🔍 SurveyAnalytics: Keeping all discovered variables in dropdown (not overwriting with filtered data)');
         
-        // Update available variables but keep pre-selected ones
-        console.log('🔍 SurveyAnalytics: Updating available variables, keeping pre-selected:', selectedVariables);
-        setAvailableVariables(variableNames); // Update available variables
-        // Don't override selectedVariables - keep the common ones we pre-selected
+        // CRITICAL: Only set availableVariables from data if we haven't discovered any yet
+        // Otherwise, keep the discovered variables which include ALL variables from ALL surveys
+        // This ensures ASA and other variables show up even if current filters exclude them
+        if (availableVariables.length === 0) {
+          console.log('🔍 SurveyAnalytics: No discovered variables yet, using data variables as temporary fallback');
+          setAvailableVariables(dataVariableNames);
+        }
+        // If we have discovered variables, DON'T overwrite them - they're the source of truth
       }
       
       // DEBUG: Check specialty mapping data structure (simplified)
@@ -247,11 +306,18 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     }
     
     // Apply provider type filtering
+    // CRITICAL FIX: Benchmarking screen should NEVER filter by provider type - show ALL data
     let providerFilteredData = allData;
     
-    if (effectiveProviderType && effectiveProviderType !== 'BOTH') {
+    if (effectiveProviderType && effectiveProviderType !== 'BOTH' && !isBenchmarkingScreen) {
+      // Only apply provider type filtering if NOT on benchmarking screen
       providerFilteredData = allData.filter(row => {
         if (!row.providerType) return false;
+        // Direct match for exact provider types (CALL, PHYSICIAN, APP)
+        if (row.providerType === effectiveProviderType) {
+          return true;
+        }
+        // Also check categorized match for backward compatibility
         const category = categorizeProviderType(row.providerType);
         return category === effectiveProviderType;
       });
@@ -261,7 +327,11 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         after: providerFilteredData.length
       });
     } else {
-      console.log('🔍 SurveyAnalytics: Provider type filtering disabled - showing all data');
+      if (isBenchmarkingScreen) {
+        console.log('🔍 SurveyAnalytics: Benchmarking screen - Provider type filtering DISABLED - showing ALL data');
+      } else {
+        console.log('🔍 SurveyAnalytics: Provider type filtering disabled - showing all data');
+      }
     }
     
     // Apply UI filters to the provider-filtered data
@@ -317,16 +387,33 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     }
     */
     
-    return uiFilteredData;
-  }, [allData, filters, effectiveProviderType, selectedVariables]);
+    // Sort by standardized name to group same specialties from different provider types together
+    const sortedData = [...uiFilteredData].sort((a, b) => {
+      const nameA = (a.standardizedName || '').toLowerCase();
+      const nameB = (b.standardizedName || '').toLowerCase();
+      if (nameA !== nameB) {
+        return nameA.localeCompare(nameB);
+      }
+      // If same standardized name, sort by provider type to keep similar data together
+      const typeA = (a.providerType || '').toLowerCase();
+      const typeB = (b.providerType || '').toLowerCase();
+      return typeA.localeCompare(typeB);
+    });
+    
+    return sortedData;
+  }, [allData, filters, effectiveProviderType, selectedVariables, isBenchmarkingScreen, selectedProviderType, providerTypeFilter]);
 
   // Generate cascading filter options based on current filter state and provider type
   const filterOptions = useMemo(() => {
     console.log('🔍 SurveyAnalytics: Generating filter options from allData length:', allData.length);
     
-    // Start with all data - DISABLED provider type filtering for filter options too
+    // Start with all data - CRITICAL: Benchmarking should always show all filter options
     let filteredData = allData;
-    console.log('🔍 SurveyAnalytics: Filter options - provider type filtering DISABLED');
+    if (isBenchmarkingScreen) {
+      console.log('🔍 SurveyAnalytics: Filter options - Benchmarking screen - showing ALL filter options (no provider type filtering)');
+    } else {
+      console.log('🔍 SurveyAnalytics: Filter options - provider type filtering DISABLED');
+    }
     
     // TODO: Re-enable provider type filtering for filter options once we understand the data structure
     /*
@@ -367,15 +454,113 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       cascadingData = cascadingData.filter(row => row.geographicRegion === filters.geographicRegion);
     }
     
-    // Generate options from the cascading-filtered dataset
+    // If data category is selected, filter by data category (NEW)
+    // ENTERPRISE FIX: Only filter if a specific category is selected (not "All Categories", empty, or undefined)
+    // CRITICAL FIX: Handle both empty string AND "All Categories" string explicitly
+    const shouldFilterByCategory = filters.dataCategory && 
+        filters.dataCategory !== '' && 
+        filters.dataCategory !== 'All Categories' &&
+        filters.dataCategory !== undefined &&
+        filters.dataCategory !== null;
+
+    if (shouldFilterByCategory) {
+      // Convert display name back to internal format if needed
+      const categoryFilter = filters.dataCategory === 'Call Pay' ? 'CALL_PAY'
+        : filters.dataCategory === 'Moonlighting' ? 'MOONLIGHTING'
+        : filters.dataCategory === 'Compensation' ? 'COMPENSATION'
+        : filters.dataCategory === 'Custom' ? 'CUSTOM'
+        : filters.dataCategory;
+      
+      const rowsBeforeFilter = cascadingData.length;
+      cascadingData = cascadingData.filter(row => {
+        const rowDataCategory = (row as any).dataCategory;
+        return rowDataCategory === categoryFilter;
+      });
+      
+      console.log('🔍 SurveyAnalytics: Cascading filter - Data category filtering APPLIED:', {
+        selectedCategory: filters.dataCategory,
+        normalizedCategory: categoryFilter,
+        rowsBeforeFilter,
+        cascadingDataCount: cascadingData.length
+      });
+    } else {
+      // ENTERPRISE FIX: When "All Categories" is selected, don't filter by dataCategory
+      const callPayRows = cascadingData.filter((row: any) => {
+        const rowDataCategory = (row as any).dataCategory;
+        return rowDataCategory === 'CALL_PAY' || 
+               (!rowDataCategory && ((row as any).surveySource || '').toLowerCase().includes('call pay'));
+      });
+      
+      console.log('🔍 SurveyAnalytics: Cascading filter - Data category filtering SKIPPED (All Categories):', {
+        dataCategoryFilter: filters.dataCategory,
+        filterValueType: typeof filters.dataCategory,
+        cascadingDataCount: cascadingData.length,
+        callPayRowsCount: callPayRows.length,
+        callPaySampleRows: callPayRows.slice(0, 3).map((row: any) => ({
+          surveySource: row.surveySource,
+          standardizedName: row.standardizedName,
+          dataCategory: (row as any).dataCategory
+        }))
+      });
+    }
+    
+    // CRITICAL FIX: Generate survey sources from ALL data, not cascading-filtered data
+    // This ensures all surveys are always available in the dropdown, regardless of other filter selections
+    // Other options (specialties, regions, etc.) can still use cascading filters for better UX
+    const allSurveySources = allData.map(row => row.surveySource).filter((item): item is string => Boolean(item));
+    const availableSourcesFromAllData = [...new Set(allSurveySources)].sort();
+    
+    // CRITICAL FIX: Generate data categories from ALL data, not cascading-filtered data
+    // This ensures all data categories are always available in the dropdown, regardless of other filter selections
+    // This allows users to filter by data category even if current specialty selection doesn't have that category
+    const allDataCategories = allData.map(row => (row as any).dataCategory).filter((item): item is string => Boolean(item));
+    const availableDataCategoriesFromAllData = [...new Set(allDataCategories)].sort();
+    // Format data categories for display
+    const formattedDataCategoriesFromAllData = availableDataCategoriesFromAllData.map(cat => {
+      if (cat === 'CALL_PAY') return 'Call Pay';
+      if (cat === 'MOONLIGHTING') return 'Moonlighting';
+      if (cat === 'COMPENSATION') return 'Compensation';
+      return cat;
+    });
+    
+    // CRITICAL DEBUG: Check for MGMA surveys specifically
+    const mgmaSources = allSurveySources.filter(src => src.toLowerCase().includes('mgma'));
+    const uniqueMgmaSources = [...new Set(mgmaSources)];
+    
+    // Enhanced logging to debug survey source generation
+    console.log('🔍 SurveyAnalytics: Survey source generation:', {
+      totalRows: allData.length,
+      totalSurveySources: allSurveySources.length,
+      uniqueSurveySources: availableSourcesFromAllData.length,
+      allSurveySourcesList: availableSourcesFromAllData,
+      mgmaSourcesRaw: mgmaSources,
+      uniqueMgmaSources: uniqueMgmaSources,
+      hasMgmaPhysician: availableSourcesFromAllData.some(s => s === 'MGMA Physician'),
+      hasMgmaCallPay: availableSourcesFromAllData.some(s => s === 'MGMA Call Pay'),
+      sampleRows: allData.slice(0, 10).map(row => ({
+        surveySource: row.surveySource,
+        dataCategory: (row as any).dataCategory,
+        providerType: row.providerType,
+        specialty: row.standardizedName
+      })),
+      mgmaRows: allData.filter(row => row.surveySource && row.surveySource.toLowerCase().includes('mgma')).slice(0, 5).map(row => ({
+        surveySource: row.surveySource,
+        dataCategory: (row as any).dataCategory,
+        providerType: row.providerType,
+        specialty: row.standardizedName
+      }))
+    });
+    
+    // Generate other options from the cascading-filtered dataset (for specialties, regions, etc.)
     const availableSpecialties = [...new Set(cascadingData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
-    const availableSources = [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
     
     console.log('🔍 SurveyAnalytics: Filter options generated:', {
       specialties: availableSpecialties.length,
-      sources: availableSources.length,
+      sources: availableSourcesFromAllData.length,
+      sourcesFromCascading: [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].length,
       specialtiesList: availableSpecialties.slice(0, 5), // Show first 5
-      sourcesList: availableSources.slice(0, 5) // Show first 5
+      sourcesList: availableSourcesFromAllData, // Show all sources
+      cascadingSourcesList: [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].slice(0, 5)
     });
     
     // Get unique regions and create formatted display options
@@ -406,28 +591,54 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       return formattedRegion;
     });
     
-    const availableProviderTypes = [...new Set(cascadingData.map(row => row.providerType).filter((item): item is string => Boolean(item)))].sort();
+    // CRITICAL FIX: Format provider types properly and remove duplicates (case-insensitive)
+    // Normalize to title case and deduplicate case-insensitively
+    const providerTypeMap = new Map<string, string>(); // Maps lowercase to properly formatted
+    cascadingData.forEach(row => {
+      if (row.providerType) {
+        const lower = row.providerType.toLowerCase();
+        // Use original if not in map, otherwise keep the first properly formatted version
+        if (!providerTypeMap.has(lower)) {
+          // Format to title case: "staff physician" -> "Staff Physician"
+          const formatted = row.providerType
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+          providerTypeMap.set(lower, formatted);
+        }
+      }
+    });
+    const availableProviderTypes = Array.from(providerTypeMap.values()).sort();
     const availableYears = [...new Set(cascadingData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
+    
+    // CRITICAL FIX: Use data categories from ALL data, not cascading-filtered data
+    // This ensures all data categories are always available in the dropdown, regardless of other filter selections
+    // This matches the pattern used for survey sources above
+    // Note: formattedDataCategoriesFromAllData was already created above from allData
 
     console.log('🔍 SurveyAnalytics: All filter options:', {
       specialties: availableSpecialties.length,
-      sources: availableSources.length,
+      sources: availableSourcesFromAllData.length,
       regions: availableRegions.length,
       providerTypes: availableProviderTypes.length,
+      dataCategories: formattedDataCategoriesFromAllData.length,
       years: availableYears.length,
       providerTypesList: availableProviderTypes.slice(0, 5),
-      yearsList: availableYears.slice(0, 5)
+      dataCategoriesList: formattedDataCategoriesFromAllData.slice(0, 5),
+      yearsList: availableYears.slice(0, 5),
+      allSourcesList: availableSourcesFromAllData
     });
 
     return {
       specialties: availableSpecialties,
-      sources: availableSources,
+      sources: availableSourcesFromAllData, // CRITICAL FIX: Use all sources from allData, not cascading-filtered
       regions: availableRegions,
       regionMapping: regionMapping,
       providerTypes: availableProviderTypes,
+      dataCategories: formattedDataCategoriesFromAllData, // CRITICAL FIX: Use all data categories from allData, not cascading-filtered
       years: availableYears
     };
-  }, [allData, filters, currentYear, effectiveProviderType, providerTypeFilter]);
+  }, [allData, filters, isBenchmarkingScreen]);
 
   // Debug: Log final data length after all filtering
   console.log('🔍 SurveyAnalytics: Final data length after all filters:', data.length);
@@ -448,6 +659,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
             availableRegions={filterOptions.regions}
             regionMapping={filterOptions.regionMapping}
             availableProviderTypes={filterOptions.providerTypes}
+            availableDataCategories={filterOptions.dataCategories}
             availableYears={filterOptions.years}
             selectedVariables={selectedVariables}
             availableVariables={availableVariables}

@@ -30,6 +30,10 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
     error,
     activeTab,
     
+    // Cross-category mapping toggle (Call Pay, Physician, APP)
+    showAllProviderTypes,
+    setShowAllProviderTypes,
+    
     // Search state
     searchTerm,
     mappedSearchTerm,
@@ -137,6 +141,10 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
     showHelp,
     isBulkSelected,
     allUnmappedCount,
+    
+    // Cross-category mapping toggle (Call Pay, Physician, APP)
+    showAllProviderTypes,
+    setShowAllProviderTypes,
     
     // Data state
     mappings,

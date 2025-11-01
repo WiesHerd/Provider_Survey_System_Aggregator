@@ -25,6 +25,10 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
   // Custom hook for data management
   const {
     // State
+    // Cross-category mapping toggle
+    showAllCategories,
+    setShowAllCategories,
+    
     mappings,
     unmappedProviderTypes,
     selectedProviderTypes,
@@ -144,6 +148,8 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
               selectedCount={selectedProviderTypes.length}
               isBulkSelected={selectedProviderTypes.length === unmappedProviderTypes.length && unmappedProviderTypes.length > 0}
               allUnmappedCount={unmappedProviderTypes.length}
+              showAllCategories={showAllCategories}
+              onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
               onShowHelp={() => setShowHelp(true)}
               onToggleSelectAll={selectedProviderTypes.length === 0 ? selectAllProviderTypes : deselectAllProviderTypes}
               onCreateMapping={handleCreateMapping}

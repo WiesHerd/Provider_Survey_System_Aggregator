@@ -48,9 +48,11 @@ export const SpecialtyCard: React.FC<SpecialtyCardProps> = ({
       
       <div className="flex justify-between items-center">
         <div className="flex-1">
-          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-            {specialty.name}
-          </Typography>
+          <div className="flex items-center gap-2 mb-1">
+            <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+              {specialty.name}
+            </Typography>
+          </div>
           <Typography variant="caption" className="text-gray-500 text-xs">
             Frequency: {specialty.frequency}
           </Typography>

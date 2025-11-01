@@ -12,11 +12,13 @@ import { useProviderContext } from '../contexts/ProviderContext';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
-import { downloadSampleFile } from '../utils/downloadUtils';
 import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
 import { EmptyState } from '../features/mapping/components/shared/EmptyState';
+import { getShortenedSurveyType as getShortenedSurveyTypeShared } from '../shared/utils/surveyFormatters';
 import { BoltIcon } from '@heroicons/react/24/outline';
+import { ColumnMappingDialog } from '../features/upload/components/ColumnMappingDialog';
+import { downloadGeneratedSample } from '../utils/generateSampleFile';
 
 
 // Provider type categories for survey selection
@@ -35,26 +37,38 @@ const SURVEY_OPTIONS = {
   }
 };
 
-// Function to shorten survey type display text based on provider type
-const getShortenedSurveyType = (surveyType: string, providerType: ProviderType): string => {
-  if (surveyType === 'CUSTOM') {
-    return 'Custom Survey Type';
+// Function to shorten survey type display text based on provider type (for compact displays)
+// Wrapper around shared formatter to maintain backward compatibility
+const getShortenedSurveyType = (surveyType: string, providerType: ProviderType, survey?: any): string => {
+  // If full survey object is available, use new display logic
+  if (survey) {
+    return getShortenedSurveyTypeShared(survey);
   }
   
-  // Handle custom survey types by taking first 3 letters
+  // BACKWARD COMPATIBILITY: Old logic for surveys without new structure
+  if (surveyType === 'CUSTOM') {
+    return 'Custom';
+  }
+  
   if (surveyType.toLowerCase().includes('custom')) {
     return surveyType.substring(0, 3).toUpperCase();
   }
   
-  // Replace provider type text with shortened versions and add hyphen with spaces
   let shortenedType = surveyType;
   
-  if (providerType === 'PHYSICIAN') {
-    shortenedType = surveyType.replace('Physician', ' - PHYS');
+  if (providerType === 'CALL') {
+    if (surveyType.includes('Physician')) {
+      shortenedType = surveyType.replace('Physician', 'Call Pay');
+    } else if (!surveyType.includes('Call Pay')) {
+      shortenedType = `${surveyType} Call Pay`;
+    }
+  } else if (providerType === 'PHYSICIAN') {
+    shortenedType = surveyType.replace('Physician', '').replace('Call Pay', 'Physician').trim();
+    if (!shortenedType.toLowerCase().includes('physician')) {
+      shortenedType = shortenedType ? `${shortenedType} Physician` : 'Physician';
+    }
   } else if (providerType === 'APP') {
-    shortenedType = surveyType.replace('APP', ' - APP'); // Add hyphen with spaces before APP
-  } else if (providerType === 'CALL') {
-    shortenedType = surveyType.replace('Call Pay', ' - CALL');
+    shortenedType = surveyType.replace('APP', ' - APP');
   }
   
   return shortenedType;
@@ -152,10 +166,14 @@ const SurveyUpload: React.FC = () => {
   const { selectedProviderType, refreshProviderTypeDetection } = useProviderContext();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
+  // NEW: Data Category state (first dropdown)
+  const [dataCategory, setDataCategory] = useState<'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM'>('COMPENSATION');
+  const [customDataCategory, setCustomDataCategory] = useState('');
   const [providerType, setProviderType] = useState<ProviderType>('PHYSICIAN');
   const [customProviderType, setCustomProviderType] = useState('');
-  const [surveyType, setSurveyType] = useState('');
-  const [customSurveyType, setCustomSurveyType] = useState('');
+  // CHANGED: Survey Source now just company names
+  const [surveySource, setSurveySource] = useState('');
+  const [customSurveySource, setCustomSurveySource] = useState('');
   const [customSurveyName, setCustomSurveyName] = useState('');
   const [surveyYear, setSurveyYear] = useState(currentYear);
   
@@ -196,37 +214,40 @@ const SurveyUpload: React.FC = () => {
   // Add state for column validation
   const [columnValidation, setColumnValidation] = useState<any>(null);
 
+  // Add state for column mapping dialog
+  const [showMappingDialog, setShowMappingDialog] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState<{
+    file: File;
+    headers: string[];
+    format: 'normalized' | 'wide';
+    sampleData: Record<string, any>[];
+  } | null>(null);
+
   // Add state for collapsible sections
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
   
-  // Add state for sample format selection
-  const [selectedSampleFormat, setSelectedSampleFormat] = useState<'sullivan-cotter' | 'mgma' | 'gallagher'>('sullivan-cotter');
   
 
-  // Filter survey options based on selected provider type
-  const availableSurveyTypes = useMemo(() => {
-    if (providerType === 'CUSTOM') {
-      // For custom provider types, show all available survey types
-      return [
-        'SullivanCotter Physician', 'MGMA Physician', 'Gallagher Physician', 'ECG Physician', 'AMGA Physician',
-        'SullivanCotter APP', 'MGMA APP', 'Gallagher APP', 'ECG APP', 'AMGA APP',
-        'SullivanCotter Call Pay', 'MGMA Call Pay', 'Gallagher Call Pay', 'ECG Call Pay', 'AMGA Call Pay'
-      ];
-    }
-    return SURVEY_OPTIONS[providerType]?.options || [];
-  }, [providerType]);
+  // NEW: Simplified survey sources - just company names
+  // Available sources based on data category (some sources may only support certain categories)
+  const availableSurveySources = useMemo(() => {
+    // All standard sources are available for all data categories
+    const standardSources = ['MGMA', 'SullivanCotter', 'Gallagher', 'ECG', 'AMGA', 'Custom'];
+    return standardSources;
+  }, [dataCategory]); // Could filter by category in future if needed
 
   // Update surveyYear when currentYear changes
   useEffect(() => {
     setSurveyYear(currentYear);
   }, [currentYear]);
 
-  // Reset survey type when provider type changes
+  // Reset survey source when data category or provider type changes
   useEffect(() => {
-    setSurveyType('');
+    setSurveySource('');
+    setCustomSurveySource('');
     setIsCustom(false);
-  }, [providerType]);
+  }, [dataCategory, providerType]);
 
 
 
@@ -282,10 +303,19 @@ const SurveyUpload: React.FC = () => {
         
         
         // Filter by provider type based on Data View selection
+        // CRITICAL FIX: Also check dataCategory for Call Pay surveys
         let providerFilteredSurveys = yearFilteredSurveys;
         if (selectedProviderType !== 'BOTH') {
           providerFilteredSurveys = yearFilteredSurveys.filter((survey: any) => {
             const surveyProviderType = survey.providerType || 'PHYSICIAN'; // Default to PHYSICIAN for legacy surveys
+            const surveyDataCategory = survey.dataCategory;
+            
+            // If filtering for CALL type, also check dataCategory === 'CALL_PAY'
+            if (selectedProviderType === 'CALL') {
+              return surveyProviderType === 'CALL' || surveyDataCategory === 'CALL_PAY';
+            }
+            
+            // For other provider types, use standard filtering
             return surveyProviderType === selectedProviderType;
           });
         }
@@ -378,24 +408,31 @@ const SurveyUpload: React.FC = () => {
     setSelectedSurvey(null);
   };
 
+  // NEW: Handle data category change
+  const handleDataCategoryChange = (e: any) => {
+    const newDataCategory = e.target.value as 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM';
+    setDataCategory(newDataCategory);
+    setCustomDataCategory(''); // Reset custom data category
+    setSurveySource(''); // Reset survey source
+    setCustomSurveySource(''); // Reset custom survey source
+    setFiles([]); // Clear any selected file
+  };
+
   const handleProviderTypeChange = (e: any) => {
     const newProviderType = e.target.value as ProviderType;
     setProviderType(newProviderType);
     setCustomProviderType(''); // Reset custom provider type
-    setSurveyType(''); // Reset survey type
-    setCustomSurveyType(''); // Reset custom survey type
-    setCustomSurveyName(''); // Reset custom survey name
-    setIsCustom(false); // Reset custom flag
     setFiles([]); // Clear any selected file
   };
 
-  const handleSurveyTypeChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+  // CHANGED: Handle survey source change (simplified - just company names)
+  const handleSurveySourceChange = (e: React.ChangeEvent<{ value: unknown }>) => {
     const value = e.target.value as string;
-    setIsCustom(value === 'CUSTOM');
-    setSurveyType(value);
+    setIsCustom(value === 'Custom');
+    setSurveySource(value);
+    setCustomSurveySource(''); // Reset custom survey source
     setCustomSurveyName(''); // Reset custom survey name
-    // Clear any selected file when survey type changes
-    setFiles([]);
+    setFiles([]); // Clear any selected file when survey source changes
   };
 
   const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
@@ -449,11 +486,287 @@ const SurveyUpload: React.FC = () => {
     }
   };
 
+  // Get expected columns for mapping dialog
+  const getExpectedColumns = (format: 'normalized' | 'wide'): Array<{
+    name: string;
+    required: boolean;
+    displayName: string;
+  }> => {
+    if (format === 'wide') {
+      return [
+        { name: 'specialty', required: true, displayName: 'Specialty' },
+        { name: 'provider_type', required: true, displayName: 'Provider Type' },
+        { name: 'geographic_region', required: true, displayName: 'Geographic Region' },
+        { name: 'tcc_p25', required: false, displayName: 'TCC P25' },
+        { name: 'tcc_p50', required: false, displayName: 'TCC P50' },
+        { name: 'tcc_p75', required: false, displayName: 'TCC P75' },
+        { name: 'tcc_p90', required: false, displayName: 'TCC P90' },
+        { name: 'wrvu_p25', required: false, displayName: 'wRVU P25' },
+        { name: 'wrvu_p50', required: false, displayName: 'wRVU P50' },
+        { name: 'wrvu_p75', required: false, displayName: 'wRVU P75' },
+        { name: 'wrvu_p90', required: false, displayName: 'wRVU P90' },
+        { name: 'cf_p25', required: false, displayName: 'CF P25' },
+        { name: 'cf_p50', required: false, displayName: 'CF P50' },
+        { name: 'cf_p75', required: false, displayName: 'CF P75' },
+        { name: 'cf_p90', required: false, displayName: 'CF P90' }
+      ];
+    }
+    
+    // Normalized format
+    return [
+      { name: 'specialty', required: true, displayName: 'Specialty' },
+      { name: 'variable', required: true, displayName: 'Variable / Benchmark' },
+      { name: 'n_orgs', required: true, displayName: 'Group Count / n_orgs' },
+      { name: 'n_incumbents', required: true, displayName: 'Indv Count / n_incumbents' },
+      { name: 'p25', required: true, displayName: '25th% / p25' },
+      { name: 'p50', required: true, displayName: '50th% / p50' },
+      { name: 'p75', required: true, displayName: '75th% / p75' },
+      { name: 'p90', required: true, displayName: '90th% / p90' },
+      { name: 'geographic_region', required: false, displayName: 'Geographic Region' },
+      { name: 'provider_type', required: false, displayName: 'Provider Type' }
+    ];
+  };
+
+  // Helper function to check if column mapping is needed
+  const checkIfMappingNeeded = (headers: string[], validation: any): boolean => {
+    // If validation is invalid, we might need mapping
+    if (!validation.isValid && validation.missingColumns.length > 0) {
+      // Check if we have unmapped columns that could be mapped
+      const detectedLower = headers.map(h => h.toLowerCase().trim());
+      
+      // Check if we have columns that look like they could match
+      const hasVariableLike = detectedLower.some(h => 
+        h.includes('benchmark') || h.includes('variable')
+      );
+      const hasCountLike = detectedLower.some(h => 
+        h.includes('group count') || h.includes('indv count') || h.includes('organizations') || h.includes('incumbents')
+      );
+      const hasPercentileLike = detectedLower.some(h => 
+        h.includes('25th') || h.includes('50th') || h.includes('75th') || h.includes('90th') ||
+        h.includes('p25') || h.includes('p50') || h.includes('p75') || h.includes('p90')
+      );
+      
+      // If we have similar columns but validation failed, show mapping dialog
+      if (hasVariableLike || hasCountLike || hasPercentileLike) {
+        return true;
+      }
+    }
+    
+    // Check if validation detected ambiguous or unknown headers
+    if (validation.ambiguousTargets && Object.keys(validation.ambiguousTargets).length > 0) {
+      return true;
+    }
+    
+    if (validation.unknownHeaders && validation.unknownHeaders.length > 0) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Continue upload with column mappings applied
+  const continueUploadWithMappings = async (mappings: Record<string, string>) => {
+    if (!pendingUpload) return;
+    
+    const { file } = pendingUpload;
+    
+    setIsUploading(true);
+    startProgress();
+    
+    const uploadTimeout = setTimeout(() => {
+      console.error('⏰ Upload timeout - forcing completion');
+      setIsUploading(false);
+      completeProgress();
+      handleError('Upload timed out. Please try again.');
+    }, 60000);
+
+    try {
+      // Read the CSV file again
+      const text = await file.text();
+      const rows = text.split('\n').filter(row => row.trim());
+      const originalHeaders = parseCSVLine(rows[0]);
+      const dataRows = rows.slice(1).filter(row => row.trim());
+      
+      // Apply column mappings
+      const mappedHeaders = originalHeaders.map(h => mappings[h] || h);
+      
+      // Re-validate with mapped headers
+      const validation = validateColumns(mappedHeaders);
+      setColumnValidation(validation);
+      
+      if (!validation.isValid) {
+        setError('File still has missing required columns after mapping. Please check the mapping.');
+        setIsUploading(false);
+        completeProgress();
+        clearTimeout(uploadTimeout);
+        return;
+      }
+
+      // Parse CSV data with mapped headers
+      const parsedRows = dataRows.map(row => {
+        const values = parseCSVLine(row);
+        const rowData: any = {};
+        originalHeaders.forEach((header: string, index: number) => {
+          const mappedHeader = mappings[header] || header;
+          rowData[mappedHeader] = values[index] || '';
+        });
+        return rowData;
+      });
+
+      // Continue with normal upload flow...
+      await processUploadedData(parsedRows, file, mappedHeaders);
+      
+      clearTimeout(uploadTimeout);
+      setIsUploading(false);
+      completeProgress();
+      setPendingUpload(null);
+      setShowMappingDialog(false);
+    } catch (error: any) {
+      clearTimeout(uploadTimeout);
+      setIsUploading(false);
+      completeProgress();
+      handleError(error.message || 'Failed to upload survey with mappings');
+      setPendingUpload(null);
+      setShowMappingDialog(false);
+    }
+  };
+
+  // Extract common upload processing logic
+  const processUploadedData = async (
+    parsedRows: any[],
+    file: File,
+    headers: string[]
+  ) => {
+    // Extract provider types from data for validation
+    const uniqueProviderTypes = new Set(
+      parsedRows
+        .map(row => row.provider_type || row.providerType || row['Provider Type'])
+        .filter(Boolean)
+    );
+
+    const detectedProviderTypes = Array.from(uniqueProviderTypes);
+    console.log('🔍 Detected provider types in data:', detectedProviderTypes);
+
+    // Validate form selection matches data
+    const providerTypeValidation = validateProviderTypeMatch(providerType, detectedProviderTypes);
+    if (!providerTypeValidation.isValid && providerTypeValidation.warning) {
+      console.warn('⚠️ Provider type mismatch:', providerTypeValidation.warning);
+    }
+
+    // NEW: Validate required fields
+    if (!dataCategory) {
+      setError('Please select a Data Category');
+      setIsUploading(false);
+      return;
+    }
+    
+    if (!surveySource || surveySource === '') {
+      setError('Please select a Survey Source');
+      setIsUploading(false);
+      return;
+    }
+    
+    if (surveySource === 'Custom' && !customSurveySource.trim()) {
+      setError('Please enter a custom survey source');
+      setIsUploading(false);
+      return;
+    }
+    
+    if (dataCategory === 'CUSTOM' && !customDataCategory.trim()) {
+      setError('Please enter a custom data category');
+      setIsUploading(false);
+      return;
+    }
+    
+    // Create survey object with new architecture
+    const surveyId = crypto.randomUUID();
+    const defaultSurveyName = file.name.replace('.csv', '');
+    
+    // NEW: Extract source and data category
+    const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
+    const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
+    const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+    
+    // BACKWARD COMPATIBILITY: Derive type field from source + dataCategory + providerType
+    const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
+      : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+      : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
+      : finalDataCategory;
+    const surveyTypeName = `${finalSource} ${categoryDisplay}`;
+    
+    // Generate survey name for display
+    const surveyName = `${finalSource} ${categoryDisplay} ${surveyYear}`;
+    
+    const survey = {
+      id: surveyId,
+      name: surveyName,
+      year: surveyYear,
+      // NEW FIELDS
+      dataCategory: finalDataCategory as 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM',
+      source: finalSource,
+      // BACKWARD COMPATIBILITY: Keep type field for existing code
+      type: surveyTypeName,
+      providerType: finalProviderType,
+      uploadDate: new Date(),
+      rowCount: parsedRows.length,
+      specialtyCount: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
+      dataPoints: parsedRows.length,
+      colorAccent: '#6366F1',
+      metadata: {
+        totalRows: parsedRows.length,
+        uniqueSpecialties: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
+        uniqueProviderTypes: new Set(parsedRows.map(row => row.providerType || row['Provider Type']).filter(Boolean)).size,
+        uniqueRegions: new Set(parsedRows.map(row => row.region || row.Region || row.geographicRegion).filter(Boolean)).size,
+        detectedProviderTypes: detectedProviderTypes,
+        columnMappings: {}
+      }
+    };
+
+    // Add survey to state immediately for visual feedback
+    const immediateSurvey = {
+      id: surveyId,
+      fileName: surveyName,
+      surveyType: surveyTypeName,
+      providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
+      surveyYear,
+      uploadDate: new Date(),
+      fileContent: '',
+      rows: [],
+      stats: {
+        totalRows: parsedRows.length,
+        uniqueSpecialties: survey.specialtyCount,
+        totalDataPoints: parsedRows.length
+      },
+      columnMappings: survey.metadata.columnMappings
+    };
+
+    setUploadedSurveys(prev => [...prev, immediateSurvey]);
+    setSelectedSurvey(surveyId);
+    setRefreshTrigger(prev => prev + 1);
+
+    // Save survey and data to IndexedDB
+    console.log('💾 Saving survey to IndexedDB...');
+    await dataService.createSurvey(survey);
+    console.log('✅ Survey created successfully');
+    
+    console.log('💾 Saving survey data to IndexedDB...');
+    await dataService.saveSurveyData(surveyId, parsedRows);
+    console.log('✅ Survey data saved successfully');
+
+    // Trigger storage event to notify other components (non-blocking)
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'survey-uploaded',
+      newValue: surveyId,
+      url: window.location.href
+    }));
+  };
+
   const handleSurveyUpload = async () => {
     const file = files[0];
-    if (!file || !surveyType || !surveyYear || 
+    if (!file || !surveySource || !dataCategory || !surveyYear || 
         (providerType === 'CUSTOM' && !customProviderType) ||
-        (surveyType === 'CUSTOM' && !customSurveyType.trim())) {
+        (surveySource === 'Custom' && !customSurveySource.trim()) ||
+        (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
       handleError('Please fill in all required fields');
       return;
     }
@@ -481,6 +794,35 @@ const SurveyUpload: React.FC = () => {
       const validation = validateColumns(headers);
       setColumnValidation(validation);
       
+      // Check if columns need explicit mapping
+      const needsMapping = checkIfMappingNeeded(headers, validation);
+      
+      if (needsMapping) {
+        // Show mapping dialog instead of blocking
+        clearTimeout(uploadTimeout);
+        setIsUploading(false);
+        completeProgress();
+        
+        // Parse sample data for preview
+        const sampleData = dataRows.slice(0, 3).map(row => {
+          const values = parseCSVLine(row);
+          const rowData: any = {};
+          headers.forEach((header: string, index: number) => {
+            rowData[header] = values[index] || '';
+          });
+          return rowData;
+        });
+        
+        setPendingUpload({
+          file,
+          headers,
+          format: (validation.format === 'wide_variable' ? 'wide' : validation.format) || 'normalized',
+          sampleData
+        });
+        setShowMappingDialog(true);
+        return;
+      }
+      
       if (!validation.isValid) {
         setError('File has missing required columns. Please check the validation details below.');
         setIsUploading(false);
@@ -500,96 +842,8 @@ const SurveyUpload: React.FC = () => {
         return rowData;
       });
 
-      // Progress is handled by useSmoothProgress hook
-
-      // Extract provider types from data for validation
-      const uniqueProviderTypes = new Set(
-        parsedRows
-          .map(row => row.provider_type || row.providerType || row['Provider Type'])
-          .filter(Boolean)
-      );
-
-      const detectedProviderTypes = Array.from(uniqueProviderTypes);
-      console.log('🔍 Detected provider types in data:', detectedProviderTypes);
-
-      // Validate form selection matches data
-      const providerTypeValidation = validateProviderTypeMatch(providerType, detectedProviderTypes);
-      if (!providerTypeValidation.isValid && providerTypeValidation.warning) {
-        console.warn('⚠️ Provider type mismatch:', providerTypeValidation.warning);
-        // Could show warning to user in the future
-      }
-
-      // Create survey object
-      const surveyId = crypto.randomUUID();
-      const defaultSurveyName = file.name.replace('.csv', '');
-      const surveyName = (surveyType === 'CUSTOM' && customSurveyType.trim()) ? customSurveyType.trim() : defaultSurveyName;
-      const surveyTypeName = isCustom ? customSurveyType : surveyType;
-      
-      const survey = {
-        id: surveyId,
-        name: surveyName,
-        year: surveyYear,
-        type: surveyTypeName,
-        providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
-        uploadDate: new Date(),
-        rowCount: parsedRows.length,
-        specialtyCount: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
-        dataPoints: parsedRows.length,
-        colorAccent: '#6366F1',
-        metadata: {
-          totalRows: parsedRows.length,
-          uniqueSpecialties: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
-          uniqueProviderTypes: new Set(parsedRows.map(row => row.providerType || row['Provider Type']).filter(Boolean)).size,
-          uniqueRegions: new Set(parsedRows.map(row => row.region || row.Region || row.geographicRegion).filter(Boolean)).size,
-          detectedProviderTypes: detectedProviderTypes,
-          columnMappings: {}
-        }
-      };
-
-      // Add survey to state immediately for visual feedback
-      const immediateSurvey = {
-        id: surveyId,
-        fileName: surveyName,
-        surveyType: surveyTypeName,
-        providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
-        surveyYear,
-        uploadDate: new Date(),
-        fileContent: '',
-        rows: [],
-        stats: {
-          totalRows: parsedRows.length,
-          uniqueSpecialties: survey.specialtyCount,
-          totalDataPoints: parsedRows.length
-        },
-        columnMappings: {}
-      };
-
-      setUploadedSurveys(prev => [...prev, immediateSurvey]);
-      setSelectedSurvey(surveyId);
-      setRefreshTrigger(prev => prev + 1);
-
-      // Progress is handled by useSmoothProgress hook
-
-      // Save survey and data to IndexedDB
-      console.log('💾 Saving survey to IndexedDB...');
-      await dataService.createSurvey(survey);
-      console.log('✅ Survey created successfully');
-      
-      console.log('💾 Saving survey data to IndexedDB...');
-      await dataService.saveSurveyData(surveyId, parsedRows);
-      console.log('✅ Survey data saved successfully');
-
-      // Progress is handled by useSmoothProgress hook
-
-      // Trigger storage event to notify other components (non-blocking)
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'survey-uploaded',
-        newValue: surveyId,
-        url: window.location.href
-      }));
-      
-      // Also dispatch custom events for immediate refresh (non-blocking)
-      window.dispatchEvent(new CustomEvent('survey-uploaded', { detail: { surveyId } }));
+      // Process the uploaded data
+      await processUploadedData(parsedRows, file, headers);
       
       // Clear provider type detection cache and refresh in background (non-blocking)
       setTimeout(async () => {
@@ -612,9 +866,9 @@ const SurveyUpload: React.FC = () => {
 
       // Clear form
       setFiles([]);
-      setSurveyType('');
+      setSurveySource('');
       setSurveyYear('');
-      setCustomSurveyType('');
+      setCustomSurveySource('');
       setIsCustom(false);
 
       // Show success message
@@ -844,41 +1098,57 @@ const SurveyUpload: React.FC = () => {
                 </button>
                 <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedSampleFormat}
-                  onChange={(e) => setSelectedSampleFormat(e.target.value as 'sullivan-cotter' | 'mgma' | 'gallagher')}
-                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  aria-label="Select sample format"
-                  title="Choose the format that matches your survey source"
-                >
-                  <option value="sullivan-cotter">Sullivan Cotter Format</option>
-                  <option value="mgma">MGMA Format</option>
-                  <option value="gallagher">Gallagher Format</option>
-                </select>
-                <button
-                  onClick={async () => {
-                    try {
-                      await downloadSampleFile(selectedSampleFormat);
-                    } catch (error) {
-                      console.error('Download failed:', error);
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 border border-gray-300"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download Sample
-                </button>
-              </div>
             </div>
             
             {!isUploadSectionCollapsed && (
               <>
-                <div className="grid grid-cols-12 gap-4">
+                <div className="grid grid-cols-12 gap-4 items-end">
+                {/* NEW: Data Category Selection (first dropdown) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Data Category
+                  </label>
+                  <FormControl fullWidth>
+                    <Select
+                      value={dataCategory}
+                      onChange={handleDataCategoryChange}
+                      sx={{
+                        backgroundColor: 'white',
+                        height: '40px',
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px',
+                          borderRadius: '8px',
+                        },
+                        '& .MuiSelect-select': {
+                          paddingTop: '8px',
+                          paddingBottom: '8px',
+                          textAlign: 'left',
+                        }
+                      }}
+                    >
+                      <MenuItem value="COMPENSATION">Compensation</MenuItem>
+                      <MenuItem value="CALL_PAY">Call Pay</MenuItem>
+                      <MenuItem value="MOONLIGHTING">Moonlighting</MenuItem>
+                      <MenuItem value="CUSTOM">Custom</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {dataCategory === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={customDataCategory}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDataCategory(e.target.value)}
+                      placeholder="Enter custom data category"
+                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        placeholder-gray-400 text-sm transition-colors duration-200"
+                      style={{ borderRadius: '8px' }}
+                    />
+                  )}
+                </div>
+
                 {/* Provider Type Selection */}
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Provider Type
                   </label>
@@ -920,15 +1190,15 @@ const SurveyUpload: React.FC = () => {
                   )}
                 </div>
 
-                {/* Survey Type Selection */}
-                <div className="col-span-3">
+                {/* CHANGED: Survey Source Selection (simplified - just company names) */}
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Survey Type
+                    Survey Source
                   </label>
                   <FormControl fullWidth>
                     <Select
-                      value={surveyType}
-                      onChange={handleSurveyTypeChange}
+                      value={surveySource}
+                      onChange={handleSurveySourceChange}
                       displayEmpty
                       disabled={false}
                       sx={{
@@ -947,22 +1217,21 @@ const SurveyUpload: React.FC = () => {
                       }}
                     >
                       <MenuItem value="" disabled>
-                        {providerType === 'CUSTOM' ? 'Enter custom type below' : 'Select a survey type'}
+                        Select a survey source
                       </MenuItem>
-                      {availableSurveyTypes.map((option: string) => (
-                        <MenuItem key={option} value={option}>
-                          {getShortenedSurveyType(option, providerType)}
+                      {availableSurveySources.map((source: string) => (
+                        <MenuItem key={source} value={source}>
+                          {source}
                         </MenuItem>
                       ))}
-                      <MenuItem value="CUSTOM">{getShortenedSurveyType('CUSTOM', providerType)}</MenuItem>
                     </Select>
                   </FormControl>
-                  {surveyType === 'CUSTOM' && (
+                  {surveySource === 'Custom' && (
                     <input
                       type="text"
-                      value={customSurveyType}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveyType(e.target.value)}
-                      placeholder="Enter custom survey type name"
+                      value={customSurveySource}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveySource(e.target.value)}
+                      placeholder="Enter custom survey source"
                       className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                         placeholder-gray-400 text-sm transition-colors duration-200"
@@ -972,7 +1241,7 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* Survey Year Selection */}
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
@@ -1011,8 +1280,49 @@ const SurveyUpload: React.FC = () => {
                   />
                 </div>
 
-                {/* Action Buttons */}
-                <div className="col-span-3 flex items-end justify-end space-x-3">
+                {/* Action Buttons - Now to the right of Survey Year */}
+                <div className="col-span-4 flex items-center justify-end space-x-3">
+                  <button
+                    onClick={() => {
+                      // Validate required fields for sample generation
+                      if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
+                        setError('Please select Data Category first');
+                        return;
+                      }
+                      if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
+                        setError('Please select Provider Type first');
+                        return;
+                      }
+                      try {
+                        // Generate sample based on selected Data Category and Provider Type
+                        // For Google-style UX: Sample matches the exact structure user selected
+                        const sampleProviderType = dataCategory === 'CALL_PAY' ? 'CALL' 
+                          : dataCategory === 'MOONLIGHTING' ? 'CALL' // Moonlighting uses similar structure to Call Pay
+                          : (providerType === 'CUSTOM' ? undefined : providerType);
+                        
+                        const surveySourceName = surveySource === 'Custom' && customSurveySource 
+                          ? customSurveySource 
+                          : surveySource || 'Sample';
+                        
+                        const dataCategoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
+                          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+                          : dataCategory === 'CUSTOM' ? customDataCategory
+                          : 'Compensation';
+                        
+                        downloadGeneratedSample(sampleProviderType, `${surveySourceName} ${dataCategoryDisplay}`);
+                      } catch (error) {
+                        console.error('Download failed:', error);
+                        setError('Failed to generate sample file. Please try again.');
+                      }
+                    }}
+                    className="inline-flex items-center px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 border border-gray-300 shadow-lg hover:shadow-xl flex items-center justify-center h-10"
+                    title={`Download sample CSV template matching selected structure (${dataCategory || 'select options'})`}
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Template
+                  </button>
                   <div {...getRootProps()} className="flex-shrink-0">
                     <input {...getInputProps()} />
                     <button
@@ -1030,17 +1340,22 @@ const SurveyUpload: React.FC = () => {
                       files.length === 0 || 
                       !surveyYear || 
                       isUploading ||
-                      // Survey type validation
-                      (surveyType === 'CUSTOM' && !customSurveyType.trim()) ||
-                      (surveyType !== 'CUSTOM' && !surveyType) ||
+                      // Data category validation
+                      !dataCategory ||
+                      (dataCategory === 'CUSTOM' && !customDataCategory.trim()) ||
+                      // Survey source validation
+                      !surveySource ||
+                      (surveySource === 'Custom' && !customSurveySource.trim()) ||
                       // Provider type validation  
                       (providerType === 'CUSTOM' && !customProviderType.trim())
                     }
                     title={
                       files.length === 0 ? 'Please select a file to upload' :
                       !surveyYear ? 'Please enter a survey year' :
-                      (surveyType === 'CUSTOM' && !customSurveyType.trim()) ? 'Please enter a custom survey type' :
-                      (surveyType !== 'CUSTOM' && !surveyType) ? 'Please select a survey type' :
+                      !dataCategory ? 'Please select a data category' :
+                      (dataCategory === 'CUSTOM' && !customDataCategory.trim()) ? 'Please enter a custom data category' :
+                      !surveySource ? 'Please select a survey source' :
+                      (surveySource === 'Custom' && !customSurveySource.trim()) ? 'Please enter a custom survey source' :
                       (providerType === 'CUSTOM' && !customProviderType.trim()) ? 'Please enter a custom provider type' :
                       'Ready to upload'
                     }
@@ -1066,13 +1381,13 @@ const SurveyUpload: React.FC = () => {
                         </svg>
                         <span className="text-sm font-medium">{files[0].name}</span>
                       </div>
-                      {surveyType && surveyYear ? (
+                      {dataCategory && surveySource && surveyYear ? (
                         <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                          {surveyType === 'CUSTOM' ? customSurveyType : surveyType} • {surveyYear}
+                          {surveySource === 'Custom' ? customSurveySource : surveySource} • {dataCategory === 'CUSTOM' ? customDataCategory : (dataCategory === 'CALL_PAY' ? 'Call Pay' : dataCategory === 'MOONLIGHTING' ? 'Moonlighting' : 'Compensation')} • {surveyYear}
                         </span>
                       ) : (
                         <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                          ⚠️ Select Provider Type and Survey Type to continue
+                          ⚠️ Select Data Category, Survey Source, and Provider Type to continue
                         </span>
                       )}
                     </div>
@@ -1088,16 +1403,33 @@ const SurveyUpload: React.FC = () => {
                 </div>
               )}
 
-                             {/* Column Validation Display */}
-               {columnValidation && (
-                 <ColumnValidationDisplay 
-                   validation={columnValidation} 
-                   fileName={files[0]?.name || ''} 
-                 />
-               )}
+              {/* Column Validation Display */}
+              {columnValidation && (
+                <ColumnValidationDisplay 
+                  validation={columnValidation} 
+                  fileName={files[0]?.name || ''} 
+                />
+              )}
             </>
             )}
           </div>
+
+          {/* Column Mapping Dialog */}
+          {pendingUpload && (
+            <ColumnMappingDialog
+              open={showMappingDialog}
+              onClose={() => {
+                setShowMappingDialog(false);
+                setPendingUpload(null);
+              }}
+              onConfirm={continueUploadWithMappings}
+              detectedColumns={pendingUpload.headers}
+              expectedColumns={getExpectedColumns(pendingUpload.format)}
+              format={pendingUpload.format}
+              sampleData={pendingUpload.sampleData}
+              surveyType={surveySource === 'Custom' ? customSurveySource : surveySource}
+            />
+          )}
           {/* Uploaded Surveys Section (compact tabs) */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-visible">
             <div className="flex items-center justify-between mb-3">
@@ -1190,7 +1522,7 @@ const SurveyUpload: React.FC = () => {
                             className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
                             title={`${survey.surveyType} • ${survey.surveyYear}`}
                           >
-                            <span className="font-medium">{getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType)}</span>
+                            <span className="font-medium">{getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType, survey)}</span>
                             <span className={`text-xs ${isActive ? 'text-indigo-100' : 'text-gray-500'}`}>{survey.surveyYear}</span>
                           </button>
                           <button

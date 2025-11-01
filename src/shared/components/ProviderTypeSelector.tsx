@@ -465,7 +465,7 @@ export const CompactProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = 
  * Provider Type Badge for displaying current selection with data indicator
  */
 export const ProviderTypeBadge: React.FC<{
-  providerType: 'PHYSICIAN' | 'APP' | 'BOTH';
+  providerType: 'PHYSICIAN' | 'APP' | 'BOTH' | 'CALL';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   showDataIndicator?: boolean;
@@ -505,6 +505,13 @@ export const ProviderTypeBadge: React.FC<{
           bgColor: 'bg-green-50',
           textColor: 'text-green-700',
           borderColor: 'border-green-200'
+        };
+      case 'CALL':
+        return {
+          label: 'Call Pay',
+          bgColor: 'bg-orange-50',
+          textColor: 'text-orange-700',
+          borderColor: 'border-orange-200'
         };
       case 'BOTH':
         return {

@@ -10,7 +10,8 @@ import {
   FormControl,
   Select,
   MenuItem,
-  IconButton
+  IconButton,
+  TextField
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { 
@@ -32,9 +33,11 @@ interface SavedViewsProps {
   filters: AnalyticsFilters;
   selectedVariables: string[];
   onLoadView: (view: SavedView) => void;
-  // For the name input field - matches CustomReports pattern
+  // For the name input field - now in modal
   viewName: string;
   onViewNameChange: (name: string) => void;
+  showSaveModal: boolean;
+  onShowSaveModal: (show: boolean) => void;
 }
 
 const STORAGE_KEY = 'analytics_saved_views';
@@ -44,7 +47,9 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
   selectedVariables,
   onLoadView,
   viewName,
-  onViewNameChange
+  onViewNameChange,
+  showSaveModal,
+  onShowSaveModal
 }) => {
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
 
@@ -79,10 +84,16 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
     }
   }, []);
 
-  // Save current view - matches CustomReports pattern
+  // Save current view - opens modal first, then saves
+  const handleSaveViewClick = useCallback(() => {
+    onShowSaveModal(true);
+  }, [onShowSaveModal]);
+
+  // Save current view - called from modal
   const handleSaveView = useCallback(() => {
     if (!viewName.trim()) {
-      return; // Button will be disabled if no name
+      alert('Please enter a view name');
+      return;
     }
 
     // Check for duplicate names
@@ -104,13 +115,14 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
       setSavedViews(updatedViews);
       saveToStorage(updatedViews);
       
-      // Clear the name field - matches CustomReports pattern
+      // Clear the name field and close modal
       onViewNameChange('');
+      onShowSaveModal(false);
     } catch (error) {
       console.error('Failed to save view:', error);
       alert('Failed to save view');
     }
-  }, [viewName, filters, selectedVariables, savedViews, saveToStorage, onViewNameChange]);
+  }, [viewName, filters, selectedVariables, savedViews, saveToStorage, onViewNameChange, onShowSaveModal]);
 
   // Load a saved view from dropdown
   const handleLoadViewFromDropdown = useCallback((viewId: string) => {
@@ -149,15 +161,73 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
 
   return (
     <>
-      {/* Save View Button - Matches CustomReports exact styling */}
+      {/* Save View Button - Opens modal */}
       <button
-        onClick={handleSaveView}
-        disabled={!viewName.trim()}
-        className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={handleSaveViewClick}
+        className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
       >
         <BookmarkIcon className="h-4 w-4 mr-2" />
         Save View
       </button>
+      
+      {/* Save View Modal */}
+      {showSaveModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => {
+            onViewNameChange('');
+            onShowSaveModal(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Save View</h3>
+            <TextField
+              fullWidth
+              size="small"
+              label="View Name"
+              placeholder="Enter view name..."
+              value={viewName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onViewNameChange(e.target.value)}
+              autoFocus
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' && viewName.trim()) {
+                  handleSaveView();
+                }
+                if (e.key === 'Escape') {
+                  onShowSaveModal(false);
+                }
+              }}
+              sx={{
+                mb: 3,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                }
+              }}
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  onViewNameChange('');
+                  onShowSaveModal(false);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveView}
+                disabled={!viewName.trim()}
+                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Saved Views Dropdown - Matches CustomReports exact styling */}
       {savedViews.length > 0 && (

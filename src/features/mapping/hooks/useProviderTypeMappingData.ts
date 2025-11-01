@@ -7,6 +7,10 @@ const dataService = getDataService();
 
 interface UseProviderTypeMappingDataReturn {
   // State
+  // Cross-category mapping state
+  showAllCategories: boolean;
+  setShowAllCategories: (value: boolean) => void;
+  
   mappings: IProviderTypeMapping[];
   unmappedProviderTypes: IUnmappedProviderType[];
   selectedProviderTypes: IUnmappedProviderType[];
@@ -66,6 +70,9 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
+
+  // State for cross-category mapping toggle (Call Pay, Physician, APP)
+  const [showAllCategories, setShowAllCategories] = useState(true); // Default to showing all
   
   // Computed values
   const filteredUnmapped = useMemo(() => {
@@ -106,11 +113,17 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       setLoading(true);
       setError(null);
       
+      // NEW: If showAllCategories is true, don't filter by data category
+      // This allows cross-category mapping (Call Pay, Physician, APP)
+      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
+        ? undefined 
+        : selectedProviderType;
+      
       // Load actual data from services with provider type filtering
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
-        dataService.getProviderTypeMappings(selectedProviderType),
-        dataService.getUnmappedProviderTypes(selectedProviderType),
-        dataService.getLearnedMappings('providerType', selectedProviderType)
+        dataService.getProviderTypeMappings(dataProviderType),
+        dataService.getUnmappedProviderTypes(dataProviderType),
+        dataService.getLearnedMappings('providerType', dataProviderType)
       ]);
       
       setMappings(mappingsData);
@@ -123,7 +136,7 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     } finally {
       setLoading(false);
     }
-  }, [selectedProviderType]);
+  }, [selectedProviderType, showAllCategories]);
 
   // Selection management
   const selectProviderType = useCallback((providerType: IUnmappedProviderType) => {
@@ -241,13 +254,23 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     setError(null);
   }, []);
 
-  // Load data on mount and when provider type changes
+  // Load data on mount and when provider type or toggle changes
+  // CRITICAL FIX: Watch for changes in showAllCategories directly, not just loadData
   useEffect(() => {
+    console.log('🔍 useProviderTypeMappingData: Reloading data due to state change:', {
+      selectedProviderType,
+      showAllCategories
+    });
     loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProviderType, showAllCategories]); // loadData is a useCallback that depends on these values
 
   return {
     // State
+    // Cross-category mapping state
+    showAllCategories,
+    setShowAllCategories,
+    
     mappings,
     unmappedProviderTypes,
     selectedProviderTypes,

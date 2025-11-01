@@ -36,6 +36,7 @@ import { formatDate } from '../../../shared/utils';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../../../shared/utils/specialtyMatching';
 import { InlineSpinner } from '../../../shared/components';
+import { getSurveyDisplayName } from '../../../shared/utils/surveyFormatters';
 
 /**
  * Uploaded Surveys component for displaying and managing uploaded surveys
@@ -268,7 +269,7 @@ export const UploadedSurveys: React.FC<UploadedSurveysProps> = memo(({
                     secondary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                         <Chip 
-                          label={survey.surveyType} 
+                          label={getSurveyDisplayName(survey)} 
                           size="small" 
                           color="primary" 
                           variant="outlined"

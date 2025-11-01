@@ -22,6 +22,10 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
     isBulkSelected,
     allUnmappedCount,
     
+    // Cross-category mapping toggle (Call Pay, Physician, APP)
+    showAllProviderTypes,
+    setShowAllProviderTypes,
+    
     // Data state
     mappings,
     unmappedSpecialties,
@@ -140,6 +144,8 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
               selectedCount={selectedSpecialties.length}
               isBulkSelected={isBulkSelected}
               allUnmappedCount={allUnmappedCount}
+              showAllProviderTypes={showAllProviderTypes}
+              onToggleProviderTypeFilter={() => setShowAllProviderTypes(!showAllProviderTypes)}
               onShowHelp={handleShowHelp}
               onToggleSelectAll={handleToggleSelectAll}
               onCreateMapping={createMapping}

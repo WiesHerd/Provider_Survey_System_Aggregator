@@ -306,9 +306,60 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
   });
 
   // First, detect if this is a normalized format file
-  const isNormalizedFormat = NORMALIZED_REQUIRED_COLUMNS.every(col => 
-    detectedColumns.includes(col)
+  // Check if it has the core normalized format structure (variable, percentiles, counts)
+  const hasVariableField = detectedColumns.some(col => 
+    col.toLowerCase() === 'variable' || 
+    col.toLowerCase() === 'benchmark' || 
+    col.toLowerCase().includes('variable') ||
+    col.toLowerCase().includes('benchmark')
   );
+  
+  const hasPercentiles = detectedColumns.some(col => 
+    col.toLowerCase().includes('p25') || 
+    col.toLowerCase().includes('p50') || 
+    col.toLowerCase().includes('p75') || 
+    col.toLowerCase().includes('p90') ||
+    col.toLowerCase().includes('25th') ||
+    col.toLowerCase().includes('50th') ||
+    col.toLowerCase().includes('75th') ||
+    col.toLowerCase().includes('90th') ||
+    col.toLowerCase() === '25th%' ||
+    col.toLowerCase() === '50th%' ||
+    col.toLowerCase() === '75th%' ||
+    col.toLowerCase() === '90th%'
+  );
+  
+  const hasCounts = detectedColumns.some(col => 
+    col.toLowerCase().includes('n_org') || 
+    col.toLowerCase().includes('n_incumbent') ||
+    col.toLowerCase().includes('group count') ||
+    col.toLowerCase().includes('indv count') ||
+    col.toLowerCase().includes('organizations') ||
+    col.toLowerCase().includes('incumbents')
+  );
+  
+  const hasSpecialty = detectedColumns.some(col => 
+    col.toLowerCase() === 'specialty' || 
+    col.toLowerCase().includes('specialty')
+  );
+  
+  // Normalized format detection: needs variable/benchmark, percentiles, counts, and specialty
+  const isNormalizedFormat = hasVariableField && hasPercentiles && hasCounts && hasSpecialty && 
+    // Check if key normalized columns exist (allowing for variations)
+    (detectedColumns.some(col => col.toLowerCase() === 'variable' || col.toLowerCase() === 'benchmark') ||
+     detectedColumns.some(col => col.toLowerCase() === 'n_orgs' || col.toLowerCase().includes('group count')) ||
+     detectedColumns.some(col => col.toLowerCase() === 'n_incumbents' || col.toLowerCase().includes('indv count'))) &&
+    // Has at least one percentile column
+    (detectedColumns.some(col => 
+      col.toLowerCase().includes('p25') || 
+      col.toLowerCase().includes('p50') || 
+      col.toLowerCase().includes('p75') || 
+      col.toLowerCase().includes('p90') ||
+      col.toLowerCase().includes('25th') ||
+      col.toLowerCase().includes('50th') ||
+      col.toLowerCase().includes('75th') ||
+      col.toLowerCase().includes('90th')
+    ));
 
   // Detect if this is a wide format with variable-specific columns (like Sullivan Cotter)
   const isWideVariableFormat = detectedColumns.some(col => 
@@ -317,26 +368,135 @@ export const validateColumns = (headers: string[]): ColumnValidationResult => {
 
   if (isNormalizedFormat) {
     // This is a normalized format file - validate against normalized columns
-    NORMALIZED_REQUIRED_COLUMNS.forEach(requiredColumn => {
-      if (detectedColumns.includes(requiredColumn)) {
-        mappedColumns[requiredColumn] = requiredColumn;
+    // Map detected columns to normalized column names (handle variations like "Benchmark", "25th%", etc.)
+    
+    // Map variable/benchmark column
+    const variableCol = detectedColumns.find(col => 
+      col.toLowerCase() === 'variable' || 
+      col.toLowerCase() === 'benchmark' ||
+      col.toLowerCase().includes('variable')
+    );
+    if (variableCol) {
+      mappedColumns['variable'] = variableCol;
+    } else {
+      missingColumns.push('variable');
+    }
+    
+    // Map specialty column (required)
+    const specialtyCol = detectedColumns.find(col => 
+      col.toLowerCase() === 'specialty' || 
+      col.toLowerCase().includes('specialty')
+    );
+    if (specialtyCol) {
+      mappedColumns['specialty'] = specialtyCol;
+    } else {
+      missingColumns.push('specialty');
+    }
+    
+    // Map geographic_region (optional for on-call compensation)
+    const regionCol = detectedColumns.find(col => 
+      col.toLowerCase() === 'geographic_region' || 
+      col.toLowerCase() === 'geographic region' ||
+      col.toLowerCase() === 'region' ||
+      col.toLowerCase().includes('region')
+    );
+    if (regionCol) {
+      mappedColumns['geographic_region'] = regionCol;
+    }
+    // Don't require geographic_region for normalized format
+    
+    // Map provider_type (optional for on-call compensation)
+    const providerTypeCol = detectedColumns.find(col => 
+      col.toLowerCase() === 'provider_type' || 
+      col.toLowerCase() === 'provider type' ||
+      col.toLowerCase() === 'providerType' ||
+      col.toLowerCase().includes('provider type')
+    );
+    if (providerTypeCol) {
+      mappedColumns['provider_type'] = providerTypeCol;
+    }
+    // Don't require provider_type for normalized format
+    
+    // Map n_orgs / Group Count
+    const nOrgsCol = detectedColumns.find(col => 
+      col.toLowerCase() === 'n_orgs' || 
+      col.toLowerCase() === 'n_org' ||
+      col.toLowerCase().includes('group count') ||
+      col.toLowerCase().includes('organizations')
+    );
+    if (nOrgsCol) {
+      mappedColumns['n_orgs'] = nOrgsCol;
+    } else {
+      missingColumns.push('n_orgs');
+    }
+    
+    // Map n_incumbents / Indv Count
+    const nIncumbentsCol = detectedColumns.find(col => 
+      col.toLowerCase() === 'n_incumbents' || 
+      col.toLowerCase() === 'n_incumbent' ||
+      col.toLowerCase().includes('indv count') ||
+      col.toLowerCase().includes('incumbents')
+    );
+    if (nIncumbentsCol) {
+      mappedColumns['n_incumbents'] = nIncumbentsCol;
+    } else {
+      missingColumns.push('n_incumbents');
+    }
+    
+    // Map percentile columns (p25, p50, p75, p90 or 25th%, 50th%, etc.)
+    const percentileMappings: Record<string, string> = {
+      'p25': 'p25',
+      'p50': 'p50',
+      'p75': 'p75',
+      'p90': 'p90',
+      '25th%': 'p25',
+      '50th%': 'p50',
+      '75th%': 'p75',
+      '90th%': 'p90',
+      '25th': 'p25',
+      '50th': 'p50',
+      '75th': 'p75',
+      '90th': 'p90'
+    };
+    
+    ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
+      const found = detectedColumns.find(col => {
+        const lower = col.toLowerCase().trim();
+        return lower === percentile || 
+               lower === percentileMappings[lower] ||
+               (percentile === 'p25' && (lower.includes('25th') || lower === '25th%')) ||
+               (percentile === 'p50' && (lower.includes('50th') || lower === '50th%')) ||
+               (percentile === 'p75' && (lower.includes('75th') || lower === '75th%')) ||
+               (percentile === 'p90' && (lower.includes('90th') || lower === '90th%'));
+      });
+      
+      if (found) {
+        mappedColumns[percentile] = found;
       } else {
-        missingColumns.push(requiredColumn);
-        errors.push(`Required normalized column "${requiredColumn}" not found`);
+        missingColumns.push(percentile);
       }
     });
 
     // Unknown headers = those not part of normalized schema
     const normalizedSet = new Set<string>([...NORMALIZED_REQUIRED_COLUMNS]);
-    const unknownHeaders = detectedColumns.filter(h => !normalizedSet.has(h));
+    const unknownHeaders = detectedColumns.filter(h => {
+      const lower = h.toLowerCase().trim();
+      // Exclude mapped columns from unknown headers
+      const isMapped = Object.values(mappedColumns).some(mapped => mapped.toLowerCase().trim() === lower);
+      return !isMapped && !normalizedSet.has(h);
+    });
+
+    // Only fail validation if truly required columns are missing (not geographic_region or provider_type)
+    const trulyRequired = ['variable', 'specialty', 'n_orgs', 'n_incumbents', 'p25', 'p50', 'p75', 'p90'];
+    const missingRequired = missingColumns.filter(col => trulyRequired.includes(col));
 
     return {
-      isValid: missingColumns.length === 0,
+      isValid: missingRequired.length === 0,
       detectedColumns,
-      missingColumns,
+      missingColumns: missingRequired, // Only show truly missing required columns
       mappedColumns,
       suggestions,
-      errors,
+      errors: missingRequired.length > 0 ? [`Missing required columns: ${missingRequired.join(', ')}`] : [],
       format: 'normalized',
       ambiguousTargets,
       duplicateTargets,

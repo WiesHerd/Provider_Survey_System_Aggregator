@@ -10,8 +10,7 @@ import {
   FormControl,
   Autocomplete,
   TextField,
-  Chip,
-  Typography
+  Chip
 } from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
@@ -43,14 +42,17 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   availableRegions,
   regionMapping,
   availableProviderTypes,
+  availableDataCategories = [], // NEW: Data category options
   availableYears,
   // NEW: Variable selection props
   selectedVariables,
   availableVariables,
   onVariablesChange
 }) => {
-  // View name state for saving views
+  // View name state for saving views (now in modal)
   const [viewName, setViewName] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  
   // Handler for standard filter changes (specialty, region, etc.)
   const handleFilterChange = useCallback((field: keyof typeof filters, value: string) => {
     // For geographic region, convert formatted display value back to original value
@@ -69,6 +71,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
       surveySource: '',
       geographicRegion: '',
       providerType: '',
+      dataCategory: '', // ENTERPRISE FIX: Clear dataCategory to show all categories
       year: ''
     });
   }, [onFiltersChange]);
@@ -106,17 +109,19 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Saved Views - Matches CustomReports pattern */}
+          {/* Saved Views - Now with modal for view name */}
           <SavedViews
             filters={filters}
             selectedVariables={selectedVariables}
             onLoadView={handleLoadView}
             viewName={viewName}
             onViewNameChange={setViewName}
+            showSaveModal={showSaveModal}
+            onShowSaveModal={setShowSaveModal}
           />
           
           {/* Clear Filters Button */}
-          {(filters.specialty || filters.surveySource || filters.geographicRegion || filters.providerType || filters.year) && (
+          {(filters.specialty || filters.surveySource || filters.geographicRegion || filters.providerType || filters.dataCategory || filters.year) && (
             <button
               onClick={clearAllFilters}
               className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
@@ -138,26 +143,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         </div>
       </div>
 
-      {/* View Name Input - Matches CustomReports pattern */}
-      <div className="mb-4">
-        <FormControl size="small" sx={{ width: '100%', maxWidth: '300px' }}>
-          <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
-            View Name
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Enter view name to save..."
-            value={viewName}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setViewName(e.target.value)}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-              }
-            }}
-          />
-        </FormControl>
-      </div>
+      {/* View Name Input removed - now in modal when Save View is clicked */}
 
       {/* Cascading Filters - Responsive Layout with Natural Width */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full max-w-full">
@@ -213,12 +199,32 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         <StandardDropdown
           value={filters.providerType}
           onChange={(value) => handleFilterChange('providerType', value)}
-          options={availableProviderTypes}
+          options={['All Types', ...(availableProviderTypes || [])]}
           label="Provider Type"
           placeholder="Select type..."
           variant="select"
           size="small"
         />
+      </div>
+
+      {/* Second Row: Data Category Filter */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full max-w-full mt-4">
+        {/* Data Category Filter (NEW) */}
+        {availableDataCategories && availableDataCategories.length > 0 && (
+          <StandardDropdown
+            value={filters.dataCategory || ''}
+            onChange={(value) => {
+              // ENTERPRISE FIX: StandardDropdown already normalizes "All Categories" to empty string
+              // Just pass the value through - empty string means "show all"
+              handleFilterChange('dataCategory', value || '');
+            }}
+            options={['All Categories', ...(availableDataCategories || [])]}
+            label="Data Category"
+            placeholder="Select category..."
+            variant="select"
+            size="small"
+          />
+        )}
       </div>
 
       {/* NEW ROW: Variable Selection (Multi-select) */}

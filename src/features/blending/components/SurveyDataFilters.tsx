@@ -14,17 +14,20 @@ interface SurveyDataFiltersProps {
   selectedYear: string;
   selectedRegion: string;
   selectedProviderType: string;
+  selectedDataCategory?: string;
   specialtySearch: string;
   onSurveyChange: (value: string) => void;
   onYearChange: (value: string) => void;
   onRegionChange: (value: string) => void;
   onProviderTypeChange: (value: string) => void;
+  onDataCategoryChange?: (value: string) => void;
   onSpecialtySearchChange: (value: string) => void;
   filterOptions: {
     surveys: string[];
     years: string[];
     regions: string[];
     providerTypes: string[];
+    dataCategories?: string[];
   };
 }
 
@@ -33,16 +36,18 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
   selectedYear,
   selectedRegion,
   selectedProviderType,
+  selectedDataCategory = '',
   specialtySearch,
   onSurveyChange,
   onYearChange,
   onRegionChange,
   onProviderTypeChange,
+  onDataCategoryChange,
   onSpecialtySearchChange,
   filterOptions
 }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
       {/* Specialty Search */}
       <div>
         <TextField

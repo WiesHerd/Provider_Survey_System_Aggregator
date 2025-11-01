@@ -24,6 +24,10 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
   // Custom hook for data management
   const {
     // State
+    // Cross-category mapping toggle
+    showAllCategories,
+    setShowAllCategories,
+    
     mappings,
     unmappedRegions,
     selectedRegions,
@@ -94,10 +98,13 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     }
   };
 
-  // Load data on mount
+  // Load data on mount and when provider type or toggle changes
+  // CRITICAL FIX: The loadData function already depends on showAllCategories via useCallback
+  // So we just need to call loadData when showAllCategories changes
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAllCategories]); // loadData is a useCallback that depends on showAllCategories
 
   // Notify parent of changes
   useEffect(() => {
@@ -130,6 +137,8 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
               selectedCount={selectedRegions.length}
               isBulkSelected={selectedRegions.length === unmappedRegions.length && unmappedRegions.length > 0}
               allUnmappedCount={unmappedRegions.length}
+              showAllCategories={showAllCategories}
+              onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
               onShowHelp={() => setShowHelp(true)}
               onToggleSelectAll={selectedRegions.length === 0 ? selectAllRegions : deselectAllRegions}
               onCreateMapping={handleCreateMapping}

@@ -321,7 +321,13 @@ export const useUploadData = (
           uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
           totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
         },
-        columnMappings: {}
+        columnMappings: {},
+        // NEW: Include full survey object for new display formatting
+        providerType: survey.providerType,
+        source: (survey as any).source,
+        dataCategory: (survey as any).dataCategory,
+        customDataCategory: (survey as any).customDataCategory,
+        customProviderType: (survey as any).customProviderType
       }));
 
       console.log('✅ useUploadData: Processed surveys:', {

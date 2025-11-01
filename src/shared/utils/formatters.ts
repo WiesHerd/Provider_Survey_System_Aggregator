@@ -394,3 +394,45 @@ export const formatRegionForDisplay = (region: string): string => {
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
 };
+
+/**
+ * Formats provider type for display in proper case
+ * 
+ * @param providerType - Provider type to format (e.g., "CALL", "PHYSICIAN", "APP", "Program Director")
+ * @returns Formatted provider type string
+ * 
+ * @example
+ * ```typescript
+ * formatProviderTypeForDisplay('CALL'); // Returns "Call"
+ * formatProviderTypeForDisplay('PHYSICIAN'); // Returns "Physician"
+ * formatProviderTypeForDisplay('APP'); // Returns "APP"
+ * formatProviderTypeForDisplay('Program Director'); // Returns "Program Director"
+ * ```
+ */
+export const formatProviderTypeForDisplay = (providerType: string): string => {
+  if (!providerType) return '';
+  
+  // Handle standard enum values
+  const standardTypes: Record<string, string> = {
+    'CALL': 'Call',
+    'PHYSICIAN': 'Physician',
+    'APP': 'APP', // Keep APP as acronym
+    'physician': 'Physician',
+    'app': 'APP',
+    'call': 'Call'
+  };
+  
+  // Check if it's a standard type
+  if (standardTypes[providerType]) {
+    return standardTypes[providerType];
+  }
+  
+  // For multi-word values like "Program Director", format as proper case
+  return providerType.split(' ').map(word => {
+    // Check if word is already in proper case (has mixed case)
+    if (word.length > 1 && word[0] === word[0].toUpperCase() && word.slice(1) !== word.slice(1).toLowerCase()) {
+      return word; // Already formatted, keep as is
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+};

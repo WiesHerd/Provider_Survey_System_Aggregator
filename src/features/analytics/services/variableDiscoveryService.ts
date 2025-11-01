@@ -55,6 +55,19 @@ export class VariableDiscoveryService {
     try {
       const surveys = await this.dataService.getAllSurveys();
       console.log('🔍 VariableDiscoveryService: Found', surveys.length, 'surveys');
+      
+      // DEBUG: Log Call Pay surveys specifically
+      const callPaySurveys = surveys.filter(s => s.providerType === 'CALL' || (s.name && s.name.toLowerCase().includes('call pay')));
+      console.log('🔍 VariableDiscoveryService: Call Pay surveys found:', callPaySurveys.length);
+      callPaySurveys.forEach(survey => {
+        console.log('🔍 VariableDiscoveryService: Call Pay survey:', {
+          id: survey.id,
+          name: survey.name,
+          type: survey.type,
+          providerType: survey.providerType
+        });
+      });
+      
       const variableMap = new Map<string, DiscoveredVariable>();
       
       // Process surveys in parallel for better performance
@@ -63,6 +76,24 @@ export class VariableDiscoveryService {
       );
       
       await Promise.all(surveyPromises);
+      
+      // DEBUG: Check for on_call_compensation variable after discovery
+      const onCallVars = Array.from(variableMap.values()).filter(v => 
+        v.normalizedName.includes('on_call') || 
+        v.normalizedName.includes('oncall') ||
+        v.name.toLowerCase().includes('on call') ||
+        v.name.toLowerCase().includes('oncall')
+      );
+      if (onCallVars.length > 0) {
+        console.log('✅ VariableDiscoveryService: Found on-call compensation variables:', onCallVars.map(v => ({
+          name: v.name,
+          normalizedName: v.normalizedName,
+          sources: v.availableSources,
+          recordCount: v.recordCount
+        })));
+      } else {
+        console.warn('⚠️ VariableDiscoveryService: NO on-call compensation variables found after processing all surveys');
+      }
       
       // Convert map to array and sort by category, then name
       this.cache = Array.from(variableMap.values()).sort((a, b) => {
@@ -95,10 +126,38 @@ export class VariableDiscoveryService {
     variableMap: Map<string, DiscoveredVariable>
   ): Promise<void> {
     try {
+      // DEBUG: Log Call Pay survey processing
+      const isCallPaySurvey = survey.providerType === 'CALL' || (survey.name && survey.name.toLowerCase().includes('call pay'));
+      if (isCallPaySurvey) {
+        console.log('🔍 VariableDiscoveryService: Processing Call Pay survey:', {
+          id: survey.id,
+          name: survey.name,
+          type: survey.type,
+          providerType: survey.providerType
+        });
+      }
+      
       const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 100 });
       
       if (surveyData.rows.length === 0) {
+        if (isCallPaySurvey) {
+          console.warn('⚠️ VariableDiscoveryService: Call Pay survey has no data rows:', survey.id);
+        }
         return;
+      }
+      
+      if (isCallPaySurvey) {
+        const firstRow = surveyData.rows[0];
+        const firstRowData = firstRow?.data || firstRow;
+        const firstRowVariable = firstRowData && typeof firstRowData === 'object' && 'variable' in firstRowData 
+          ? (firstRowData as any).variable 
+          : 'No variable field';
+        console.log('🔍 VariableDiscoveryService: Call Pay survey data loaded:', {
+          surveyId: survey.id,
+          rowCount: surveyData.rows.length,
+          firstRowVariables: firstRowVariable,
+          columns: firstRowData && typeof firstRowData === 'object' ? Object.keys(firstRowData).slice(0, 10) : []
+        });
       }
       
       // Extract from LONG format (variable field)
@@ -106,6 +165,10 @@ export class VariableDiscoveryService {
       
       // Extract from WIDE format (column patterns: *_p25, *_p50, etc.)
       this.extractWideFormatVariables(surveyData.rows, survey, variableMap);
+      
+      if (isCallPaySurvey) {
+        console.log('✅ VariableDiscoveryService: Finished processing Call Pay survey:', survey.id);
+      }
       
     } catch (error) {
       console.warn(`⚠️ VariableDiscoveryService: Failed to process survey ${survey.id}:`, error);
@@ -120,6 +183,7 @@ export class VariableDiscoveryService {
     survey: any, 
     variableMap: Map<string, DiscoveredVariable>
   ): void {
+    const isCallPaySurvey = survey.providerType === 'CALL' || (survey.name && survey.name.toLowerCase().includes('call pay'));
     const variableSet = new Set<string>();
     
     rows.forEach(row => {
@@ -127,6 +191,19 @@ export class VariableDiscoveryService {
       const variable = actualRowData.variable || actualRowData.Variable || actualRowData['Variable Name'];
       if (variable && typeof variable === 'string') {
         variableSet.add(variable.trim());
+        
+        // DEBUG: Log on-call related variables from Call Pay surveys
+        if (isCallPaySurvey) {
+          const lowerVar = variable.toLowerCase();
+          if (lowerVar.includes('on') && (lowerVar.includes('call') || lowerVar.includes('oncall'))) {
+            console.log('🔍 VariableDiscoveryService: Found on-call variable in Call Pay survey:', {
+              surveyId: survey.id,
+              surveyName: survey.name,
+              variableName: variable,
+              normalized: normalizeVariableName(variable)
+            });
+          }
+        }
       }
     });
     
@@ -148,6 +225,16 @@ export class VariableDiscoveryService {
           dataQuality: this.calculateDataQuality(rows, varName),
           format: 'long'
         });
+        
+        // DEBUG: Log when on-call variable is added to map
+        if (isCallPaySurvey && (normalized.includes('on_call') || normalized.includes('oncall'))) {
+          console.log('✅ VariableDiscoveryService: Added on-call variable to map:', {
+            name: varName,
+            normalizedName: normalized,
+            recordCount,
+            surveySource: survey.type
+          });
+        }
       } else {
         // Merge with existing
         const existing = variableMap.get(normalized)!;
@@ -155,6 +242,16 @@ export class VariableDiscoveryService {
           existing.availableSources.push(survey.type);
         }
         existing.recordCount += recordCount;
+        
+        // DEBUG: Log when on-call variable is merged
+        if (isCallPaySurvey && (normalized.includes('on_call') || normalized.includes('oncall'))) {
+          console.log('✅ VariableDiscoveryService: Merged on-call variable with existing:', {
+            name: varName,
+            normalizedName: normalized,
+            totalRecordCount: existing.recordCount,
+            allSources: existing.availableSources
+          });
+        }
       }
     });
   }
@@ -173,30 +270,73 @@ export class VariableDiscoveryService {
     const actualRowData = firstRow.data || firstRow;
     const columns = Object.keys(actualRowData);
     const pattern = /^(.+)_p(25|50|75|90)$/i;
-    const baseNames = new Set<string>();
+    const baseNameMap = new Map<string, string>(); // Maps normalized name to original base name for data lookup
+    
+    console.log(`🔍 VariableDiscoveryService: Processing ${survey.type} survey - ${columns.length} columns`);
+    
+    // Log all columns for debugging
+    const matchingColumns: string[] = [];
+    const nonMatchingColumns: string[] = [];
     
     columns.forEach(col => {
       const match = col.match(pattern);
       if (match) {
-        baseNames.add(match[1].toLowerCase());
+        matchingColumns.push(col);
+        const rawBaseName = match[1];
+        // CRITICAL: Normalize the base name to handle variations like "ASA" -> "asa_units"
+        const normalizedBaseName = normalizeVariableName(rawBaseName);
+        
+        // DEBUG: Log ASA-related columns
+        if (rawBaseName.toLowerCase().includes('asa') || normalizedBaseName.includes('asa')) {
+          console.log(`🔍 VariableDiscoveryService: Found ASA-related column: "${col}"`);
+          console.log(`   → Raw base name: "${rawBaseName}"`);
+          console.log(`   → Normalized: "${normalizedBaseName}"`);
+        }
+        
+        // Store mapping from normalized name to raw base name (preserve original case for column lookup)
+        if (!baseNameMap.has(normalizedBaseName)) {
+          baseNameMap.set(normalizedBaseName, rawBaseName); // Keep original case for accurate column matching
+        }
+      } else {
+        nonMatchingColumns.push(col);
       }
     });
     
-    baseNames.forEach(baseName => {
-      if (!variableMap.has(baseName)) {
-        variableMap.set(baseName, {
-          name: this.formatDisplayName(baseName),
-          normalizedName: baseName,
-          category: detectVariableCategory(baseName),
+    if (matchingColumns.length > 0) {
+      console.log(`🔍 VariableDiscoveryService: ${matchingColumns.length} columns match percentile pattern`);
+    }
+    
+    if (survey.type === 'SullivanCotter') {
+      const asaColumns = columns.filter(col => col.toLowerCase().includes('asa'));
+      if (asaColumns.length > 0) {
+        console.log(`🔍 VariableDiscoveryService: Found ${asaColumns.length} ASA-related columns in Sullivan Cotter:`);
+        asaColumns.forEach(col => {
+          const match = col.match(pattern);
+          if (match) {
+            const normalized = normalizeVariableName(match[1]);
+            console.log(`   ✅ "${col}" → normalized: "${normalized}"`);
+          } else {
+            console.log(`   ⚠️ "${col}" → does NOT match pattern *_p25/p50/p75/p90`);
+          }
+        });
+      }
+    }
+    
+    baseNameMap.forEach((rawBaseName, normalizedBaseName) => {
+      if (!variableMap.has(normalizedBaseName)) {
+        variableMap.set(normalizedBaseName, {
+          name: this.formatDisplayName(normalizedBaseName),
+          normalizedName: normalizedBaseName,
+          category: detectVariableCategory(normalizedBaseName),
           availableSources: [survey.type],
           recordCount: rows.length,
           firstSeen: new Date(),
-          dataQuality: this.calculateWideFormatQuality(rows, baseName),
+          dataQuality: this.calculateWideFormatQuality(rows, rawBaseName),
           format: 'wide'
         });
       } else {
         // Merge with existing
-        const existing = variableMap.get(baseName)!;
+        const existing = variableMap.get(normalizedBaseName)!;
         if (!existing.availableSources.includes(survey.type)) {
           existing.availableSources.push(survey.type);
         }
@@ -270,7 +410,10 @@ export class VariableDiscoveryService {
       'base_salary': 'Base Salary',
       'asa_units': 'ASA Units',
       'panel_size': 'Panel Size',
-      'total_encounters': 'Total Encounters'
+      'total_encounters': 'Total Encounters',
+      'on_call_compensation': 'Daily Rate On-Call Compensation',
+      'oncall_compensation': 'Daily Rate On-Call Compensation',
+      'daily_rate_on_call': 'Daily Rate On-Call Compensation'
     };
     
     if (displayMap[standardizedName]) {

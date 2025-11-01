@@ -26,6 +26,9 @@ export const useRegionMappingData = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
 
+  // State for cross-category mapping toggle (Call Pay, Physician, APP)
+  const [showAllCategories, setShowAllCategories] = useState(true); // Default to showing all
+
   // Data service
   const dataService = useMemo(() => new DataService(), []);
 
@@ -67,8 +70,11 @@ export const useRegionMappingData = () => {
     setError(null);
     
     try {
-      // Convert UI provider type to data service provider type
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      // NEW: If showAllCategories is true, don't filter by data category
+      // This allows cross-category mapping (Call Pay, Physician, APP)
+      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
+        ? undefined 
+        : selectedProviderType;
       
       // Load region mappings (persisted) with provider type filtering
       const regionMappings = await dataService.getRegionMappings(dataProviderType);
@@ -78,8 +84,8 @@ export const useRegionMappingData = () => {
       const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
-      // Load learned mappings (FIXED!)
-      const learnedData = await dataService.getLearnedMappings('region', selectedProviderType);
+      // Load learned mappings
+      const learnedData = await dataService.getLearnedMappings('region', dataProviderType);
       setLearnedMappings(learnedData);
       
     } catch (err) {
@@ -87,7 +93,7 @@ export const useRegionMappingData = () => {
     } finally {
       setLoading(false);
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
 
 
@@ -139,13 +145,16 @@ export const useRegionMappingData = () => {
       await dataService.createRegionMapping(mapping);
       setMappings(prev => [...prev, mapping]);
       
-      // Create learned mappings for all regions in the group (FIXED!)
+      // Create learned mappings for all regions in the group
+      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
+        ? undefined 
+        : selectedProviderType;
       for (const region of regions) {
-        await dataService.saveLearnedMapping('region', region.name, standardizedName, selectedProviderType, region.surveySource);
+        await dataService.saveLearnedMapping('region', region.name, standardizedName, dataProviderType, region.surveySource);
       }
       
       // Update learned mappings state to show the new ones
-      const learnedData = await dataService.getLearnedMappings('region', selectedProviderType);
+      const learnedData = await dataService.getLearnedMappings('region', dataProviderType);
       setLearnedMappings(learnedData);
       
       // Remove mapped regions from unmapped list
@@ -159,7 +168,7 @@ export const useRegionMappingData = () => {
       console.error('Failed to create grouped region mapping:', err);
       setError('Failed to create grouped region mapping');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
   // Delete region mapping
   const deleteMapping = useCallback(async (mappingId: string) => {
@@ -168,7 +177,9 @@ export const useRegionMappingData = () => {
       setMappings(prev => prev.filter(mapping => mapping.id !== mappingId));
       
       // Reload unmapped regions to include any that were in this mapping - WITH provider type filtering
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
+        ? undefined 
+        : selectedProviderType;
       const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
@@ -176,7 +187,7 @@ export const useRegionMappingData = () => {
       console.error('Failed to delete region mapping:', err);
       setError('Failed to delete region mapping');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
   // Clear all region mappings
   const clearAllMappings = useCallback(async () => {
@@ -185,7 +196,9 @@ export const useRegionMappingData = () => {
       setMappings([]);
       
       // Reload unmapped regions - WITH provider type filtering
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
+        ? undefined 
+        : selectedProviderType;
       const unmapped = await dataService.getUnmappedRegions(dataProviderType);
       setUnmappedRegions(unmapped);
       
@@ -193,7 +206,7 @@ export const useRegionMappingData = () => {
       console.error('Failed to clear region mappings:', err);
       setError('Failed to clear region mappings');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
   // Region selection
   const selectRegion = useCallback((region: IUnmappedRegion) => {
@@ -233,13 +246,23 @@ export const useRegionMappingData = () => {
     setError(null);
   }, []);
 
-  // Load data on mount
+  // Load data on mount and when provider type or toggle changes
+  // CRITICAL FIX: Watch for changes in showAllCategories directly, not just loadData
   useEffect(() => {
+    console.log('🔍 useRegionMappingData: Reloading data due to state change:', {
+      selectedProviderType: selectedProviderType || 'BOTH',
+      showAllCategories
+    });
     loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProviderType, showAllCategories]); // loadData is a useCallback that depends on these values
 
   return {
     // State
+    // Cross-category mapping state
+    showAllCategories,
+    setShowAllCategories,
+    
     mappings,
     unmappedRegions,
     selectedRegions,

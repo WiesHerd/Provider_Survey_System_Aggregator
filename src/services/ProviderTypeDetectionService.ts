@@ -56,15 +56,24 @@ export class ProviderTypeDetectionService {
       // Process each survey
       allSurveys.forEach(survey => {
         const providerType = (survey as any).providerType;
+        const dataCategory = (survey as any).dataCategory;
         const customDescription = (survey as any).customProviderDescription;
         
-        if (providerType) {
-          const key = providerType === 'OTHER' ? `OTHER_${customDescription || 'Unknown'}` : providerType;
+        // CRITICAL FIX: Also check dataCategory for Call Pay surveys
+        // If survey has dataCategory === 'CALL_PAY', treat it as CALL type
+        // This handles cases where Call Pay surveys might have providerType !== 'CALL'
+        let effectiveProviderType: ProviderType | 'OTHER' | undefined = providerType;
+        if (dataCategory === 'CALL_PAY') {
+          effectiveProviderType = 'CALL';
+        }
+        
+        if (effectiveProviderType) {
+          const key = effectiveProviderType === 'OTHER' ? `OTHER_${customDescription || 'Unknown'}` : effectiveProviderType;
           
           if (!providerTypeMap.has(key)) {
             providerTypeMap.set(key, {
-              type: providerType,
-              displayName: this.getDisplayName(providerType, customDescription),
+              type: effectiveProviderType,
+              displayName: this.getDisplayName(effectiveProviderType, customDescription),
               hasData: true,
               surveyCount: 0,
               lastUpdated: null,
@@ -126,6 +135,8 @@ export class ProviderTypeDetectionService {
         return 'Physician';
       case 'APP':
         return 'Advanced Practice Provider';
+      case 'CALL':
+        return 'Call Pay';
       case 'OTHER':
         return customDescription || 'Other Provider Type';
       default:

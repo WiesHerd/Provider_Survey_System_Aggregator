@@ -36,6 +36,7 @@ export interface AggregatedData {
   geographicRegion: string;
   providerType?: string;
   surveyYear?: string;
+  dataCategory?: string; // NEW: Data category from survey (COMPENSATION, CALL_PAY, MOONLIGHTING, CUSTOM)
   
   // TCC (Total Cash Compensation) metrics with independent organizational data
   tcc_n_orgs: number;
@@ -71,6 +72,7 @@ export interface AnalyticsFilters {
   surveySource: string;
   geographicRegion: string;
   providerType: string;
+  dataCategory?: string; // NEW: Data category filter (COMPENSATION, CALL_PAY, MOONLIGHTING, CUSTOM)
   year: string;
 }
 
@@ -149,6 +151,7 @@ export interface AnalyticsFiltersProps {
   availableRegions: string[];
   regionMapping?: Map<string, string>;
   availableProviderTypes: string[];
+  availableDataCategories?: string[]; // NEW: Available data category options
   availableYears: string[];
   // NEW: Variable selection props
   selectedVariables: string[];

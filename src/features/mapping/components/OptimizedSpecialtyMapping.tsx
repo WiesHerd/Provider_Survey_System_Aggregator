@@ -40,6 +40,9 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
   // Performance state
   const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
+  
+  // Cross-category mapping toggle (Call Pay, Physician, APP)
+  const [showAllProviderTypes, setShowAllProviderTypes] = useState(true);
 
   // Optimized data hook
   const {
@@ -255,6 +258,8 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
         selectedCount={selectedSpecialties.length}
         isBulkSelected={selectedSpecialties.length > 0}
         allUnmappedCount={unmappedSpecialties.length}
+        showAllProviderTypes={showAllProviderTypes}
+        onToggleProviderTypeFilter={() => setShowAllProviderTypes(!showAllProviderTypes)}
         onShowHelp={() => {}}
         onToggleSelectAll={() => {}}
         onCreateMapping={createMapping}

@@ -18,6 +18,9 @@ interface Survey {
   colorAccent: string;
   metadata: any;
   providerType?: ProviderType | string; // Provider type: PHYSICIAN, APP, or CUSTOM
+  // NEW: Data Category architecture fields
+  dataCategory?: 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM'; // What type of compensation data
+  source?: string; // Just company name: 'MGMA', 'SullivanCotter', etc.
 }
 
 interface SurveyData {
@@ -615,6 +618,119 @@ export class IndexedDBService {
   }
 
   // Survey Methods
+  /**
+   * Migrate old survey structure to new structure with dataCategory and source fields
+   * Handles backward compatibility for surveys created before the dataCategory architecture
+   */
+  private migrateSurveyStructure(survey: Survey): Survey {
+    // If already migrated (has dataCategory), return as-is
+    if ((survey as any).dataCategory) {
+      return survey;
+    }
+
+    const migratedSurvey = { ...survey } as any;
+    const surveyType = survey.type || '';
+    const surveyProviderType = survey.providerType || '';
+
+    // Case 1: Old surveys with providerType = 'CALL'
+    if (surveyProviderType === 'CALL') {
+      migratedSurvey.dataCategory = 'CALL_PAY';
+      // Extract source from type string (e.g., "MGMA Call Pay" → "MGMA")
+      const sourceMatch = surveyType.match(/^([A-Za-z]+)\s+Call\s+Pay/i);
+      migratedSurvey.source = sourceMatch ? sourceMatch[1] : this.extractSourceFromType(surveyType);
+      // CRITICAL FIX: Preserve 'CALL' as providerType for backward compatibility
+      // The new architecture uses dataCategory='CALL_PAY' to identify Call Pay data
+      // But we keep providerType='CALL' to maintain existing logic that checks for it
+      // In the future, providerType should be PHYSICIAN/APP (who), not CALL (what)
+      migratedSurvey.providerType = 'CALL'; // Keep original for backward compatibility
+      console.log('🔍 Migrated CALL survey:', {
+        id: survey.id,
+        oldType: surveyType,
+        newSource: migratedSurvey.source,
+        newDataCategory: migratedSurvey.dataCategory,
+        preservedProviderType: 'CALL'
+      });
+    }
+    // Case 2: Type contains "Call Pay" (even if providerType isn't CALL)
+    else if (surveyType.toLowerCase().includes('call pay')) {
+      migratedSurvey.dataCategory = 'CALL_PAY';
+      // Extract source from type string
+      const sourceMatch = surveyType.match(/^([A-Za-z]+)\s+Call\s+Pay/i);
+      migratedSurvey.source = sourceMatch ? sourceMatch[1] : this.extractSourceFromType(surveyType);
+      // Keep existing providerType
+      if (!migratedSurvey.providerType) {
+        migratedSurvey.providerType = 'PHYSICIAN'; // Default fallback
+      }
+      console.log('🔍 Migrated Call Pay survey (from type):', {
+        id: survey.id,
+        oldType: surveyType,
+        newSource: migratedSurvey.source,
+        newDataCategory: migratedSurvey.dataCategory
+      });
+    }
+    // Case 3: Type contains "Moonlighting"
+    else if (surveyType.toLowerCase().includes('moonlighting')) {
+      migratedSurvey.dataCategory = 'MOONLIGHTING';
+      migratedSurvey.source = this.extractSourceFromType(surveyType);
+      // Keep existing providerType
+      if (!migratedSurvey.providerType) {
+        migratedSurvey.providerType = 'PHYSICIAN'; // Default fallback
+      }
+      console.log('🔍 Migrated Moonlighting survey:', {
+        id: survey.id,
+        oldType: surveyType,
+        newSource: migratedSurvey.source,
+        newDataCategory: migratedSurvey.dataCategory
+      });
+    }
+    // Case 4: Standard compensation surveys (e.g., "MGMA Physician", "SullivanCotter APP")
+    else {
+      migratedSurvey.dataCategory = 'COMPENSATION';
+      migratedSurvey.source = this.extractSourceFromType(surveyType);
+      
+      // Try to extract provider type from type string if not already set
+      if (!migratedSurvey.providerType) {
+        if (surveyType.toLowerCase().includes('app') || surveyType.toLowerCase().includes('advanced practice')) {
+          migratedSurvey.providerType = 'APP';
+        } else if (surveyType.toLowerCase().includes('physician') || surveyType.toLowerCase().includes('phys')) {
+          migratedSurvey.providerType = 'PHYSICIAN';
+        } else {
+          migratedSurvey.providerType = 'PHYSICIAN'; // Default fallback
+        }
+      }
+      console.log('🔍 Migrated Compensation survey:', {
+        id: survey.id,
+        oldType: surveyType,
+        newSource: migratedSurvey.source,
+        newDataCategory: migratedSurvey.dataCategory,
+        newProviderType: migratedSurvey.providerType
+      });
+    }
+
+    return migratedSurvey as Survey;
+  }
+
+  /**
+   * Extract source (company name) from survey type string
+   * Handles formats like "MGMA Physician", "SullivanCotter APP", "MGMA Call Pay", etc.
+   */
+  private extractSourceFromType(type: string): string {
+    if (!type) return 'Unknown';
+
+    // Known survey sources
+    const knownSources = ['MGMA', 'SullivanCotter', 'Gallagher', 'ECG', 'AMGA'];
+    
+    for (const source of knownSources) {
+      if (type.toLowerCase().startsWith(source.toLowerCase())) {
+        return source;
+      }
+    }
+
+    // If no known source matches, take first word
+    const firstWord = type.split(/\s+/)[0];
+    return firstWord || 'Unknown';
+  }
+
   async getAllSurveys(): Promise<Survey[]> {
     const db = await this.ensureDB();
     return new Promise((resolve, reject) => {
@@ -634,7 +750,14 @@ export class IndexedDBService {
           console.error('❌ Failed to get surveys:', request.error);
           resolve([]); // Return empty array instead of rejecting
         };
-        request.onsuccess = () => resolve(request.result || []);
+        request.onsuccess = () => {
+          const surveys = request.result || [];
+          
+          // Apply migration on-the-fly for backward compatibility
+          const migratedSurveys = surveys.map(survey => this.migrateSurveyStructure(survey));
+          
+          resolve(migratedSurveys);
+        };
       } catch (error) {
         console.error('❌ Transaction error in getAllSurveys:', error);
         resolve([]); // Return empty array instead of rejecting
@@ -1823,6 +1946,9 @@ export class IndexedDBService {
       return [];
     }
     
+    // ENTERPRISE FIX: When providerType is undefined (showing all categories),
+    // we still need to get all mappings to check for mapped specialties.
+    // However, we should NOT filter surveys by providerType when building unmapped list.
     const mappings = await this.getAllSpecialtyMappings(providerType);
     
     // ENTERPRISE DEBUG: Log provider type filtering details - removed for performance
@@ -1853,17 +1979,41 @@ export class IndexedDBService {
     const specialtyCounts = new Map<string, { count: number; sources: Set<string> }>();
 
     for (const survey of surveys) {
-      // Filter surveys by provider type if specified
-      
-      if (providerType && survey.providerType && survey.providerType !== providerType) {
+      // Filter surveys by data category (Provider Type) if specified
+      // When providerType is undefined, include all surveys (Call Pay, Physician, APP)
+      // ENTERPRISE FIX: Only filter if providerType is explicitly provided (not undefined)
+      // When undefined (showAllCategories = true), include ALL surveys regardless of providerType
+      if (providerType !== undefined && survey.providerType && survey.providerType !== providerType) {
         continue;
       }
       
+      // ENTERPRISE DEBUG: Log Call Pay surveys when providerType is undefined
+      if (providerType === undefined && survey.providerType === 'CALL') {
+        console.log(`🔍 getUnmappedSpecialties: Including Call Pay survey: ${survey.type || survey.name}, providerType: ${survey.providerType}`);
+      }
       
       const { rows } = await this.getSurveyData(survey.id);
       
-      // Get survey source with proper fallbacks
-      const surveySource = survey.type || survey.name || 'Unknown';
+      // Get survey source with proper fallbacks - use new structure if available
+      // NEW: Use survey.source and survey.dataCategory if available (new architecture)
+      let surveySource: string;
+      if ((survey as any).source && (survey as any).dataCategory) {
+        const source = (survey as any).source;
+        const dataCategory = (survey as any).dataCategory;
+        const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+          : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+          : dataCategory;
+        surveySource = `${source} ${categoryDisplay}`;
+      } else {
+        // Backward compatibility: Use old logic
+        surveySource = survey.type || survey.name || 'Unknown';
+      }
+      
+      // ENTERPRISE DEBUG: Log Call Pay survey sources
+      if (survey.providerType === 'CALL') {
+        console.log(`🔍 getUnmappedSpecialties: Processing Call Pay survey source: ${surveySource}`);
+      }
       
       // ENTERPRISE DEBUG: Log survey source for MGMA
       if (survey.name.toLowerCase().includes('mgma') || survey.type.toLowerCase().includes('mgma')) {
@@ -1900,6 +2050,11 @@ export class IndexedDBService {
           current.sources.add(surveySource);
           specialtyCounts.set(key, current);
           
+          // ENTERPRISE DEBUG: Log Call Pay specialties being added
+          if (survey.providerType === 'CALL') {
+            console.log(`🔍 getUnmappedSpecialties: Adding unmapped Call Pay specialty: "${specialty}" from ${surveySource}`);
+          }
+          
           // ENTERPRISE DEBUG: Log specialty extraction for MGMA
           if (surveySource.toLowerCase().includes('mgma')) {
           }
@@ -1912,14 +2067,25 @@ export class IndexedDBService {
     }
 
     // Create separate entries for each survey source instead of combining them
+    // Map survey sources to their provider types for display
+    const surveyProviderTypeMap = new Map<string, string>();
+    surveys.forEach(survey => {
+      const source = survey.type || survey.name || 'Unknown';
+      if (survey.providerType) {
+        surveyProviderTypeMap.set(source, survey.providerType);
+      }
+    });
+    
     specialtyCounts.forEach((value, key) => {
       // Create a separate entry for each survey source
       Array.from(value.sources).forEach(surveySource => {
+        const providerType = surveyProviderTypeMap.get(surveySource) || 'UNKNOWN';
         unmapped.push({
           id: crypto.randomUUID(),
           name: key,
           frequency: value.count,
-          surveySource: surveySource as SurveySource
+          surveySource: surveySource as SurveySource,
+          providerType: providerType as any // Store provider type for display
         });
       });
     });
@@ -1962,8 +2128,21 @@ export class IndexedDBService {
       
       const { rows } = await this.getSurveyData(survey.id);
       
-      // Get survey source with proper fallbacks
-      const surveySource = survey.type || survey.name || 'Unknown';
+      // Get survey source with proper fallbacks - use new structure if available
+      // NEW: Use survey.source and survey.dataCategory if available (new architecture)
+      let surveySource: string;
+      if ((survey as any).source && (survey as any).dataCategory) {
+        const source = (survey as any).source;
+        const dataCategory = (survey as any).dataCategory;
+        const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+          : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+          : dataCategory;
+        surveySource = `${source} ${categoryDisplay}`;
+      } else {
+        // Backward compatibility: Use old logic
+        surveySource = survey.type || survey.name || 'Unknown';
+      }
       
       rows.forEach(row => {
         const variable = row.variable || row.Variable || row['Variable Name'];

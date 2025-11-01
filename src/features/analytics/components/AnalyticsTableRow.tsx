@@ -6,7 +6,7 @@
  */
 
 import React, { memo } from 'react';
-import { formatSpecialtyForDisplay, formatRegionForDisplay } from '../../../shared/utils/formatters';
+import { formatSpecialtyForDisplay, formatRegionForDisplay, formatProviderTypeForDisplay } from '../../../shared/utils/formatters';
 import { 
   getVariableLightBackgroundColor,
   mapVariableNameToStandard
@@ -118,7 +118,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             minWidth: '120px'
           }}
         >
-          {row.providerType || 'Unknown'}
+          {formatProviderTypeForDisplay(row.providerType || 'Unknown')}
         </td>
       )}
       
@@ -184,7 +184,13 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             'asa_units': 'asa_units',
             'asa': 'asa_units',
             'net_collections': 'net_collections',
-            'collections': 'net_collections'
+            'collections': 'net_collections',
+            // On-Call Compensation support
+            'on_call_compensation': 'on_call',
+            'oncall_compensation': 'on_call',
+            'daily_rate_on_call': 'on_call',
+            'on_call': 'on_call',
+            'oncall': 'on_call'
           };
           
           const legacyPrefix = legacyFieldMap[varName] || varName;

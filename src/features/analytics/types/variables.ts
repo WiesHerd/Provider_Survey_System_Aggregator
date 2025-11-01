@@ -43,6 +43,7 @@ export interface DynamicAggregatedData {
   geographicRegion: string;
   providerType?: string;
   surveyYear?: string;
+  dataCategory?: string; // NEW: Data category from survey (COMPENSATION, CALL_PAY, MOONLIGHTING, CUSTOM)
   
   // Dynamic variables - structure adapts to selected variables
   variables: Record<string, VariableMetrics>;
@@ -58,6 +59,7 @@ export interface DynamicNormalizedRow {
   region: string;
   surveySource: string;
   surveyYear: string;
+  dataCategory?: string; // NEW: Data category from survey (COMPENSATION, CALL_PAY, MOONLIGHTING, CUSTOM)
   variables: Record<string, VariableMetrics>;
 }
 

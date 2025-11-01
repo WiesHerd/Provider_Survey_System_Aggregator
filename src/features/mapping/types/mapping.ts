@@ -29,6 +29,7 @@ export interface IUnmappedSpecialty extends BaseEntity {
   name: string;
   surveySource: SurveySource;
   frequency: number;
+  providerType?: 'PHYSICIAN' | 'APP' | 'CALL' | 'CUSTOM'; // Provider type for cross-provider mapping display
 }
 
 /**

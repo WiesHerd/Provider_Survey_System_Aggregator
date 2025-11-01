@@ -24,6 +24,10 @@ interface UseMappingDataReturn {
   error: string | null;
   activeTab: 'unmapped' | 'mapped' | 'learned';
   
+  // Cross-provider mapping toggle
+  showAllProviderTypes: boolean;
+  setShowAllProviderTypes: (value: boolean) => void;
+  
   // Search state
   searchTerm: string;
   mappedSearchTerm: string;
@@ -145,14 +149,20 @@ export const useMappingData = (): UseMappingDataReturn => {
     }
   }, [filteredUnmapped, selectedSpecialties]);
 
+  // State for cross-category mapping toggle
+  const [showAllProviderTypes, setShowAllProviderTypes] = useState(true); // Default to showing all
+  
   // Data loading
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Convert UI provider type to data service provider type
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      // NEW: If showAllCategories is true, don't filter by data category
+      // This allows cross-category specialty mapping (Call Pay, Physician, APP)
+      const dataProviderType = (showAllProviderTypes || selectedProviderType === 'BOTH') 
+        ? undefined 
+        : selectedProviderType;
       
       
       // ENTERPRISE DEBUG: Log provider type conversion - removed for performance
@@ -188,12 +198,18 @@ export const useMappingData = (): UseMappingDataReturn => {
     } finally {
       setLoading(false);
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllProviderTypes]);
 
-  // Reload data when provider type changes
+  // Reload data when data category changes or when showAllCategories toggle changes
+  // CRITICAL FIX: Force reload when toggle changes by including it in dependencies
   useEffect(() => {
+    console.log('🔍 useMappingData: Reloading data due to state change:', {
+      selectedProviderType,
+      showAllProviderTypes
+    });
     loadData();
-  }, [selectedProviderType, loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProviderType, showAllProviderTypes]); // loadData is a useCallback that depends on these values
 
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {
@@ -482,7 +498,7 @@ export const useMappingData = (): UseMappingDataReturn => {
     } catch (err) {
       setError('Failed to apply learned mappings');
     }
-  }, [learnedMappings, selectedProviderType, dataService, loadData]);
+  }, [learnedMappings, dataService, loadData]); // Remove selectedProviderType from deps as it's not used directly
 
 
   // Utility functions
@@ -512,6 +528,10 @@ export const useMappingData = (): UseMappingDataReturn => {
     loading,
     error,
     activeTab,
+    
+    // Cross-provider mapping toggle
+    showAllProviderTypes,
+    setShowAllProviderTypes,
     
     // Search state
     searchTerm,

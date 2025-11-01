@@ -5,7 +5,7 @@
  * Following enterprise patterns for separation of concerns and reusability.
  */
 
-import { AggregatedData, SummaryCalculation } from '../types/analytics';
+import { AggregatedData } from '../types/analytics';
 import { analyticsComputationCache, cacheUtils } from '../services/analyticsComputationCache';
 import { mapVariableNameToStandard } from './variableFormatters';
 
@@ -163,7 +163,7 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
 
   // Check if filters are empty (no filtering needed)
   const hasActiveFilters = Object.values(filters).some(value => 
-    value !== undefined && value !== '' && value !== 'All Sources' && value !== 'All Types' && value !== 'All Years'
+    value !== undefined && value !== '' && value !== 'All Sources' && value !== 'All Types' && value !== 'All Years' && value !== 'All Categories'
   );
   
   if (!hasActiveFilters) {
@@ -194,6 +194,7 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   const regionIndex = new Map<string, AggregatedData[]>();
   const providerTypeIndex = new Map<string, AggregatedData[]>();
   const yearIndex = new Map<string, AggregatedData[]>();
+  const dataCategoryIndex = new Map<string, AggregatedData[]>(); // NEW: Data category index
 
   // Build indexes
   data.forEach(row => {
@@ -231,6 +232,17 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       sourceIndex.set(row.surveySource, []);
     }
     sourceIndex.get(row.surveySource)!.push(row);
+    
+    // Debug logging for Call Pay data
+    if (row.surveySource && row.surveySource.toLowerCase().includes('call pay')) {
+      console.log('🔍 Call Pay Data Index Building:', {
+        surveySource: row.surveySource,
+        surveySourceLength: row.surveySource.length,
+        surveySourceChars: row.surveySource.split('').map((c: string) => `${c}(${c.charCodeAt(0)})`).join(''),
+        standardizedName: row.standardizedName,
+        providerType: row.providerType
+      });
+    }
 
     // Region index
     if (!regionIndex.has(row.geographicRegion)) {
@@ -253,6 +265,37 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
     if (row.surveyYear) {
       yearIndex.get(row.surveyYear)!.push(row);
     }
+
+    // Data category index (NEW)
+    // ENTERPRISE FIX: Handle missing dataCategory for old surveys
+    // Old surveys won't have dataCategory, so we need to infer it from surveySource
+    let dataCategory = (row as any).dataCategory;
+    if (!dataCategory) {
+      // Infer from surveySource for backward compatibility
+      const surveySource = (row as any).surveySource || '';
+      if (surveySource.toLowerCase().includes('call pay')) {
+        dataCategory = 'CALL_PAY';
+      } else if (surveySource.toLowerCase().includes('moonlighting')) {
+        dataCategory = 'MOONLIGHTING';
+      } else {
+        dataCategory = 'COMPENSATION'; // Default for old surveys
+      }
+    }
+    
+    if (!dataCategoryIndex.has(dataCategory)) {
+      dataCategoryIndex.set(dataCategory, []);
+    }
+    dataCategoryIndex.get(dataCategory)!.push(row);
+    
+    // Debug logging for Call Pay data
+    if (dataCategory === 'CALL_PAY') {
+      console.log('🔍 Call Pay Data in Index:', {
+        dataCategory,
+        surveySource: (row as any).surveySource,
+        standardizedName: (row as any).standardizedName,
+        specialty: (row as any).surveySpecialty
+      });
+    }
   });
 
   // Apply filters using indexes for faster lookup
@@ -263,16 +306,32 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
     const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
     const specialtyMatches = specialtyIndex.get(normalizedFilterSpecialty) || [];
     
+    // ENTERPRISE DEBUG: Check for Call Pay data in specialty matches
+    const callPayInMatches = specialtyMatches.filter((row: any) => {
+      const rowDataCategory = (row as any).dataCategory;
+      const surveySource = (row as any).surveySource || '';
+      return rowDataCategory === 'CALL_PAY' || 
+             (!rowDataCategory && surveySource.toLowerCase().includes('call pay'));
+    });
+    
     console.log('🔍 filterAnalyticsData: DEBUG - Specialty filtering:', {
       selectedSpecialty: filters.specialty,
       normalizedFilterSpecialty,
       specialtyMatchesCount: specialtyMatches.length,
+      callPayRowsInMatches: callPayInMatches.length,
+      callPayRowsInMatchesDetails: callPayInMatches.slice(0, 3).map((row: any) => ({
+        surveySource: (row as any).surveySource,
+        standardizedName: (row as any).standardizedName,
+        dataCategory: (row as any).dataCategory,
+        hasVariables: !!(row as any).variables,
+        variableKeys: (row as any).variables ? Object.keys((row as any).variables) : []
+      })),
       totalRowsBeforeFilter: filteredData.length,
-      availableSpecialtyKeys: Array.from(specialtyIndex.keys())
+      availableSpecialtyKeys: Array.from(specialtyIndex.keys()).slice(0, 10) // Show first 10
     });
     
     // Debug: Check if MGMA data is in the specialty matches
-    const mgmaMatches = specialtyMatches.filter(row => 
+    const mgmaMatches = specialtyMatches.filter(row =>
       row.surveySource && row.surveySource.toLowerCase().includes('mgma')
     );
     console.log('🔍 MGMA in specialty matches:', {
@@ -286,20 +345,92 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
     
     filteredData = filteredData.filter(row => specialtyMatches.includes(row));
     
+    // ENTERPRISE DEBUG: Check for Call Pay data after specialty filtering
+    const callPayAfterSpecialty = filteredData.filter((row: any) => {
+      const rowDataCategory = (row as any).dataCategory;
+      const surveySource = (row as any).surveySource || '';
+      return rowDataCategory === 'CALL_PAY' || 
+             (!rowDataCategory && surveySource.toLowerCase().includes('call pay'));
+    });
+    
     console.log('🔍 filterAnalyticsData: DEBUG - After specialty filtering:', {
       remainingRows: filteredData.length,
+      callPayRowsAfterSpecialty: callPayAfterSpecialty.length,
+      callPayRowsDetails: callPayAfterSpecialty.slice(0, 5).map((row: any) => ({
+        surveySource: (row as any).surveySource,
+        standardizedName: (row as any).standardizedName,
+        surveySpecialty: (row as any).surveySpecialty,
+        dataCategory: (row as any).dataCategory,
+        hasVariables: !!(row as any).variables,
+        variableKeys: (row as any).variables ? Object.keys((row as any).variables).slice(0, 10) : [],
+        hasOnCallCompensation: (row as any).variables && 'on_call_compensation' in (row as any).variables
+      })),
       sampleRows: filteredData.slice(0, 3).map(row => ({
         surveySource: row.surveySource,
         surveySpecialty: row.surveySpecialty,
-        standardizedName: row.standardizedName
+        standardizedName: row.standardizedName,
+        dataCategory: (row as any).dataCategory
       }))
     });
   }
 
   // Survey source filter
   if (filters.surveySource && filters.surveySource !== '' && filters.surveySource !== 'All Sources') {
-    const sourceMatches = sourceIndex.get(filters.surveySource) || [];
+    // Debug logging for survey source filtering
+    const allSourceKeys = Array.from(sourceIndex.keys());
+    const hasExactMatch = sourceIndex.has(filters.surveySource);
+    let sourceMatches = sourceIndex.get(filters.surveySource) || [];
+    
+    console.log('🔍 filterAnalyticsData: DEBUG - Survey Source filtering:', {
+      selectedSurveySource: filters.surveySource,
+      selectedSurveySourceLength: filters.surveySource.length,
+      selectedSurveySourceChars: filters.surveySource.split('').map((c: string) => `${c}(${c.charCodeAt(0)})`).join(''),
+      hasExactMatch,
+      sourceMatchesCount: sourceMatches.length,
+      totalRowsBeforeFilter: filteredData.length,
+      allAvailableSources: allSourceKeys,
+      allAvailableSourcesLengths: allSourceKeys.map(k => ({ source: k, length: k.length })),
+      callPaySources: allSourceKeys.filter(k => k.toLowerCase().includes('call pay')),
+      mgmaSources: allSourceKeys.filter(k => k.toLowerCase().includes('mgma'))
+    });
+    
+    // Additional debug: Check for similar sources (fuzzy match detection)
+    const similarSources = allSourceKeys.filter(key => {
+      const lowerFilter = filters.surveySource.toLowerCase().trim();
+      const lowerKey = key.toLowerCase().trim();
+      return lowerFilter === lowerKey || 
+             lowerKey.includes(lowerFilter) || 
+             lowerFilter.includes(lowerKey);
+    });
+    
+    if (similarSources.length > 0 && !hasExactMatch) {
+      console.warn('⚠️ filterAnalyticsData: Similar sources found but no exact match:', {
+        filterValue: filters.surveySource,
+        similarSources
+      });
+      
+      // FIX: Try trimmed matching if exact match fails (handles whitespace differences)
+      const trimmedFilter = filters.surveySource.trim();
+      const trimmedMatches = allSourceKeys.filter(key => key.trim() === trimmedFilter);
+      
+      if (trimmedMatches.length > 0) {
+        console.log('🔍 filterAnalyticsData: Found trimmed match, using it instead:', trimmedMatches);
+        // Get all matches from the trimmed keys
+        sourceMatches = trimmedMatches.flatMap(key => sourceIndex.get(key) || []);
+      }
+    }
+    
     filteredData = filteredData.filter(row => sourceMatches.includes(row));
+    
+    console.log('🔍 filterAnalyticsData: DEBUG - After survey source filtering:', {
+      remainingRows: filteredData.length,
+      sampleRows: filteredData.slice(0, 3).map(row => ({
+        surveySource: row.surveySource,
+        surveySpecialty: row.surveySpecialty,
+        standardizedName: row.standardizedName,
+        providerType: row.providerType
+      }))
+    });
   }
 
   // Geographic region filter
@@ -312,6 +443,83 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types') {
     const providerMatches = providerTypeIndex.get(filters.providerType) || [];
     filteredData = filteredData.filter(row => providerMatches.includes(row));
+  } else if (filters.providerType === '' || !filters.providerType) {
+    // If provider type is empty or undefined, show all types (no filtering)
+  }
+
+  // Data category filter (NEW)
+  // ENTERPRISE FIX: Only filter if a specific category is selected (not "All Categories", empty, or undefined)
+  // Enhanced logging to debug filter state
+  console.log('🔍 filterAnalyticsData: Data category filter check:', {
+    dataCategoryFilter: filters.dataCategory,
+    filterType: typeof filters.dataCategory,
+    isEmpty: filters.dataCategory === '',
+    isAllCategories: filters.dataCategory === 'All Categories',
+    isUndefined: filters.dataCategory === undefined,
+    isNull: filters.dataCategory === null,
+    isTruthy: !!filters.dataCategory,
+    totalRowsBefore: filteredData.length,
+    availableIndexKeys: Array.from(dataCategoryIndex.keys()),
+    callPayRowsBefore: filteredData.filter((row: any) => {
+      const rowDataCategory = (row as any).dataCategory;
+      return rowDataCategory === 'CALL_PAY' || 
+             (!rowDataCategory && ((row as any).surveySource || '').toLowerCase().includes('call pay'));
+    }).length
+  });
+
+  // CRITICAL FIX: Handle both empty string AND "All Categories" string explicitly
+  // The StandardDropdown converts "All Categories" to empty string, but we also check for the string
+  // to handle edge cases where it might not be normalized
+  const shouldFilterByCategory = filters.dataCategory && 
+      filters.dataCategory !== '' && 
+      filters.dataCategory !== 'All Categories' &&
+      filters.dataCategory !== undefined &&
+      filters.dataCategory !== null;
+
+  if (shouldFilterByCategory) {
+    // ENTERPRISE FIX: Convert display format to internal format for index lookup
+    // Display format: "Call Pay", "Compensation", "Moonlighting"
+    // Internal format: "CALL_PAY", "COMPENSATION", "MOONLIGHTING"
+    const normalizedCategory = filters.dataCategory === 'Call Pay' ? 'CALL_PAY'
+      : filters.dataCategory === 'Moonlighting' ? 'MOONLIGHTING'
+      : filters.dataCategory === 'Compensation' ? 'COMPENSATION'
+      : filters.dataCategory === 'Custom' ? 'CUSTOM'
+      : filters.dataCategory; // Use as-is if already in internal format
+    
+    const categoryMatches = dataCategoryIndex.get(normalizedCategory) || [];
+    const rowsBeforeFilter = filteredData.length;
+    filteredData = filteredData.filter(row => categoryMatches.includes(row));
+    
+    console.log('🔍 filterAnalyticsData: Data category filtering APPLIED:', {
+      selectedCategory: filters.dataCategory,
+      normalizedCategory,
+      categoryMatchesCount: categoryMatches.length,
+      rowsBeforeFilter,
+      rowsAfterFilter: filteredData.length,
+      indexKeys: Array.from(dataCategoryIndex.keys()) // Debug: show available keys
+    });
+  } else {
+    // ENTERPRISE FIX: When "All Categories" is selected, show ALL data (no filtering)
+    const callPayRows = filteredData.filter((row: any) => {
+      const rowDataCategory = (row as any).dataCategory;
+      return rowDataCategory === 'CALL_PAY' || 
+             (!rowDataCategory && ((row as any).surveySource || '').toLowerCase().includes('call pay'));
+    });
+    
+    console.log('🔍 filterAnalyticsData: Data category filtering SKIPPED (All Categories selected):', {
+      dataCategoryFilter: filters.dataCategory,
+      filterValueType: typeof filters.dataCategory,
+      totalRowsBefore: filteredData.length,
+      callPayRowsCount: callPayRows.length,
+      callPaySampleRows: callPayRows.slice(0, 3).map((row: any) => ({
+        surveySource: row.surveySource,
+        standardizedName: row.standardizedName,
+        dataCategory: (row as any).dataCategory,
+        surveySpecialty: row.surveySpecialty
+      })),
+      indexKeys: Array.from(dataCategoryIndex.keys()),
+      indexSizes: Array.from(dataCategoryIndex.entries()).map(([key, value]) => ({ key, count: value.length }))
+    });
   }
 
   // Year filter
@@ -345,12 +553,12 @@ export const calculateSummaryRows = (
   // No legacy fallbacks needed - unified data structure
   
   selectedVariables.forEach(varName => {
-    // Collect all percentile values and weights for this variable
-    const p25Values: number[] = [];
-    const p50Values: number[] = [];
-    const p75Values: number[] = [];
-    const p90Values: number[] = [];
-    const allWeights: number[] = [];
+    // FIXED: Store percentile values with their weights separately for each percentile
+    // This allows independent calculation when some percentiles have missing data
+    const p25Values: Array<{value: number, weight: number}> = [];
+    const p50Values: Array<{value: number, weight: number}> = [];
+    const p75Values: Array<{value: number, weight: number}> = [];
+    const p90Values: Array<{value: number, weight: number}> = [];
     let totalOrgs = 0;
     let totalIncumbents = 0;
     
@@ -379,7 +587,12 @@ export const calculateSummaryRows = (
           'panel_size': 'panel_size',
           'total_encounters': 'total_encounters',
           'asa_units': 'asa_units',
-          'net_collections': 'net_collections'
+          'net_collections': 'net_collections',
+          // Call Pay support
+          'on_call_compensation': 'on_call',
+          'oncall_compensation': 'on_call',
+          'daily_rate_on_call': 'on_call',
+          'on_call_rate': 'on_call'
         };
         
         const legacyPrefix = legacyFieldMap[varName] || varName;
@@ -407,52 +620,59 @@ export const calculateSummaryRows = (
       }
       
       // Process metrics from either dynamic or legacy data structure
-      if (metrics && metrics.p50 > 0) {
-        // Collect all percentile values
-        p25Values.push(metrics.p25 || 0);
-        p50Values.push(metrics.p50 || 0);
-        p75Values.push(metrics.p75 || 0);
-        p90Values.push(metrics.p90 || 0);
-        allWeights.push(metrics.n_incumbents || 1);
+      // FIXED: Track orgs/incumbents for rows with any valid data, but only include percentiles that have actual data
+      if (metrics) {
+        const weight = metrics.n_incumbents || 1;
         totalOrgs += metrics.n_orgs || 0;
         totalIncumbents += metrics.n_incumbents || 0;
+        
+        // CRITICAL FIX: Only include each percentile if it has actual data (> 0)
+        // This ensures rows with missing percentiles (showing ***) don't contribute 0 to the weighted average
+        // Each percentile is calculated independently based on available data
+        if (metrics.p25 > 0) {
+          p25Values.push({ value: metrics.p25, weight });
+        }
+        if (metrics.p50 > 0) {
+          p50Values.push({ value: metrics.p50, weight });
+        }
+        if (metrics.p75 > 0) {
+          p75Values.push({ value: metrics.p75, weight });
+        }
+        if (metrics.p90 > 0) {
+          p90Values.push({ value: metrics.p90, weight });
+        }
       }
     });
     
+    // Calculate averages only if we have at least p50 data
     if (p50Values.length > 0) {
-      // SIMPLE AVERAGE: Mean of all values (unweighted)
+      // SIMPLE AVERAGE: Mean of all values (unweighted) - only for percentiles that have data
       simple[varName] = {
         n_orgs: Math.round(totalOrgs / p50Values.length),
         n_incumbents: Math.round(totalIncumbents / p50Values.length),
-        p25: p25Values.reduce((sum, val) => sum + val, 0) / p25Values.length,
-        p50: p50Values.reduce((sum, val) => sum + val, 0) / p50Values.length,
-        p75: p75Values.reduce((sum, val) => sum + val, 0) / p75Values.length,
-        p90: p90Values.reduce((sum, val) => sum + val, 0) / p90Values.length
+        p25: p25Values.length > 0 ? p25Values.reduce((sum, d) => sum + d.value, 0) / p25Values.length : 0,
+        p50: p50Values.reduce((sum, d) => sum + d.value, 0) / p50Values.length,
+        p75: p75Values.length > 0 ? p75Values.reduce((sum, d) => sum + d.value, 0) / p75Values.length : 0,
+        p90: p90Values.length > 0 ? p90Values.reduce((sum, d) => sum + d.value, 0) / p90Values.length : 0
       };
       
-      // WEIGHTED AVERAGE: Weighted by number of incumbents for each percentile
-      const totalWeight = allWeights.reduce((sum, weight) => sum + weight, 0);
-      if (totalWeight > 0) {
-        const weightedP25 = p25Values.reduce((sum, val, index) => 
-          sum + (val * allWeights[index]), 0) / totalWeight;
-        const weightedP50 = p50Values.reduce((sum, val, index) => 
-          sum + (val * allWeights[index]), 0) / totalWeight;
-        const weightedP75 = p75Values.reduce((sum, val, index) => 
-          sum + (val * allWeights[index]), 0) / totalWeight;
-        const weightedP90 = p90Values.reduce((sum, val, index) => 
-          sum + (val * allWeights[index]), 0) / totalWeight;
-        
-        weighted[varName] = {
-          n_orgs: totalOrgs,
-          n_incumbents: totalIncumbents,
-          p25: weightedP25,
-          p50: weightedP50,
-          p75: weightedP75,
-          p90: weightedP90
-        };
-      } else {
-        weighted[varName] = simple[varName];
-      }
+      // WEIGHTED AVERAGE: Weighted by number of incumbents - only for percentiles that have data
+      // Each percentile calculated independently based on available data
+      const calculateWeighted = (data: Array<{value: number, weight: number}>): number => {
+        if (data.length === 0) return 0;
+        const totalWeight = data.reduce((sum, d) => sum + d.weight, 0);
+        if (totalWeight === 0) return 0;
+        return data.reduce((sum, d) => sum + (d.value * d.weight), 0) / totalWeight;
+      };
+      
+      weighted[varName] = {
+        n_orgs: totalOrgs,
+        n_incumbents: totalIncumbents,
+        p25: calculateWeighted(p25Values),
+        p50: calculateWeighted(p50Values),
+        p75: calculateWeighted(p75Values),
+        p90: calculateWeighted(p90Values)
+      };
     } else {
       // No data available
       simple[varName] = null;

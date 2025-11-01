@@ -420,9 +420,19 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     console.log('Creating column defs for headers:', headers);
     
     // Check if this is normalized format data
-    const isNormalizedFormat = headers.some(header => 
-      ['p25', 'p50', 'p75', 'p90', 'variable'].includes(header.toLowerCase())
-    );
+    // Recognize normalized format by presence of variable/benchmark column AND percentile columns
+    const hasVariableColumn = headers.some(header => {
+      const lower = header.toLowerCase();
+      return lower === 'variable' || lower === 'benchmark' || 
+             lower.includes('variable') || lower.includes('benchmark');
+    });
+    const hasPercentileColumns = headers.some(header => {
+      const lower = header.toLowerCase();
+      return ['p25', 'p50', 'p75', 'p90'].includes(lower) ||
+             lower.includes('25th') || lower.includes('50th') || 
+             lower.includes('75th') || lower.includes('90th');
+    });
+    const isNormalizedFormat = hasVariableColumn && hasPercentileColumns;
     
     return headers
       .filter((header: string) => {
@@ -437,11 +447,24 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       const isTcc = lower.startsWith('tcc_') || lower.includes('total_cash') || lower.includes('tcc');
       const isCf = lower.startsWith('cf_') || lower.includes('conversion');
       const isWrvu = lower.includes('wrvu');
-      const isCount = lower === 'n_orgs' || lower === 'n_incumbents';
+      // Count columns - handle variations like "Group Count", "Indv Count", "n_orgs", "n_incumbents"
+      const isCount = lower === 'n_orgs' || lower === 'n_incumbents' || 
+                      lower.includes('group count') || lower.includes('indv count') ||
+                      lower.includes('organizations') || lower.includes('incumbents');
       
       // For normalized format, check if this is a percentile column
-      const isPercentile = isNormalizedFormat && ['p25', 'p50', 'p75', 'p90'].includes(lower);
-      const isVariable = isNormalizedFormat && lower === 'variable';
+      // Handle variations: "p25", "25th%", "25th", "50th%", etc.
+      const isPercentile = isNormalizedFormat && (
+        ['p25', 'p50', 'p75', 'p90'].includes(lower) ||
+        lower.includes('25th') || lower.includes('50th') || 
+        lower.includes('75th') || lower.includes('90th')
+      );
+      
+      // Variable column - handle "variable", "benchmark", "Variable", "Benchmark"
+      const isVariable = isNormalizedFormat && (
+        lower === 'variable' || lower === 'benchmark' ||
+        lower.includes('variable') || lower.includes('benchmark')
+      );
       
       const isNumeric = isTcc || isCf || isWrvu || isCount || isPercentile;
       const isSpecialty = lower.includes('specialty');
@@ -453,13 +476,22 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         filter: isNumeric ? 'agNumberColumnFilter' : 'agTextColumnFilter',
         resizable: true,
         // Google-style intelligent column sizing
-        minWidth: isSpecialty ? 250 : isVariable ? 200 : isNumeric ? 90 : 130,
-        maxWidth: isSpecialty ? 400 : isVariable ? 300 : isNumeric ? 120 : 200,
+        // Benchmark/variable columns need width constraint to prevent overflow
+        minWidth: isSpecialty ? 250 : isVariable ? 180 : isNumeric ? 90 : 130,
+        maxWidth: isSpecialty ? 400 : isVariable ? 220 : isNumeric ? 120 : 200,
         // Smart flex ratios based on content importance and typical length
-        flex: isSpecialty ? 3 : isVariable ? 2.5 : isNumeric ? 1 : 1.5,
-        // Enable text wrapping for long content
-        wrapText: isSpecialty || isVariable,
-        autoHeight: isSpecialty || isVariable,
+        flex: isSpecialty ? 3 : isVariable ? 2 : isNumeric ? 1 : 1.5,
+        // Enable text wrapping for long content BUT limit to prevent overflow
+        wrapText: false, // Disable wrapping - use truncation instead for better control
+        autoHeight: false, // Disable auto-height to prevent row expansion
+        // Apply CSS for text truncation on variable/benchmark columns
+        cellStyle: isVariable ? {
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          maxWidth: '220px'
+        } : undefined,
+        tooltipValueGetter: isVariable ? (params: any) => params.value || '' : undefined, // Show full text on hover
         cellClass: isNumeric ? 'ag-right-aligned-cell' : (isSpecialty ? 'font-semibold' : undefined),
         headerClass: isNumeric ? 'ag-right-aligned-header' : undefined,
         headerComponent: 'CustomHeader',

@@ -27,12 +27,33 @@ interface FilterBarProps {
     providerTypes: string[];
     regions: string[];
     surveySources: string[];
+    dataCategories: string[];
     years: string[];
   };
 }
 
 const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues }) => (
   <Grid container spacing={2} sx={{ mb: 3 }}>
+    <Grid item xs={12} md={4}>
+      <TextField
+        select
+        label="Data Category"
+        value={filters.dataCategory || ''}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, dataCategory: e.target.value }))}
+        fullWidth
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+          }
+        }}
+      >
+        <MenuItem value="">All Categories</MenuItem>
+        {uniqueValues.dataCategories?.map((option: string) => (
+          <MenuItem key={option} value={option}>{option}</MenuItem>
+        ))}
+      </TextField>
+    </Grid>
     <Grid item xs={12} md={4}>
       <TextField
         select
@@ -551,6 +572,7 @@ const FMVCalculator: React.FC = () => {
     providerType: '',
     region: '',
     surveySource: '',
+    dataCategory: '',
     year: '',
     fte: 1.0,
   });
@@ -582,12 +604,14 @@ const FMVCalculator: React.FC = () => {
     providerTypes: string[];
     regions: string[];
     surveySources: string[];
+    dataCategories: string[];
     years: string[];
   }>({
     specialties: [],
     providerTypes: [],
     regions: [],
     surveySources: [],
+    dataCategories: [],
     years: []
   });
 
@@ -615,7 +639,8 @@ const FMVCalculator: React.FC = () => {
         specialties: new Set<string>(),
         providerTypes: new Set<string>(),
         regions: new Set<string>(),
-        surveySources: new Set<string>()
+        surveySources: new Set<string>(),
+        dataCategories: new Set<string>()
       };
       let allRows: any[] = [];
       allMappings.forEach(mapping => {
@@ -637,6 +662,15 @@ const FMVCalculator: React.FC = () => {
         }
         if (survey.metadata && survey.metadata.surveyType) values.surveySources.add(survey.metadata.surveyType);
         if ((survey as any).type) values.surveySources.add((survey as any).type);
+        // Extract data category from survey
+        if ((survey as any).dataCategory) {
+          const category = (survey as any).dataCategory;
+          const categoryDisplay = category === 'CALL_PAY' ? 'Call Pay'
+            : category === 'MOONLIGHTING' ? 'Moonlighting'
+            : category === 'COMPENSATION' ? 'Compensation'
+            : category;
+          values.dataCategories.add(categoryDisplay);
+        }
         const data = await dataService.getSurveyData(survey.id);
         if (data && data.rows) {
           const cm = survey.metadata?.columnMappings || {};
@@ -657,6 +691,7 @@ const FMVCalculator: React.FC = () => {
         providerTypes: Array.from(values.providerTypes).sort(),
         regions: Array.from(values.regions).sort(),
         surveySources: Array.from(values.surveySources).sort(),
+        dataCategories: Array.from(values.dataCategories).sort(),
         years: Array.from(yearsSet).sort((a, b) => Number(b) - Number(a))
       });
     };
@@ -701,6 +736,22 @@ const FMVCalculator: React.FC = () => {
       }
       if (filters.region) filteredRows = filteredRows.filter(r => normalizeString(r.geographicRegion) === normalizeString(filters.region));
       if (filters.surveySource) filteredRows = filteredRows.filter(r => normalizeString(r.surveySource) === normalizeString(filters.surveySource));
+      if (filters.dataCategory) {
+        // Normalize data category for comparison
+        const normalizedSelected = filters.dataCategory === 'Call Pay' ? 'CALL_PAY'
+          : filters.dataCategory === 'Moonlighting' ? 'MOONLIGHTING'
+          : filters.dataCategory === 'Compensation' ? 'COMPENSATION'
+          : filters.dataCategory;
+        filteredRows = filteredRows.filter(r => {
+          // Check both normalized and survey dataCategory
+          const rowDataCategory = (r as any).dataCategory || '';
+          const normalizedRow = rowDataCategory === 'CALL_PAY' ? 'Call Pay'
+            : rowDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+            : rowDataCategory === 'COMPENSATION' ? 'Compensation'
+            : rowDataCategory;
+          return normalizedRow === filters.dataCategory || rowDataCategory === normalizedSelected;
+        });
+      }
       if (filters.year) {
         filteredRows = filteredRows.filter(r => String(r.year) === String(filters.year));
       }
@@ -830,7 +881,7 @@ const FMVCalculator: React.FC = () => {
             inputValue={compareType === 'TCC' ? tccFTEAdjusted : compareType === 'wRVUs' ? wrvusFTEAdjusted : Number(cf)}
             rawValue={compareType === 'TCC' ? Number(tcc) : compareType === 'wRVUs' ? Number(wrvus) : Number(cf)}
             fte={filters.fte}
-            onResetFilters={() => setFilters({ ...filters, specialty: '', providerType: '', region: '', surveySource: '', year: '' })}
+            onResetFilters={() => setFilters({ ...filters, specialty: '', providerType: '', region: '', surveySource: '', dataCategory: '', year: '' })}
           />
         </Card>
         {/* Hidden printable component for react-to-print */}

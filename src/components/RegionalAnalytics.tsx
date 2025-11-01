@@ -25,6 +25,7 @@ export const RegionalAnalytics: React.FC = () => {
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [selectedProviderType, setSelectedProviderType] = useState<string>('');
   const [selectedSurveySource, setSelectedSurveySource] = useState<string>('');
+  const [selectedDataCategory, setSelectedDataCategory] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [mappings, setMappings] = useState<any[]>([]);
   const [regionMappings, setRegionMappings] = useState<any[]>([]);
@@ -48,6 +49,7 @@ export const RegionalAnalytics: React.FC = () => {
           surveySource: '',
           geographicRegion: '',
           providerType: '',
+          dataCategory: '',
           year: ''
         });
         
@@ -134,7 +136,24 @@ export const RegionalAnalytics: React.FC = () => {
     return years.sort((a, b) => b.localeCompare(a)); // Sort descending (newest first)
   }, [analyticsData]);
 
-  // Multi-filter logic with specialty, provider type, survey source, and year
+  // Extract available data categories from survey data
+  const dataCategories = useMemo(() => {
+    const categories = Array.from(new Set(
+      analyticsData
+        .map(r => r.dataCategory || '')
+        .filter(Boolean)
+        .map(cat => {
+          // Format for display
+          if (cat === 'CALL_PAY') return 'Call Pay';
+          if (cat === 'MOONLIGHTING') return 'Moonlighting';
+          if (cat === 'COMPENSATION') return 'Compensation';
+          return cat;
+        })
+    ));
+    return categories.sort();
+  }, [analyticsData]);
+
+  // Multi-filter logic with specialty, provider type, survey source, data category, and year
   const filtered = useMemo(() => {
     if (!selectedSpecialty) return [];
     
@@ -142,6 +161,7 @@ export const RegionalAnalytics: React.FC = () => {
       specialty: selectedSpecialty,
       providerType: selectedProviderType,
       surveySource: selectedSurveySource,
+      dataCategory: selectedDataCategory,
       year: selectedYear
     });
     console.log(`📊 Total rows to filter: ${analyticsData.length}`);
@@ -164,6 +184,25 @@ export const RegionalAnalytics: React.FC = () => {
       if (selectedSurveySource) {
         const rowSurveySource = String(row.surveySource || '');
         if (rowSurveySource.toLowerCase() !== selectedSurveySource.toLowerCase()) {
+          return false;
+        }
+      }
+      
+      // Data category filter
+      if (selectedDataCategory) {
+        const rowDataCategory = row.dataCategory || '';
+        // Normalize for comparison (convert display name back to enum or compare directly)
+        const normalizedSelected = selectedDataCategory === 'Call Pay' ? 'CALL_PAY'
+          : selectedDataCategory === 'Moonlighting' ? 'MOONLIGHTING'
+          : selectedDataCategory === 'Compensation' ? 'COMPENSATION'
+          : selectedDataCategory;
+        const normalizedRow = rowDataCategory === 'CALL_PAY' ? 'Call Pay'
+          : rowDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+          : rowDataCategory === 'COMPENSATION' ? 'Compensation'
+          : rowDataCategory;
+        
+        // Compare normalized values
+        if (normalizedRow !== selectedDataCategory && rowDataCategory !== normalizedSelected) {
           return false;
         }
       }
@@ -465,12 +504,13 @@ export const RegionalAnalytics: React.FC = () => {
               <p className="text-gray-600 text-sm">Choose filters to analyze regional compensation patterns</p>
             </div>
             {/* Clear Filters Button - Top Right */}
-            {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedYear) && (
+            {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedDataCategory || selectedYear) && (
               <button
                 onClick={() => {
                   setSelectedSpecialty('');
                   setSelectedProviderType('');
                   setSelectedSurveySource('');
+                  setSelectedDataCategory('');
                   setSelectedYear('');
                 }}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
@@ -493,7 +533,7 @@ export const RegionalAnalytics: React.FC = () => {
             )}
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             {/* Year Filter */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -617,6 +657,67 @@ export const RegionalAnalytics: React.FC = () => {
               />
             </FormControl>
           </div>
+
+            {/* Data Category Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data Category
+              </label>
+              <FormControl sx={{ width: '100%' }}>
+                <Autocomplete
+                  value={selectedDataCategory}
+                  onChange={(event: any, newValue: string | null) => setSelectedDataCategory(newValue || '')}
+                  options={['', ...dataCategories]}
+                  getOptionLabel={(option: string) => option || 'All Categories'}
+                  renderInput={(params: any) => (
+                    <TextField
+                      {...params}
+                      placeholder="All Categories"
+                      size="small"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          height: '40px',
+                          border: '1px solid #d1d5db !important',
+                          '&:hover': { 
+                            borderColor: '#9ca3af !important',
+                            borderWidth: '1px !important'
+                          },
+                          '&.Mui-focused': { 
+                            boxShadow: 'none', 
+                            borderColor: '#3b82f6 !important',
+                            borderWidth: '1px !important'
+                          },
+                          '& fieldset': {
+                            border: 'none !important'
+                          }
+                        }
+                      }}
+                    />
+                  )}
+                  sx={{
+                    '& .MuiAutocomplete-paper': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                      maxHeight: '200px'
+                    },
+                    '& .MuiAutocomplete-option': {
+                      '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                      '&.Mui-selected': { 
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
+                      }
+                    }
+                  }}
+                  clearOnBlur={false}
+                  blurOnSelect={true}
+                />
+              </FormControl>
+            </div>
 
             {/* Provider Type Filter */}
             <div>
