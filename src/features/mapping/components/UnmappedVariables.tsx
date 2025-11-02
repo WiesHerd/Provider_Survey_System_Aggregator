@@ -177,7 +177,7 @@ export const UnmappedVariables: React.FC<UnmappedVariablesProps> = ({
             return (
               <Paper 
                 key={source} 
-                className="p-3 relative overflow-hidden flex-shrink-0 sm:flex-1"
+                className="p-3 relative overflow-hidden flex-shrink-0 sm:flex-1 border border-gray-200"
                 style={{ 
                   minWidth: '320px',
                   maxWidth: '500px' // Prevent columns from becoming too wide on very large screens

@@ -184,7 +184,7 @@ export const UnmappedItemsGrid = <T,>({
           const color = getSurveySourceColor(source);
           
           return (
-            <Paper key={source} className="p-3 relative overflow-hidden">
+            <Paper key={source} className="p-3 relative overflow-hidden border border-gray-200">
               <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
                 <span style={{ color }}>{source}</span>
                 <Typography variant="caption" color="textSecondary" className="text-xs">
