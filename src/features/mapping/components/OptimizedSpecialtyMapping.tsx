@@ -42,7 +42,8 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
   
   // Cross-category mapping toggle (Call Pay, Physician, APP)
-  const [showAllProviderTypes, setShowAllProviderTypes] = useState(true);
+  // Default to false (filtered by current Data View selection) to match expected UI behavior
+  const [showAllProviderTypes, setShowAllProviderTypes] = useState(false);
 
   // Optimized data hook
   const {
@@ -281,6 +282,8 @@ export const OptimizedSpecialtyMapping: React.FC<OptimizedSpecialtyMappingProps>
         onSpecialtyDeselect={deselectSpecialty}
         onClearSelection={clearSelectedSpecialties}
         onRefresh={handleLoadData}
+        showAllProviderTypes={showAllProviderTypes}
+        onToggleProviderTypeFilter={() => setShowAllProviderTypes(!showAllProviderTypes)}
         mappedSearchTerm={mappedSearchTerm}
         onMappedSearchChange={setMappedSearchTerm}
         onDeleteMapping={deleteMapping}

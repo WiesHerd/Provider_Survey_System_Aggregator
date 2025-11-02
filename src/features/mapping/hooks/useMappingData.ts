@@ -92,11 +92,6 @@ export const useMappingData = (): UseMappingDataReturn => {
   // Service instance
   const dataService = useMemo(() => getDataService(), []);
 
-  // Load data on mount
-  useEffect(() => {
-    loadData();
-  }, []);
-
   // Smart tab selection based on data availability (only on initial load)
   useEffect(() => {
     if (!loading) {
@@ -150,7 +145,8 @@ export const useMappingData = (): UseMappingDataReturn => {
   }, [filteredUnmapped, selectedSpecialties]);
 
   // State for cross-category mapping toggle
-  const [showAllProviderTypes, setShowAllProviderTypes] = useState(true); // Default to showing all
+  // Default to false (filtered by current Data View selection) to match expected UI behavior
+  const [showAllProviderTypes, setShowAllProviderTypes] = useState(false);
   
   // Data loading
   const loadData = useCallback(async () => {
@@ -158,11 +154,12 @@ export const useMappingData = (): UseMappingDataReturn => {
       setLoading(true);
       setError(null);
       
-      // NEW: If showAllCategories is true, don't filter by data category
-      // This allows cross-category specialty mapping (Call Pay, Physician, APP)
-      const dataProviderType = (showAllProviderTypes || selectedProviderType === 'BOTH') 
-        ? undefined 
-        : selectedProviderType;
+      // Checkbox logic: 
+      // - When checked (showAllProviderTypes = true): Show ALL surveys regardless of Data View (override filter)
+      // - When unchecked (showAllProviderTypes = false): Respect Data View selection (filter by selectedProviderType)
+      const dataProviderType = showAllProviderTypes 
+        ? undefined // undefined = show all (override Data View filter)
+        : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType); // Respect Data View selection
       
       
       // ENTERPRISE DEBUG: Log provider type conversion - removed for performance
@@ -200,16 +197,15 @@ export const useMappingData = (): UseMappingDataReturn => {
     }
   }, [dataService, selectedProviderType, showAllProviderTypes]);
 
-  // Reload data when data category changes or when showAllCategories toggle changes
-  // CRITICAL FIX: Force reload when toggle changes by including it in dependencies
+  // Reload data on mount and when data category or showAllProviderTypes toggle changes
+  // CRITICAL FIX: Include loadData in dependencies to ensure we always use the latest version
   useEffect(() => {
     console.log('🔍 useMappingData: Reloading data due to state change:', {
       selectedProviderType,
       showAllProviderTypes
     });
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProviderType, showAllProviderTypes]); // loadData is a useCallback that depends on these values
+  }, [loadData]); // loadData is a useCallback that depends on selectedProviderType and showAllProviderTypes
 
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {

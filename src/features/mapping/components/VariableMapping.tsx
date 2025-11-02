@@ -59,7 +59,11 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     
     // Search and filters
     setSearchTerm,
-    setMappedSearchTerm
+    setMappedSearchTerm,
+    
+    // Cross-category toggle
+    showAllCategories,
+    setShowAllCategories
   } = useVariableMappingData();
 
 
@@ -216,12 +220,15 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
               {activeTab === 'unmapped' && (
                 filteredUnmapped.length > 0 ? (
                   <UnmappedVariables
+                    onClearSelection={clearSelectedVariables}
                     unmappedVariables={filteredUnmapped}
                     selectedVariables={selectedVariables}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
                     onVariableSelect={selectVariable}
                     onRefresh={loadData}
+                    showAllCategories={showAllCategories}
+                    onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
                   />
                 ) : (
                   <div className="flex items-center justify-center py-20">

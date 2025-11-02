@@ -26,6 +26,9 @@ export const useVariableMappingData = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
 
+  // State for cross-category mapping toggle (Call Pay, Physician, APP)
+  const [showAllCategories, setShowAllCategories] = useState(false); // Default to false (filtered by Data View)
+
   // Data service
   const dataService = useMemo(() => new DataService(), []);
 
@@ -71,13 +74,16 @@ export const useVariableMappingData = () => {
       setLoading(true);
       setError(null);
       
-      // Convert UI provider type to data service provider type
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      // If showAllCategories is true, don't filter by provider type (override Data View filter)
+      // If showAllCategories is false, respect Data View selection (filter by selectedProviderType)
+      const dataProviderType = showAllCategories 
+        ? undefined // undefined = show all (override Data View filter)
+        : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType); // Respect Data View selection
       
       const [mappingsData, unmappedData, learnedData] = await Promise.all([
         dataService.getVariableMappings(dataProviderType),
         dataService.getUnmappedVariables(dataProviderType),
-        dataService.getLearnedMappings('variable', selectedProviderType)
+        dataService.getLearnedMappings('variable', dataProviderType)
       ]);
       
       
@@ -90,7 +96,7 @@ export const useVariableMappingData = () => {
     } finally {
       setLoading(false);
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
   // Detect unmapped variables from survey data
   const detectUnmappedVariables = useCallback(async (): Promise<IUnmappedVariable[]> => {
@@ -468,7 +474,9 @@ export const useVariableMappingData = () => {
       setVariableMappings(prev => prev.filter(mapping => mapping.id !== mappingId));
       
       // Reload unmapped variables to include any that were in this mapping - WITH provider type filtering
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const dataProviderType = showAllCategories 
+        ? undefined 
+        : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType);
       const unmapped = await dataService.getUnmappedVariables(dataProviderType);
       setUnmappedVariables(unmapped);
       
@@ -476,7 +484,7 @@ export const useVariableMappingData = () => {
       console.error('Failed to delete variable mapping:', err);
       setError('Failed to delete variable mapping');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
   // Clear all variable mappings
   const clearAllVariableMappings = useCallback(async () => {
@@ -485,7 +493,9 @@ export const useVariableMappingData = () => {
       setVariableMappings([]);
       
       // Reload unmapped variables - WITH provider type filtering
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      const dataProviderType = showAllCategories 
+        ? undefined 
+        : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType);
       const unmapped = await dataService.getUnmappedVariables(dataProviderType);
       setUnmappedVariables(unmapped);
       
@@ -493,7 +503,7 @@ export const useVariableMappingData = () => {
       console.error('Failed to clear variable mappings:', err);
       setError('Failed to clear variable mappings');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, selectedProviderType, showAllCategories]);
 
   // Variable selection
   const selectVariable = useCallback((variable: IUnmappedVariable) => {
@@ -579,6 +589,10 @@ export const useVariableMappingData = () => {
     // Search and filters
     setSearchTerm,
     setMappedSearchTerm,
-    clearError
+    clearError,
+    
+    // Cross-category toggle
+    showAllCategories,
+    setShowAllCategories
   };
 };

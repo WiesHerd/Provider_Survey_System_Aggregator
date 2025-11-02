@@ -34,12 +34,22 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
   const [emergencyTimeout, setEmergencyTimeout] = useState(false);
   
   // Confirmation dialog state
-  const [dialogState, setDialogState] = useState({
+  const [dialogState, setDialogState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    type?: 'danger' | 'warning' | 'info';
+    onConfirm: () => void;
+    onCancel: () => void;
+  }>({
     isOpen: false,
     title: '',
     message: '',
     confirmText: 'Confirm',
     cancelText: 'Cancel',
+    type: 'warning',
     onConfirm: () => {},
     onCancel: () => {}
   });
@@ -63,7 +73,11 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
     setActiveTab,
     setSearchTerm,
     setMappedSearchTerm,
-    loadData
+    loadData,
+    
+    // Cross-category toggle
+    showAllCategories,
+    setShowAllCategories
   } = useOptimizedColumnMappingData();
 
   // Get provider type from context
@@ -118,13 +132,21 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
   };
 
   // Confirmation dialog handlers
-  const showConfirmationDialog = (title: string, message: string, onConfirm: () => void, confirmText = 'Confirm', cancelText = 'Cancel') => {
+  const showConfirmationDialog = (
+    title: string, 
+    message: string, 
+    onConfirm: () => void, 
+    confirmText = 'Confirm', 
+    cancelText = 'Cancel',
+    type: 'danger' | 'warning' | 'info' = 'warning'
+  ) => {
     setDialogState({
       isOpen: true,
       title,
       message,
       confirmText,
       cancelText,
+      type,
       onConfirm: () => {
         setDialogState(prev => ({ ...prev, isOpen: false }));
         onConfirm();
@@ -317,7 +339,8 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
         }
       },
       'Clear All',
-      'Cancel'
+      'Cancel',
+      'danger'
     );
   };
 
@@ -393,7 +416,8 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
         }
       },
       'Delete',
-      'Cancel'
+      'Cancel',
+      'danger'
     );
   };
 
@@ -550,6 +574,8 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
                 onColumnSelect={selectColumn}
                 onClearSelection={clearSelectedColumns}
                 onRefresh={loadData}
+                showAllCategories={showAllCategories}
+                onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
               />
             )}
             {activeTab === 'mapped' && (
@@ -643,6 +669,7 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
         cancelText={dialogState.cancelText}
         onConfirm={handleConfirm}
         onClose={handleCancel}
+        type={dialogState.type}
       />
     </div>
     </AdvancedErrorBoundary>

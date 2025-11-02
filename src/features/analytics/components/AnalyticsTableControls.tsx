@@ -6,7 +6,7 @@
  */
 
 import React, { memo } from 'react';
-import { DocumentTextIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 
 interface AnalyticsTableControlsProps {
   onExport: () => void;
@@ -28,21 +28,42 @@ export const AnalyticsTableControls: React.FC<AnalyticsTableControlsProps> = mem
 }) => {
   return (
     <div className="flex justify-end gap-2 mb-2">
-      <button
-        onClick={onFormatVariables}
-        className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white focus:ring-green-500"
-      >
-        <Cog6ToothIcon className="w-4 h-4 mr-2" />
-        Format Variables
-      </button>
-      <button
-        onClick={onExport}
-        disabled={isExporting}
-        className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <DocumentTextIcon className="w-4 h-4 mr-2" />
-        {isExporting ? 'Exporting...' : 'Export Data'}
-      </button>
+      {/* Format Variables - Icon Button */}
+      <div className="relative group">
+        <button
+          onClick={onFormatVariables}
+          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+          aria-label="Format variables"
+        >
+          <Cog6ToothIcon className="h-5 w-5" />
+        </button>
+        {/* Tooltip */}
+        <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+          <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+            Format Variables
+            <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Export Data - Icon Button */}
+      <div className="relative group">
+        <button
+          onClick={onExport}
+          disabled={isExporting}
+          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={isExporting ? "Exporting data" : "Export data"}
+        >
+          <ArrowDownTrayIcon className="h-5 w-5" />
+        </button>
+        {/* Tooltip */}
+        <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+          <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+            {isExporting ? 'Exporting...' : 'Export Data'}
+            <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 });

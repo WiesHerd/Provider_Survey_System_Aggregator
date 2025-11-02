@@ -132,6 +132,7 @@ export interface AnalyticsTableProps {
   error: string | null;
   onExport: () => void;
   onFormatVariables: () => void;
+  isExporting?: boolean; // Export loading state
   // NEW: Dynamic variable support
   selectedVariables?: string[]; // For dynamic table generation
   // NEW: Variable formatting support

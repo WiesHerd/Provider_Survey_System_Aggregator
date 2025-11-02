@@ -505,31 +505,39 @@ export const RegionalAnalytics: React.FC = () => {
             </div>
             {/* Clear Filters Button - Top Right */}
             {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedDataCategory || selectedYear) && (
-              <button
-                onClick={() => {
-                  setSelectedSpecialty('');
-                  setSelectedProviderType('');
-                  setSelectedSurveySource('');
-                  setSelectedDataCategory('');
-                  setSelectedYear('');
-                }}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
-                title="Clear all filters"
-              >
-                <div className="relative w-4 h-4 mr-2">
-                  {/* Funnel Icon */}
-                  <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
-                  </svg>
-                  {/* X Overlay - Only show when filters are active */}
-                  {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedYear) && (
-                    <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              <div className="relative group">
+                <button
+                  onClick={() => {
+                    setSelectedSpecialty('');
+                    setSelectedProviderType('');
+                    setSelectedSurveySource('');
+                    setSelectedDataCategory('');
+                    setSelectedYear('');
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                  aria-label="Clear all filters"
+                >
+                  <div className="relative w-5 h-5">
+                    {/* Funnel Icon */}
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
                     </svg>
-                  )}
+                    {/* X Overlay - Only show when filters are active */}
+                    {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedYear) && (
+                      <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+                {/* Tooltip */}
+                <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                  <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                    Clear Filters
+                    <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                  </div>
                 </div>
-                <span className="text-xs">Clear Filters</span>
-              </button>
+              </div>
             )}
           </div>
           
@@ -713,11 +721,11 @@ export const RegionalAnalytics: React.FC = () => {
                       }
                     }
                   }}
-                  clearOnBlur={false}
-                  blurOnSelect={true}
-                />
-              </FormControl>
-            </div>
+                clearOnBlur={false}
+                blurOnSelect={true}
+              />
+            </FormControl>
+          </div>
 
             {/* Provider Type Filter */}
             <div>

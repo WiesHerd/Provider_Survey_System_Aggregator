@@ -205,7 +205,10 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
                     onProviderTypeSelect={selectProviderType}
+                    onClearSelection={clearSelectedProviderTypes}
                     onRefresh={loadData}
+                    showAllCategories={showAllCategories}
+                    onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
                   />
                 ) : (
                   <div className="flex items-center justify-center py-20">

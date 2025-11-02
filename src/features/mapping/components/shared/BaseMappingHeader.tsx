@@ -155,10 +155,10 @@ export const BaseMappingHeader: React.FC<BaseMappingHeaderProps> = ({
                   onClick={onCreateIndividualMappings}
                   disabled={selectedCount === 0}
                   className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 border border-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={`Map ${selectedCount} ${entityName.toLowerCase()}s individually`}
+                  title={`Map ${selectedCount} ${entityName.toLowerCase()}s separately`}
                 >
                   <UserIcon className="h-4 w-4 mr-2" />
-                  Map Individually ({selectedCount})
+                  Map Separately ({selectedCount})
                 </button>
               </div>
             ) : (
@@ -208,29 +208,7 @@ export const BaseMappingHeader: React.FC<BaseMappingHeaderProps> = ({
       </div>
       </div>
 
-      {/* Cross-Category Mapping Toggle (Call Pay, Physician, APP) - Only show if toggle provided */}
-      {onToggleCategoryFilter !== undefined && (
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showAllCategories ?? false}
-                onChange={onToggleCategoryFilter}
-                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
-              />
-              <span className="text-sm font-medium text-gray-700">
-                Show All Survey Types
-              </span>
-            </label>
-            <span className="text-xs text-gray-500">
-              {showAllCategories 
-                ? `Showing ${entityName.toLowerCase()}s from all survey types (Call Pay, Physician, APP)`
-                : 'Filtered by current Data View selection'}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Cross-Category Mapping Toggle moved to selection area in unmapped components */}
     </div>
   );
 };

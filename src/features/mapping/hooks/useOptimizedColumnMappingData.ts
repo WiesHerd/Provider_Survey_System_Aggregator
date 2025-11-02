@@ -42,6 +42,10 @@ interface UseOptimizedColumnMappingDataReturn {
   clearCache: () => void;
   getCacheStats: () => any;
   clearError: () => void;
+  
+  // Cross-category toggle
+  showAllCategories: boolean;
+  setShowAllCategories: (value: boolean) => void;
 }
 
 /**
@@ -63,7 +67,10 @@ export const useOptimizedColumnMappingData = (): UseOptimizedColumnMappingDataRe
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
-  
+
+  // State for cross-category mapping toggle (Call Pay, Physician, APP)
+  const [showAllCategories, setShowAllCategories] = useState(false); // Default to false (filtered by Data View)
+
   // Performance service
   const performanceService = useMemo(() => getPerformanceOptimizedDataService(), []);
 
@@ -121,7 +128,12 @@ export const useOptimizedColumnMappingData = (): UseOptimizedColumnMappingDataRe
       console.log('🚀 Loading optimized column mapping data...');
       const startTime = performance.now();
       
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      // If showAllCategories is true, don't filter by provider type (override Data View filter)
+      // If showAllCategories is false, respect Data View selection (filter by selectedProviderType)
+      const dataProviderType = showAllCategories 
+        ? undefined // undefined = show all (override Data View filter)
+        : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType); // Respect Data View selection
+      
       const data = await performanceService.getColumnMappingData(dataProviderType);
       
       const duration = performance.now() - startTime;
@@ -138,12 +150,12 @@ export const useOptimizedColumnMappingData = (): UseOptimizedColumnMappingDataRe
     } finally {
       setLoading(false);
     }
-  }, [performanceService, selectedProviderType]);
+  }, [performanceService, selectedProviderType, showAllCategories]);
 
-  // Reload data when provider type changes
+  // Reload data when provider type or showAllCategories changes
   useEffect(() => {
     loadData();
-  }, [selectedProviderType]);
+  }, [selectedProviderType, showAllCategories, loadData]);
 
   // Data operations
   const removeLearnedMapping = useCallback(async (original: string) => {
@@ -211,10 +223,14 @@ export const useOptimizedColumnMappingData = (): UseOptimizedColumnMappingDataRe
     clearAllLearnedMappings,
     applyAllLearnedMappings,
     
-    // Performance
-    refreshData,
-    clearCache,
-    getCacheStats,
-    clearError
+  // Performance
+  refreshData,
+  clearCache,
+  getCacheStats,
+  clearError,
+  
+  // Cross-category toggle
+  showAllCategories,
+  setShowAllCategories
   };
 };

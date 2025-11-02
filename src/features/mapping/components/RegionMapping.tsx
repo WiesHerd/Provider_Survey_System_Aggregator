@@ -191,7 +191,10 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                   searchTerm={searchTerm}
                   onSearchChange={setSearchTerm}
                   onRegionSelect={selectRegion}
+                  onClearSelection={clearSelectedRegions}
                   onRefresh={loadData}
+                  showAllCategories={showAllCategories}
+                  onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
                 />
               )}
 

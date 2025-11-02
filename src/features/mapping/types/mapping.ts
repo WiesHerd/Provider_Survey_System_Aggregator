@@ -113,6 +113,8 @@ export interface UnmappedSpecialtiesProps {
   onSpecialtyDeselect?: (specialty: IUnmappedSpecialty) => void;
   onClearSelection?: () => void;
   onRefresh: () => void;
+  showAllProviderTypes?: boolean;
+  onToggleProviderTypeFilter?: () => void;
 }
 
 export interface MappedSpecialtiesProps {

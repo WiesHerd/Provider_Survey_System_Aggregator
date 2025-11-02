@@ -18,6 +18,7 @@ import { VariableFormattingService } from '../services/variableFormattingService
 import { VariableFormattingDialog } from './VariableFormattingDialog';
 // import { DEFAULT_VARIABLES } from '../types/variables'; // Not used currently
 import { logMGMA } from '../utils/diagnostics';
+import { SavedViews } from './SavedViews';
 
 interface SurveyAnalyticsProps {
   providerTypeFilter?: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
@@ -51,6 +52,10 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   const [formattingService] = useState(() => VariableFormattingService.getInstance());
   const [showFormatDialog, setShowFormatDialog] = useState(false);
   
+  // Saved Views state
+  const [viewName, setViewName] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  
   // Function to open format variables dialog
   const handleFormatVariables = useCallback(() => {
     setShowFormatDialog(true);
@@ -66,93 +71,17 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     ? 'BOTH' 
     : (selectedProviderType || providerTypeFilter);
   
-  // NEW: Discover variables on mount
+  // Expose VariableDiscoveryService globally for debugging (moved before filters to avoid dependency issues)
   useEffect(() => {
-    const discoverVariables = async () => {
-      try {
-        // setIsDiscoveringVariables(true); // Not used currently
-        const service = VariableDiscoveryService.getInstance();
-        // CRITICAL: Clear cache to ensure we get fresh discovery after code changes
-        service.clearCache();
-        // Expose service globally for debugging
-        (window as any).VariableDiscoveryService = VariableDiscoveryService;
-        (window as any).refreshVariables = async () => {
-          service.clearCache();
-          const vars = await service.discoverAllVariables();
-          console.log('🔄 Refreshed variables:', vars.map(v => v.normalizedName));
-          return vars;
-        };
-        const discovered = await service.discoverAllVariables();
-        const variableNames = discovered.map(v => v.normalizedName);
-        console.log('🔍 SurveyAnalytics: All discovered variables:', variableNames);
-        console.log('🔍 SurveyAnalytics: Available variables count:', variableNames.length);
-        
-        // Check specifically for ASA
-        const asaVars = discovered.filter(v => v.normalizedName.includes('asa'));
-        if (asaVars.length > 0) {
-          console.log('✅ SurveyAnalytics: Found ASA variables:', asaVars.map(v => v.normalizedName));
-        } else {
-          console.log('❌ SurveyAnalytics: NO ASA variables found');
-        }
-        
-        // DEBUG: Check specifically for on-call compensation variables
-        const onCallVars = discovered.filter(v => 
-          v.normalizedName.includes('on_call') || 
-          v.normalizedName.includes('oncall') ||
-          v.name.toLowerCase().includes('on call') ||
-          v.name.toLowerCase().includes('oncall')
-        );
-        if (onCallVars.length > 0) {
-          console.log('✅ SurveyAnalytics: Found On-Call Compensation variables:', onCallVars.map(v => ({
-            name: v.name,
-            normalizedName: v.normalizedName,
-            sources: v.availableSources,
-            recordCount: v.recordCount
-          })));
-        } else {
-          console.warn('⚠️ SurveyAnalytics: NO On-Call Compensation variables found in discovered variables');
-          console.log('🔍 SurveyAnalytics: This may indicate Call Pay surveys are not being processed correctly');
-        }
-        
-        setAvailableVariables(variableNames);
-        
-        // Run MGMA diagnostic if requested (can be triggered from console or URL)
-        if (window.location.search.includes('diagnose=mgma')) {
-          console.log('🔍 Running MGMA diagnostic...');
-          await logMGMA();
-        }
-        
-        // Make diagnostic available globally for easy console access
-        (window as any).diagnoseMGMA = logMGMA;
-        
-        // Keep pre-selected common variables, but update available variables
-        console.log('🔍 SurveyAnalytics: Discovered variables:', variableNames);
-        console.log('🔍 SurveyAnalytics: Keeping pre-selected common variables:', selectedVariables);
-        
-        // Filter selectedVariables to only include those that were actually discovered
-        const validSelectedVariables = selectedVariables.filter(variable => 
-          variableNames.includes(variable)
-        );
-        
-        if (validSelectedVariables.length !== selectedVariables.length) {
-          console.log('🔍 SurveyAnalytics: Updating selectedVariables to match discovered variables');
-          setSelectedVariables(validSelectedVariables);
-        }
-        
-        // If no variables were discovered, try to get them from the data directly
-        if (variableNames.length === 0) {
-          console.log('🔍 SurveyAnalytics: No variables discovered, trying fallback method...');
-          // Fallback: Get variables from the first data row
-          // This will be handled by the analytics data service
-        }
-      } catch (error) {
-        console.error('Failed to discover variables:', error);
-        setAvailableVariables([]);
-        setSelectedVariables([]);
-      }
+    (window as any).VariableDiscoveryService = VariableDiscoveryService;
+    (window as any).refreshVariables = async (dataCategory?: string) => {
+      const service = VariableDiscoveryService.getInstance();
+      service.clearCache();
+      const vars = await service.discoverAllVariables(dataCategory);
+      console.log('🔄 Refreshed variables:', vars.map(v => v.normalizedName));
+      return vars;
     };
-    
-    discoverVariables();
+    (window as any).diagnoseMGMA = logMGMA;
   }, []);
 
   // Load formatting rules on mount
@@ -241,6 +170,96 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     providerType: '', // Don't pre-select provider type in filters
     year: ''
   }, selectedVariables); // NEW: Pass selected variables to hook
+
+  // CRITICAL FIX: Discover variables on mount and when dataCategory filter changes
+  useEffect(() => {
+    const discoverVariables = async () => {
+      try {
+        const service = VariableDiscoveryService.getInstance();
+        // CRITICAL: Clear cache to ensure we get fresh discovery when filter changes
+        service.clearCache();
+        
+        // CRITICAL FIX: Filter variable discovery by dataCategory if a specific category is selected
+        // Only filter if not "All Categories", empty, null, or undefined
+        const dataCategoryFilter = filters.dataCategory &&
+          filters.dataCategory !== '' &&
+          filters.dataCategory !== 'All Categories' &&
+          filters.dataCategory !== undefined &&
+          filters.dataCategory !== null
+          ? filters.dataCategory
+          : undefined;
+        
+        console.log('🔍 SurveyAnalytics: Discovering variables', dataCategoryFilter ? `(filtered by: ${dataCategoryFilter})` : '(all categories)');
+        const discovered = await service.discoverAllVariables(dataCategoryFilter);
+        const variableNames = discovered.map(v => v.normalizedName);
+        console.log('🔍 SurveyAnalytics: All discovered variables:', variableNames);
+        console.log('🔍 SurveyAnalytics: Available variables count:', variableNames.length);
+        
+        // Check specifically for ASA
+        const asaVars = discovered.filter(v => v.normalizedName.includes('asa'));
+        if (asaVars.length > 0) {
+          console.log('✅ SurveyAnalytics: Found ASA variables:', asaVars.map(v => v.normalizedName));
+        } else {
+          console.log('❌ SurveyAnalytics: NO ASA variables found');
+        }
+        
+        // DEBUG: Check specifically for on-call compensation variables
+        const onCallVars = discovered.filter(v => 
+          v.normalizedName.includes('on_call') || 
+          v.normalizedName.includes('oncall') ||
+          v.name.toLowerCase().includes('on call') ||
+          v.name.toLowerCase().includes('oncall')
+        );
+        if (onCallVars.length > 0) {
+          console.log('✅ SurveyAnalytics: Found On-Call Compensation variables:', onCallVars.map(v => ({
+            name: v.name,
+            normalizedName: v.normalizedName,
+            sources: v.availableSources,
+            recordCount: v.recordCount
+          })));
+        } else {
+          console.warn('⚠️ SurveyAnalytics: NO On-Call Compensation variables found in discovered variables');
+          console.log('🔍 SurveyAnalytics: This may indicate Call Pay surveys are not being processed correctly');
+        }
+        
+        setAvailableVariables(variableNames);
+        
+        // Run MGMA diagnostic if requested (can be triggered from console or URL)
+        if (window.location.search.includes('diagnose=mgma')) {
+          console.log('🔍 Running MGMA diagnostic...');
+          await logMGMA();
+        }
+        
+        // Keep pre-selected common variables, but update available variables
+        console.log('🔍 SurveyAnalytics: Discovered variables:', variableNames);
+        console.log('🔍 SurveyAnalytics: Keeping pre-selected common variables:', selectedVariables);
+        
+        // Filter selectedVariables to only include those that were actually discovered
+        const validSelectedVariables = selectedVariables.filter(variable => 
+          variableNames.includes(variable)
+        );
+        
+        if (validSelectedVariables.length !== selectedVariables.length) {
+          console.log('🔍 SurveyAnalytics: Updating selectedVariables to match discovered variables');
+          setSelectedVariables(validSelectedVariables);
+        }
+        
+        // If no variables were discovered, try to get them from the data directly
+        if (variableNames.length === 0) {
+          console.log('🔍 SurveyAnalytics: No variables discovered, trying fallback method...');
+          // Fallback: Get variables from the first data row
+          // This will be handled by the analytics data service
+        }
+      } catch (error) {
+        console.error('Failed to discover variables:', error);
+        setAvailableVariables([]);
+        setSelectedVariables([]);
+      }
+    };
+    
+    discoverVariables();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.dataCategory]); // CRITICAL FIX: Re-discover variables when dataCategory filter changes
 
   // FIXED: Don't overwrite discovered variables - they should show ALL available variables
   // from all surveys, not just ones with data in current filtered results
@@ -645,12 +664,33 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   console.log('🔍 SurveyAnalytics: Selected variables:', selectedVariables);
   console.log('🔍 SurveyAnalytics: All data length:', allData.length);
 
+  // Handle loading a saved view
+  const handleLoadView = useCallback((view: any) => {
+    // Update filters from saved view
+    setFilters(view.filters);
+    // Update variables from saved view
+    setSelectedVariables(view.selectedVariables);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // setFilters and setSelectedVariables are stable from useState/useAnalyticsData
+
   return (
     <AnalyticsErrorBoundary>
       <div className="flex flex-col space-y-6">
+        {/* Save/Load Views - Page-level actions above filters */}
+        <div className="flex items-center justify-end w-full">
+          <SavedViews
+            filters={filters}
+            selectedVariables={selectedVariables}
+            onLoadView={handleLoadView}
+            viewName={viewName}
+            onViewNameChange={setViewName}
+            showSaveModal={showSaveModal}
+            onShowSaveModal={setShowSaveModal}
+          />
+        </div>
+
         {/* Fixed Filters Section - Left-aligned, reasonable width */}
         <div className="w-full">
-          
           <AnalyticsFilters
             filters={filters}
             onFiltersChange={setFilters}

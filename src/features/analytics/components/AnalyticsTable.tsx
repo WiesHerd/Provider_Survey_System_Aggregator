@@ -11,9 +11,8 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import { AnalyticsTableProps } from '../types/analytics';
 import { calculateSummaryRows } from '../utils/analyticsCalculations';
 import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
-import { BoltIcon } from '@heroicons/react/24/outline';
+import { BoltIcon, ArrowDownTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { useMemoizedGrouping, useMemoizedColumnGroups } from '../hooks/useMemoizedCalculations';
-import { AnalyticsTableControls } from './AnalyticsTableControls';
 import { AnalyticsTableHeader } from './AnalyticsTableHeader';
 import { AnalyticsTableRow } from './AnalyticsTableRow';
 import { AnalyticsSummaryRow } from './AnalyticsSummaryRow';
@@ -37,7 +36,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   onExport,
   onFormatVariables,
   selectedVariables = [], // Default to empty array for backward compatibility
-  formattingRules = [] // Default to empty array for backward compatibility
+  formattingRules = [], // Default to empty array for backward compatibility
+  isExporting = false // New prop for export state
 }) => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -171,32 +171,51 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 w-full max-w-full" style={{ overflow: 'hidden' }}>
-      {/* Control buttons */}
-      <AnalyticsTableControls
-        onExport={onExport}
-        onFormatVariables={onFormatVariables}
-      />
-      
-      {/* Column Visibility Controls */}
+      {/* Column Visibility Controls with View Toolbar */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-medium text-gray-700">Column Visibility</h4>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setColumnVisibility({ specialty: true, surveySource: true, region: true, providerType: true })}
-              className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-            >
-              Show All
-            </button>
-            <button
-              onClick={() => setColumnVisibility({ specialty: false, surveySource: false, region: false, providerType: false })}
-              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-            >
-              Hide All
-            </button>
+          {/* View Controls Toolbar - Format and Export grouped together */}
+          <div className="flex items-center gap-2">
+            {/* Format Variables - Icon Button */}
+            <div className="relative group">
+              <button
+                onClick={onFormatVariables}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
+                aria-label="Format variables"
+              >
+                <Cog6ToothIcon className="h-4 w-4" />
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  Format Variables
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Export Data - Icon Button */}
+            <div className="relative group">
+              <button
+                onClick={onExport}
+                disabled={isExporting}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={isExporting ? "Exporting data" : "Export data"}
+              >
+                <ArrowDownTrayIcon className="h-4 w-4" />
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  {isExporting ? 'Exporting...' : 'Export Data'}
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <label className="flex items-center space-x-2 cursor-pointer">
             <input
               type="checkbox"

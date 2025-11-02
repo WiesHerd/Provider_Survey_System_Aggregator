@@ -9,8 +9,10 @@ import {
 import { 
   MagnifyingGlassIcon as SearchIcon,
   BoltIcon,
-  XMarkIcon
+  XMarkIcon,
+  RectangleStackIcon
 } from '@heroicons/react/24/outline';
+import { RectangleStackIcon as RectangleStackIconSolid } from '@heroicons/react/24/solid';
 import { IUnmappedRegion } from '../types/mapping';
 import { RegionCard } from './RegionCard';
 import { getSurveySourceColor } from '../utils/mappingCalculations';
@@ -21,7 +23,10 @@ interface UnmappedRegionsProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onRegionSelect: (region: IUnmappedRegion) => void;
+  onClearSelection?: () => void;
   onRefresh: () => void;
+  showAllCategories?: boolean;
+  onToggleCategoryFilter?: () => void;
 }
 
 /**
@@ -34,7 +39,10 @@ export const UnmappedRegions: React.FC<UnmappedRegionsProps> = ({
   searchTerm,
   onSearchChange,
   onRegionSelect,
-  onRefresh
+  onClearSelection,
+  onRefresh,
+  showAllCategories = false,
+  onToggleCategoryFilter
 }) => {
   // Group regions by survey source
   const regionsBySurvey = new Map<string, typeof unmappedRegions>();
@@ -86,14 +94,73 @@ export const UnmappedRegions: React.FC<UnmappedRegionsProps> = ({
         />
       </div>
 
-      {/* Selection Counter */}
-      {selectedRegions.length > 0 && (
-        <div className="mb-4 flex items-center justify-end">
+      {/* Selection Counter and View Controls */}
+      <div className="mb-4 flex items-center justify-between">
+        {selectedRegions.length > 0 ? (
           <div className="text-sm text-gray-600 font-medium">
             {selectedRegions.length} selected
+            {searchTerm && (
+              <span className="text-gray-400 ml-2">
+                (may include hidden items)
+              </span>
+            )}
           </div>
+        ) : (
+          <div></div>
+        )}
+        
+        <div className="flex items-center gap-2">
+          {/* Show All Survey Types Toggle - View Control */}
+          {onToggleCategoryFilter && (
+            <div className="relative group">
+              <button
+                onClick={onToggleCategoryFilter}
+                className={`p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  showAllCategories
+                    ? 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 hover:border-indigo-300 focus:ring-indigo-500'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 border-gray-200 hover:border-gray-400 focus:ring-gray-500'
+                }`}
+                aria-label={showAllCategories ? 'Show all survey types' : 'Filter by Data View'}
+              >
+                {showAllCategories ? (
+                  <RectangleStackIconSolid className="h-4 w-4" />
+                ) : (
+                  <RectangleStackIcon className="h-4 w-4" />
+                )}
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  {showAllCategories 
+                    ? 'Show All Survey Types'
+                    : 'Filtered by Data View'}
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Clear Selection - Icon Button */}
+          {onClearSelection && selectedRegions.length > 0 && (
+            <div className="relative group">
+              <button
+                onClick={onClearSelection}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full border border-gray-200 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                aria-label="Clear all selections"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  Clear Selection
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Regions Grid - Intelligent flexible layout that adapts to any number of columns */}
       {/* Fixed column width (320px) ensures consistent appearance regardless of number of columns */}

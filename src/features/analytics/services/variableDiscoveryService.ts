@@ -40,21 +40,43 @@ export class VariableDiscoveryService {
   /**
    * Discover all variables across all surveys
    * Cached for performance with automatic refresh
+   * 
+   * @param dataCategory - Optional filter to only discover variables from surveys matching this data category
+   *                       Values: 'CALL_PAY', 'COMPENSATION', 'MOONLIGHTING', 'CUSTOM', or undefined for all
    */
-  async discoverAllVariables(): Promise<DiscoveredVariable[]> {
+  async discoverAllVariables(dataCategory?: string): Promise<DiscoveredVariable[]> {
     const now = Date.now();
     
-    // Return cached data if still fresh
-    if (this.cache && (now - this.cacheTimestamp) < this.CACHE_DURATION) {
+    // Return cached data if still fresh (but only if no dataCategory filter is applied)
+    // CRITICAL FIX: Don't use cache when filtering by dataCategory as cache is for all variables
+    if (!dataCategory && this.cache && (now - this.cacheTimestamp) < this.CACHE_DURATION) {
       return this.cache;
     }
     
-    console.log('🔍 VariableDiscoveryService: Starting variable discovery...');
+    console.log('🔍 VariableDiscoveryService: Starting variable discovery...', dataCategory ? `(filtered by: ${dataCategory})` : '(all categories)');
     const startTime = performance.now();
     
     try {
-      const surveys = await this.dataService.getAllSurveys();
-      console.log('🔍 VariableDiscoveryService: Found', surveys.length, 'surveys');
+      let surveys = await this.dataService.getAllSurveys();
+      console.log('🔍 VariableDiscoveryService: Found', surveys.length, 'surveys (before filtering)');
+      
+      // CRITICAL FIX: Filter surveys by dataCategory if provided
+      if (dataCategory) {
+        const normalizedCategory = dataCategory === 'Call Pay' ? 'CALL_PAY'
+          : dataCategory === 'Moonlighting' ? 'MOONLIGHTING'
+          : dataCategory === 'Compensation' ? 'COMPENSATION'
+          : dataCategory === 'Custom' ? 'CUSTOM'
+          : dataCategory; // Use as-is if already in internal format
+        
+        surveys = surveys.filter(survey => {
+          const surveyDataCategory = (survey as any).dataCategory;
+          // Also check old surveys that might have providerType='CALL' for backward compatibility
+          const matchesCategory = surveyDataCategory === normalizedCategory ||
+            (normalizedCategory === 'CALL_PAY' && survey.providerType === 'CALL' && !surveyDataCategory);
+          return matchesCategory;
+        });
+        console.log('🔍 VariableDiscoveryService: After dataCategory filtering:', surveys.length, 'surveys');
+      }
       
       // DEBUG: Log Call Pay surveys specifically
       const callPaySurveys = surveys.filter(s => s.providerType === 'CALL' || (s.name && s.name.toLowerCase().includes('call pay')));

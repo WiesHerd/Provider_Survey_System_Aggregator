@@ -11,6 +11,8 @@ interface UnmappedColumnsProps {
   onColumnSelect: (column: IColumnInfo) => void;
   onClearSelection?: () => void;
   onRefresh: () => void;
+  showAllCategories?: boolean;
+  onToggleCategoryFilter?: () => void;
 }
 
 /**
@@ -32,7 +34,9 @@ export const UnmappedColumns: React.FC<UnmappedColumnsProps> = ({
   onSearchChange,
   onColumnSelect,
   onClearSelection,
-  onRefresh
+  onRefresh,
+  showAllCategories = false,
+  onToggleCategoryFilter
 }) => {
   return (
     <UnmappedItemsGrid
@@ -43,6 +47,8 @@ export const UnmappedColumns: React.FC<UnmappedColumnsProps> = ({
       selectedItems={selectedColumns}
       onClearSelection={onClearSelection}
       onRefresh={onRefresh}
+      showAllCategories={showAllCategories}
+      onToggleCategoryFilter={onToggleCategoryFilter}
       renderCard={(column, isSelected) => (
         <ColumnCard
           key={column.id}

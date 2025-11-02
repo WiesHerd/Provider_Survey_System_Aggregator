@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
@@ -1098,13 +1098,62 @@ const SurveyUpload: React.FC = () => {
                 </button>
                 <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
               </div>
+              {!isUploadSectionCollapsed && (
+                <div className="relative group">
+                  <button
+                    onClick={() => {
+                      // Validate required fields for sample generation
+                      if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
+                        setError('Please select Data Category first');
+                        return;
+                      }
+                      if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
+                        setError('Please select Provider Type first');
+                        return;
+                      }
+                      try {
+                        // Generate sample based on selected Data Category and Provider Type
+                        // For Google-style UX: Sample matches the exact structure user selected
+                        const sampleProviderType = dataCategory === 'CALL_PAY' ? 'CALL' 
+                          : dataCategory === 'MOONLIGHTING' ? 'CALL' // Moonlighting uses similar structure to Call Pay
+                          : (providerType === 'CUSTOM' ? undefined : providerType);
+                        
+                        const surveySourceName = surveySource === 'Custom' && customSurveySource 
+                          ? customSurveySource 
+                          : surveySource || 'Sample';
+                        
+                        const dataCategoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
+                          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+                          : dataCategory === 'CUSTOM' ? customDataCategory
+                          : 'Compensation';
+                        
+                        downloadGeneratedSample(sampleProviderType, `${surveySourceName} ${dataCategoryDisplay}`);
+                      } catch (error) {
+                        console.error('Download failed:', error);
+                        setError('Failed to generate sample file. Please try again.');
+                      }
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
+                    aria-label="Download sample CSV template"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4" />
+                  </button>
+                  {/* Tooltip */}
+                  <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                    <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                      Download Template
+                      <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             {!isUploadSectionCollapsed && (
               <>
-                <div className="grid grid-cols-12 gap-4 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-4 items-end">
                 {/* NEW: Data Category Selection (first dropdown) */}
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Data Category
                   </label>
@@ -1148,7 +1197,7 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* Provider Type Selection */}
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Provider Type
                   </label>
@@ -1191,7 +1240,7 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* CHANGED: Survey Source Selection (simplified - just company names) */}
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Source
                   </label>
@@ -1241,7 +1290,7 @@ const SurveyUpload: React.FC = () => {
                 </div>
 
                 {/* Survey Year Selection */}
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
@@ -1280,49 +1329,8 @@ const SurveyUpload: React.FC = () => {
                   />
                 </div>
 
-                {/* Action Buttons - Now to the right of Survey Year */}
-                <div className="col-span-4 flex items-center justify-end space-x-3">
-                  <button
-                    onClick={() => {
-                      // Validate required fields for sample generation
-                      if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
-                        setError('Please select Data Category first');
-                        return;
-                      }
-                      if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
-                        setError('Please select Provider Type first');
-                        return;
-                      }
-                      try {
-                        // Generate sample based on selected Data Category and Provider Type
-                        // For Google-style UX: Sample matches the exact structure user selected
-                        const sampleProviderType = dataCategory === 'CALL_PAY' ? 'CALL' 
-                          : dataCategory === 'MOONLIGHTING' ? 'CALL' // Moonlighting uses similar structure to Call Pay
-                          : (providerType === 'CUSTOM' ? undefined : providerType);
-                        
-                        const surveySourceName = surveySource === 'Custom' && customSurveySource 
-                          ? customSurveySource 
-                          : surveySource || 'Sample';
-                        
-                        const dataCategoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
-                          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-                          : dataCategory === 'CUSTOM' ? customDataCategory
-                          : 'Compensation';
-                        
-                        downloadGeneratedSample(sampleProviderType, `${surveySourceName} ${dataCategoryDisplay}`);
-                      } catch (error) {
-                        console.error('Download failed:', error);
-                        setError('Failed to generate sample file. Please try again.');
-                      }
-                    }}
-                    className="inline-flex items-center px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 border border-gray-300 shadow-lg hover:shadow-xl flex items-center justify-center h-10"
-                    title={`Download sample CSV template matching selected structure (${dataCategory || 'select options'})`}
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Template
-                  </button>
+                {/* Action Buttons - Browse and Upload */}
+                <div className="col-span-2 md:col-span-4 flex items-center justify-end space-x-3">
                   <div {...getRootProps()} className="flex-shrink-0">
                     <input {...getInputProps()} />
                     <button
@@ -1359,7 +1367,7 @@ const SurveyUpload: React.FC = () => {
                       (providerType === 'CUSTOM' && !customProviderType.trim()) ? 'Please enter a custom provider type' :
                       'Ready to upload'
                     }
-                    className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10"
+                    className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10 w-[140px]"
                   >
                     <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
                     {isUploading ? 'Uploading...' : 'Upload'}
@@ -1448,13 +1456,22 @@ const SurveyUpload: React.FC = () => {
                 <h2 className="text-lg font-semibold text-gray-900">Uploaded Surveys</h2>
               </div>
               {uploadedSurveys.length > 0 && (
-                <button
-                  onClick={handleClearAll}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  <XMarkIcon className="h-4 w-4 mr-1.5" />
-                  Clear All
-                </button>
+                <div className="relative group">
+                  <button
+                    onClick={handleClearAll}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full border border-gray-200 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200"
+                    aria-label="Clear all surveys"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                  {/* Tooltip */}
+                  <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                    <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                      Clear All Surveys
+                      <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1714,10 +1731,10 @@ const SurveyUpload: React.FC = () => {
       {/* Clear All Surveys Confirmation Modal */}
       {showClearAllConfirmation && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
+          <div className="bg-white rounded-xl shadow-lg border border-red-400 w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Clear All Surveys</h3>
             <p className="text-sm text-gray-700 mb-6">
-              Are you sure you want to delete this item?
+              Are you sure you want to delete <strong>all surveys</strong>? This action cannot be undone.
             </p>
             
             {/* Progress indicator when deleting */}
@@ -1769,7 +1786,7 @@ const SurveyUpload: React.FC = () => {
                     Clearing...
                   </>
                 ) : (
-                  'Delete'
+                  'Clear All'
                 )}
               </button>
             </div>

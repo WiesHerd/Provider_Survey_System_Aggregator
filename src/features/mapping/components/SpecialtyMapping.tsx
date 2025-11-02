@@ -184,6 +184,8 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
               onSpecialtyDeselect={deselectSpecialty}
               onClearSelection={clearSelectedSpecialties}
               onRefresh={loadData}
+              showAllProviderTypes={showAllProviderTypes}
+              onToggleProviderTypeFilter={() => setShowAllProviderTypes(!showAllProviderTypes)}
               // Mapped props
               mappings={filteredMappings}
               mappedSearchTerm={mappedSearchTerm}

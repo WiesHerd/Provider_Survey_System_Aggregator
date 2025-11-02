@@ -17,6 +17,8 @@ interface SpecialtyMappingContentProps {
   onSpecialtyDeselect: (specialty: IUnmappedSpecialty) => void;
   onClearSelection: () => void;
   onRefresh: () => void;
+  showAllProviderTypes?: boolean;
+  onToggleProviderTypeFilter?: () => void;
   
   // Mapped tab props
   mappings: ISpecialtyMapping[];
@@ -49,6 +51,8 @@ export const SpecialtyMappingContent: React.FC<SpecialtyMappingContentProps> = (
   onSpecialtyDeselect,
   onClearSelection,
   onRefresh,
+  showAllProviderTypes,
+  onToggleProviderTypeFilter,
   // Mapped props
   mappings,
   mappedSearchTerm,
@@ -74,6 +78,8 @@ export const SpecialtyMappingContent: React.FC<SpecialtyMappingContentProps> = (
           onSpecialtyDeselect={onSpecialtyDeselect}
           onClearSelection={onClearSelection}
           onRefresh={onRefresh}
+          showAllProviderTypes={showAllProviderTypes}
+          onToggleProviderTypeFilter={onToggleProviderTypeFilter}
         />
       )}
       {activeTab === 'mapped' && (

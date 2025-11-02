@@ -1575,10 +1575,41 @@ export class IndexedDBService {
           // ENTERPRISE DEBUG: Log all mappings before filtering - removed for performance
           
           // Filter by provider type if specified
+          // Handle special 'EXCLUDE_CALL_PAY' flag to exclude Call Pay surveys
           if (providerType) {
             // Get all surveys to determine which survey sources belong to the specified provider type
             this.getAllSurveys().then(async (surveys) => {
-              const surveysByProviderType = surveys.filter(survey => survey.providerType === providerType);
+              let surveysByProviderType;
+              if (providerType === 'CALL') {
+                // For CALL view: Show only Call Pay surveys
+                surveysByProviderType = surveys.filter(survey => this.isCallPaySurvey(survey));
+              } else if (providerType === 'PHYSICIAN') {
+                // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
+                surveysByProviderType = surveys.filter(survey => {
+                  const isCallPay = this.isCallPaySurvey(survey);
+                  const isMoonlighting = this.isMoonlightingSurvey(survey);
+                  const effectiveProviderType = this.getEffectiveProviderType(survey);
+                  return (effectiveProviderType === 'PHYSICIAN') && 
+                         !isCallPay && 
+                         (this.isCompensationSurvey(survey) || isMoonlighting);
+                });
+              } else if (providerType === 'APP') {
+                // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+                surveysByProviderType = surveys.filter(survey => {
+                  const isCallPay = this.isCallPaySurvey(survey);
+                  const isMoonlighting = this.isMoonlightingSurvey(survey);
+                  const effectiveProviderType = this.getEffectiveProviderType(survey);
+                  return (effectiveProviderType === 'APP') && 
+                         !isCallPay && 
+                         !isMoonlighting;
+                });
+              } else {
+                // For CUSTOM or other types: Match providerType exactly
+                surveysByProviderType = surveys.filter(survey => {
+                  const effectiveProviderType = this.getEffectiveProviderType(survey);
+                  return effectiveProviderType === providerType || survey.providerType === providerType;
+                });
+              }
               const validSurveySources = new Set(surveysByProviderType.map(s => s.type || s.name));
               
               // ENTERPRISE DEBUG: Log filtering details for each mapping - removed for performance
@@ -1937,9 +1968,71 @@ export class IndexedDBService {
     return 'Other Compensation';
   }
 
+  /**
+   * Helper method to determine if a survey is a Call Pay survey
+   * Checks both old (providerType) and new (dataCategory) ways Call Pay is stored
+   */
+  private isCallPaySurvey(survey: Survey): boolean {
+    return survey.providerType === 'CALL' || 
+           (survey as any).dataCategory === 'CALL_PAY' ||
+           !!(survey.name && survey.name.toLowerCase().includes('call pay')) ||
+           !!(survey.type && survey.type.toLowerCase().includes('call pay'));
+  }
+
+  /**
+   * Helper method to determine if a survey is a Moonlighting survey
+   * Moonlighting is physician-related compensation data
+   */
+  private isMoonlightingSurvey(survey: Survey): boolean {
+    return (survey as any).dataCategory === 'MOONLIGHTING' ||
+           !!(survey.name && survey.name.toLowerCase().includes('moonlighting')) ||
+           !!(survey.type && survey.type.toLowerCase().includes('moonlighting'));
+  }
+
+  /**
+   * Helper method to determine if a survey is a Compensation survey (not Call Pay or Moonlighting)
+   */
+  private isCompensationSurvey(survey: Survey): boolean {
+    const dataCategory = (survey as any).dataCategory;
+    // If dataCategory is explicitly set, use it
+    if (dataCategory) {
+      return dataCategory === 'COMPENSATION';
+    }
+    // Otherwise, if it's not Call Pay or Moonlighting, it's likely Compensation
+    return !this.isCallPaySurvey(survey) && !this.isMoonlightingSurvey(survey);
+  }
+
+  /**
+   * Get the effective provider type for a survey, considering dataCategory
+   * This handles backward compatibility and edge cases
+   */
+  private getEffectiveProviderType(survey: Survey): ProviderType | string {
+    // If survey has dataCategory, use it to determine effective type
+    const dataCategory = (survey as any).dataCategory;
+    
+    if (dataCategory === 'CALL_PAY') {
+      return 'CALL';
+    }
+    
+    if (dataCategory === 'MOONLIGHTING') {
+      // Moonlighting is physician-related, but keep original providerType if set
+      return survey.providerType || 'PHYSICIAN';
+    }
+    
+    if (dataCategory === 'CUSTOM') {
+      // For custom surveys, use the custom providerType if available
+      return survey.providerType || 'CUSTOM';
+    }
+    
+    // For COMPENSATION or legacy surveys, use providerType directly
+    return survey.providerType || 'PHYSICIAN';
+  }
+
   // Utility Methods
   async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
+    console.log('🔍 getUnmappedSpecialties: Called with providerType:', providerType);
     const surveys = await this.getAllSurveys();
+    console.log('🔍 getUnmappedSpecialties: Total surveys found:', surveys.length);
     
     // ENTERPRISE FIX: Handle case when no surveys exist
     if (surveys.length === 0) {
@@ -1978,14 +2071,53 @@ export class IndexedDBService {
     const unmapped: IUnmappedSpecialty[] = [];
     const specialtyCounts = new Map<string, { count: number; sources: Set<string> }>();
 
+    console.log('🔍 getUnmappedSpecialties: Starting survey processing with filter:', providerType);
+    let processedCount = 0;
+    let excludedCount = 0;
+
     for (const survey of surveys) {
       // Filter surveys by data category (Provider Type) if specified
       // When providerType is undefined, include all surveys (Call Pay, Physician, APP)
-      // ENTERPRISE FIX: Only filter if providerType is explicitly provided (not undefined)
-      // When undefined (showAllCategories = true), include ALL surveys regardless of providerType
-      if (providerType !== undefined && survey.providerType && survey.providerType !== providerType) {
-        continue;
+      // When providerType is specified, filter to match that provider type
+      if (providerType !== undefined) {
+        // Determine if this survey matches the requested provider type
+        let surveyMatchesProviderType = false;
+        
+        // Use helper methods for consistent classification
+        const isCallPay = this.isCallPaySurvey(survey);
+        const isMoonlighting = this.isMoonlightingSurvey(survey);
+        const effectiveProviderType = this.getEffectiveProviderType(survey);
+        
+        if (providerType === 'CALL') {
+          // For CALL view: Show only Call Pay surveys
+          surveyMatchesProviderType = isCallPay;
+        } else if (providerType === 'PHYSICIAN') {
+          // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
+          // MOONLIGHTING is physician-related compensation data
+          const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                         !isCallPay && 
+                                         (this.isCompensationSurvey(survey) || isMoonlighting);
+          surveyMatchesProviderType = isPhysicianCompensation;
+        } else if (providerType === 'APP') {
+          // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+          surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                     !isCallPay && 
+                                     !isMoonlighting;
+        } else {
+          // For CUSTOM or other types: Match providerType exactly
+          // For CUSTOM surveys, must match exactly (including custom providerType values)
+          surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                     survey.providerType === providerType;
+        }
+        
+        if (!surveyMatchesProviderType) {
+          excludedCount++;
+          continue;
+        }
       }
+      
+      // Track processed surveys
+      processedCount++;
       
       // ENTERPRISE DEBUG: Log Call Pay surveys when providerType is undefined
       if (providerType === undefined && survey.providerType === 'CALL') {
@@ -2089,8 +2221,15 @@ export class IndexedDBService {
         });
       });
     });
-
     
+    console.log('🔍 getUnmappedSpecialties: Processing complete:', {
+      providerType,
+      totalSurveys: surveys.length,
+      processedSurveys: processedCount,
+      excludedSurveys: excludedCount,
+      totalUnmappedSpecialties: unmapped.length
+    });
+
     // ENTERPRISE DEBUG: Specialty counts calculated
     
     return unmapped;
@@ -2120,11 +2259,44 @@ export class IndexedDBService {
     const variableCounts = new Map<string, { count: number; sources: Set<string> }>();
 
     for (const survey of surveys) {
-      // Filter surveys by provider type if specified
-      if (providerType && survey.providerType !== providerType) {
-        continue;
+      // Filter surveys by data category (Provider Type) if specified
+      // When providerType is undefined, include all surveys (Call Pay, Physician, APP)
+      // When providerType is specified, filter to match that provider type
+      if (providerType !== undefined) {
+        // Determine if this survey matches the requested provider type
+        let surveyMatchesProviderType = false;
+        
+        // Use helper methods for consistent classification
+        const isCallPay = this.isCallPaySurvey(survey);
+        const isMoonlighting = this.isMoonlightingSurvey(survey);
+        const effectiveProviderType = this.getEffectiveProviderType(survey);
+        
+        if (providerType === 'CALL') {
+          // For CALL view: Show only Call Pay surveys
+          surveyMatchesProviderType = isCallPay;
+        } else if (providerType === 'PHYSICIAN') {
+          // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
+          // MOONLIGHTING is physician-related compensation data
+          const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                         !isCallPay && 
+                                         (this.isCompensationSurvey(survey) || isMoonlighting);
+          surveyMatchesProviderType = isPhysicianCompensation;
+        } else if (providerType === 'APP') {
+          // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+          surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                     !isCallPay && 
+                                     !isMoonlighting;
+        } else {
+          // For CUSTOM or other types: Match providerType exactly
+          // For CUSTOM surveys, must match exactly (including custom providerType values)
+          surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                     survey.providerType === providerType;
+        }
+        
+        if (!surveyMatchesProviderType) {
+          continue;
+        }
       }
-      
       
       const { rows } = await this.getSurveyData(survey.id);
       
@@ -2862,8 +3034,54 @@ export class IndexedDBService {
         const mappings: Record<string, string> = {};
         request.result.forEach((item: any) => {
           // Filter by provider type if specified
-          if (providerType && item.providerType && item.providerType !== providerType && item.providerType !== 'ALL') {
-            return; // Skip this mapping if it doesn't match the provider type
+          if (providerType) {
+            let itemMatchesProviderType = false;
+            
+            // Determine classification from learned mapping item
+            // Learned mappings may have providerType, dataCategory, or surveySource to infer from
+            const isCallPay = item.providerType === 'CALL' || 
+                             item.dataCategory === 'CALL_PAY' ||
+                             (item.surveySource && item.surveySource.toLowerCase().includes('call pay'));
+            const isMoonlighting = item.dataCategory === 'MOONLIGHTING' ||
+                                  (item.surveySource && item.surveySource.toLowerCase().includes('moonlighting'));
+            
+            // Get effective provider type for the item
+            let effectiveItemProviderType = item.providerType;
+            if (item.dataCategory === 'CALL_PAY') {
+              effectiveItemProviderType = 'CALL';
+            } else if (item.dataCategory === 'MOONLIGHTING') {
+              effectiveItemProviderType = item.providerType || 'PHYSICIAN';
+            } else if (item.dataCategory === 'CUSTOM') {
+              effectiveItemProviderType = item.providerType || 'CUSTOM';
+            }
+            
+            if (providerType === 'CALL') {
+              // For CALL view: Show only Call Pay learned mappings
+              itemMatchesProviderType = isCallPay;
+            } else if (providerType === 'PHYSICIAN') {
+              // For PHYSICIAN view: Include PHYSICIAN + MOONLIGHTING, exclude CALL_PAY and APP
+              itemMatchesProviderType = (effectiveItemProviderType === 'PHYSICIAN' || 
+                                        effectiveItemProviderType === 'ALL' || 
+                                        isMoonlighting) && 
+                                       !isCallPay &&
+                                       effectiveItemProviderType !== 'APP';
+            } else if (providerType === 'APP') {
+              // For APP view: Include only APP, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+              itemMatchesProviderType = (effectiveItemProviderType === 'APP' || 
+                                        effectiveItemProviderType === 'ALL') && 
+                                       !isCallPay && 
+                                       !isMoonlighting &&
+                                       effectiveItemProviderType !== 'PHYSICIAN';
+            } else {
+              // For CUSTOM or other types: Match providerType exactly
+              itemMatchesProviderType = effectiveItemProviderType === providerType || 
+                                       item.providerType === providerType || 
+                                       item.providerType === 'ALL';
+            }
+            
+            if (!itemMatchesProviderType) {
+              return; // Skip this mapping if it doesn't match the provider type
+            }
           }
           
           // Keep the most recent mapping for each original name
@@ -2894,13 +3112,60 @@ export class IndexedDBService {
         const mappings: Array<{original: string, corrected: string, surveySource: string}> = [];
         request.result.forEach((item: any) => {
           // Filter by provider type if specified
-          if (!providerType || item.providerType === providerType || item.providerType === 'ALL') {
-            mappings.push({
-              original: item.original,
-              corrected: item.corrected,
-              surveySource: item.surveySource || 'Custom'
-            });
+          if (providerType) {
+            let itemMatchesProviderType = false;
+            
+            // Determine classification from learned mapping item
+            const isCallPay = item.providerType === 'CALL' || 
+                             item.dataCategory === 'CALL_PAY' ||
+                             (item.surveySource && item.surveySource.toLowerCase().includes('call pay'));
+            const isMoonlighting = item.dataCategory === 'MOONLIGHTING' ||
+                                  (item.surveySource && item.surveySource.toLowerCase().includes('moonlighting'));
+            
+            // Get effective provider type for the item
+            let effectiveItemProviderType = item.providerType;
+            if (item.dataCategory === 'CALL_PAY') {
+              effectiveItemProviderType = 'CALL';
+            } else if (item.dataCategory === 'MOONLIGHTING') {
+              effectiveItemProviderType = item.providerType || 'PHYSICIAN';
+            } else if (item.dataCategory === 'CUSTOM') {
+              effectiveItemProviderType = item.providerType || 'CUSTOM';
+            }
+            
+            if (providerType === 'CALL') {
+              // For CALL view: Show only Call Pay learned mappings
+              itemMatchesProviderType = isCallPay;
+            } else if (providerType === 'PHYSICIAN') {
+              // For PHYSICIAN view: Include PHYSICIAN + MOONLIGHTING, exclude CALL_PAY and APP
+              itemMatchesProviderType = (effectiveItemProviderType === 'PHYSICIAN' || 
+                                        effectiveItemProviderType === 'ALL' || 
+                                        isMoonlighting) && 
+                                       !isCallPay &&
+                                       effectiveItemProviderType !== 'APP';
+            } else if (providerType === 'APP') {
+              // For APP view: Include only APP, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+              itemMatchesProviderType = (effectiveItemProviderType === 'APP' || 
+                                        effectiveItemProviderType === 'ALL') && 
+                                       !isCallPay && 
+                                       !isMoonlighting &&
+                                       effectiveItemProviderType !== 'PHYSICIAN';
+            } else {
+              // For CUSTOM or other types: Match providerType exactly
+              itemMatchesProviderType = effectiveItemProviderType === providerType || 
+                                       item.providerType === providerType || 
+                                       item.providerType === 'ALL';
+            }
+            
+            if (!itemMatchesProviderType) {
+              return; // Skip this mapping if it doesn't match the provider type
+            }
           }
+          
+          mappings.push({
+            original: item.original,
+            corrected: item.corrected,
+            surveySource: item.surveySource || 'Custom'
+          });
         });
         resolve(mappings);
       };
