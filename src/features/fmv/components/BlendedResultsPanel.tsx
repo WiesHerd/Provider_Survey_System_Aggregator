@@ -61,6 +61,22 @@ export const BlendedResultsPanel: React.FC<BlendedResultsPanelProps> = ({
   };
 
   const currentPercentiles = blendedData.blendedPercentiles[compareType.toLowerCase() as keyof typeof blendedData.blendedPercentiles];
+  
+  if (!currentPercentiles) {
+    return (
+      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <CardContent className="p-6">
+          <Typography variant="h6" className="text-gray-900 font-semibold mb-2">
+            Blended Results
+          </Typography>
+          <Typography variant="body2" className="text-gray-600">
+            No market data available for {compareType}
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+  
   const percentileRanking = calculatePercentile(rawValue, currentPercentiles);
 
   // Get confidence level description
@@ -208,24 +224,33 @@ export const BlendedResultsPanel: React.FC<BlendedResultsPanelProps> = ({
                   {specialty}
                 </Typography>
                 <div className="grid grid-cols-3 gap-2 mt-1">
-                  <div className="text-center">
-                    <Typography variant="caption" className="text-gray-500">P25</Typography>
-                    <Typography variant="body2" className="font-medium">
-                      {formatCurrency(data[compareType.toLowerCase() as keyof typeof data].p25)}
-                    </Typography>
-                  </div>
-                  <div className="text-center">
-                    <Typography variant="caption" className="text-gray-500">P50</Typography>
-                    <Typography variant="body2" className="font-medium">
-                      {formatCurrency(data[compareType.toLowerCase() as keyof typeof data].p50)}
-                    </Typography>
-                  </div>
-                  <div className="text-center">
-                    <Typography variant="caption" className="text-gray-500">P75</Typography>
-                    <Typography variant="body2" className="font-medium">
-                      {formatCurrency(data[compareType.toLowerCase() as keyof typeof data].p75)}
-                    </Typography>
-                  </div>
+                  {(() => {
+                    const metricKey = compareType.toLowerCase() as keyof typeof data;
+                    const metricData = data[metricKey];
+                    if (!metricData) return null;
+                    return (
+                      <>
+                        <div className="text-center">
+                          <Typography variant="caption" className="text-gray-500">P25</Typography>
+                          <Typography variant="body2" className="font-medium">
+                            {formatCurrency(metricData.p25)}
+                          </Typography>
+                        </div>
+                        <div className="text-center">
+                          <Typography variant="caption" className="text-gray-500">P50</Typography>
+                          <Typography variant="body2" className="font-medium">
+                            {formatCurrency(metricData.p50)}
+                          </Typography>
+                        </div>
+                        <div className="text-center">
+                          <Typography variant="caption" className="text-gray-500">P75</Typography>
+                          <Typography variant="body2" className="font-medium">
+                            {formatCurrency(metricData.p75)}
+                          </Typography>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ))}

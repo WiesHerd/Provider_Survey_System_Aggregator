@@ -2,7 +2,7 @@ import { Box, Typography, Table, TableBody, TableCell, TableRow, Grid } from '@m
 import { forwardRef } from 'react';
 
 interface Props {
-  compareType: 'TCC' | 'wRVUs' | 'CFs';
+  compareType: 'TCC' | 'wRVUs' | 'CFs' | 'CallPay';
   specialty: string;
   providerType: string;
   region: string;
@@ -29,6 +29,10 @@ const FairMarketValuePrintable = forwardRef<HTMLDivElement, Props>(({
     valueLabel = 'Conversion Factor';
     valuePrefix = '$';
     valueSuffix = ' /wRVU';
+  } else if (compareType === 'CallPay') {
+    valueLabel = 'Call Pay';
+    valuePrefix = '$';
+    valueSuffix = '';
   }
   const formatValue = (v: number) =>
     compareType === 'wRVUs'

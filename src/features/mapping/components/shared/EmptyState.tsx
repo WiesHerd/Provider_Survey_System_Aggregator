@@ -4,7 +4,7 @@ import { BoltIcon } from '@heroicons/react/24/outline';
 interface EmptyStateProps {
   icon?: React.ReactNode;
   title: string;
-  message: string;
+  message: string | React.ReactNode;
   action?: {
     label: string;
     onClick: () => void;
@@ -36,7 +36,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           {icon || defaultIcon}
         </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-        <p className="text-gray-600 mb-4">{message}</p>
+        <div className="text-gray-600 mb-4 whitespace-pre-line text-left">{typeof message === 'string' ? message : message}</div>
         {action && (
           <button
             onClick={action.onClick}

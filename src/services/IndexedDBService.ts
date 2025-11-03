@@ -4,7 +4,7 @@ import { IColumnMapping } from '../types/column';
 import { IUnmappedVariable } from '../features/mapping/types/mapping';
 import { SurveySource } from '../shared/types';
 import { parseCSVLine } from '../shared/utils/csvParser';
-import { ProviderType } from '../types/provider';
+import { ProviderType, DataCategory } from '../types/provider';
 
 interface Survey {
   id: string;
@@ -19,7 +19,7 @@ interface Survey {
   metadata: any;
   providerType?: ProviderType | string; // Provider type: PHYSICIAN, APP, or CUSTOM
   // NEW: Data Category architecture fields
-  dataCategory?: 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM'; // What type of compensation data
+  dataCategory?: DataCategory; // What type of compensation data
   source?: string; // Just company name: 'MGMA', 'SullivanCotter', etc.
 }
 

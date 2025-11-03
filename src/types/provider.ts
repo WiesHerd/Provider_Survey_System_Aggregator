@@ -8,6 +8,9 @@
 // Base provider types
 export type ProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'CUSTOM';
 
+// Data Category types - what type of compensation data it is
+export type DataCategory = 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM';
+
 // UI provider selection types (for navigation and UI components)
 export type UIProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
 export type PhysicianType = 'MD' | 'DO' | 'Resident' | 'Fellow';
@@ -141,7 +144,9 @@ export interface Survey {
   metadata: any;
   // New provider-specific fields
   providerType?: ProviderType | string;
-  source?: string;
+  // Data Category architecture fields
+  dataCategory?: DataCategory; // What type of compensation data
+  source?: string; // Just company name: 'MGMA', 'SullivanCotter', etc.
   createdAt?: Date;
   updatedAt?: Date;
   data?: PhysicianSurveyRow[] | APPSurveyRow[];

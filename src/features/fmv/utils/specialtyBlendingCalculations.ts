@@ -72,6 +72,18 @@ export const calculateBlendedMarketData = (
     blendingConfig.blendingMethod
   );
 
+  // Calculate blended Call Pay percentiles if available
+  const hasCallPayData = specialties.some(s => s.data.callPay);
+  const blendedCallPay = hasCallPayData ? calculateBlendedPercentiles(
+    specialties.map(s => ({
+      data: s.data.callPay || { p25: 0, p50: 0, p75: 0, p90: 0 },
+      percentage: s.percentage,
+      weight: s.weight,
+      sampleSize: s.sampleSize
+    })),
+    blendingConfig.blendingMethod
+  ) : undefined;
+
   // Calculate confidence based on sample sizes and data quality
   const confidence = calculateBlendingConfidence(specialties);
 
@@ -89,7 +101,8 @@ export const calculateBlendedMarketData = (
     blendedPercentiles: {
       tcc: blendedTcc,
       wrvu: blendedWrvu,
-      cf: blendedCf
+      cf: blendedCf,
+      callPay: blendedCallPay
     },
     sourceData,
     confidence,

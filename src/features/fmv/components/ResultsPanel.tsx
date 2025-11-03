@@ -4,7 +4,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { ArrowPathIcon, BoltIcon } from '@heroicons/react/24/outline';
-import { ResultsPanelProps, AggregationMethod } from '../types/fmv';
+import { ResultsPanelProps, AggregationMethod, CallPayAdjustments } from '../types/fmv';
 import { formatFMVValue } from '../utils/fmvCalculations';
 import { EmptyState } from '../../mapping/components/shared/EmptyState';
 
@@ -30,19 +30,23 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
   surveyCount = 0,
   isFilteringSpecificSurvey = false,
   onResetFilters,
-  onAggregationMethodChange
+  onAggregationMethodChange,
+  availableCallPaySpecialties,
+  availableCallPaySurveySources
 }) => {
   // Get the appropriate percentile data based on comparison type
   const percentileData = 
     compareType === 'wRVUs' ? marketData?.wrvu :
     compareType === 'TCC' ? marketData?.tcc :
     compareType === 'CFs' ? marketData?.cf :
+    compareType === 'CallPay' ? marketData?.callPay :
     undefined;
 
   const currentPercentile = 
     compareType === 'wRVUs' ? percentiles.wrvu :
     compareType === 'TCC' ? percentiles.tcc :
     compareType === 'CFs' ? percentiles.cf :
+    compareType === 'CallPay' ? percentiles.callPay :
     null;
 
   // Check if market data is available
@@ -125,7 +129,27 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
         <EmptyState
           icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
           title="No Market Data Available"
-          message="Try adjusting your filters to find matching market data."
+          message={
+            compareType === 'CallPay' 
+              ? (() => {
+                  let msg = "No Call Pay market data found for the selected filters.\n\n";
+                  msg += "Make sure you have Call Pay surveys uploaded with dataCategory='CALL_PAY', and that your specialty, provider type, and region filters match available data.";
+                  
+                  if (availableCallPaySpecialties && availableCallPaySpecialties.length > 0) {
+                    msg += `\n\nAvailable Call Pay specialties:\n${availableCallPaySpecialties.slice(0, 10).map(s => `• ${s}`).join('\n')}`;
+                    if (availableCallPaySpecialties.length > 10) {
+                      msg += `\n(and ${availableCallPaySpecialties.length - 10} more)`;
+                    }
+                  }
+                  
+                  if (availableCallPaySurveySources && availableCallPaySurveySources.length > 0) {
+                    msg += `\n\nAvailable Call Pay survey sources:\n${availableCallPaySurveySources.map(s => `• ${s}`).join('\n')}`;
+                  }
+                  
+                  return msg;
+                })()
+              : "Try adjusting your filters to find matching market data."
+          }
           action={onResetFilters ? {
             label: "Reset Filters",
             onClick: onResetFilters,

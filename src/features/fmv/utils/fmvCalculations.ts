@@ -8,7 +8,9 @@ import {
   FMVCalculationParams,
   FMVValidationResult,
   CompareType,
-  AggregationMethod
+  AggregationMethod,
+  MarketPercentiles,
+  CallPayAdjustments
 } from '../types/fmv';
 import { calculatePercentile } from '../../../shared/utils/calculations';
 
@@ -25,6 +27,25 @@ export const normalizeSurveyRow = (
   surveyMeta: any, 
   columnMappings: any = {}
 ): NormalizedSurveyRow => {
+  // Check if this is a Call Pay survey (dataCategory or providerType)
+  const isCallPaySurvey = (surveyMeta as any)?.dataCategory === 'CALL_PAY' || 
+                         row.providerType === 'CALL' ||
+                         (surveyMeta?.type && surveyMeta.type.toLowerCase().includes('call pay'));
+  
+  // Extract Call Pay percentiles - check for Call Pay specific columns first, then fallback to TCC structure
+  const callPayP25 = Number(row[columnMappings.callPay_p25 || 'callPay_p25']) || 
+                     (isCallPaySurvey ? Number(row[columnMappings.tcc_p25 || 'tcc_p25']) || 0 : 0);
+  const callPayP50 = Number(row[columnMappings.callPay_p50 || 'callPay_p50']) || 
+                     (isCallPaySurvey ? Number(row[columnMappings.tcc_p50 || 'tcc_p50']) || 0 : 0);
+  const callPayP75 = Number(row[columnMappings.callPay_p75 || 'callPay_p75']) || 
+                     (isCallPaySurvey ? Number(row[columnMappings.tcc_p75 || 'tcc_p75']) || 0 : 0);
+  const callPayP90 = Number(row[columnMappings.callPay_p90 || 'callPay_p90']) || 
+                     (isCallPaySurvey ? Number(row[columnMappings.tcc_p90 || 'tcc_p90']) || 0 : 0);
+  const callPayNOrgs = Number(row[columnMappings.callPay_n_orgs || 'callPay_n_orgs']) || 
+                       (isCallPaySurvey ? Number(row[columnMappings.tcc_n_orgs || 'tcc_n_orgs']) || 0 : 0);
+  const callPayNIncumbents = Number(row[columnMappings.callPay_n_incumbents || 'callPay_n_incumbents']) || 
+                             (isCallPaySurvey ? Number(row[columnMappings.tcc_n_incumbents || 'tcc_n_incumbents']) || 0 : 0);
+
   return {
     id: row.id || '',
     providerType: row[columnMappings.providerType || 'providerType'] || row.providerType || row.provider_type || '',
@@ -54,6 +75,13 @@ export const normalizeSurveyRow = (
     cf_p50: Number(row[columnMappings.cf_p50 || 'cf_p50']) || 0,
     cf_p75: Number(row[columnMappings.cf_p75 || 'cf_p75']) || 0,
     cf_p90: Number(row[columnMappings.cf_p90 || 'cf_p90']) || 0,
+    // Call Pay metrics with organizational data (with fallback to TCC for Call Pay surveys)
+    callPay_n_orgs: callPayNOrgs,
+    callPay_n_incumbents: callPayNIncumbents,
+    callPay_p25: callPayP25,
+    callPay_p50: callPayP50,
+    callPay_p75: callPayP75,
+    callPay_p90: callPayP90,
   };
 };
 
@@ -139,13 +167,21 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
     return {
       tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
       wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
-      cf: { p25: 0, p50: 0, p75: 0, p90: 0 }
+      cf: { p25: 0, p50: 0, p75: 0, p90: 0 },
+      callPay: { p25: 0, p50: 0, p75: 0, p90: 0 }
     };
   }
 
   // Always calculate both simple and weighted averages (like Analytics screen)
   // Then return the one selected by the aggregation method
   
+  // Filter rows that have Call Pay data
+  const callPayRows = filteredRows.filter(row => {
+    const hasCallPayData = (row.callPay_p25 || row.callPay_p50 || row.callPay_p75 || row.callPay_p90);
+    const hasPositiveCallPayData = (row.callPay_p25 ?? 0) > 0 || (row.callPay_p50 ?? 0) > 0 || (row.callPay_p75 ?? 0) > 0 || (row.callPay_p90 ?? 0) > 0;
+    return hasCallPayData && hasPositiveCallPayData;
+  });
+
   // Simple average - mean of all percentile values
   const simpleResult = {
     tcc: {
@@ -166,12 +202,19 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
       p75: filteredRows.reduce((sum, row) => sum + (row.cf_p75 || 0), 0) / filteredRows.length,
       p90: filteredRows.reduce((sum, row) => sum + (row.cf_p90 || 0), 0) / filteredRows.length,
     },
+    callPay: callPayRows.length > 0 ? {
+      p25: callPayRows.reduce((sum, row) => sum + (row.callPay_p25 || 0), 0) / callPayRows.length,
+      p50: callPayRows.reduce((sum, row) => sum + (row.callPay_p50 || 0), 0) / callPayRows.length,
+      p75: callPayRows.reduce((sum, row) => sum + (row.callPay_p75 || 0), 0) / callPayRows.length,
+      p90: callPayRows.reduce((sum, row) => sum + (row.callPay_p90 || 0), 0) / callPayRows.length,
+    } : undefined,
   };
 
   // Weighted average - weighted by number of incumbents for each metric type
   const totalTccIncumbents = filteredRows.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0);
   const totalWrvuIncumbents = filteredRows.reduce((sum, row) => sum + (row.wrvu_n_incumbents || 0), 0);
   const totalCfIncumbents = filteredRows.reduce((sum, row) => sum + (row.cf_n_incumbents || 0), 0);
+  const totalCallPayIncumbents = callPayRows.reduce((sum, row) => sum + (row.callPay_n_incumbents || 0), 0);
   
   const weightedResult = {
     tcc: {
@@ -192,6 +235,12 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
       p75: totalCfIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.cf_p75 || 0) * (row.cf_n_incumbents || 0)), 0) / totalCfIncumbents : 0,
       p90: totalCfIncumbents > 0 ? filteredRows.reduce((sum, row) => sum + ((row.cf_p90 || 0) * (row.cf_n_incumbents || 0)), 0) / totalCfIncumbents : 0,
     },
+    callPay: callPayRows.length > 0 && totalCallPayIncumbents > 0 ? {
+      p25: totalCallPayIncumbents > 0 ? callPayRows.reduce((sum, row) => sum + ((row.callPay_p25 || 0) * (row.callPay_n_incumbents || 0)), 0) / totalCallPayIncumbents : 0,
+      p50: totalCallPayIncumbents > 0 ? callPayRows.reduce((sum, row) => sum + ((row.callPay_p50 || 0) * (row.callPay_n_incumbents || 0)), 0) / totalCallPayIncumbents : 0,
+      p75: totalCallPayIncumbents > 0 ? callPayRows.reduce((sum, row) => sum + ((row.callPay_p75 || 0) * (row.callPay_n_incumbents || 0)), 0) / totalCallPayIncumbents : 0,
+      p90: totalCallPayIncumbents > 0 ? callPayRows.reduce((sum, row) => sum + ((row.callPay_p90 || 0) * (row.callPay_n_incumbents || 0)), 0) / totalCallPayIncumbents : 0,
+    } : undefined,
   };
 
   // Handle pure survey method - use the first survey's data only
@@ -200,6 +249,8 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
     if (filteredRows.length === 1) {
       // Single survey - use its data directly
       const row = filteredRows[0];
+      const hasCallPayData = (row.callPay_p25 || row.callPay_p50 || row.callPay_p75 || row.callPay_p90);
+      const hasCallPay = hasCallPayData && ((row.callPay_p25 ?? 0) > 0 || (row.callPay_p50 ?? 0) > 0 || (row.callPay_p75 ?? 0) > 0 || (row.callPay_p90 ?? 0) > 0);
       result = {
         tcc: {
           p25: row.tcc_p25 || 0,
@@ -219,10 +270,18 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
           p75: row.cf_p75 || 0,
           p90: row.cf_p90 || 0,
         },
+        callPay: hasCallPay ? {
+          p25: row.callPay_p25 || 0,
+          p50: row.callPay_p50 || 0,
+          p75: row.callPay_p75 || 0,
+          p90: row.callPay_p90 || 0,
+        } : undefined,
       };
     } else {
       // Multiple surveys - use the first one and warn user
       const row = filteredRows[0];
+      const hasCallPayData = (row.callPay_p25 || row.callPay_p50 || row.callPay_p75 || row.callPay_p90);
+      const hasCallPay = hasCallPayData && ((row.callPay_p25 ?? 0) > 0 || (row.callPay_p50 ?? 0) > 0 || (row.callPay_p75 ?? 0) > 0 || (row.callPay_p90 ?? 0) > 0);
       result = {
         tcc: {
           p25: row.tcc_p25 || 0,
@@ -242,6 +301,12 @@ export const calculateMarketData = (filteredRows: NormalizedSurveyRow[], aggrega
           p75: row.cf_p75 || 0,
           p90: row.cf_p90 || 0,
         },
+        callPay: hasCallPay ? {
+          p25: row.callPay_p25 || 0,
+          p50: row.callPay_p50 || 0,
+          p75: row.callPay_p75 || 0,
+          p90: row.callPay_p90 || 0,
+        } : undefined,
       };
     }
   } else {
@@ -313,19 +378,111 @@ export const getPercentileRank = (
  * @param tccValue - User's TCC value (FTE-adjusted)
  * @param wrvuValue - User's wRVU value (FTE-adjusted)
  * @param cfValue - User's conversion factor value
+ * @param callPayValue - User's Call Pay value (FTE-adjusted, optional)
  * @returns User percentile rankings
  */
 export const calculateUserPercentiles = (
   marketData: MarketData,
   tccValue: number,
   wrvuValue: number,
-  cfValue: number
+  cfValue: number,
+  callPayValue?: number
 ): UserPercentiles => {
   return {
     tcc: getPercentileRank(marketData?.tcc, tccValue),
     wrvu: getPercentileRank(marketData?.wrvu, wrvuValue),
     cf: getPercentileRank(marketData?.cf, cfValue),
+    callPay: callPayValue !== undefined && marketData?.callPay ? getPercentileRank(marketData.callPay, callPayValue) : null,
   };
+};
+
+/**
+ * Applies Call Pay adjustments to market percentiles
+ * 
+ * @param marketData - Market percentiles to adjust
+ * @param adjustments - Adjustment factors to apply
+ * @returns Adjusted market percentiles
+ */
+export const applyCallPayAdjustments = (
+  marketData: MarketPercentiles,
+  adjustments: CallPayAdjustments
+): MarketPercentiles => {
+  // Calculate total multiplier from all adjustment factors
+  let multiplier = 1.0;
+  
+  // Weekend premium (e.g., 50% = 1.5x)
+  if (adjustments.weekendPremium > 0) {
+    multiplier *= (1 + adjustments.weekendPremium / 100);
+  }
+  
+  // Major holiday premium (e.g., 100% = 2x)
+  if (adjustments.majorHolidayPremium > 0) {
+    multiplier *= (1 + adjustments.majorHolidayPremium / 100);
+  }
+  
+  // High-value holiday premium (e.g., 200% = 3x)
+  if (adjustments.highValueHolidayPremium > 0) {
+    multiplier *= (1 + adjustments.highValueHolidayPremium / 100);
+  }
+  
+  // Frequency multiplier (e.g., 25% = 1.25x)
+  if (adjustments.frequencyMultiplier > 0) {
+    multiplier *= (1 + adjustments.frequencyMultiplier / 100);
+  }
+  
+  // Acuity multiplier (e.g., 20% = 1.2x)
+  if (adjustments.acuityMultiplier > 0) {
+    multiplier *= (1 + adjustments.acuityMultiplier / 100);
+  }
+  
+  return {
+    p25: marketData.p25 * multiplier,
+    p50: marketData.p50 * multiplier,
+    p75: marketData.p75 * multiplier,
+    p90: marketData.p90 * multiplier,
+  };
+};
+
+/**
+ * Applies Call Pay adjustments to a user input value
+ * 
+ * @param value - Base call pay value
+ * @param adjustments - Adjustment factors to apply
+ * @returns Adjusted call pay value
+ */
+export const applyCallPayAdjustmentsToValue = (
+  value: number,
+  adjustments: CallPayAdjustments
+): number => {
+  // Calculate total multiplier from all adjustment factors
+  let multiplier = 1.0;
+  
+  // Weekend premium
+  if (adjustments.weekendPremium > 0) {
+    multiplier *= (1 + adjustments.weekendPremium / 100);
+  }
+  
+  // Major holiday premium
+  if (adjustments.majorHolidayPremium > 0) {
+    multiplier *= (1 + adjustments.majorHolidayPremium / 100);
+  }
+  
+  // High-value holiday premium
+  if (adjustments.highValueHolidayPremium > 0) {
+    multiplier *= (1 + adjustments.highValueHolidayPremium / 100);
+  }
+  
+  // Frequency multiplier
+  if (adjustments.frequencyMultiplier > 0) {
+    multiplier *= (1 + adjustments.frequencyMultiplier / 100);
+  }
+  
+  // Acuity multiplier
+  if (adjustments.acuityMultiplier > 0) {
+    multiplier *= (1 + adjustments.acuityMultiplier / 100);
+  }
+  
+  return value * multiplier;
 };
 
 /**
@@ -385,6 +542,9 @@ export const validateFMVCalculation = (params: FMVCalculationParams): FMVValidat
         errors.push('Conversion factor must be greater than 0');
       }
       break;
+    case 'CallPay':
+      // Call Pay validation will be handled in the component
+      break;
   }
 
   return {
@@ -409,6 +569,7 @@ export const formatFMVValue = (value: number, compareType: CompareType): string 
     });
   }
   
+  // Format as currency for TCC, CFs, and CallPay
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

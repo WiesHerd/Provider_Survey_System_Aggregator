@@ -5,6 +5,7 @@ import { FMVFilters } from './FMVFilters';
 import { TCCItemization } from './TCCItemization';
 import { WRVUsInput } from './WRVUsInput';
 import { CFInput } from './CFInput';
+import { CallPayInput } from './CallPayInput';
 import { ResultsPanel } from './ResultsPanel';
 import BlendedResultsPanel from './BlendedResultsPanel';
 import { SavedFMVManager } from './SavedFMVManager';
@@ -31,12 +32,16 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     compComponents,
     wrvus,
     cf,
+    callPay,
+    callPayAdjustments,
     compareType,
     marketData,
     percentiles,
     uniqueValues,
     surveyCount,
     blendedData,
+    availableCallPaySpecialties,
+    availableCallPaySurveySources,
     loading,
     error,
     
@@ -44,12 +49,15 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     tcc,
     tccFTEAdjusted,
     wrvusFTEAdjusted,
+    callPayFTEAdjusted,
     
     // Actions
     updateFilters,
     setCompComponents,
     setWRVUs,
     setCF,
+    setCallPay,
+    setCallPayAdjustments,
     setCompareType,
     resetFilters,
   } = useFMVData();
@@ -240,6 +248,16 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
                   >
                     CF
                   </button>
+                  <button
+                    onClick={() => setCompareType('CallPay')}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                      compareType === 'CallPay'
+                        ? 'bg-white text-blue-600 shadow-md border border-blue-200'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Call Pay
+                  </button>
                 </div>
               </div>
             </div>
@@ -303,6 +321,27 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             />
           </div>
         )}
+        
+        {compareType === 'CallPay' && (
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Call Pay
+              </h2>
+              <p className="text-sm text-gray-600">
+                Enter your call pay rate and configure adjustment factors for market comparison
+              </p>
+            </div>
+            <CallPayInput 
+              value={callPay}
+              onChange={setCallPay}
+              fte={filters.fte}
+              onFTEChange={(fte) => updateFilters({ fte })}
+              adjustments={callPayAdjustments}
+              onAdjustmentsChange={setCallPayAdjustments}
+            />
+          </div>
+        )}
 
 
 
@@ -315,11 +354,13 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               inputValue={
                 compareType === 'TCC' ? tccFTEAdjusted : 
                 compareType === 'wRVUs' ? wrvusFTEAdjusted : 
+                compareType === 'CallPay' ? callPayFTEAdjusted :
                 Number(cf)
               }
               rawValue={
                 compareType === 'TCC' ? Number(tcc) : 
                 compareType === 'wRVUs' ? Number(wrvus) : 
+                compareType === 'CallPay' ? Number(callPay) :
                 Number(cf)
               }
               fte={filters.fte}
@@ -334,11 +375,13 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               inputValue={
                 compareType === 'TCC' ? tccFTEAdjusted : 
                 compareType === 'wRVUs' ? wrvusFTEAdjusted : 
+                compareType === 'CallPay' ? callPayFTEAdjusted :
                 Number(cf)
               }
               rawValue={
                 compareType === 'TCC' ? Number(tcc) : 
                 compareType === 'wRVUs' ? Number(wrvus) : 
+                compareType === 'CallPay' ? Number(callPay) :
                 Number(cf)
               }
               fte={filters.fte}
@@ -347,6 +390,9 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
               isFilteringSpecificSurvey={filters.surveySource !== 'All Sources'}
               onResetFilters={resetFilters}
               onAggregationMethodChange={(method) => updateFilters({ aggregationMethod: method })}
+              callPayAdjustments={compareType === 'CallPay' ? callPayAdjustments : undefined}
+              availableCallPaySpecialties={availableCallPaySpecialties}
+              availableCallPaySurveySources={availableCallPaySurveySources}
             />
           )}
         </div>
@@ -374,16 +420,19 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             value={
               compareType === 'TCC' ? tcc : 
               compareType === 'wRVUs' ? Number(wrvus) : 
+              compareType === 'CallPay' ? Number(callPay) :
               Number(cf)
             }
             marketPercentile={
               compareType === 'TCC' ? percentiles.tcc ?? 0 :
               compareType === 'wRVUs' ? percentiles.wrvu ?? 0 :
+              compareType === 'CallPay' ? percentiles.callPay ?? 0 :
               percentiles.cf ?? 0
             }
             marketData={
               compareType === 'TCC' ? (marketData?.tcc ?? { p25: 0, p50: 0, p75: 0, p90: 0 }) :
               compareType === 'wRVUs' ? (marketData?.wrvu ?? { p25: 0, p50: 0, p75: 0, p90: 0 }) :
+              compareType === 'CallPay' ? (marketData?.callPay ?? { p25: 0, p50: 0, p75: 0, p90: 0 }) :
               (marketData?.cf ?? { p25: 0, p50: 0, p75: 0, p90: 0 })
             }
             providerName={currentProviderName}

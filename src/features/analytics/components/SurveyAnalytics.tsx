@@ -536,7 +536,21 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     // CRITICAL FIX: Generate data categories from ALL data, not cascading-filtered data
     // This ensures all data categories are always available in the dropdown, regardless of other filter selections
     // This allows users to filter by data category even if current specialty selection doesn't have that category
-    const allDataCategories = allData.map(row => (row as any).dataCategory).filter((item): item is string => Boolean(item));
+    // ENTERPRISE FIX: Also detect Call Pay from survey source name if dataCategory is missing (backward compatibility)
+    const allDataCategories = allData.map(row => {
+      const dataCategory = (row as any).dataCategory;
+      // If no dataCategory, infer from surveySource for backward compatibility
+      if (!dataCategory) {
+        const surveySource = row.surveySource || '';
+        if (surveySource.toLowerCase().includes('call pay')) {
+          return 'CALL_PAY';
+        }
+        if (surveySource.toLowerCase().includes('moonlighting')) {
+          return 'MOONLIGHTING';
+        }
+      }
+      return dataCategory;
+    }).filter((item): item is string => Boolean(item));
     const availableDataCategoriesFromAllData = [...new Set(allDataCategories)].sort();
     // Format data categories for display
     const formattedDataCategoriesFromAllData = availableDataCategoriesFromAllData.map(cat => {

@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { FMVFiltersProps } from '../types/fmv';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { filterSpecialtyOptions } from '../../../shared/utils/specialtyMatching';
 
 /**
  * FMV Filters component for filtering market data
@@ -70,13 +71,16 @@ export const FMVFilters: React.FC<FMVFiltersProps> = ({
             onChange={(_: any, newValue: string | null) => handleFilterChange('specialty', newValue || '')}
             options={uniqueValues.specialties || []}
             getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+            filterOptions={(options: string[], { inputValue }: { inputValue: string }) => 
+              filterSpecialtyOptions(options, inputValue, 100)
+            }
             renderInput={(params: any) => (
               <TextField
                 {...params}
                 label="Specialty"
                 variant="outlined"
                 size="small"
-                placeholder="Select specialty..."
+                placeholder="Search specialties..."
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: '8px',

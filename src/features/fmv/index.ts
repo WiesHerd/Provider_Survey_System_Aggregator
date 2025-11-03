@@ -7,6 +7,7 @@ export { CompareTypeSelector } from './components/CompareTypeSelector';
 export { TCCItemization } from './components/TCCItemization';
 export { WRVUsInput } from './components/WRVUsInput';
 export { CFInput } from './components/CFInput';
+export { CallPayInput } from './components/CallPayInput';
 export { ResultsPanel } from './components/ResultsPanel';
 export { SavedFMVManager } from './components/SavedFMVManager';
 export { AggregationMethodSelector } from './components/AggregationMethodSelector';
@@ -38,6 +39,8 @@ export type {
   TCCItemizationProps,
   WRVUsInputProps,
   CFInputProps,
+  CallPayInputProps,
+  CallPayAdjustments,
   ResultsPanelProps,
   AggregationMethodSelectorProps,
   FMVCalculatorProps,
@@ -65,6 +68,8 @@ export {
   calculateUserPercentiles,
   calculateTotalTCC,
   applyFTEAdjustment,
+  applyCallPayAdjustments,
+  applyCallPayAdjustmentsToValue,
   validateFMVCalculation,
   formatFMVValue,
   extractUniqueFilterValues,

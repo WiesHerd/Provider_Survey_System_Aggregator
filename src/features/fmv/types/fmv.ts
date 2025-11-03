@@ -33,6 +33,7 @@ export interface BlendedMarketData {
     tcc: MarketPercentiles;
     wrvu: MarketPercentiles;
     cf: MarketPercentiles;
+    callPay?: MarketPercentiles;
   };
   sourceData: {
     [specialty: string]: MarketData;
@@ -40,6 +41,18 @@ export interface BlendedMarketData {
   confidence: number; // 0-1, based on sample sizes and data quality
   totalSampleSize: number;
   qualityWarnings: string[];
+}
+
+/**
+ * Call Pay adjustment factors for market data or user input
+ */
+export interface CallPayAdjustments {
+  weekendPremium: number; // 0-100 percentage (e.g., 50 = 1.5x)
+  majorHolidayPremium: number; // 0-200 percentage (e.g., 100 = 2x)
+  highValueHolidayPremium: number; // 0-300 percentage (e.g., 200 = 3x)
+  frequencyMultiplier: number; // 0-50 percentage (e.g., 25 = 1.25x)
+  acuityMultiplier: number; // 0-50 percentage (e.g., 20 = 1.2x)
+  applyToMarketData: boolean; // If true, adjusts market data; if false, adjusts user input
 }
 
 /**
@@ -55,6 +68,7 @@ export interface FMVFilters {
   aggregationMethod: AggregationMethod; // Method for aggregating multiple surveys
   useSpecialtyBlending: boolean; // Toggle between single specialty and blended specialties
   specialtyBlending?: SpecialtyBlendingConfig; // Configuration for specialty blending
+  callPayAdjustments?: CallPayAdjustments; // Call Pay adjustment factors
 }
 
 /**
@@ -66,6 +80,7 @@ export interface SavedFMVCalculation extends BaseEntity {
   compComponents: CompensationComponent[];
   wrvus: string;
   cf: string;
+  callPay?: string;
   compareType: CompareType;
   marketData: MarketData;
   percentiles: UserPercentiles;
@@ -102,6 +117,7 @@ export interface MarketData {
   tcc: MarketPercentiles;
   wrvu: MarketPercentiles;
   cf: MarketPercentiles;
+  callPay?: MarketPercentiles;
 }
 
 /**
@@ -111,12 +127,13 @@ export interface UserPercentiles {
   tcc: number | null;
   wrvu: number | null;
   cf: number | null;
+  callPay: number | null;
 }
 
 /**
  * Comparison type for FMV analysis
  */
-export type CompareType = 'TCC' | 'wRVUs' | 'CFs';
+export type CompareType = 'TCC' | 'wRVUs' | 'CFs' | 'CallPay';
 
 /**
  * Unique values available for filters
@@ -176,6 +193,13 @@ export interface NormalizedSurveyRow extends BaseEntity {
   cf_p50: number;
   cf_p75: number;
   cf_p90: number;
+  // Call Pay metrics with organizational data
+  callPay_n_orgs?: number;
+  callPay_n_incumbents?: number;
+  callPay_p25?: number;
+  callPay_p50?: number;
+  callPay_p75?: number;
+  callPay_p90?: number;
 }
 
 /**
@@ -236,6 +260,18 @@ export interface CFInputProps {
 }
 
 /**
+ * Component props for Call Pay input
+ */
+export interface CallPayInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  fte: number;
+  onFTEChange: (fte: number) => void;
+  adjustments: CallPayAdjustments;
+  onAdjustmentsChange: (adjustments: CallPayAdjustments) => void;
+}
+
+/**
  * Component props for results panel
  */
 export interface ResultsPanelProps {
@@ -250,6 +286,9 @@ export interface ResultsPanelProps {
   isFilteringSpecificSurvey?: boolean;
   onResetFilters?: () => void;
   onAggregationMethodChange?: (method: AggregationMethod) => void;
+  callPayAdjustments?: CallPayAdjustments;
+  availableCallPaySpecialties?: string[]; // Available specialties with Call Pay data
+  availableCallPaySurveySources?: string[]; // Available survey sources with Call Pay data
 }
 
 /**

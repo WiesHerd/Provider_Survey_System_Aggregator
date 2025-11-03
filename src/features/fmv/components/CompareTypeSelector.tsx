@@ -4,7 +4,7 @@ import {
   FormControlLabel, 
   Radio 
 } from '@mui/material';
-import { CompareTypeSelectorProps } from '../types/fmv';
+import { CompareTypeSelectorProps, CompareType } from '../types/fmv';
 
 /**
  * Comparison Type Selector component for choosing FMV analysis type
@@ -22,7 +22,7 @@ export const CompareTypeSelector: React.FC<CompareTypeSelectorProps> = ({
         row
         value={compareType}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-          onCompareTypeChange(e.target.value as 'TCC' | 'wRVUs' | 'CFs')
+          onCompareTypeChange(e.target.value as CompareType)
         }
         className="flex flex-col sm:flex-row gap-6"
       >
@@ -79,6 +79,25 @@ export const CompareTypeSelector: React.FC<CompareTypeSelectorProps> = ({
           label={
             <span className="text-sm font-medium text-gray-900">
               Conversion Factors
+            </span>
+          }
+          className="flex-1"
+        />
+        <FormControlLabel 
+          value="CallPay" 
+          control={
+            <Radio 
+              sx={{
+                color: '#6b7280',
+                '&.Mui-checked': {
+                  color: '#3b82f6',
+                },
+              }}
+            />
+          } 
+          label={
+            <span className="text-sm font-medium text-gray-900">
+              Call Pay
             </span>
           }
           className="flex-1"
