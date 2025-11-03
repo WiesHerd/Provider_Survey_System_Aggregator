@@ -74,10 +74,11 @@ export const useOptimizedColumnMappingData = (): UseOptimizedColumnMappingDataRe
   // Performance service
   const performanceService = useMemo(() => getPerformanceOptimizedDataService(), []);
 
-  // Load data on mount
+  // Load data on mount and when provider type or category filter changes
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProviderType, showAllCategories]);
 
   // Smart tab selection
   useEffect(() => {
@@ -152,10 +153,6 @@ export const useOptimizedColumnMappingData = (): UseOptimizedColumnMappingDataRe
     }
   }, [performanceService, selectedProviderType, showAllCategories]);
 
-  // Reload data when provider type or showAllCategories changes
-  useEffect(() => {
-    loadData();
-  }, [selectedProviderType, showAllCategories, loadData]);
 
   // Data operations
   const removeLearnedMapping = useCallback(async (original: string) => {

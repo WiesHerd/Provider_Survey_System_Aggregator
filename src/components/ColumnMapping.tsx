@@ -123,12 +123,14 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
     setSelectedColumns([]);
   };
 
-  const selectAllColumns = () => {
-    setSelectedColumns([...filteredUnmapped]);
-  };
-
-  const deselectAllColumns = () => {
-    setSelectedColumns([]);
+  const toggleSelectAll = () => {
+    if (selectedColumns.length === 0 || selectedColumns.length < filteredUnmapped.length) {
+      // Select all filtered columns
+      setSelectedColumns([...filteredUnmapped]);
+    } else {
+      // Deselect all
+      setSelectedColumns([]);
+    }
   };
 
   // Confirmation dialog handlers
@@ -525,7 +527,7 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
             isBulkSelected={selectedColumns.length === filteredUnmapped.length && filteredUnmapped.length > 0}
             allUnmappedCount={filteredUnmapped.length}
             onShowHelp={() => setShowHelp(true)}
-            onToggleSelectAll={selectedColumns.length === 0 ? selectAllColumns : deselectAllColumns}
+            onToggleSelectAll={toggleSelectAll}
             onCreateMapping={handleCreateMapping}
             onCreateIndividualMappings={handleMapIndividually}
             onCreateGroupedMapping={handleCreateMapping}
