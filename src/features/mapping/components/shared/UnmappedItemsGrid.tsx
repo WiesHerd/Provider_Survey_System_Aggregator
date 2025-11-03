@@ -66,6 +66,17 @@ export const UnmappedItemsGrid = <T,>({
     const current = itemsBySurvey.get(surveySource) || [];
     itemsBySurvey.set(surveySource, [...current, item]);
   });
+  
+  // Debug logging to verify grouping
+  if (process.env.NODE_ENV === 'development' && items.length > 0) {
+    console.log('🔍 UnmappedItemsGrid: Grouped items:', {
+      totalItems: items.length,
+      groups: Array.from(itemsBySurvey.entries()).map(([source, items]) => ({
+        source,
+        count: items.length
+      }))
+    });
+  }
 
   return (
     <>
@@ -201,7 +212,7 @@ export const UnmappedItemsGrid = <T,>({
                 <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
                   <span style={{ color }}>{source}</span>
                   <Typography variant="caption" color="textSecondary" className="text-xs">
-                    {surveyItems.length} {entityName}
+                    {surveyItems.length} {entityName === 'columns' ? 'columns' : entityName === 'variables' ? 'fields' : entityName === 'specialties' ? 'specialties' : entityName === 'regions' ? 'regions' : entityName}
                   </Typography>
                 </Typography>
                 <div className="space-y-1.5">
