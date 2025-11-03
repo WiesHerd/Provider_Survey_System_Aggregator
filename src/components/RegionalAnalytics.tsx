@@ -7,7 +7,8 @@ import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinne
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
-import { AnalyticsDataService } from '../features/analytics/services/analyticsDataService';
+// Using new benchmarking query hook for better performance (reuses same data as benchmarking)
+import { useBenchmarkingQuery } from '../features/analytics/hooks/useBenchmarkingQuery';
 import { AggregatedData } from '../features/analytics/types/analytics';
 
 // These will be dynamically populated from region mappings
@@ -33,70 +34,54 @@ export const RegionalAnalytics: React.FC = () => {
   const [provenanceOpen, setProvenanceOpen] = useState(false);
   const [provenanceRegion, setProvenanceRegion] = useState<string>('');
 
+  // Use benchmarking query hook for shared data caching (same data as Survey Analytics)
+  const {
+    allData: queryAllData,
+    loading: queryLoading,
+    loadingProgress: queryProgress
+  } = useBenchmarkingQuery({
+    specialty: '',
+    surveySource: '',
+    geographicRegion: '',
+    providerType: '',
+    year: ''
+  }, []);
+
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        console.log('🔍 Regional Analytics: Starting data load with AnalyticsDataService...');
-        
-        // Use the same AnalyticsDataService as Survey Analytics
-        const analyticsDataService = new AnalyticsDataService();
-        analyticsDataService.clearCache(); // Clear cache to get fresh data
-        
-        // Get all analytics data (same as Survey Analytics)
-        const allData = await analyticsDataService.getAnalyticsData({
-          specialty: '',
-          surveySource: '',
-          geographicRegion: '',
-          providerType: '',
-          dataCategory: '',
-          year: ''
-        });
-        
-        console.log('🔍 Regional Analytics: Loaded analytics data -', allData.length, 'records');
-        console.log('🔍 Regional Analytics: Sample data:', allData[0]);
-        
-        // Debug: Check what years are in the data
-        const yearsInData = Array.from(new Set(allData.map(r => r.surveyYear).filter(Boolean)));
-        console.log('🔍 Regional Analytics: Years found in data:', yearsInData);
-        
-        // Debug: Check survey sources
-        const sourcesInData = Array.from(new Set(allData.map(r => r.surveySource).filter(Boolean)));
-        console.log('🔍 Regional Analytics: Survey sources found:', sourcesInData);
-        
-        // Debug: Check what regions are actually in the data
-        const regionsInData = Array.from(new Set(allData.map(r => r.geographicRegion).filter(Boolean)));
-        console.log('🔍 Regional Analytics: Regions found in data:', regionsInData);
-        
-        // Debug: Show sample data with regions
-        console.log('🔍 Regional Analytics: Sample data with regions:', allData.slice(0, 5).map(r => ({
-          standardizedName: r.standardizedName,
-          geographicRegion: r.geographicRegion,
-          surveySource: r.surveySource,
-          surveyYear: r.surveyYear,
-          tcc_p50: r.tcc_p50
-        })));
-        
-        // Also load mappings for filter options
-        const dataService = getDataService();
-        const [allMappings, regionMappings] = await Promise.all([
-          dataService.getAllSpecialtyMappings(),
-          dataService.getRegionMappings()
-        ]);
-        
-        setAnalyticsData(allData);
+    if (queryAllData.length > 0) {
+      console.log('🔍 Regional Analytics: Loaded analytics data from cache -', queryAllData.length, 'records');
+      
+      // Debug: Check what years are in the data
+      const yearsInData = Array.from(new Set(queryAllData.map(r => r.surveyYear).filter(Boolean)));
+      console.log('🔍 Regional Analytics: Years found in data:', yearsInData);
+      
+      // Debug: Check survey sources
+      const sourcesInData = Array.from(new Set(queryAllData.map(r => r.surveySource).filter(Boolean)));
+      console.log('🔍 Regional Analytics: Survey sources found:', sourcesInData);
+      
+      // Debug: Check what regions are actually in the data
+      const regionsInData = Array.from(new Set(queryAllData.map(r => r.geographicRegion).filter(Boolean)));
+      console.log('🔍 Regional Analytics: Regions found in data:', regionsInData);
+      
+      // Also load mappings for filter options
+      const dataService = getDataService();
+      Promise.all([
+        dataService.getAllSpecialtyMappings(),
+        dataService.getRegionMappings()
+      ]).then(([allMappings, regionMappings]) => {
+        setAnalyticsData(queryAllData);
         setMappings(allMappings);
         setRegionMappings(regionMappings);
-        
-        console.log('🔍 Regional Analytics: Data loading complete');
-      } catch (error) {
-        console.error('Error loading data for Regional Analytics:', error);
-      } finally {
         setLoading(false);
-      }
-    };
-    loadData();
-  }, []);
+        console.log('🔍 Regional Analytics: Data loading complete');
+      });
+    }
+  }, [queryAllData]);
+  
+  // Sync loading state
+  useEffect(() => {
+    setLoading(queryLoading);
+  }, [queryLoading]);
 
   // Use standardizedName for dropdown
   const specialties = useMemo(() => {
@@ -514,17 +499,17 @@ export const RegionalAnalytics: React.FC = () => {
                     setSelectedDataCategory('');
                     setSelectedYear('');
                   }}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full border border-gray-200 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
                   aria-label="Clear all filters"
                 >
-                  <div className="relative w-5 h-5">
+                  <div className="relative w-4 h-4">
                     {/* Funnel Icon */}
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
                     </svg>
                     {/* X Overlay - Only show when filters are active */}
                     {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedYear) && (
-                      <svg className="absolute -top-1 -right-1 w-3 h-3 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
                     )}

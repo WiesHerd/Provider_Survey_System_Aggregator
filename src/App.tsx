@@ -1,5 +1,6 @@
 import React, { useState, Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import EnhancedSidebar from './components/EnhancedSidebar';
@@ -11,6 +12,7 @@ import { YearProvider } from './contexts/YearContext';
 import { ProviderContextProvider } from './contexts/ProviderContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DatabaseProvider, useDatabase } from './contexts/DatabaseContext';
+import { queryClient } from './shared/services/queryClient';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { SuspenseSpinner } from './shared/components';
 import { SurveyMigrationService } from './services/SurveyMigrationService';
@@ -72,6 +74,15 @@ const theme = createTheme({
 // Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
+
+// DevTools component - only loads in development
+// Using string-based import to avoid TypeScript compile-time resolution
+const LazyDevTools = lazy(() => {
+  // @ts-ignore - DevTools is optional, module may not be available in all builds
+  return import('@tanstack/react-query-devtools').then(module => ({ 
+    default: module.ReactQueryDevtools 
+  })).catch(() => ({ default: () => null }));
+});
 const SpecialtyMapping = lazy(() => import('./features/mapping/components/SpecialtyMapping').then(module => ({ default: module.SpecialtyMapping })));
 const ProviderTypeMapping = lazy(() => import('./features/mapping/components/ProviderTypeMapping').then(module => ({ default: module.ProviderTypeMapping })));
 const RegionMapping = lazy(() => import('./features/mapping/components/RegionMapping').then(module => ({ default: module.RegionMapping })));
@@ -544,22 +555,29 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <DatabaseProvider>
-        <DatabaseInitializationScreen />
-        <AuthProvider>
-          <StorageProvider>
-            <MappingProvider>
-              <YearProvider>
-                <ProviderContextProvider>
-                  <Router basename={basename}>
-                    <PageContent />
-                  </Router>
-                </ProviderContextProvider>
-              </YearProvider>
-            </MappingProvider>
-          </StorageProvider>
-        </AuthProvider>
-      </DatabaseProvider>
+      <QueryClientProvider client={queryClient}>
+        <DatabaseProvider>
+          <DatabaseInitializationScreen />
+          <AuthProvider>
+            <StorageProvider>
+              <MappingProvider>
+                <YearProvider>
+                  <ProviderContextProvider>
+                    <Router basename={basename}>
+                      <PageContent />
+                    </Router>
+                  </ProviderContextProvider>
+                </YearProvider>
+              </MappingProvider>
+            </StorageProvider>
+          </AuthProvider>
+        </DatabaseProvider>
+        {process.env.NODE_ENV === 'development' && (
+          <Suspense fallback={null}>
+            <LazyDevTools />
+          </Suspense>
+        )}
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

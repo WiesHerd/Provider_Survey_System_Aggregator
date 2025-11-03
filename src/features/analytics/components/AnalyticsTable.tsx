@@ -181,7 +181,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
             <div className="relative group">
               <button
                 onClick={onFormatVariables}
-                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
                 aria-label="Format variables"
               >
                 <Cog6ToothIcon className="h-4 w-4" />
@@ -200,7 +200,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               <button
                 onClick={onExport}
                 disabled={isExporting}
-                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={isExporting ? "Exporting data" : "Export data"}
               >
                 <ArrowDownTrayIcon className="h-4 w-4" />

@@ -6,11 +6,14 @@
  */
 
 import React, { memo, useMemo, useState, useEffect, useCallback } from 'react';
-import { useAnalyticsData } from '../hooks/useAnalyticsData';
+// Using new benchmarking query hook with TanStack Query for performance optimization
+import { useBenchmarkingQuery } from '../hooks/useBenchmarkingQuery';
+// Keep old hook available for fallback if needed
+// import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { AnalyticsTable } from './AnalyticsTable';
 import { AnalyticsFilters } from './AnalyticsFilters';
 import { AnalyticsErrorBoundary } from './AnalyticsErrorBoundary';
-import { useYear } from '../../../contexts/YearContext';
+// import { useYear } from '../../../contexts/YearContext'; // Not currently used
 import { useProviderContext } from '../../../contexts/ProviderContext';
 import { filterAnalyticsData, normalizeSpecialtyName } from '../utils/analyticsCalculations';
 import { VariableDiscoveryService } from '../services/variableDiscoveryService';
@@ -35,7 +38,7 @@ interface SurveyAnalyticsProps {
  */
 const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilter }) => {
   console.log('🔍 SurveyAnalytics: Component rendered');
-  const { currentYear } = useYear();
+  // const { currentYear } = useYear(); // Not currently used
   const { selectedProviderType } = useProviderContext();
   
   // NEW: Variable selection state - Start with common variables selected
@@ -155,6 +158,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   };
   
   // Initialize analytics data hook with empty filters (no pre-selection)
+  // Using new benchmarking query hook with TanStack Query for caching and performance
   const {
     allData,
     loading,
@@ -163,7 +167,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     filters,
     setFilters,
     exportToExcel
-  } = useAnalyticsData({
+  } = useBenchmarkingQuery({
     specialty: '',
     surveySource: '',
     geographicRegion: '',
@@ -302,7 +306,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         });
       });
     }
-  }, [allData, selectedVariables]);
+  }, [allData, selectedVariables, availableVariables.length]);
 
   // Apply provider type filtering, UI filters, and variable filtering
   const data = useMemo(() => {

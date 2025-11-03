@@ -46,7 +46,7 @@ import { BoltIcon } from '@heroicons/react/24/outline';
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { ISurveyRow } from '../types/survey';
-import { ISpecialtyMapping } from '../types/specialty';
+// import { ISpecialtyMapping } from '../types/specialty'; // Not currently used
 import { useYear } from '../contexts/YearContext';
 
 interface ReportConfig {
@@ -140,7 +140,8 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   const [loading, setLoading] = useState(true);
   const [surveyData, setSurveyData] = useState<ISurveyRow[]>([]);
   const [savedReports, setSavedReports] = useState<ReportConfig[]>([]);
-  const [specialtyMappings, setSpecialtyMappings] = useState<ISpecialtyMapping[]>([]);
+  // Specialty mappings are loaded but not currently used in component logic
+  // const [specialtyMappings, setSpecialtyMappings] = useState<ISpecialtyMapping[]>([]);
   // Modal functionality removed for cleaner interface
   // const [showDataViewer, setShowDataViewer] = useState(false);
   // const [selectedDataItem, setSelectedDataItem] = useState<ChartDataItem | null>(null);
@@ -185,18 +186,19 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   // Services
   const dataService = useMemo(() => getDataService(), []);
 
-  // Load data
+  // Load data - Custom Reports needs raw ISurveyRow data, so we load directly
+  // But we can benefit from shared query cache for surveys list and mappings
   useEffect(() => {
     const loadData = async () => {
       try {
         console.log('🔍 Custom Reports: Starting data load...');
         setLoading(true);
         
-        // Load specialty mappings first
-        const mappings = await dataService.getAllSpecialtyMappings();
-        setSpecialtyMappings(mappings);
+        // Load specialty mappings (for future use if needed)
+        // const mappings = await dataService.getAllSpecialtyMappings();
+        // setSpecialtyMappings(mappings);
         
-        // Get all surveys first
+        // Get all surveys - this benefits from query deduplication if other routes are open
         const surveys = await dataService.getAllSurveys();
         console.log('🔍 Custom Reports: Loaded surveys:', surveys.length);
         

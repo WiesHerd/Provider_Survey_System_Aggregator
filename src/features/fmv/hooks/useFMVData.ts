@@ -186,6 +186,7 @@ export const useFMVData = () => {
       }
       
       // Use the same AnalyticsDataService as the Analytics screen
+      // This benefits from TanStack Query cache if benchmarking route is also loaded
       const analyticsDataService = new AnalyticsDataService();
       const allData = await analyticsDataService.getAnalyticsData({
         specialty: '',
@@ -499,7 +500,9 @@ export const useFMVData = () => {
         }
       }
       
-      // Use the same approach as Analytics screen: fetch ALL data first, then filter client-side
+      // Use the same AnalyticsDataService as Analytics screen
+      // This benefits from shared IndexedDB cache and will benefit from TanStack Query
+      // if benchmarking route is also open (data will be in memory cache)
       const analyticsDataService = new AnalyticsDataService();
       const allData = await analyticsDataService.getAnalyticsData({
         specialty: '',

@@ -604,6 +604,19 @@ export const useUploadData = (
           maxRetries: uploadState.maxRetries
         }
       }));
+      
+      // Invalidate TanStack Query cache for benchmarking queries after successful upload
+      try {
+        const { queryClient } = require('../../../shared/services/queryClient');
+        const { invalidateBenchmarkingQueries } = require('../../../features/analytics/hooks/useBenchmarkingQuery');
+        invalidateBenchmarkingQueries(queryClient.queryClient);
+        // Also invalidate survey list queries (for SurveyUpload/DataPreview screens)
+        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys'] });
+        console.log('✅ Invalidated benchmarking queries and survey list queries after survey upload');
+      } catch (error) {
+        console.warn('Failed to invalidate query cache:', error);
+      }
+      
     } finally {
       setIsUploading(false);
     }
@@ -662,6 +675,20 @@ export const useUploadData = (
       // Invalidate analytics cache since data was removed
       const analyticsService = new AnalyticsDataService();
       analyticsService.invalidateCache();
+      
+      // Invalidate TanStack Query cache for benchmarking queries
+      try {
+        const { queryClient } = require('../../../shared/services/queryClient');
+        const { invalidateBenchmarkingQueries } = require('../../../features/analytics/hooks/useBenchmarkingQuery');
+        invalidateBenchmarkingQueries(queryClient.queryClient);
+        // Also invalidate survey list queries (for SurveyUpload/DataPreview screens)
+        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys'] });
+        // Invalidate all survey data queries for this survey
+        queryClient.queryClient.invalidateQueries({ queryKey: ['surveyData', surveyId] });
+        console.log('✅ Invalidated benchmarking queries and survey list queries after survey deletion');
+      } catch (error) {
+        console.warn('Failed to invalidate query cache:', error);
+      }
       
       console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows removed`);
       
