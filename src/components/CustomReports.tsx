@@ -48,6 +48,7 @@ import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
 import { ISurveyRow } from '../types/survey';
 // import { ISpecialtyMapping } from '../types/specialty'; // Not currently used
 import { useYear } from '../contexts/YearContext';
+import { getVariableColor, getVariableLightBackgroundColor } from '../features/analytics/utils/variableFormatters';
 
 interface ReportConfig {
   id: string;
@@ -120,6 +121,142 @@ const getSurveySourceField = (row: any): string => {
 
 const getYearField = (row: any): string => {
   return String(row.surveyYear || row.year || '');
+};
+
+/**
+ * Gets the Display Variables pill color for a metric (matches AnalyticsFilters exactly)
+ * Uses the same getVariableColor function as Display Variables pills
+ * Returns DARK background colors with WHITE text (for pills/chips)
+ */
+const getMetricDisplayVariableColor = (metric: string): string => {
+  // Map metrics to their base variable types and use the exact same color function
+  // This matches how Display Variables pills determine colors (dark backgrounds, white text)
+  if (metric.includes('tcc')) {
+    return getVariableColor('tcc', 0); // TCC uses index 0 -> '#1565C0' (Dark Blue)
+  } else if (metric.includes('wrvu')) {
+    return getVariableColor('wrvu', 1); // wRVU uses index 1 -> '#2E7D32' (Dark Green)
+  } else if (metric.includes('cf')) {
+    return getVariableColor('cf', 2); // CF uses index 2 -> '#FFD54F' (Light Amber)
+  }
+  // Fallback to TCC color
+  return getVariableColor('tcc', 0);
+};
+
+/**
+ * Gets the table header background color for a metric (matches AnalyticsTableHeader exactly)
+ * Uses the same getVariableLightBackgroundColor function as Analytics table headers
+ * Returns LIGHT background colors with BLACK text (not dark colors with white text)
+ */
+const getMetricTableHeaderColor = (metric: string): string => {
+  // Map metrics to their base variable types and use the exact same light color function
+  // This matches how AnalyticsTableHeader determines colors (light backgrounds, black text)
+  if (metric.includes('tcc')) {
+    return getVariableLightBackgroundColor('tcc', 0); // TCC uses index 0 -> '#E3F2FD' (Light Blue)
+  } else if (metric.includes('wrvu')) {
+    return getVariableLightBackgroundColor('wrvu', 1); // wRVU uses index 1 -> '#E8F5E8' (Light Green)
+  } else if (metric.includes('cf')) {
+    return getVariableLightBackgroundColor('cf', 2); // CF uses index 2 -> '#FFF3E0' (Light Orange)
+  }
+  // Fallback to TCC color
+  return getVariableLightBackgroundColor('tcc', 0);
+};
+
+/**
+ * Gets the background color for a metric that matches the chart color
+ * Chart colors: ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+ * These are converted to enhanced, vibrant background colors for table cells
+ */
+const getMetricBackgroundColor = (metric: string, allMetrics: string[]): string => {
+  // Handle CF metrics separately (they use orange background)
+  if (metric.includes('cf')) {
+    return '#FEF3C7'; // Warm light amber for CF metrics
+  }
+  
+  // Sort metrics the same way as the chart (TCC first, then wRVU)
+  const tccMetrics = allMetrics.filter(m => m.includes('tcc') && !m.includes('cf')).sort((a, b) => {
+    const percentileOrder = { 'p25': 1, 'p50': 2, 'p75': 3, 'p90': 4 };
+    const aPercentile = a.match(/p\d+/)?.[0] || '';
+    const bPercentile = b.match(/p\d+/)?.[0] || '';
+    return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+           (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+  });
+  
+  const wrvuMetrics = allMetrics.filter(m => m.includes('wrvu') && !m.includes('cf')).sort((a, b) => {
+    const percentileOrder = { 'p25': 1, 'p50': 2, 'p75': 3, 'p90': 4 };
+    const aPercentile = a.match(/p\d+/)?.[0] || '';
+    const bPercentile = b.match(/p\d+/)?.[0] || '';
+    return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+           (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+  });
+  
+  const sortedMetrics = [...tccMetrics, ...wrvuMetrics];
+  const metricIndex = sortedMetrics.indexOf(metric);
+  
+  // Chart colors in order (same as EChartsBar component)
+  const chartColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+  const chartColor = chartColors[metricIndex % chartColors.length] || '#6366f1';
+  
+  // Convert chart color to enhanced, more vibrant background colors
+  // Using more saturated, professional colors that maintain readability
+  const colorMap: Record<string, string> = {
+    '#6366f1': '#DBEAFE', // Indigo -> Vibrant light blue (TCC 25th)
+    '#8b5cf6': '#F3E8FF', // Purple -> Rich light purple (TCC 50th, TCC 75th)
+    '#ec4899': '#FCE7F3', // Pink -> Soft pink with warmth
+    '#f59e0b': '#FEF3C7', // Orange -> Warm light amber
+    '#10b981': '#D1FAE5', // Green -> Fresh light mint (wRVU metrics)
+  };
+  
+  return colorMap[chartColor] || '#F5F5F5';
+};
+
+/**
+ * Gets a slightly darker version of a hex color for hover effects
+ */
+const getDarkerColor = (hexColor: string, amount: number = 0.1): string => {
+  // Convert hex to RGB
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  
+  // Darken by reducing RGB values
+  const darkerR = Math.max(0, Math.floor(r * (1 - amount)));
+  const darkerG = Math.max(0, Math.floor(g * (1 - amount)));
+  const darkerB = Math.max(0, Math.floor(b * (1 - amount)));
+  
+  return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
+};
+
+/**
+ * Sorts metrics in the same order as the chart (TCC 25th, 50th, 75th, 90th, then wRVU, then CF)
+ * This ensures table columns match the chart order
+ */
+const sortMetricsForDisplay = (metrics: string[]): string[] => {
+  const percentileOrder = { 'p25': 1, 'p50': 2, 'p75': 3, 'p90': 4 };
+  
+  // Separate metrics by type
+  const tccMetrics = metrics.filter(m => m.includes('tcc') && !m.includes('cf')).sort((a, b) => {
+    const aPercentile = a.match(/p\d+/)?.[0] || '';
+    const bPercentile = b.match(/p\d+/)?.[0] || '';
+    return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+           (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+  });
+  
+  const wrvuMetrics = metrics.filter(m => m.includes('wrvu') && !m.includes('cf')).sort((a, b) => {
+    const aPercentile = a.match(/p\d+/)?.[0] || '';
+    const bPercentile = b.match(/p\d+/)?.[0] || '';
+    return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+           (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+  });
+  
+  const cfMetrics = metrics.filter(m => m.includes('cf')).sort((a, b) => {
+    const aPercentile = a.match(/p\d+/)?.[0] || '';
+    const bPercentile = b.match(/p\d+/)?.[0] || '';
+    return (percentileOrder[aPercentile as keyof typeof percentileOrder] || 0) - 
+           (percentileOrder[bPercentile as keyof typeof percentileOrder] || 0);
+  });
+  
+  // Return in chart order: TCC first, then wRVU, then CF
+  return [...tccMetrics, ...wrvuMetrics, ...cfMetrics];
 };
 
 const CustomReports: React.FC<CustomReportsProps> = ({ 
@@ -1536,7 +1673,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                         })()}
                         size="small"
                         sx={{ 
-                          backgroundColor: '#8B5CF6', 
+                          backgroundColor: getMetricDisplayVariableColor(option), 
                           color: 'white',
                           '& .MuiChip-deleteIcon': {
                             color: 'rgba(255, 255, 255, 0.8)',
@@ -2161,18 +2298,52 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                 <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
                   Data Table
                 </Typography>
-                <div className="rounded-lg border border-gray-200 overflow-x-auto">
-                <TableContainer component={Paper} sx={{ maxHeight: '600px', overflow: 'auto' }}>
-                  <Table stickyHeader size="small">
+                <div className="overflow-x-auto">
+                <TableContainer 
+                  component={Paper} 
+                  sx={{ 
+                    maxHeight: '600px', 
+                    overflow: 'auto',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    border: '1px solid #e5e7eb'
+                  }}
+                >
+                  <Table 
+                    stickyHeader 
+                    size="medium"
+                    sx={{
+                      '& .MuiTableCell-root': {
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                      }
+                    }}
+                  >
                   <TableHead>
-                    <TableRow>
+                    <TableRow sx={{ 
+                      backgroundColor: '#fafafa',
+                      borderBottom: '2px solid #e5e7eb',
+                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)',
+                      '& .MuiTableCell-root': { 
+                        borderBottom: '2px solid #e5e7eb',
+                        backgroundColor: '#fafafa'
+                      } 
+                    }}>
                       <TableCell sx={{ 
-                        fontWeight: 'bold', 
-                        backgroundColor: '#F5F5F5',
+                        fontWeight: 500, 
+                        backgroundColor: '#fafafa',
+                        color: '#6b7280',
                         position: 'sticky',
                         left: 0,
                         zIndex: 2,
-                        minWidth: '200px'
+                        minWidth: '200px',
+                        padding: '14px 20px',
+                        fontSize: '12px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        borderBottom: '2px solid #e5e7eb',
+                        '&:hover': {
+                          backgroundColor: '#f3f4f6'
+                        }
                       }}>
                         {currentConfig.dimension === 'specialty' ? 'Specialty' : 
                          currentConfig.dimension === 'region' ? 'Region' : 
@@ -2181,16 +2352,24 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                          currentConfig.dimension}
                       </TableCell>
                       {currentConfig.metrics.length > 1 ? (
-                        currentConfig.metrics.map((metric, index) => (
+                        sortMetricsForDisplay(currentConfig.metrics).map((metric, index) => {
+                          return (
                       <TableCell 
                         key={metric} 
                         sx={{ 
-                          fontWeight: 'bold', 
-                          backgroundColor: metric.includes('tcc') ? '#E3F2FD' : 
-                                        metric.includes('wrvu') ? '#E8F5E8' : 
-                                        metric.includes('cf') ? '#FFF3E0' : '#F5F5F5',
-                          borderRight: '1px solid #E0E0E0',
-                          cursor: index === 0 ? 'pointer' : 'default'
+                          fontWeight: 500, 
+                          backgroundColor: '#fafafa',
+                          color: '#6b7280',
+                          padding: '14px 20px',
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          borderBottom: '2px solid #e5e7eb',
+                          borderRight: 'none',
+                          cursor: index === 0 ? 'pointer' : 'default',
+                          '&:hover': index === 0 ? {
+                            backgroundColor: '#f3f4f6'
+                          } : {}
                         }} 
                         align="right"
                         onClick={index === 0 ? () => setTableSortDesc(prev => !prev) : undefined}
@@ -2210,15 +2389,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                              metric === 'cf_p90' ? 'CF 90th' :
                          metric.replace('_', ' ').toUpperCase()) + (index === 0 ? (tableSortDesc ? ' ▼' : ' ▲') : '')}
                       </TableCell>
-                        ))
+                          );
+                        })
                       ) : (
                     <TableCell sx={{ 
-                      fontWeight: 'bold', 
-                      backgroundColor: currentConfig.metric.includes('tcc') ? '#E3F2FD' : 
-                                    currentConfig.metric.includes('wrvu') ? '#E8F5E8' : 
-                                    currentConfig.metric.includes('cf') ? '#FFF3E0' : '#F5F5E5',
-                      borderRight: '1px solid #E0E0E0',
-                      cursor: 'pointer'
+                      fontWeight: 500, 
+                      backgroundColor: '#fafafa',
+                      color: '#6b7280',
+                      padding: '14px 20px',
+                      fontSize: '12px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      borderBottom: '2px solid #e5e7eb',
+                      borderRight: 'none',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        backgroundColor: '#f3f4f6'
+                      }
                     }} align="right" onClick={() => setTableSortDesc(prev => !prev)} title="Toggle sort">
                       {(currentConfig.metric === 'tcc_p25' ? 'TCC 25th Percentile' :
                            currentConfig.metric === 'tcc_p50' ? 'TCC 50th Percentile' :
@@ -2236,8 +2423,15 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     </TableCell>
                       )}
                       <TableCell sx={{ 
-                        fontWeight: 'bold', 
-                        backgroundColor: '#F5F5F5'
+                        fontWeight: 500, 
+                        backgroundColor: '#fafafa',
+                        color: '#6b7280',
+                        padding: '14px 20px',
+                        fontSize: '12px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        borderBottom: '2px solid #e5e7eb',
+                        borderRight: 'none'
                       }} align="right">
                         Count
                       </TableCell>
@@ -2246,27 +2440,47 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                   <TableBody>
                     {tableData.map((item, index) => (
                       <TableRow 
-                        key={index} 
+                        key={index}
+                        sx={{
+                          backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb',
+                          '&:last-child td': {
+                            borderBottom: 'none'
+                          },
+                          '&:hover': {
+                            backgroundColor: '#f3f4f6'
+                          }
+                        }}
                       >
                         <TableCell sx={{ 
                           position: 'sticky',
                           left: 0,
-                          backgroundColor: 'white',
-                          borderRight: '1px solid #e0e0e0',
+                          backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb',
+                          borderRight: '1px solid #f3f4f6',
+                          borderBottom: '1px solid #e5e7eb',
                           zIndex: 1,
-                          fontWeight: 'medium'
+                          fontWeight: 'normal',
+                          padding: '14px 20px',
+                          fontSize: '14px',
+                          color: '#1f2937',
+                          boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.05)',
+                          '&:hover': {
+                            backgroundColor: '#f3f4f6'
+                          }
                         }}>
-                          <span className="text-gray-900">{item.name}</span>
+                          {item.name}
                         </TableCell>
                         {currentConfig.metrics.length > 1 ? (
-                          currentConfig.metrics.map((metric, index) => (
+                          sortMetricsForDisplay(currentConfig.metrics).map((metric, index) => (
                             <TableCell 
                               key={metric} 
                               sx={{ 
-                                backgroundColor: metric.includes('tcc') ? '#E3F2FD' : 
-                                              metric.includes('wrvu') ? '#E8F5E8' : 
-                                              metric.includes('cf') ? '#FFF3E0' : 'white',
-                                borderRight: '1px solid #E0E0E0'
+                                backgroundColor: 'transparent',
+                                borderRight: 'none',
+                                borderBottom: '1px solid #e5e7eb',
+                                padding: '14px 20px',
+                                fontSize: '14px',
+                                color: '#1f2937',
+                                fontWeight: '500'
                               }} 
                               align="right"
                             >
@@ -2278,10 +2492,13 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                           ))
                         ) : (
                           <TableCell sx={{ 
-                            backgroundColor: currentConfig.metric.includes('tcc') ? '#E3F2FD' : 
-                                          currentConfig.metric.includes('wrvu') ? '#E8F5E8' : 
-                                          currentConfig.metric.includes('cf') ? '#FFF3E0' : 'white',
-                            borderRight: '1px solid #E0E0E0'
+                            backgroundColor: 'transparent',
+                            borderRight: 'none',
+                            borderBottom: '1px solid #e5e7eb',
+                            padding: '14px 20px',
+                            fontSize: '14px',
+                            color: '#1f2937',
+                            fontWeight: '500'
                           }} align="right">
                             {currentConfig.metric.includes('wrvu') ? 
                               item.value.toLocaleString() : 
@@ -2289,7 +2506,13 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                             }
                           </TableCell>
                         )}
-                        <TableCell align="right" sx={{ backgroundColor: 'white' }}>
+                        <TableCell align="right" sx={{ 
+                          backgroundColor: 'transparent',
+                          borderBottom: '1px solid #e5e7eb',
+                          padding: '14px 20px',
+                          fontSize: '14px',
+                          color: '#1f2937'
+                        }}>
                           {item.count}
                         </TableCell>
                       </TableRow>
