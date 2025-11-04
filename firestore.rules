@@ -1,0 +1,188 @@
+rules_version = '2';
+
+/**
+ * Firestore Security Rules for Survey Aggregator
+ * 
+ * Enterprise-grade security rules ensuring complete user data isolation.
+ * All data is scoped to authenticated users with strict access controls.
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    /**
+     * User-scoped data access rules
+     * 
+     * Pattern: users/{userId}/...
+     * 
+     * Security Model:
+     * - Only authenticated users can access data
+     * - Users can only access their own data (userId must match auth.uid)
+     * - No cross-user data access allowed
+     * - All operations require authentication
+     */
+    match /users/{userId} {
+      // Users can only access their own data
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      /**
+       * Survey data access rules
+       * 
+       * Pattern: users/{userId}/surveys/{surveyId}
+       * 
+       * Security:
+       * - Only the owner can read/write their surveys
+       * - Survey metadata and configuration data
+       */
+      match /surveys/{surveyId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Survey data rows access rules
+       * 
+       * Pattern: users/{userId}/surveyData/{surveyId}/data/{dataId}
+       * 
+       * Security:
+       * - Only the owner can read/write survey data rows
+       * - Large datasets are stored in subcollections for performance
+       */
+      match /surveyData/{surveyId}/data/{dataId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Specialty mapping access rules
+       * 
+       * Pattern: users/{userId}/specialtyMappings/{mappingId}
+       * 
+       * Security:
+       * - Only the owner can manage their specialty mappings
+       * - Used for standardizing specialty names across surveys
+       */
+      match /specialtyMappings/{mappingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Column mapping access rules
+       * 
+       * Pattern: users/{userId}/columnMappings/{mappingId}
+       * 
+       * Security:
+       * - Only the owner can manage their column mappings
+       * - Used for mapping CSV columns to standardized fields
+       */
+      match /columnMappings/{mappingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Variable mapping access rules
+       * 
+       * Pattern: users/{userId}/variableMappings/{mappingId}
+       * 
+       * Security:
+       * - Only the owner can manage their variable mappings
+       * - Used for mapping compensation variables
+       */
+      match /variableMappings/{mappingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Region mapping access rules
+       * 
+       * Pattern: users/{userId}/regionMappings/{mappingId}
+       * 
+       * Security:
+       * - Only the owner can manage their region mappings
+       * - Used for standardizing geographic regions
+       */
+      match /regionMappings/{mappingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Provider type mapping access rules
+       * 
+       * Pattern: users/{userId}/providerTypeMappings/{mappingId}
+       * 
+       * Security:
+       * - Only the owner can manage their provider type mappings
+       * - Used for standardizing provider types (Physician, APP, etc.)
+       */
+      match /providerTypeMappings/{mappingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Learned mappings access rules
+       * 
+       * Pattern: users/{userId}/learnedMappings/{mappingType}/{mappingId}
+       * 
+       * Security:
+       * - Only the owner can manage their learned mappings
+       * - Used for ML-based mapping suggestions
+       */
+      match /learnedMappings/{mappingType}/{mappingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * User preferences access rules
+       * 
+       * Pattern: users/{userId}/preferences/{preferenceId}
+       * 
+       * Security:
+       * - Only the owner can manage their preferences
+       * - Used for storing user settings and preferences
+       */
+      match /preferences/{preferenceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Audit logs access rules
+       * 
+       * Pattern: users/{userId}/auditLogs/{logId}
+       * 
+       * Security:
+       * - Only the owner can read their audit logs
+       * - Write access for system-generated audit entries
+       * - Used for tracking data changes and user actions
+       */
+      match /auditLogs/{logId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    /**
+     * Global system data access rules
+     * 
+     * Pattern: system/...
+     * 
+     * Security:
+     * - Read-only access for system configuration
+     * - No user-specific data in system collections
+     * - Used for app configuration and shared resources
+     */
+    match /system/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false; // System data is read-only for users
+    }
+    
+    /**
+     * Deny all other access
+     * 
+     * Security:
+     * - Explicitly deny access to any documents not matching above patterns
+     * - Prevents accidental data exposure
+     * - Ensures only explicitly allowed paths are accessible
+     */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

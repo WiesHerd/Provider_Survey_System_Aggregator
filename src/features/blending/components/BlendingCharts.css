@@ -1,0 +1,25 @@
+/* Blending Charts Styles */
+
+.chart-container {
+  position: relative;
+  margin: 0 auto;
+}
+
+.chart-container canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Dynamic sizing using data attributes */
+.chart-container[data-height] {
+  height: var(--chart-height, 300px);
+}
+
+.chart-container[data-width] {
+  width: var(--chart-width, 400px);
+}
+
+/* Range slider styles */
+.range-slider[data-weight] {
+  background: linear-gradient(to right, #4f46e5 0%, #4f46e5 var(--weight-percent, 0%), #e5e7eb var(--weight-percent, 0%), #e5e7eb 100%);
+}

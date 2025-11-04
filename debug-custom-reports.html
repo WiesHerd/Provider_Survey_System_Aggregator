@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Reports Debug Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #4f46e5;
+        }
+        #output {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 600px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .step {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Custom Reports Debug Tool</h1>
+        
+        <div class="step">
+            <h3>Step 1: Open Your App</h3>
+            <p>Make sure your Survey Aggregator app is running at <code>localhost:3000</code></p>
+        </div>
+        
+        <div class="step">
+            <h3>Step 2: Run Diagnostic</h3>
+            <p>Click the button below to run the diagnostic script:</p>
+            <button onclick="runDiagnostic()">🔍 Run Diagnostic</button>
+            <button onclick="clearOutput()">🗑️ Clear Output</button>
+        </div>
+        
+        <div class="warning">
+            <h3>⚠️ Important</h3>
+            <p>This tool needs to access the same IndexedDB that your app uses. Make sure you have the app open in the same browser tab or window.</p>
+        </div>
+        
+        <div id="output"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const output = document.getElementById('output');
+            output.textContent += message + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+        
+        async function runDiagnostic() {
+            clearOutput();
+            log('🔍 Starting Custom Reports Diagnostic...');
+            log('================================================');
+            
+            try {
+                // Check if we can access IndexedDB
+                if (!window.indexedDB) {
+                    log('❌ IndexedDB is not available in this browser');
+                    return;
+                }
+                
+                log('✅ IndexedDB is available');
+                
+                // Try to open the database
+                const request = indexedDB.open('SurveyAggregatorDB', 7);
+                
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    log('✅ Database opened successfully');
+                    log('📊 Object stores: ' + Array.from(db.objectStoreNames).join(', '));
+                    
+                    // Check surveys
+                    if (db.objectStoreNames.contains('surveys')) {
+                        const transaction = db.transaction(['surveys'], 'readonly');
+                        const store = transaction.objectStore('surveys');
+                        const getAllRequest = store.getAll();
+                        
+                        getAllRequest.onsuccess = () => {
+                            const surveys = getAllRequest.result;
+                            log(`📊 Found ${surveys.length} surveys:`);
+                            
+                            if (surveys.length === 0) {
+                                log('❌ NO SURVEYS FOUND - This is why you see "No Data Available"');
+                                log('💡 Solution: Upload some survey data first');
+                                log('');
+                                log('📋 To upload data:');
+                                log('   1. Go to localhost:3000/upload');
+                                log('   2. Upload a CSV file with survey data');
+                                log('   3. Return to custom-reports');
+                                return;
+                            }
+                            
+                            surveys.forEach((survey, index) => {
+                                log(`Survey ${index + 1}:`);
+                                log(`  - ID: ${survey.id}`);
+                                log(`  - Name: ${survey.name || survey.surveyProvider || 'Unknown'}`);
+                                log(`  - Year: ${survey.surveyYear || survey.year || 'Unknown'}`);
+                                log(`  - Type: ${survey.type || survey.surveyProvider || 'Unknown'}`);
+                                log(`  - Provider Type: ${survey.providerType || 'Unknown'}`);
+                                log(`  - Row Count: ${survey.rowCount || 'Unknown'}`);
+                                log('');
+                            });
+                            
+                            // Check survey data for each survey
+                            let totalDataRows = 0;
+                            surveys.forEach((survey, surveyIndex) => {
+                                if (db.objectStoreNames.contains('surveyData')) {
+                                    const dataTransaction = db.transaction(['surveyData'], 'readonly');
+                                    const dataStore = dataTransaction.objectStore('surveyData');
+                                    const dataIndex = dataStore.index('by-survey');
+                                    const dataRequest = dataIndex.getAll(IDBKeyRange.only(survey.id));
+                                    
+                                    dataRequest.onsuccess = () => {
+                                        const surveyData = dataRequest.result;
+                                        const dataRows = surveyData.reduce((total, chunk) => total + (chunk.data ? chunk.data.length : 0), 0);
+                                        totalDataRows += dataRows;
+                                        
+                                        log(`📋 Survey "${survey.name || survey.surveyProvider}" has ${surveyData.length} data chunks (${dataRows} total rows)`);
+                                        
+                                        if (surveyData.length > 0 && dataRows > 0) {
+                                            // Get a sample of the data
+                                            const firstChunk = surveyData.find(chunk => chunk.data && chunk.data.length > 0);
+                                            if (firstChunk) {
+                                                const sampleData = firstChunk.data[0];
+                                                log('📋 Sample data row:');
+                                                log(`  - Specialty: ${sampleData.specialty || sampleData.Specialty || 'N/A'}`);
+                                                log(`  - Region: ${sampleData.region || sampleData.Region || sampleData.geographic_region || 'N/A'}`);
+                                                log(`  - Provider Type: ${sampleData.providerType || sampleData.ProviderType || sampleData['Provider Type'] || 'N/A'}`);
+                                                log(`  - Survey Source: ${sampleData.surveySource || sampleData.type || 'N/A'}`);
+                                                log(`  - Year: ${sampleData.surveyYear || sampleData.year || 'N/A'}`);
+                                                log(`  - Variable: ${sampleData.variable || 'N/A'}`);
+                                                log(`  - TCC P50: ${sampleData.tcc_p50 || 'N/A'}`);
+                                                log(`  - CF P50: ${sampleData.cf_p50 || 'N/A'}`);
+                                                log(`  - wRVU P50: ${sampleData.wrvu_p50 || 'N/A'}`);
+                                                log('');
+                                            }
+                                            
+                                            // Check if data matches current filters
+                                            log('🔍 Checking data against current filters...');
+                                            const hasAddictionMedicine = surveyData.some(chunk => 
+                                                (chunk.data || []).some(row => 
+                                                    (row.specialty || row.Specialty || '').toLowerCase().includes('addiction')
+                                                )
+                                            );
+                                            log(`  - Has Addiction Medicine data: ${hasAddictionMedicine}`);
+                                            
+                                            const hasNational = surveyData.some(chunk => 
+                                                (chunk.data || []).some(row => 
+                                                    (row.region || row.Region || row.geographic_region || '').toLowerCase().includes('national')
+                                                )
+                                            );
+                                            log(`  - Has National region: ${hasNational}`);
+                                            
+                                            const hasGallagher = surveyData.some(chunk => 
+                                                (chunk.data || []).some(row => 
+                                                    (row.surveySource || row.type || '').toLowerCase().includes('gallagher')
+                                                )
+                                            );
+                                            log(`  - Has Gallagher source: ${hasGallagher}`);
+                                            
+                                            const hasStaffPhysician = surveyData.some(chunk => 
+                                                (chunk.data || []).some(row => 
+                                                    (row.providerType || row.ProviderType || row['Provider Type'] || '').toLowerCase().includes('staff')
+                                                )
+                                            );
+                                            log(`  - Has Staff Physician: ${hasStaffPhysician}`);
+                                            
+                                            const has2025 = surveyData.some(chunk => 
+                                                (chunk.data || []).some(row => 
+                                                    String(row.surveyYear || row.year || '').includes('2025')
+                                                )
+                                            );
+                                            log(`  - Has 2025 data: ${has2025}`);
+                                            log('');
+                                        }
+                                        
+                                        // If this is the last survey, show summary
+                                        if (surveyIndex === surveys.length - 1) {
+                                            log('📊 SUMMARY:');
+                                            log(`  - Total surveys: ${surveys.length}`);
+                                            log(`  - Total data rows: ${totalDataRows}`);
+                                            
+                                            if (totalDataRows === 0) {
+                                                log('❌ No data rows found in any survey');
+                                                log('💡 This explains why custom reports shows "No Data Available"');
+                                            } else {
+                                                log('✅ Data is available - the issue is likely with filters');
+                                                log('💡 Try clearing all filters in the custom reports screen');
+                                            }
+                                        }
+                                    };
+                                    
+                                    dataRequest.onerror = () => {
+                                        log(`❌ Error getting data for survey ${survey.name}: ${dataRequest.error}`);
+                                    };
+                                }
+                            });
+                        };
+                        
+                        getAllRequest.onerror = () => {
+                            log('❌ Error getting surveys: ' + getAllRequest.error);
+                        };
+                    } else {
+                        log('❌ No surveys object store found');
+                    }
+                    
+                    // Check current year context
+                    log('\n🔍 Checking Year Context...');
+                    const yearConfigs = localStorage.getItem('year_configs');
+                    if (yearConfigs) {
+                        try {
+                            const parsed = JSON.parse(yearConfigs);
+                            log('📅 Year configs: ' + JSON.stringify(parsed, null, 2));
+                        } catch (e) {
+                            log('❌ Could not parse year configs');
+                        }
+                    } else {
+                        log('❌ No year configs found');
+                    }
+                    
+                    // Check current filters in custom reports
+                    log('\n🔍 Checking Current Custom Reports Filters...');
+                    const customReports = localStorage.getItem('customReports');
+                    if (customReports) {
+                        try {
+                            const parsed = JSON.parse(customReports);
+                            log('📊 Saved custom reports: ' + JSON.stringify(parsed, null, 2));
+                        } catch (e) {
+                            log('❌ Could not parse custom reports');
+                        }
+                    } else {
+                        log('❌ No custom reports config found');
+                    }
+                };
+                
+                request.onerror = () => {
+                    log('❌ Error opening database: ' + request.error);
+                    log('💡 Make sure your Survey Aggregator app is running at localhost:3000');
+                };
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,36 @@
+name: Deploy Backend Only
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-only.yml'
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+    
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci --production
+    
+    - name: Create deployment package
+      run: |
+        cd backend
+        zip -r ../backend-deploy.zip . -x "node_modules/.cache/*"
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: survey-aggregator-backend
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: backend-deploy.zip

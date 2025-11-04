@@ -1,0 +1,466 @@
+version: "1.0.0"
+
+hardMaps:
+  # Exact matches with high confidence
+  - id: "EXACT_CARD_GENERAL"
+    pattern: "^cardiology$"
+    canonicalId: "CARD-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_CARD_INTERVENTIONAL"
+    pattern: ".*cardiology.*interventional.*|.*cardiac.*interventional.*|.*cardiology.*invasive.*|.*cardiac.*invasive.*"
+    canonicalId: "CARD-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "EXACT_CARD_EP"
+    pattern: ".*cardiology.*electrophysiology.*|.*cardiac.*electrophysiology.*|.*cardiology.*ep.*|.*cardiac.*ep.*"
+    canonicalId: "CARD-EP"
+    confidence: 0.95
+  
+  - id: "EXACT_CARD_IMAGING"
+    pattern: ".*cardiology.*cardiac imaging.*|.*cardiology.*imaging.*|.*cardiac imaging.*|.*echo.*cardiology.*|.*echocardiography.*cardiology.*|.*cardiology.*-.*cardiac imaging.*\\(.*echo.*ct.*mri.*nuclear.*\\)"
+    canonicalId: "CARD-IMAGING"
+    confidence: 0.95
+  
+  - id: "EXACT_NEURO_GENERAL"
+    pattern: "^neurology$"
+    canonicalId: "NEURO-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_NEURO_INTERVENTIONAL"
+    pattern: "^(interventional|vascular).*neurology$"
+    canonicalId: "NEURO-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "EXACT_NEURO_EPILEPSY"
+    pattern: "^(epilepsy|seizure).*neurology$"
+    canonicalId: "NEURO-EPILEPSY"
+    confidence: 0.95
+  
+  - id: "EXACT_NEURO_MS"
+    pattern: "^(multiple sclerosis|ms).*neurology$"
+    canonicalId: "NEURO-MS"
+    confidence: 0.95
+  
+  - id: "EXACT_NEURO_MOVEMENT"
+    pattern: "^(movement|parkinson).*neurology$"
+    canonicalId: "NEURO-MOVEMENT"
+    confidence: 0.95
+  
+  - id: "EXACT_PULM_GENERAL"
+    pattern: "^(pulmonology|pulmonary medicine)$"
+    canonicalId: "PULM-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_PULM_INTERVENTIONAL"
+    pattern: "^(interventional).*pulmonology$"
+    canonicalId: "PULM-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "EXACT_PULM_CRITICAL_CARE"
+    pattern: "^(critical care|intensivist).*pulmonology$"
+    canonicalId: "PULM-CRITICAL-CARE"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_DIAGNOSTIC"
+    pattern: "^(diagnostic radiology|radiology)$"
+    canonicalId: "RAD-DIAGNOSTIC"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_INTERVENTIONAL"
+    pattern: "^(interventional radiology|ir)$"
+    canonicalId: "RAD-INTERVENTIONAL"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_NEURO_IR"
+    pattern: "^(neuro.*interventional|neuro.*ir)$"
+    canonicalId: "RAD-NEURO-IR"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_MAMMOGRAPHY"
+    pattern: "^(mammography|breast imaging)$"
+    canonicalId: "RAD-MAMMOGRAPHY"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_NUCLEAR"
+    pattern: "^(nuclear medicine|nuclear)$"
+    canonicalId: "RAD-NUCLEAR"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_MSK"
+    pattern: "^(msk|musculoskeletal).*radiology$"
+    canonicalId: "RAD-MSK"
+    confidence: 0.95
+  
+  - id: "EXACT_RAD_NOCTURNIST"
+    pattern: "^(nocturnist|night).*radiology$"
+    canonicalId: "RAD-NOCTURNIST"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_GENERAL"
+    pattern: "^(general surgery|surgery)$"
+    canonicalId: "SURG-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_CT"
+    pattern: "^(cardiothoracic|ct).*surgery$"
+    canonicalId: "SURG-CT"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_THORACIC"
+    pattern: "^(thoracic).*surgery$"
+    canonicalId: "SURG-THORACIC"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_VASCULAR"
+    pattern: "^(vascular).*surgery$"
+    canonicalId: "SURG-VASCULAR"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_TRAUMA"
+    pattern: "^(trauma).*surgery$"
+    canonicalId: "SURG-TRAUMA"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_TRANSPLANT"
+    pattern: "^(transplant).*surgery$"
+    canonicalId: "SURG-TRANSPLANT"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_BARIATRIC"
+    pattern: "^(bariatric|weight loss).*surgery$"
+    canonicalId: "SURG-BARIATRIC"
+    confidence: 0.95
+  
+  - id: "EXACT_SURG_BREAST"
+    pattern: "^(breast).*surgery$"
+    canonicalId: "SURG-BREAST"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_GENERAL"
+    pattern: "^(obstetrics.*gynecology|obgyn|ob/gyn)$"
+    canonicalId: "OBGYN-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_MFM"
+    pattern: "^(maternal.*fetal|mfm|high risk).*obgyn$"
+    canonicalId: "OBGYN-MFM"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_REI"
+    pattern: "^(reproductive.*endocrinology|rei|infertility).*obgyn$"
+    canonicalId: "OBGYN-REI"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_UROGYN"
+    pattern: "^(urogynecology|urogyn|pelvic).*obgyn$"
+    canonicalId: "OBGYN-UROGYN"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_GYN_ONC"
+    pattern: "^(gynecologic.*oncology|gyn.*onc).*obgyn$"
+    canonicalId: "OBGYN-GYN-ONC"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_HOSPITALIST"
+    pattern: "^(hospitalist|laborist).*obgyn$"
+    canonicalId: "OBGYN-HOSPITALIST"
+    confidence: 0.95
+  
+  - id: "EXACT_OBGYN_MIGS"
+    pattern: "^(minimally.*invasive|migs|laparoscopic).*obgyn$"
+    canonicalId: "OBGYN-MIGS"
+    confidence: 0.95
+  
+  - id: "EXACT_ENT_GENERAL"
+    pattern: "^(otolaryngology|ent|ear.*nose.*throat)$"
+    canonicalId: "ENT-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_ENT_RHINOLOGY"
+    pattern: "^(rhinology|sinus|nasal).*ent$"
+    canonicalId: "ENT-RHINOLOGY"
+    confidence: 0.95
+  
+  - id: "EXACT_ENT_OTOLOGY"
+    pattern: "^(otology|neurotology|hearing).*ent$"
+    canonicalId: "ENT-OTOLOGY"
+    confidence: 0.95
+  
+  - id: "EXACT_ENT_HEAD_NECK"
+    pattern: "^(head.*neck|thyroid).*ent$"
+    canonicalId: "ENT-HEAD-NECK"
+    confidence: 0.95
+  
+  - id: "EXACT_ENT_FACIAL_PLASTICS"
+    pattern: "^(facial.*plastics|reconstructive).*ent$"
+    canonicalId: "ENT-FACIAL-PLASTICS"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_GENERAL"
+    pattern: "^(orthopedics|orthopaedic|ortho)$"
+    canonicalId: "ORTHO-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_HAND"
+    pattern: "^(hand).*ortho$"
+    canonicalId: "ORTHO-HAND"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_FOOT_ANKLE"
+    pattern: "^(foot.*ankle|podiatry).*ortho$"
+    canonicalId: "ORTHO-FOOT-ANKLE"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_SPINE"
+    pattern: "^(spine|spinal).*ortho$"
+    canonicalId: "ORTHO-SPINE"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_SPORTS"
+    pattern: "^(sports).*ortho$"
+    canonicalId: "ORTHO-SPORTS"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_ONCOLOGY"
+    pattern: "^(oncology|cancer).*ortho$"
+    canonicalId: "ORTHO-ONCOLOGY"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_SHOULDER_ELBOW"
+    pattern: "^(shoulder.*elbow).*ortho$"
+    canonicalId: "ORTHO-SHOULDER-ELBOW"
+    confidence: 0.95
+  
+  - id: "EXACT_ORTHO_HIP_KNEE"
+    pattern: "^(hip.*knee|joint.*replacement).*ortho$"
+    canonicalId: "ORTHO-HIP-KNEE"
+    confidence: 0.95
+  
+  - id: "EXACT_PATH_AP"
+    pattern: "^(anatomic pathology|ap)$"
+    canonicalId: "PATH-AP"
+    confidence: 0.95
+  
+  - id: "EXACT_PATH_CP"
+    pattern: "^(clinical pathology|cp)$"
+    canonicalId: "PATH-CP"
+    confidence: 0.95
+  
+  - id: "EXACT_PATH_AP_CP"
+    pattern: "^(anatomic.*clinical|ap.*cp)$"
+    canonicalId: "PATH-AP-CP"
+    confidence: 0.95
+  
+  - id: "EXACT_PATH_DERM"
+    pattern: "^(dermatopathology|dermpath)$"
+    canonicalId: "PATH-DERM"
+    confidence: 0.95
+  
+  - id: "EXACT_PATH_CYTO"
+    pattern: "^(cytopathology|cyto)$"
+    canonicalId: "PATH-CYTO"
+    confidence: 0.95
+  
+  - id: "EXACT_PATH_BLOOD_BANK"
+    pattern: "^(blood.*bank|transfusion)$"
+    canonicalId: "PATH-BLOOD-BANK"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_GENERAL"
+    pattern: "^(psychiatry|psychiatric)$"
+    canonicalId: "PSYCH-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_INPATIENT"
+    pattern: "^(inpatient).*psych$"
+    canonicalId: "PSYCH-INPATIENT"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_OUTPATIENT"
+    pattern: "^(outpatient).*psych$"
+    canonicalId: "PSYCH-OUTPATIENT"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_GERIATRIC"
+    pattern: "^(geriatric).*psych$"
+    canonicalId: "PSYCH-GERIATRIC"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_CONSULT_LIAISON"
+    pattern: "^(consultation.*liaison|consult.*liaison).*psych$"
+    canonicalId: "PSYCH-CONSULT-LIAISON"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_FORENSIC"
+    pattern: "^(forensic).*psych$"
+    canonicalId: "PSYCH-FORENSIC"
+    confidence: 0.95
+  
+  - id: "EXACT_PSYCH_ADDICTION"
+    pattern: "^(addiction|substance).*psych$"
+    canonicalId: "PSYCH-ADDICTION"
+    confidence: 0.95
+  
+  - id: "EXACT_PEDS_GENERAL"
+    pattern: "^(pediatrics|pediatric|ped)$"
+    canonicalId: "PEDS-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_PEDS_HOSPITALIST"
+    pattern: "^(hospitalist).*ped$"
+    canonicalId: "PEDS-HOSPITALIST"
+    confidence: 0.95
+  
+  - id: "EXACT_PEDS_NICU"
+    pattern: "^(neonatal|nicu|newborn).*ped$"
+    canonicalId: "PEDS-NICU"
+    confidence: 0.95
+  
+  - id: "EXACT_PEDS_PICU"
+    pattern: "^(picu|critical care).*ped$"
+    canonicalId: "PEDS-PICU"
+    confidence: 0.95
+  
+  - id: "EXACT_DERM_GENERAL"
+    pattern: "^(dermatology|derm)$"
+    canonicalId: "DERM-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_ANESTH_GENERAL"
+    pattern: "^(anesthesiology|anesthesia)$"
+    canonicalId: "ANESTH-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_EM_GENERAL"
+    pattern: "^(emergency medicine|emergency|er|ed)$"
+    canonicalId: "EM-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_FM_GENERAL"
+    pattern: "^(family medicine|family practice|family physician)$"
+    canonicalId: "FM-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_FM_OB"
+    pattern: ".*(family medicine|family practice).*(obstetrics|obgyn|ob).*|.*(family medicine|family practice).*with.*(obstetrics|obgyn|ob).*"
+    canonicalId: "FM-OB"
+    confidence: 0.95
+  
+  - id: "EXACT_IM_GENERAL"
+    pattern: "^(internal medicine|internal med|internist)$"
+    canonicalId: "IM-GENERAL"
+    confidence: 0.95
+  
+  - id: "EXACT_IM_HOSPITALIST"
+    pattern: "^(hospitalist).*internal$"
+    canonicalId: "IM-HOSPITALIST"
+    confidence: 0.95
+  
+  - id: "EXACT_IM_NOCTURNIST"
+    pattern: "^(nocturnist|night).*internal$"
+    canonicalId: "IM-NOCTURNIST"
+    confidence: 0.95
+  
+  - id: "EXACT_HOSPICE_PALLIATIVE"
+    pattern: ".*(hospice|palliative).*(medicine|care).*|.*(hospice|palliative).*"
+    canonicalId: "HOSPICE-PALLIATIVE"
+    confidence: 0.95
+
+blocks:
+  - id: "BLOCK_CROSS_DOMAIN"
+    condition: "domain_mismatch"
+    reason: "Adult and Pediatric specialties cannot be cross-mapped"
+  
+  - id: "BLOCK_SURGERY_MEDICINE"
+    condition: "surgery_medicine_conflict"
+    reason: "Surgical and medical specialties are distinct domains"
+  
+  - id: "BLOCK_RADIATION_ONCOLOGY"
+    condition: "radiation_oncology_conflict"
+    reason: "Radiation oncology is distinct from diagnostic radiology"
+  
+  - id: "BLOCK_IMAGING_MODALITIES"
+    condition: "imaging_modality_standalone"
+    reason: "Individual imaging modalities (Echo, CT, MRI, Nuclear) should not be standalone specialties"
+
+bucketingHints:
+  - id: "HINT_CARDIOVASCULAR"
+    pattern: ".*(cardiovascular|cardiac|heart).*"
+    parent: "Cardiology"
+    confidence: 0.8
+  
+  - id: "HINT_NEUROLOGICAL"
+    pattern: ".*(neurological|neuro|brain|nervous).*"
+    parent: "Neurology"
+    confidence: 0.8
+  
+  - id: "HINT_PULMONARY"
+    pattern: ".*(pulmonary|lung|respiratory|chest).*"
+    parent: "Pulmonology"
+    confidence: 0.8
+  
+  - id: "HINT_RADIOLOGICAL"
+    pattern: ".*(radiology|imaging|diagnostic).*"
+    parent: "Radiology"
+    confidence: 0.8
+  
+  - id: "HINT_SURGICAL"
+    pattern: ".*(surgery|surgical|surgeon).*"
+    parent: "Surgery"
+    confidence: 0.8
+  
+  - id: "HINT_OBSTETRICS"
+    pattern: ".*(obstetrics|gynecology|obgyn|women).*"
+    parent: "Obstetrics and Gynecology"
+    confidence: 0.8
+  
+  - id: "HINT_ENT"
+    pattern: ".*(ent|otolaryngology|ear.*nose.*throat).*"
+    parent: "Otolaryngology"
+    confidence: 0.8
+  
+  - id: "HINT_ORTHOPEDIC"
+    pattern: ".*(orthopedic|orthopaedic|ortho|bone|musculoskeletal).*"
+    parent: "Orthopedics"
+    confidence: 0.8
+  
+  - id: "HINT_PATHOLOGICAL"
+    pattern: ".*(pathology|pathologist|laboratory).*"
+    parent: "Pathology"
+    confidence: 0.8
+  
+  - id: "HINT_PSYCHIATRIC"
+    pattern: ".*(psychiatry|psychiatric|mental.*health).*"
+    parent: "Psychiatry"
+    confidence: 0.8
+  
+  - id: "HINT_PEDIATRIC"
+    pattern: ".*(pediatric|pediatrics|ped|peds|child|children).*"
+    parent: "Pediatrics"
+    confidence: 0.8
+  
+  - id: "HINT_DERMATOLOGICAL"
+    pattern: ".*(dermatology|derm|skin).*"
+    parent: "Dermatology"
+    confidence: 0.8
+  
+  - id: "HINT_ANESTHESIOLOGICAL"
+    pattern: ".*(anesthesiology|anesthesia|anesthetist).*"
+    parent: "Anesthesiology"
+    confidence: 0.8
+  
+  - id: "HINT_EMERGENCY"
+    pattern: ".*(emergency|er|ed|trauma).*"
+    parent: "Emergency Medicine"
+    confidence: 0.8
+  
+  - id: "HINT_FAMILY"
+    pattern: ".*(family.*medicine|family.*practice|primary.*care).*"
+    parent: "Family Medicine"
+    confidence: 0.8
+  
+  - id: "HINT_INTERNAL"
+    pattern: ".*(internal.*medicine|internist|medicine).*"
+    parent: "Internal Medicine"
+    confidence: 0.8

@@ -1,0 +1,564 @@
+/* Modern AG Grid Styling - Minimal Approach */
+
+/* Custom Range Slider Styles */
+.range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #4f46e5;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+}
+
+.range-slider::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #4f46e5;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.range-slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+}
+
+.range-slider:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Use AG Grid's CSS variables for consistent theming */
+.ag-theme-alpine {
+  --ag-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ag-font-size: 12px;
+  --ag-grid-size: 6px;
+  --ag-list-item-height: 36px;
+  
+  /* Colors - modern, subtle palette */
+  --ag-foreground-color: #374151;
+  --ag-secondary-foreground-color: #6b7280;
+  --ag-header-foreground-color: #374151;
+  --ag-disabled-foreground-color: #9ca3af;
+  
+  /* Backgrounds */
+  --ag-background-color: #ffffff;
+  --ag-header-background-color: #f9fafb;
+  --ag-odd-row-background-color: #ffffff;
+  --ag-row-hover-color: #f8fafc;
+  --ag-selected-row-background-color: #ffffff;
+  
+  /* Borders - very subtle */
+  --ag-border-color: #e5e7eb;
+  --ag-row-border-color: #f3f4f6;
+  --ag-cell-horizontal-border: solid #f3f4f6;
+  --ag-header-column-separator-color: #e5e7eb;
+  
+  /* Spacing */
+  --ag-cell-horizontal-padding: 10px;
+  --ag-cell-vertical-padding: 6px;
+  --ag-header-cell-horizontal-padding: 10px;
+  --ag-header-cell-vertical-padding: 10px;
+  
+  /* Focus states - minimal */
+  --ag-focus-border-color: #93c5fd;
+  --ag-focus-border-width: 1px;
+  
+  /* Scrollbars - thin and modern */
+  --ag-scrollbar-track-color: #f1f5f9;
+  --ag-scrollbar-thumb-color: #cbd5e1;
+  --ag-scrollbar-thumb-hover-color: #94a3b8;
+  
+  /* Input styling */
+  --ag-input-border-color: #d1d5db;
+  --ag-input-border-radius: 4px;
+  --ag-input-background-color: #ffffff;
+  --ag-input-hover-border-color: #9ca3af;
+  --ag-input-focus-border-color: #3b82f6;
+  
+  /* Button styling */
+  --ag-button-background-color: #ffffff;
+  --ag-button-border-color: #d1d5db;
+  --ag-button-border-radius: 4px;
+  --ag-button-hover-background-color: #f9fafb;
+  --ag-button-hover-border-color: #9ca3af;
+  
+  /* Icons */
+  --ag-icon-color: #6b7280;
+  --ag-icon-hover-color: #374151;
+  --ag-icon-selected-color: #3b82f6;
+  
+  /* Menu styling */
+  --ag-menu-background-color: #ffffff;
+  --ag-menu-border-color: #e5e7eb;
+  --ag-menu-border-radius: 6px;
+  --ag-menu-box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  
+  /* Pagination - modern and minimal */
+  --ag-paging-panel-background-color: #f8f9fa;
+  --ag-paging-panel-border-color: #e9ecef;
+  --ag-paging-panel-border-radius: 0 0 8px 8px;
+  --ag-paging-panel-padding: 12px 16px;
+  --ag-paging-panel-min-height: 48px;
+  
+  /* Override default border radius */
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+/* Minimal custom overrides for specific elements */
+.ag-theme-alpine .ag-header {
+  height: 44px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ag-theme-alpine .ag-header-cell {
+  height: 44px;
+  font-weight: 500;
+  border-right: 1px solid #e5e7eb;
+}
+
+.ag-theme-alpine .ag-header-cell:hover {
+  background-color: #f3f4f6;
+}
+
+.ag-theme-alpine .ag-row {
+  height: 36px;
+  min-height: 36px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.ag-theme-alpine .ag-row:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.ag-theme-alpine .ag-cell {
+  height: 36px;
+  border-right: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+}
+
+/* Excel-like cell selection - very subtle */
+.ag-theme-alpine .ag-cell:focus,
+.ag-theme-alpine .ag-cell-focus {
+  border: 1px solid #93c5fd;
+  outline: none;
+  background-color: #f8fafc;
+}
+
+.ag-theme-alpine .ag-cell-range-selected {
+  background-color: rgba(147, 197, 253, 0.08);
+  border: 1px solid #93c5fd;
+}
+
+.ag-theme-alpine .ag-cell-range-selected-1 {
+  background-color: rgba(147, 197, 253, 0.12);
+}
+
+.ag-theme-alpine .ag-cell-range-selected-2 {
+  background-color: rgba(147, 197, 253, 0.16);
+}
+
+.ag-theme-alpine .ag-cell-range-selected-3 {
+  background-color: rgba(147, 197, 253, 0.20);
+}
+
+.ag-theme-alpine .ag-cell-range-selected-4 {
+  background-color: rgba(147, 197, 253, 0.24);
+}
+
+/* Modern pagination - clean and professional */
+.ag-theme-alpine .ag-paging-panel {
+  background-color: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 13px !important;
+  color: #334155 !important;
+  min-height: 56px !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
+.ag-theme-alpine .ag-paging-page-summary-panel,
+.ag-theme-alpine .ag-paging-row-summary-panel {
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.ag-theme-alpine .ag-paging-button {
+  border: 1px solid #cbd5e1 !important;
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  margin: 0 3px !important;
+  cursor: pointer !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.ag-theme-alpine .ag-paging-button:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #1e293b !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.ag-theme-alpine .ag-paging-button.ag-disabled {
+  background-color: #f8fafc !important;
+  color: #cbd5e1 !important;
+  border-color: #e2e8f0 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.ag-theme-alpine .ag-paging-button.ag-current {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3) !important;
+}
+
+.ag-theme-alpine .ag-paging-button.ag-current:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Page size selector - clean and modern */
+.ag-theme-alpine .ag-paging-page-size-select {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  margin-left: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  min-width: 70px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.ag-theme-alpine .ag-paging-page-size-select:hover {
+  border-color: #94a3b8 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.ag-theme-alpine .ag-paging-page-size-select:focus {
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Page size label */
+.ag-theme-alpine .ag-paging-page-size-select-label {
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  margin-right: 8px !important;
+}
+
+/* Right-aligned cells for numeric data */
+.ag-theme-alpine .ag-right-aligned-cell {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.ag-theme-alpine .ag-right-aligned-header {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+/* Filter and menu icons - subtle */
+.ag-theme-alpine .ag-header-cell-menu-button,
+.ag-theme-alpine .ag-header-cell-filter-button {
+  color: #6b7280;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+.ag-theme-alpine .ag-header-cell-menu-button:hover,
+.ag-theme-alpine .ag-header-cell-filter-button:hover {
+  color: #374151;
+  opacity: 1;
+  background-color: transparent;
+}
+
+/* Custom scrollbar styling */
+.ag-theme-alpine .ag-body-vertical-scroll-viewport::-webkit-scrollbar,
+.ag-theme-alpine .ag-body-horizontal-scroll-viewport::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ag-theme-alpine .ag-body-vertical-scroll-viewport::-webkit-scrollbar-track,
+.ag-theme-alpine .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.ag-theme-alpine .ag-body-vertical-scroll-viewport::-webkit-scrollbar-thumb,
+.ag-theme-alpine .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.ag-theme-alpine .ag-body-vertical-scroll-viewport::-webkit-scrollbar-thumb:hover,
+.ag-theme-alpine .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* AG Grid Quartz Theme Customizations */
+
+/* ===== COLUMN SEPARATORS ===== */
+
+/* Default column separators (current implementation) */
+.ag-theme-quartz {
+  --ag-borders: solid 1px;
+  --ag-border-color: #e2e8f0;
+  --ag-header-column-separator-display: block;
+  --ag-header-column-separator-height: 100%;
+  --ag-header-column-separator-width: 0.5px;
+  --ag-header-column-separator-color: rgba(203, 213, 225, 0.3);
+  
+  /* Ensure proper corner connection */
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+/* Column group styling for percentile columns */
+.ag-theme-quartz .tcc-header {
+  background-color: #fef3c7 !important; /* Light yellow for TCC */
+  border-right: 2px solid #f59e0b !important;
+}
+
+.ag-theme-quartz .wrvu-header {
+  background-color: #dbeafe !important; /* Light blue for wRVU */
+  border-right: 2px solid #3b82f6 !important;
+}
+
+.ag-theme-quartz .cf-header {
+  background-color: #dcfce7 !important; /* Light green for CF */
+  border-right: 2px solid #10b981 !important;
+}
+
+/* Alternative: No column separators for ultra-clean look */
+.ag-theme-quartz.no-separators {
+  --ag-header-column-separator-display: none;
+  --ag-borders: none;
+}
+
+/* ===== CUSTOMIZATION OPTIONS ===== */
+
+/* Stronger column separators (2px thick, darker color) */
+.ag-theme-quartz.strong-separators {
+  --ag-header-column-separator-width: 2px;
+  --ag-header-column-separator-color: #64748b;
+  --ag-border-color: #64748b;
+}
+
+/* Very strong column separators (3px thick, very dark) */
+.ag-theme-quartz.very-strong-separators {
+  --ag-header-column-separator-width: 3px;
+  --ag-header-column-separator-color: #475569;
+  --ag-border-color: #475569;
+}
+
+/* Colored column separators */
+.ag-theme-quartz.blue-separators {
+  --ag-header-column-separator-color: #3b82f6;
+  --ag-border-color: #3b82f6;
+}
+
+.ag-theme-quartz.green-separators {
+  --ag-header-column-separator-color: #10b981;
+  --ag-border-color: #10b981;
+}
+
+.ag-theme-quartz.red-separators {
+  --ag-header-column-separator-color: #ef4444;
+  --ag-border-color: #ef4444;
+}
+
+/* Subtle column separators (very light) */
+.ag-theme-quartz.subtle-separators {
+  --ag-header-column-separator-color: #e2e8f0;
+  --ag-border-color: #e2e8f0;
+  --ag-header-column-separator-width: 0.5px;
+}
+
+/* ===== USAGE EXAMPLES ===== */
+
+/* To use these customizations, add the class to your AG Grid container:
+
+<div className="ag-theme-quartz strong-separators">
+  <AgGridReact ... />
+</div>
+
+<div className="ag-theme-quartz blue-separators">
+  <AgGridReact ... />
+</div>
+
+<div className="ag-theme-quartz subtle-separators">
+  <AgGridReact ... />
+</div>
+
+*/
+
+/* ===== ADDITIONAL CUSTOMIZATIONS ===== */
+
+/* Dashed column separators */
+.ag-theme-quartz.dashed-separators {
+  --ag-header-column-separator-style: dashed;
+}
+
+/* Dotted column separators */
+.ag-theme-quartz.dotted-separators {
+  --ag-header-column-separator-style: dotted;
+}
+
+/* Gradient column separators (advanced) */
+.ag-theme-quartz.gradient-separators {
+  --ag-header-column-separator-color: transparent;
+}
+
+.ag-theme-quartz.gradient-separators .ag-header-cell::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, #3b82f6, #10b981);
+}
+
+/* ===== RESPONSIVE SEPARATORS ===== */
+
+/* Hide separators on mobile */
+@media (max-width: 768px) {
+  .ag-theme-quartz.mobile-friendly {
+    --ag-header-column-separator-display: none;
+  }
+}
+
+/* ===== PERFORMANCE OPTIMIZATIONS ===== */
+
+/* Disable separators for better performance on large datasets */
+.ag-theme-quartz.performance-mode {
+  --ag-header-column-separator-display: none;
+  --ag-borders: none;
+}
+
+/* ===== ACCESSIBILITY ===== */
+
+/* High contrast mode for accessibility */
+.ag-theme-quartz.high-contrast {
+  --ag-header-column-separator-color: #000000;
+  --ag-border-color: #000000;
+  --ag-header-column-separator-width: 2px;
+}
+
+/* ===== THEME VARIATIONS ===== */
+
+/* Dark theme separators */
+.ag-theme-quartz.dark-theme {
+  --ag-header-column-separator-color: #4b5563;
+  --ag-border-color: #4b5563;
+  --ag-header-background-color: #1f2937;
+  --ag-header-foreground-color: #f9fafb;
+}
+
+/* Light theme separators (current default) */
+.ag-theme-quartz.light-theme {
+  --ag-header-column-separator-color: #cbd5e1;
+  --ag-border-color: #e2e8f0;
+  --ag-header-background-color: #f1f5f9;
+  --ag-header-foreground-color: #1e293b;
+}
+
+/* ===== CHECKBOX FIXES ===== */
+
+/* Fix double checkbox issue - ensure only AG Grid's native checkboxes are shown */
+.ag-theme-alpine .ag-checkbox-input,
+.ag-theme-alpine .ag-checkbox-input-wrapper,
+.ag-theme-quartz .ag-checkbox-input,
+.ag-theme-quartz .ag-checkbox-input-wrapper {
+  /* Hide any custom checkbox styling that might be interfering */
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure AG Grid's native checkbox styling is clean */
+.ag-theme-alpine .ag-checkbox-input,
+.ag-theme-quartz .ag-checkbox-input {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 3px !important;
+  background-color: #ffffff !important;
+  cursor: pointer !important;
+}
+
+.ag-theme-alpine .ag-checkbox-input:checked,
+.ag-theme-quartz .ag-checkbox-input:checked {
+  background-color: #8b5cf6 !important;
+  border-color: #8b5cf6 !important;
+}
+
+.ag-theme-alpine .ag-checkbox-input:checked::after,
+.ag-theme-quartz .ag-checkbox-input:checked::after {
+  content: '✓' !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Let AG Grid handle row selection styling naturally */

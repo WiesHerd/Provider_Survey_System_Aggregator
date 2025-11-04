@@ -1,0 +1,8 @@
+/* Unified Loading Spinner Styles */
+.unified-spinner {
+  background: conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%);
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  mask: radial-gradient(circle at center, transparent 60%, black 60%);
+  -webkit-mask: radial-gradient(circle at center, transparent 60%, black 60%);
+}

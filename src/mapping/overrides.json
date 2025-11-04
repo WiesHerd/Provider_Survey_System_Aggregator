@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "overrides": [
+    {
+      "id": "OVERRIDE_001",
+      "pattern": "cardiology.*invasive.*interventional",
+      "canonicalId": "CARD-INTERVENTIONAL",
+      "source": "MGMA",
+      "addedBy": "system",
+      "addedAt": "2024-01-01T00:00:00Z",
+      "reason": "MGMA uses specific terminology for interventional cardiology"
+    },
+    {
+      "id": "OVERRIDE_002",
+      "pattern": "neurology.*interventional",
+      "canonicalId": "NEURO-INTERVENTIONAL",
+      "addedBy": "system",
+      "addedAt": "2024-01-01T00:00:00Z",
+      "reason": "Standard interventional neurology mapping"
+    },
+    {
+      "id": "OVERRIDE_003",
+      "pattern": "pediatric.*cardiology",
+      "canonicalId": "PEDS-CARD-GENERAL",
+      "addedBy": "system",
+      "addedAt": "2024-01-01T00:00:00Z",
+      "reason": "Pediatric cardiology general mapping"
+    }
+  ]
+}

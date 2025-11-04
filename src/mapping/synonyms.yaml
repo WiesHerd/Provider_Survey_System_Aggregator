@@ -1,0 +1,660 @@
+version: "1.0.0"
+
+domainHints:
+  pediatric:
+    - "pediatric"
+    - "pediatrics"
+    - "ped"
+    - "peds"
+    - "neonatal"
+    - "neonatology"
+    - "adolescent"
+    - "child"
+    - "children"
+    - "infant"
+    - "newborn"
+    - "nicu"
+    - "picu"
+    - "pediatrician"
+  
+  adult:
+    - "adult"
+    - "adults"
+    - "geriatric"
+    - "elderly"
+    - "senior"
+
+parentSynonyms:
+  "Cardiology":
+    - "cardiology"
+    - "cardiovascular"
+    - "cardiac"
+    - "heart"
+    - "cv medicine"
+    - "cardiovascular medicine"
+  
+  "Pediatric Cardiology":
+    - "pediatric cardiology"
+    - "pediatric cardiovascular"
+    - "pediatric cardiac"
+    - "peds cardiology"
+    - "peds cardiovascular"
+    - "peds cardiac"
+  
+  "Neurology":
+    - "neurology"
+    - "neurological"
+    - "neuro"
+    - "brain"
+    - "nervous system"
+  
+  "Pediatric Neurology":
+    - "pediatric neurology"
+    - "pediatric neurological"
+    - "peds neurology"
+    - "peds neuro"
+  
+  "Pulmonology":
+    - "pulmonology"
+    - "pulmonary"
+    - "pulmonary medicine"
+    - "lung"
+    - "respiratory"
+    - "chest medicine"
+  
+  "Radiology":
+    - "radiology"
+    - "radiologist"
+    - "imaging"
+    - "diagnostic radiology"
+    - "medical imaging"
+  
+  "Pediatric Radiology":
+    - "pediatric radiology"
+    - "pediatric imaging"
+    - "peds radiology"
+    - "peds imaging"
+  
+  "Surgery":
+    - "surgery"
+    - "surgical"
+    - "surgeon"
+    - "general surgery"
+  
+  "Pediatric Surgery":
+    - "pediatric surgery"
+    - "pediatric surgical"
+    - "peds surgery"
+    - "peds surgical"
+  
+  "Obstetrics and Gynecology":
+    - "obstetrics"
+    - "gynecology"
+    - "obgyn"
+    - "ob/gyn"
+    - "ob-gyn"
+    - "obstetrics and gynecology"
+    - "obstetrics & gynecology"
+    - "women's health"
+  
+  "Otolaryngology":
+    - "otolaryngology"
+    - "ent"
+    - "ear nose throat"
+    - "ear, nose, throat"
+    - "otorhinolaryngology"
+    - "head and neck"
+    - "head & neck"
+  
+  "Orthopedics":
+    - "orthopedics"
+    - "orthopaedic"
+    - "ortho"
+    - "bone"
+    - "musculoskeletal"
+    - "sports medicine"
+  
+  "Pediatric Orthopedics":
+    - "pediatric orthopedics"
+    - "pediatric orthopaedic"
+    - "peds orthopedics"
+    - "peds ortho"
+  
+  "Pathology":
+    - "pathology"
+    - "pathologist"
+    - "laboratory"
+    - "lab"
+  
+  "Psychiatry":
+    - "psychiatry"
+    - "psychiatric"
+    - "mental health"
+    - "behavioral health"
+    - "psych"
+  
+  "Pediatrics":
+    - "pediatrics"
+    - "pediatric"
+    - "ped"
+    - "peds"
+    - "children's medicine"
+    - "child medicine"
+  
+  "Dermatology":
+    - "dermatology"
+    - "derm"
+    - "skin"
+    - "cutaneous"
+  
+  "Anesthesiology":
+    - "anesthesiology"
+    - "anesthesia"
+    - "anesthetist"
+    - "pain medicine"
+  
+  "Pediatric Anesthesia":
+    - "pediatric anesthesiology"
+    - "pediatric anesthesia"
+    - "peds anesthesiology"
+    - "peds anesthesia"
+  
+  "Emergency Medicine":
+    - "emergency medicine"
+    - "emergency"
+    - "er"
+    - "ed"
+    - "emergency room"
+    - "emergency department"
+    - "trauma"
+  
+  "Family Medicine":
+    - "family medicine"
+    - "family practice"
+    - "family physician"
+    - "family med"
+    - "primary care"
+    - "general practice"
+  
+  "Internal Medicine":
+    - "internal medicine"
+    - "internal med"
+    - "internist"
+    - "general internal medicine"
+    - "medicine"
+
+subspecialtyTokens:
+  "interventional":
+    - "interventional"
+    - "invasive"
+    - "invasive-interventional"
+    - "interventionalist"
+    - "procedural"
+  
+  "electrophysiology":
+    - "electrophysiology"
+    - "ep"
+    - "electrophysiologist"
+    - "arrhythmia"
+    - "pacemaker"
+    - "defibrillator"
+  
+  "imaging":
+    - "imaging"
+    - "echo"
+    - "echocardiography"
+    - "ct"
+    - "mri"
+    - "nuclear"
+    - "nuclear medicine"
+    - "ultrasound"
+    - "sonography"
+  
+  "critical-care":
+    - "critical care"
+    - "intensivist"
+    - "icu"
+    - "intensive care"
+    - "critical care medicine"
+  
+  "transplant":
+    - "transplant"
+    - "transplantation"
+    - "txp"
+    - "organ transplant"
+  
+  "heart-failure":
+    - "heart failure"
+    - "hf"
+    - "advanced heart failure"
+    - "heart transplant"
+    - "mechanical support"
+    - "vad"
+  
+  "structural":
+    - "structural"
+    - "valve"
+    - "structural heart"
+    - "valvular"
+    - "tavi"
+    - "tavr"
+  
+  "vascular":
+    - "vascular"
+    - "endovascular"
+    - "peripheral vascular"
+    - "carotid"
+    - "aortic"
+  
+  "epilepsy":
+    - "epilepsy"
+    - "seizure"
+    - "epileptologist"
+    - "eeg"
+  
+  "multiple-sclerosis":
+    - "multiple sclerosis"
+    - "ms"
+    - "demyelinating"
+    - "neuroimmunology"
+  
+  "movement":
+    - "movement"
+    - "parkinson"
+    - "parkinson's"
+    - "tremor"
+    - "dystonia"
+    - "huntington"
+  
+  "neuro-interventional":
+    - "neuro-interventional"
+    - "neuro ir"
+    - "neurointerventional"
+    - "endovascular neurosurgery"
+    - "neuroendovascular"
+  
+  "mammography":
+    - "mammography"
+    - "breast imaging"
+    - "breast"
+    - "mammo"
+  
+  "msk":
+    - "msk"
+    - "musculoskeletal"
+    - "bone"
+    - "joint"
+    - "spine"
+    - "muscle"
+  
+  "nocturnist":
+    - "nocturnist"
+    - "night"
+    - "overnight"
+    - "nocturnal"
+  
+  "cardiothoracic":
+    - "cardiothoracic"
+    - "ct surgery"
+    - "cardiac surgery"
+    - "thoracic surgery"
+    - "heart surgery"
+    - "lung surgery"
+  
+  "thoracic":
+    - "thoracic"
+    - "chest surgery"
+    - "lung surgery"
+    - "esophagus"
+    - "mediastinum"
+  
+  "trauma":
+    - "trauma"
+    - "trauma surgery"
+    - "acute care"
+    - "emergency surgery"
+  
+  "bariatric":
+    - "bariatric"
+    - "weight loss"
+    - "metabolic"
+    - "gastric bypass"
+    - "sleeve"
+  
+  "breast":
+    - "breast"
+    - "breast surgery"
+    - "oncology"
+    - "cancer"
+  
+  "maternal-fetal":
+    - "maternal-fetal"
+    - "mfm"
+    - "high risk"
+    - "perinatology"
+    - "fetal medicine"
+  
+  "reproductive":
+    - "reproductive"
+    - "rei"
+    - "infertility"
+    - "ivf"
+    - "endocrinology"
+  
+  "urogynecology":
+    - "urogynecology"
+    - "urogyn"
+    - "pelvic"
+    - "reconstructive"
+    - "incontinence"
+  
+  "gynecologic-oncology":
+    - "gynecologic oncology"
+    - "gyn onc"
+    - "gynecologic cancer"
+    - "ovarian"
+    - "cervical"
+    - "endometrial"
+  
+  "hospitalist":
+    - "hospitalist"
+    - "hospital medicine"
+    - "inpatient"
+    - "laborist"
+  
+  "minimally-invasive":
+    - "minimally invasive"
+    - "migs"
+    - "laparoscopic"
+    - "robotic"
+    - "endoscopic"
+  
+  "rhinology":
+    - "rhinology"
+    - "sinus"
+    - "nasal"
+    - "allergy"
+    - "nasal surgery"
+  
+  "otology":
+    - "otology"
+    - "neurotology"
+    - "hearing"
+    - "ear surgery"
+    - "cochlear"
+  
+  "head-neck":
+    - "head and neck"
+    - "head & neck"
+    - "oncology"
+    - "thyroid"
+    - "parathyroid"
+  
+  "facial-plastics":
+    - "facial plastics"
+    - "facial plastic"
+    - "reconstructive"
+    - "cosmetic"
+    - "aesthetic"
+  
+  "hand":
+    - "hand"
+    - "hand surgery"
+    - "upper extremity"
+    - "microsurgery"
+  
+  "foot-ankle":
+    - "foot"
+    - "ankle"
+    - "foot and ankle"
+    - "podiatry"
+    - "lower extremity"
+  
+  "spine":
+    - "spine"
+    - "spinal"
+    - "back"
+    - "cervical"
+    - "lumbar"
+    - "thoracic"
+  
+  "sports":
+    - "sports"
+    - "sports medicine"
+    - "athletic"
+    - "knee"
+    - "shoulder"
+    - "arthroscopy"
+  
+  "oncology":
+    - "oncology"
+    - "cancer"
+    - "tumor"
+    - "sarcoma"
+    - "malignancy"
+  
+  "shoulder-elbow":
+    - "shoulder"
+    - "elbow"
+    - "shoulder and elbow"
+    - "upper extremity"
+  
+  "hip-knee":
+    - "hip"
+    - "knee"
+    - "hip and knee"
+    - "joint replacement"
+    - "arthroplasty"
+  
+  "anatomic-pathology":
+    - "anatomic pathology"
+    - "ap"
+    - "surgical pathology"
+    - "autopsy"
+    - "forensic"
+  
+  "clinical-pathology":
+    - "clinical pathology"
+    - "cp"
+    - "laboratory medicine"
+    - "chemistry"
+    - "hematology"
+  
+  "dermatopathology":
+    - "dermatopathology"
+    - "dermpath"
+    - "skin pathology"
+    - "cutaneous pathology"
+  
+  "cytopathology":
+    - "cytopathology"
+    - "cyto"
+    - "fine needle"
+    - "fnac"
+    - "pap smear"
+  
+  "blood-bank":
+    - "blood bank"
+    - "transfusion"
+    - "transfusion medicine"
+    - "blood banking"
+  
+  "inpatient":
+    - "inpatient"
+    - "hospital"
+    - "ward"
+    - "psychiatric hospital"
+  
+  "outpatient":
+    - "outpatient"
+    - "clinic"
+    - "ambulatory"
+    - "office"
+  
+  "geriatric":
+    - "geriatric"
+    - "elderly"
+    - "senior"
+    - "aging"
+    - "dementia"
+  
+  "consultation-liaison":
+    - "consultation"
+    - "liaison"
+    - "consult-liaison"
+    - "psychosomatic"
+    - "med-psych"
+  
+  "forensic":
+    - "forensic"
+    - "legal"
+    - "court"
+    - "criminal"
+    - "competency"
+  
+  "addiction":
+    - "addiction"
+    - "substance abuse"
+    - "alcohol"
+    - "drug"
+    - "rehabilitation"
+  
+  "neonatal":
+    - "neonatal"
+    - "nicu"
+    - "newborn"
+    - "premature"
+    - "perinatal"
+  
+  "picu":
+    - "picu"
+    - "pediatric intensive care"
+    - "pediatric critical care"
+    - "pediatric intensivist"
+  
+  "hospice-palliative":
+    - "hospice"
+    - "palliative"
+    - "hospice and palliative"
+    - "hospice/palliative"
+    - "palliative care"
+    - "hospice care"
+    - "end of life"
+    - "end-of-life"
+
+negativeTokens:
+  "Cardiology":
+    - "vascular surgery"
+    - "cardiac surgery"
+    - "cardiothoracic surgery"
+    - "thoracic surgery"
+    - "heart surgery"
+    - "surgical"
+    - "surgeon"
+  
+  "Neurology":
+    - "neurosurgery"
+    - "neurosurgeon"
+    - "surgical"
+    - "surgeon"
+    - "spine surgery"
+    - "spinal surgery"
+  
+  "Pulmonology":
+    - "thoracic surgery"
+    - "lung surgery"
+    - "chest surgery"
+    - "surgical"
+    - "surgeon"
+    - "pulmonary surgery"
+  
+  "Radiology":
+    - "radiation oncology"
+    - "radiation therapy"
+    - "oncology"
+    - "cancer treatment"
+    - "radiotherapy"
+  
+  "Surgery":
+    - "medicine"
+    - "medical"
+    - "physician"
+    - "non-surgical"
+    - "conservative"
+  
+  "Obstetrics and Gynecology":
+    - "urology"
+    - "urologist"
+    - "male"
+    - "men's health"
+    - "prostate"
+  
+  "Otolaryngology":
+    - "oral surgery"
+    - "oral and maxillofacial"
+    - "dental"
+    - "dentist"
+    - "orthodontist"
+  
+  "Orthopedics":
+    - "rheumatology"
+    - "rheumatologist"
+    - "medical"
+    - "non-surgical"
+    - "conservative"
+  
+  "Pathology":
+    - "radiology"
+    - "imaging"
+    - "diagnostic"
+    - "clinical"
+    - "patient care"
+  
+  "Psychiatry":
+    - "psychology"
+    - "psychologist"
+    - "counseling"
+    - "therapy"
+    - "social work"
+  
+  "Pediatrics":
+    - "adult"
+    - "geriatric"
+    - "elderly"
+    - "senior"
+    - "maternal"
+  
+  "Dermatology":
+    - "plastic surgery"
+    - "cosmetic surgery"
+    - "aesthetic"
+    - "reconstructive"
+    - "surgical"
+  
+  "Anesthesiology":
+    - "pain medicine"
+    - "pain management"
+    - "chronic pain"
+    - "interventional pain"
+    - "pain clinic"
+  
+  "Emergency Medicine":
+    - "urgent care"
+    - "walk-in"
+    - "clinic"
+    - "outpatient"
+    - "ambulatory"
+  
+  "Family Medicine":
+    - "specialist"
+    - "specialty"
+    - "subspecialty"
+    - "fellowship"
+    - "board certified"
+  
+  "Internal Medicine":
+    - "surgery"
+    - "surgical"
+    - "surgeon"
+    - "procedural"
+    - "invasive"

@@ -1,0 +1,10 @@
+specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90
+General Pediatrics,Staff Physician,National,TCC,108,1054,510610,567345,624079,680814
+General Pediatrics,Staff Physician,National,Work RVUs,108,1054,7326,8140,8954,9768
+General Pediatrics,Staff Physician,National,CFs,108,1054,69,77,84,92
+General Pediatrics,Staff Physician,Northeast,TCC,125,901,546353,607059,667765,728471
+General Pediatrics,Staff Physician,Northeast,Work RVUs,125,901,7326,8140,8954,9768
+General Pediatrics,Staff Physician,Northeast,CFs,125,901,69,77,84,92
+General Pediatrics,Program Director,National,TCC,32,144,602520,669467,736414,803361
+General Pediatrics,Program Director,National,Work RVUs,32,144,5976,6640,7304,7968
+General Pediatrics,Program Director,National,CFs,32,144,103,112,121,130
