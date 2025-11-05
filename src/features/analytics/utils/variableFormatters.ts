@@ -306,6 +306,44 @@ export const normalizeVariableName = (variableName: string): string => {
 };
 
 /**
+ * Convert display name back to normalized key
+ * This is the reverse of formatVariableDisplayName
+ * Used when user selects a variable by its display name
+ */
+export const displayNameToNormalizedKey = (displayName: string): string => {
+  // Reverse mapping from display names to normalized keys
+  const reverseDisplayMap: Record<string, string> = {
+    'TCC (Total Cash Compensation)': 'tcc',
+    'TCC Excluding Premium': 'tcc_excluding_premium',
+    'Work RVUs': 'work_rvus',
+    'TCC per wRVUs (CFs)': 'tcc_per_work_rvu',
+    'Base Salary': 'base_salary',
+    'Base Pay Hourly Rate': 'base_pay_hourly_rate',
+    'ASA Units': 'asa_units',
+    'Panel Size': 'panel_size',
+    'Total Encounters': 'total_encounters',
+    'TCC per Encounter': 'tcc_per_encounter',
+    'Net Collections': 'net_collections',
+    'TCC to Net Collections': 'tcc_to_net_collections',
+    'TCC per ASA Unit': 'tcc_per_asa_unit',
+    'Daily Rate On-Call Compensation': 'on_call_compensation',
+    // Also handle variations without parentheses
+    'Daily Rate On Call Compensation': 'on_call_compensation',
+    'Daily Rate On-Call': 'on_call_compensation',
+    'On-Call Compensation': 'on_call_compensation',
+    'On Call Compensation': 'on_call_compensation'
+  };
+  
+  // Check exact match first
+  if (reverseDisplayMap[displayName]) {
+    return reverseDisplayMap[displayName];
+  }
+  
+  // Fallback: normalize the display name and map to standard
+  return normalizeVariableName(displayName);
+};
+
+/**
  * Map variable name variations to standard names
  * Handles different naming conventions across surveys
  * Uses pattern-based matching as fallback for unknown variations

@@ -5,13 +5,8 @@ import {
   InputAdornment,
   IconButton,
   Checkbox,
-  Button,
   Box,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
+  Chip
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
@@ -22,6 +17,7 @@ import {
 import { LearnedMappingsProps } from '../types/mapping';
 import { MappedSpecialtyItem } from './MappedSpecialtyItem';
 import { StandardTooltip } from '../../../shared/components';
+import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
 
 /**
  * LearnedMappings component for displaying learned mappings
@@ -45,16 +41,14 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
   
   // Confirmation dialog state
   const [confirmationDialog, setConfirmationDialog] = useState<{
-    open: boolean;
+    isOpen: boolean;
     title: string;
     message: string;
-    items: string[];
     onConfirm: () => void;
   }>({
-    open: false,
+    isOpen: false,
     title: '',
     message: '',
-    items: [],
     onConfirm: () => {}
   });
   // Group learned mappings by standardized name (like Mapped Specialties screen)
@@ -147,23 +141,17 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
   const handleBulkDelete = useCallback(() => {
     if (selectedMappings.size === 0) return;
     
-    const selectedItems = Array.from(selectedMappings).map(id => {
-      const mapping = learnedMappingsList.find(m => m.id === id);
-      return mapping ? mapping.standardizedName : id;
-    });
-    
     setConfirmationDialog({
-      open: true,
+      isOpen: true,
       title: 'Delete Learned Mappings',
       message: `Are you sure you want to delete ${selectedMappings.size} learned mapping(s)? This action cannot be undone and will affect data processing for future survey uploads.`,
-      items: selectedItems,
       onConfirm: () => {
         selectedMappings.forEach(mappingId => {
           onRemoveLearnedMapping(mappingId);
         });
         setSelectedMappings(new Set());
         setIsBulkMode(false);
-        setConfirmationDialog(prev => ({ ...prev, open: false }));
+        setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
       }
     });
   }, [selectedMappings, onRemoveLearnedMapping, learnedMappingsList]);
@@ -279,12 +267,20 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
               <MappedSpecialtyItem
                 mapping={mapping}
                 onDelete={() => {
-                  
-                  // Show confirmation dialog first
-                  if (window.confirm('Remove this learned mapping?')) {
-                    onRemoveLearnedMapping(mapping.standardizedName);
-                  } else {
-                  }
+                  // Show single confirmation dialog for deleting all source specialties
+                  setConfirmationDialog({
+                    isOpen: true,
+                    title: 'Remove Learned Mapping',
+                    message: `Are you sure you want to remove the learned mapping for "${mapping.standardizedName}"? This will remove ${mapping.sourceSpecialties.length} mapping(s).`,
+                    onConfirm: () => {
+                      // Remove all source specialties for this standardized name
+                      // No need for individual confirmations - user already confirmed once
+                      mapping.sourceSpecialties.forEach(source => {
+                        onRemoveLearnedMapping(source.specialty);
+                      });
+                      setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+                    }
+                  });
                 }}
               />
             </div>
@@ -309,58 +305,17 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
         )}
       </div>
       
-      {/* Simple Confirmation Dialog */}
-      <Dialog 
-        open={confirmationDialog.open} 
-        onClose={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-        maxWidth="sm" 
-        fullWidth
-      >
-        <DialogTitle className="flex items-center space-x-3">
-          <div className="w-6 h-6 text-red-500">
-            <svg fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <Typography variant="h6" component="span" className="font-semibold">
-            {confirmationDialog.title}
-          </Typography>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" className="text-gray-700 mb-4">
-            {confirmationDialog.message}
-          </Typography>
-          {confirmationDialog.items.length > 0 && (
-            <Box className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-md max-h-40 overflow-y-auto">
-              <Typography variant="subtitle2" className="font-medium text-gray-800 mb-2">
-                Affected Items:
-              </Typography>
-              <ul className="text-sm text-gray-600 space-y-1">
-                {confirmationDialog.items.map((item, index) => (
-                  <li key={index}>• {item}</li>
-                ))}
-              </ul>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions className="p-4">
-          <Button 
-            onClick={() => setConfirmationDialog(prev => ({ ...prev, open: false }))} 
-            color="inherit" 
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={confirmationDialog.onConfirm} 
-            color="error" 
-            variant="contained" 
-            autoFocus
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmationDialog.isOpen}
+        onClose={() => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmationDialog.onConfirm}
+        title={confirmationDialog.title}
+        message={confirmationDialog.message}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };

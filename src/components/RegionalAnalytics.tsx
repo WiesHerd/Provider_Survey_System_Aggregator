@@ -10,9 +10,100 @@ import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 // Using new benchmarking query hook for better performance (reuses same data as benchmarking)
 import { useBenchmarkingQuery } from '../features/analytics/hooks/useBenchmarkingQuery';
 import { AggregatedData } from '../features/analytics/types/analytics';
+import { DynamicAggregatedData } from '../features/analytics/types/variables';
 
 // These will be dynamically populated from region mappings
 const DEFAULT_REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
+
+// Helper function to check if data is in old AggregatedData format
+const isAggregatedData = (row: AggregatedData | DynamicAggregatedData): row is AggregatedData => {
+  return 'tcc_p50' in row;
+};
+
+// Helper function to safely get TCC p50 from either format
+const getTccP50 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) {
+    return row.tcc_p50 || 0;
+  }
+  // For DynamicAggregatedData, check variables object
+  const tcc = row.variables?.tcc || row.variables?.total_cash_compensation;
+  return tcc?.p50 || 0;
+};
+
+// Helper function to safely get CF p50 from either format
+const getCfP50 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) {
+    return row.cf_p50 || 0;
+  }
+  // For DynamicAggregatedData, check variables object
+  const cf = row.variables?.tcc_per_work_rvu || row.variables?.conversion_factor;
+  return cf?.p50 || 0;
+};
+
+// Helper function to safely get wRVU p50 from either format
+const getWrvuP50 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) {
+    return row.wrvu_p50 || 0;
+  }
+  // For DynamicAggregatedData, check variables object
+  const wrvu = row.variables?.work_rvus || row.variables?.wrvu;
+  return wrvu?.p50 || 0;
+};
+
+// Helper functions for all percentiles
+const getTccP25 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.tcc_p25 || 0;
+  const tcc = row.variables?.tcc || row.variables?.total_cash_compensation;
+  return tcc?.p25 || 0;
+};
+
+const getTccP75 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.tcc_p75 || 0;
+  const tcc = row.variables?.tcc || row.variables?.total_cash_compensation;
+  return tcc?.p75 || 0;
+};
+
+const getTccP90 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.tcc_p90 || 0;
+  const tcc = row.variables?.tcc || row.variables?.total_cash_compensation;
+  return tcc?.p90 || 0;
+};
+
+const getCfP25 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.cf_p25 || 0;
+  const cf = row.variables?.tcc_per_work_rvu || row.variables?.conversion_factor;
+  return cf?.p25 || 0;
+};
+
+const getCfP75 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.cf_p75 || 0;
+  const cf = row.variables?.tcc_per_work_rvu || row.variables?.conversion_factor;
+  return cf?.p75 || 0;
+};
+
+const getCfP90 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.cf_p90 || 0;
+  const cf = row.variables?.tcc_per_work_rvu || row.variables?.conversion_factor;
+  return cf?.p90 || 0;
+};
+
+const getWrvuP25 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.wrvu_p25 || 0;
+  const wrvu = row.variables?.work_rvus || row.variables?.wrvu;
+  return wrvu?.p25 || 0;
+};
+
+const getWrvuP75 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.wrvu_p75 || 0;
+  const wrvu = row.variables?.work_rvus || row.variables?.wrvu;
+  return wrvu?.p75 || 0;
+};
+
+const getWrvuP90 = (row: AggregatedData | DynamicAggregatedData): number => {
+  if (isAggregatedData(row)) return row.wrvu_p90 || 0;
+  const wrvu = row.variables?.work_rvus || row.variables?.wrvu;
+  return wrvu?.p90 || 0;
+};
 
 export const RegionalAnalytics: React.FC = () => {
   // Use smooth progress for dynamic loading
@@ -22,7 +113,7 @@ export const RegionalAnalytics: React.FC = () => {
     intervalMs: 100
   });
   
-  const [analyticsData, setAnalyticsData] = useState<AggregatedData[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<AggregatedData[] | DynamicAggregatedData[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [selectedProviderType, setSelectedProviderType] = useState<string>('');
   const [selectedSurveySource, setSelectedSurveySource] = useState<string>('');
@@ -151,7 +242,7 @@ export const RegionalAnalytics: React.FC = () => {
     });
     console.log(`📊 Total rows to filter: ${analyticsData.length}`);
     
-    const filteredRows = analyticsData.filter(row => {
+    const filteredRows = (analyticsData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
       // Specialty filter - use standardizedName from AggregatedData
       if (row.standardizedName !== selectedSpecialty) {
         return false;
@@ -205,14 +296,14 @@ export const RegionalAnalytics: React.FC = () => {
     
     console.log(`✅ Filtered rows found: ${filteredRows.length}`);
     if (filteredRows.length > 0) {
-      console.log(`📋 Sample filtered rows with compensation data:`, filteredRows.slice(0, 3).map(row => ({
+      console.log(`📋 Sample filtered rows with compensation data:`, filteredRows.slice(0, 3).map((row: AggregatedData | DynamicAggregatedData) => ({
         standardizedName: row.standardizedName,
         surveySource: row.surveySource,
         geographicRegion: row.geographicRegion,
         surveyYear: row.surveyYear,
-          tcc_p50: row.tcc_p50,
-          cf_p50: row.cf_p50,
-          wrvu_p50: row.wrvu_p50
+          tcc_p50: getTccP50(row),
+          cf_p50: getCfP50(row),
+          wrvu_p50: getWrvuP50(row)
       })));
     }
     
@@ -227,22 +318,22 @@ export const RegionalAnalytics: React.FC = () => {
     console.log(`📊 Calculating regional comparison data for ${filtered.length} filtered rows`);
     
     // Debug: Check what regions are actually in the filtered data
-    const uniqueRegions = Array.from(new Set(filtered.map(r => r.geographicRegion)));
+    const uniqueRegions = Array.from(new Set(filtered.map((r: AggregatedData | DynamicAggregatedData) => r.geographicRegion)));
     console.log(`🔍 Unique regions in filtered data:`, uniqueRegions);
     
     // Debug: Show detailed region information
-    console.log(`🔍 Detailed region analysis:`, filtered.slice(0, 10).map(r => ({
+    console.log(`🔍 Detailed region analysis:`, filtered.slice(0, 10).map((r: AggregatedData | DynamicAggregatedData) => ({
       standardizedName: r.standardizedName,
       geographicRegion: r.geographicRegion,
       surveySource: r.surveySource,
-      tcc_p50: r.tcc_p50
+      tcc_p50: getTccP50(r)
     })));
     
     // Filter out any rows with invalid data - more lenient check
-    const validRows = filtered.filter(r => {
-      const hasValidTCC = Number(r.tcc_p50) > 0 || Number(r.tcc_p25) > 0 || Number(r.tcc_p75) > 0 || Number(r.tcc_p90) > 0;
-      const hasValidCF = Number(r.cf_p50) > 0 || Number(r.cf_p25) > 0 || Number(r.cf_p75) > 0 || Number(r.cf_p90) > 0;
-      const hasValidWRVU = Number(r.wrvu_p50) > 0 || Number(r.wrvu_p25) > 0 || Number(r.wrvu_p75) > 0 || Number(r.wrvu_p90) > 0;
+    const validRows = (filtered as (AggregatedData | DynamicAggregatedData)[]).filter((r: AggregatedData | DynamicAggregatedData) => {
+      const hasValidTCC = getTccP50(r) > 0 || getTccP25(r) > 0 || getTccP75(r) > 0 || getTccP90(r) > 0;
+      const hasValidCF = getCfP50(r) > 0 || getCfP25(r) > 0 || getCfP75(r) > 0 || getCfP90(r) > 0;
+      const hasValidWRVU = getWrvuP50(r) > 0 || getWrvuP25(r) > 0 || getWrvuP75(r) > 0 || getWrvuP90(r) > 0;
       return hasValidTCC || hasValidCF || hasValidWRVU;
     });
     
@@ -288,9 +379,9 @@ export const RegionalAnalytics: React.FC = () => {
       console.log(`🔍 Using region mappings:`, standardizedRegions);
     } else {
       // Fallback: try to determine regions from the actual data
-      const dataRegions = Array.from(new Set(validRows.map(r => mapToParentRegion(r.geographicRegion))));
+      const dataRegions = Array.from(new Set(validRows.map((r: AggregatedData | DynamicAggregatedData) => mapToParentRegion(r.geographicRegion))));
       console.log(`🔍 No region mappings found, using data regions:`, dataRegions);
-      standardizedRegions = dataRegions.filter(r => r !== 'national').sort();
+      standardizedRegions = (dataRegions as string[]).filter((r: string) => r !== 'national').sort();
     }
     
     // Ensure National is first
@@ -302,7 +393,7 @@ export const RegionalAnalytics: React.FC = () => {
       // For 'national' (lowercase), use all valid filtered rows
       const regionRows = regionName.toLowerCase() === 'national'
         ? validRows
-        : validRows.filter(r => {
+        : validRows.filter((r: AggregatedData | DynamicAggregatedData) => {
           const parentRegion = mapToParentRegion(r.geographicRegion);
           // Map the regionName to its parent region for comparison
           const targetParentRegion = mapToParentRegion(regionName);
@@ -310,27 +401,27 @@ export const RegionalAnalytics: React.FC = () => {
         });
       
       console.log(`🔍 Filtering for region "${regionName}": found ${regionRows.length} rows`);
-      console.log(`🔍 Available regions in data:`, Array.from(new Set(validRows.map(r => r.geographicRegion).filter(Boolean))));
+      console.log(`🔍 Available regions in data:`, Array.from(new Set(validRows.map((r: AggregatedData | DynamicAggregatedData) => r.geographicRegion).filter(Boolean))));
       const targetParentRegion = mapToParentRegion(regionName);
-      console.log(`🔍 Region mapping for ${regionName} (target parent: ${targetParentRegion}):`, validRows.slice(0, 3).map(r => ({
+      console.log(`🔍 Region mapping for ${regionName} (target parent: ${targetParentRegion}):`, validRows.slice(0, 3).map((r: AggregatedData | DynamicAggregatedData) => ({
         original: r.geographicRegion,
         parentRegion: mapToParentRegion(r.geographicRegion),
         target: targetParentRegion,
         matches: mapToParentRegion(r.geographicRegion) === targetParentRegion
       })));
       if (regionRows.length > 0) {
-        console.log(`🔍 Sample rows for ${regionName}:`, regionRows.slice(0, 2).map(r => ({
+        console.log(`🔍 Sample rows for ${regionName}:`, regionRows.slice(0, 2).map((r: AggregatedData | DynamicAggregatedData) => ({
           region: r.geographicRegion,
-          tcc_p50: r.tcc_p50
+          tcc_p50: getTccP50(r)
         })));
       }
       if (regionRows.length > 0) {
-        console.log(`📋 Sample rows for ${regionName}:`, regionRows.slice(0, 2).map(r => ({
+        console.log(`📋 Sample rows for ${regionName}:`, regionRows.slice(0, 2).map((r: AggregatedData | DynamicAggregatedData) => ({
           standardizedName: r.standardizedName,
           region: r.geographicRegion,
-          tcc_p50: r.tcc_p50,
-          cf_p50: r.cf_p50,
-          wrvu_p50: r.wrvu_p50
+          tcc_p50: getTccP50(r),
+          cf_p50: getCfP50(r),
+          wrvu_p50: getWrvuP50(r)
         })));
       }
       
@@ -341,18 +432,18 @@ export const RegionalAnalytics: React.FC = () => {
       
       const regionData = {
         region: regionName,
-        tcc_p25: calculateAverage(regionRows.map(r => Number(r.tcc_p25) || 0)),
-        tcc_p50: calculateAverage(regionRows.map(r => Number(r.tcc_p50) || 0)),
-        tcc_p75: calculateAverage(regionRows.map(r => Number(r.tcc_p75) || 0)),
-        tcc_p90: calculateAverage(regionRows.map(r => Number(r.tcc_p90) || 0)),
-        cf_p25: calculateAverage(regionRows.map(r => Number(r.cf_p25) || 0)),
-        cf_p50: calculateAverage(regionRows.map(r => Number(r.cf_p50) || 0)),
-        cf_p75: calculateAverage(regionRows.map(r => Number(r.cf_p75) || 0)),
-        cf_p90: calculateAverage(regionRows.map(r => Number(r.cf_p90) || 0)),
-        wrvus_p25: calculateAverage(regionRows.map(r => Number(r.wrvu_p25) || 0)),
-        wrvus_p50: calculateAverage(regionRows.map(r => Number(r.wrvu_p50) || 0)),
-        wrvus_p75: calculateAverage(regionRows.map(r => Number(r.wrvu_p75) || 0)),
-        wrvus_p90: calculateAverage(regionRows.map(r => Number(r.wrvu_p90) || 0)),
+        tcc_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP25(r))),
+        tcc_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP50(r))),
+        tcc_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP75(r))),
+        tcc_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP90(r))),
+        cf_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP25(r))),
+        cf_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP50(r))),
+        cf_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP75(r))),
+        cf_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP90(r))),
+        wrvus_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP25(r))),
+        wrvus_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP50(r))),
+        wrvus_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP75(r))),
+        wrvus_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP90(r))),
       };
       
       console.log(`📋 ${regionName}: ${regionRows.length} rows, TCC P50: $${regionData.tcc_p50.toLocaleString()}, CF P50: $${regionData.cf_p50.toLocaleString()}`);
@@ -361,12 +452,12 @@ export const RegionalAnalytics: React.FC = () => {
       if (regionName.toLowerCase() === 'national') {
         console.log(`🔍 National calculation details:`, {
           totalRows: regionRows.length,
-          sampleTCCValues: regionRows.slice(0, 5).map(r => ({ 
+          sampleTCCValues: regionRows.slice(0, 5).map((r: AggregatedData | DynamicAggregatedData) => ({ 
             standardizedName: r.standardizedName, 
             region: r.geographicRegion, 
-            tcc_p50: r.tcc_p50 
+            tcc_p50: getTccP50(r) 
           })),
-          allTCCP50Values: regionRows.map(r => Number(r.tcc_p50) || 0).slice(0, 10),
+          allTCCP50Values: regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP50(r)).slice(0, 10),
           calculatedAverage: regionData.tcc_p50
         });
       }
@@ -388,10 +479,10 @@ export const RegionalAnalytics: React.FC = () => {
     }
 
     // Recreate validRows and orderedRegions logic for consistent grouping
-    const validRows = filtered.filter(r => {
-      const hasValidTCC = Number(r.tcc_p50) > 0 || Number(r.tcc_p25) > 0 || Number(r.tcc_p75) > 0 || Number(r.tcc_p90) > 0;
-      const hasValidCF = Number(r.cf_p50) > 0 || Number(r.cf_p25) > 0 || Number(r.cf_p75) > 0 || Number(r.cf_p90) > 0;
-      const hasValidWRVU = Number(r.wrvu_p50) > 0 || Number(r.wrvu_p25) > 0 || Number(r.wrvu_p75) > 0 || Number(r.wrvu_p90) > 0;
+    const validRows = (filtered as (AggregatedData | DynamicAggregatedData)[]).filter((r: AggregatedData | DynamicAggregatedData) => {
+      const hasValidTCC = getTccP50(r) > 0 || getTccP25(r) > 0 || getTccP75(r) > 0 || getTccP90(r) > 0;
+      const hasValidCF = getCfP50(r) > 0 || getCfP25(r) > 0 || getCfP75(r) > 0 || getCfP90(r) > 0;
+      const hasValidWRVU = getWrvuP50(r) > 0 || getWrvuP25(r) > 0 || getWrvuP75(r) > 0 || getWrvuP90(r) > 0;
       return hasValidTCC || hasValidCF || hasValidWRVU;
     });
 
@@ -427,11 +518,11 @@ export const RegionalAnalytics: React.FC = () => {
     const regions = regionalComparisonData.map(r => r.region);
     regions.forEach(regionName => {
       const parent = mapToParentRegion(regionName);
-      const rows = parent === 'national' ? validRows : validRows.filter(r => mapToParentRegion(r.geographicRegion) === parent);
+      const rows = parent === 'national' ? validRows : validRows.filter((r: AggregatedData | DynamicAggregatedData) => mapToParentRegion(r.geographicRegion) === parent);
       const bySource: Record<string, number> = {};
       const srcRegions: Record<string, number> = {};
       const bySourceRegions: Record<string, Record<string, number>> = {};
-      rows.forEach(r => {
+      rows.forEach((r: AggregatedData | DynamicAggregatedData) => {
         const src = String(r.surveySource || 'Unknown');
         bySource[src] = (bySource[src] || 0) + 1;
         const rg = String(r.geographicRegion || 'Unknown');

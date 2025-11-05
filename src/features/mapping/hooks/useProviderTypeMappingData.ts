@@ -72,7 +72,8 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
 
   // State for cross-category mapping toggle (Call Pay, Physician, APP)
-  const [showAllCategories, setShowAllCategories] = useState(true); // Default to showing all
+  // Default to false (filtered by current Data View selection) to match expected UI behavior
+  const [showAllCategories, setShowAllCategories] = useState(false);
   
   // Computed values
   const filteredUnmapped = useMemo(() => {

@@ -17,6 +17,7 @@ import { AnalyticsTableHeader } from './AnalyticsTableHeader';
 import { AnalyticsTableRow } from './AnalyticsTableRow';
 import { AnalyticsSummaryRow } from './AnalyticsSummaryRow';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
+import { EmptyState } from '../../mapping/components/shared/EmptyState';
 
 // formatRegionForDisplay is now imported from shared utils
 
@@ -39,6 +40,20 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   formattingRules = [], // Default to empty array for backward compatibility
   isExporting = false // New prop for export state
 }) => {
+  // CRITICAL DEBUG: Log selectedVariables received by AnalyticsTable
+  useEffect(() => {
+    const { formatVariableDisplayName } = require('../utils/variableFormatters');
+    console.log('🔍 AnalyticsTable: Received selectedVariables:', {
+      count: selectedVariables.length,
+      variables: selectedVariables,
+      hasBaseSalary: selectedVariables.includes('base_salary'),
+      hasOnCallComp: selectedVariables.includes('on_call_compensation'),
+      allVariables: selectedVariables.map(v => ({ 
+        key: v, 
+        displayName: formatVariableDisplayName(v) 
+      }))
+    });
+  }, [selectedVariables]);
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -221,7 +236,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               type="checkbox"
               checked={columnVisibility.specialty}
               onChange={() => handleColumnToggle('specialty')}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+              style={{ accentColor: '#9333ea' }}
             />
             <span className="text-sm text-gray-700">Specialty</span>
           </label>
@@ -230,7 +246,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               type="checkbox"
               checked={columnVisibility.surveySource}
               onChange={() => handleColumnToggle('surveySource')}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+              style={{ accentColor: '#9333ea' }}
             />
             <span className="text-sm text-gray-700">Survey Source</span>
           </label>
@@ -239,7 +256,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               type="checkbox"
               checked={columnVisibility.region}
               onChange={() => handleColumnToggle('region')}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+              style={{ accentColor: '#9333ea' }}
             />
             <span className="text-sm text-gray-700">Region</span>
           </label>
@@ -248,25 +266,36 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
               type="checkbox"
               checked={columnVisibility.providerType}
               onChange={() => handleColumnToggle('providerType')}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+              style={{ accentColor: '#9333ea' }}
             />
             <span className="text-sm text-gray-700">Provider Type</span>
           </label>
         </div>
       </div>
 
-      {/* HTML Table with frozen headers */}
-      <div 
-        className="rounded-xl border border-gray-200 shadow-sm"
-        style={{ 
-          maxHeight: '600px',
-          maxWidth: '100%',
-          overflow: 'auto',
-          backgroundColor: 'white',
-          position: 'relative'
-        }}
-      >
-        <table 
+      {/* Show empty state when no variables are selected */}
+      {selectedVariables.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 shadow-sm bg-white">
+          <EmptyState
+            icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
+            title="No Variables Selected"
+            message="Please select at least one variable from the 'Display Variables' dropdown above to view data in the table."
+          />
+        </div>
+      ) : (
+        /* HTML Table with frozen headers */
+        <div 
+          className="rounded-xl border border-gray-200 shadow-sm"
+          style={{ 
+            maxHeight: '600px',
+            maxWidth: '100%',
+            overflow: 'auto',
+            backgroundColor: 'white',
+            position: 'relative'
+          }}
+        >
+          <table 
           className="w-full border-collapse"
           style={{ 
             minWidth: `${400 + (Object.values(columnVisibility).filter(Boolean).length * 150) + (selectedVariables.length * 100)}px`,
@@ -325,10 +354,12 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
             )}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
 
-      {/* Modern Pagination - Always show so users can change page size even when showing all */}
-      <div className="pagination-container">
+      {/* Modern Pagination - Only show when variables are selected and data exists */}
+      {selectedVariables.length > 0 && (
+        <div className="pagination-container">
         <ModernPagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -338,7 +369,8 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
           onPageSizeChange={handleItemsPerPageChange}
             pageSizeOptions={[10, 25, 50, 100, 250, 500]}
         />
-      </div>
+        </div>
+      )}
     </div>
   );
 });

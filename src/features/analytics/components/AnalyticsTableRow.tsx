@@ -9,7 +9,9 @@ import React, { memo } from 'react';
 import { formatSpecialtyForDisplay, formatRegionForDisplay, formatProviderTypeForDisplay } from '../../../shared/utils/formatters';
 import { 
   getVariableLightBackgroundColor,
-  mapVariableNameToStandard
+  mapVariableNameToStandard,
+  displayNameToNormalizedKey,
+  normalizeVariableName
 } from '../utils/variableFormatters';
 import { VariableFormattingService } from '../services/variableFormattingService';
 import { DynamicAggregatedData } from '../types/variables';
@@ -124,12 +126,34 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
       
       {/* Dynamic Variable Columns */}
       {selectedVariables.map((varName, varIndex) => {
+        // CRITICAL DEBUG: Log variable rendering for first few rows and specific variables
+        if (index < 2 && (varName === 'base_salary' || varName === 'on_call_compensation' || varName.includes('base') || varName.includes('on_call'))) {
+          console.log('🔍 AnalyticsTableRow: Rendering variable column:', {
+            rowIndex: index,
+            varIndex,
+            varName,
+            selectedVariablesCount: selectedVariables.length,
+            allSelectedVariables: selectedVariables
+          });
+        }
+        
         const dynamicRow = row as DynamicAggregatedData;
         const legacyRow = row as any; // Legacy data format
         const lightColor = getVariableLightBackgroundColor(varName, varIndex);
         
-        // FIXED: Improved format detection and variable handling
-        const normalizedVarName = mapVariableNameToStandard(varName);
+        // CRITICAL FIX: Handle both display names and normalized names
+        // First, try to convert display name to normalized key (e.g., "Daily Rate On-Call Compensation" -> "on_call_compensation")
+        // If that doesn't work, normalize the name and map to standard
+        let normalizedVarName: string;
+        const isDisplayName = varName.includes(' ') || varName.includes('-') || varName.includes('(');
+        if (isDisplayName) {
+          // Try reverse mapping from display name
+          normalizedVarName = displayNameToNormalizedKey(varName);
+        } else {
+          // Already normalized, just map to standard
+          normalizedVarName = mapVariableNameToStandard(normalizeVariableName(varName));
+        }
+        
         let metrics: any = null;
         
         // General debug logging for first few rows
@@ -150,6 +174,86 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         if (dynamicRow.variables && typeof dynamicRow.variables === 'object') {
           // Dynamic format: use variables object directly
           metrics = dynamicRow.variables[normalizedVarName];
+          
+          // CRITICAL DEBUG: Log data lookup for base_salary and other variables that are failing
+          if (index < 3 && (varName === 'base_salary' || normalizedVarName === 'base_salary' || !metrics)) {
+            console.log('🔍 AnalyticsTableRow: Variable Data Lookup:', {
+              rowIndex: index,
+              surveySource: legacyRow.surveySource,
+              specialty: legacyRow.standardizedName || legacyRow.surveySpecialty,
+              varName,
+              normalizedVarName,
+              isDisplayName,
+              hasVariables: !!dynamicRow.variables,
+              variablesObject: dynamicRow.variables,
+              availableVariableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables) : [],
+              lookingForKey: normalizedVarName,
+              metricsFound: !!metrics,
+              metrics: metrics ? {
+                n_orgs: metrics.n_orgs,
+                n_incumbents: metrics.n_incumbents,
+                p25: metrics.p25,
+                p50: metrics.p50,
+                p75: metrics.p75,
+                p90: metrics.p90
+              } : null,
+              allVariableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables).join(', ') : 'none',
+              exactMatchFound: dynamicRow.variables ? dynamicRow.variables.hasOwnProperty(normalizedVarName) : false
+            });
+          }
+          
+          // CRITICAL FIX: If lookup failed, try alternative key variations for Call Pay
+          if (!metrics && (normalizedVarName === 'on_call_compensation' || varName.toLowerCase().includes('on call') || varName.toLowerCase().includes('on-call'))) {
+            // Try alternative key variations
+            const alternativeKeys = [
+              'oncall_compensation',
+              'daily_rate_on_call',
+              'daily_rate_oncall',
+              'daily_rate_on_call_compensation',
+              'on_call_rate',
+              'oncall_rate'
+            ];
+            
+            for (const altKey of alternativeKeys) {
+              if (dynamicRow.variables[altKey]) {
+                metrics = dynamicRow.variables[altKey];
+                console.log(`✅ Found Call Pay variable with alternative key: ${altKey} (was looking for ${normalizedVarName})`);
+                break;
+              }
+            }
+          }
+          
+          // ENTERPRISE DEBUG: Comprehensive logging for Call Pay variables
+          const isCallPayVariable = normalizedVarName === 'on_call_compensation' || 
+                                    normalizedVarName.includes('on_call') || 
+                                    normalizedVarName.includes('oncall') ||
+                                    varName.toLowerCase().includes('on call') ||
+                                    varName.toLowerCase().includes('on-call');
+          const isCallPaySurvey = (legacyRow.surveySource?.toLowerCase().includes('call pay')) ||
+                                  (legacyRow as any).dataCategory === 'CALL_PAY' ||
+                                  legacyRow.providerType === 'CALL';
+          
+          if (isCallPayVariable || (isCallPaySurvey && isCallPayVariable)) {
+            console.log('🔍 AnalyticsTableRow: Call Pay Variable Lookup:', {
+              index,
+              surveySource: legacyRow.surveySource,
+              specialty: legacyRow.standardizedName || legacyRow.surveySpecialty,
+              dataCategory: (legacyRow as any).dataCategory,
+              providerType: legacyRow.providerType,
+              varName,
+              normalizedVarName,
+              isDisplayName,
+              hasVariables: !!dynamicRow.variables,
+              availableVariableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables) : [],
+              metricsFound: !!metrics,
+              metrics: metrics ? {
+                n_orgs: metrics.n_orgs,
+                n_incumbents: metrics.n_incumbents,
+                p50: metrics.p50
+              } : null,
+              allVariableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables).join(', ') : 'none'
+            });
+          }
           
           // Debug logging for dynamic format
           if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan') || legacyRow.surveySource?.toLowerCase().includes('gallagher'))) {

@@ -74,10 +74,21 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   
   // NEW: Variable selection handler
   const handleVariableChange = useCallback((event: any, newValue: string[]) => {
+    // CRITICAL DEBUG: Log variable selection changes
+    console.log('🔍 AnalyticsFilters: handleVariableChange called:', {
+      previousCount: selectedVariables.length,
+      previousVariables: selectedVariables,
+      newCount: newValue.length,
+      newVariables: newValue,
+      added: newValue.filter(v => !selectedVariables.includes(v)),
+      removed: selectedVariables.filter(v => !newValue.includes(v))
+    });
+    
     // Enforce maximum 5 variables limit
     if (newValue.length > MAX_SELECTED_VARIABLES) {
       // If trying to add more than 5, keep only the first 5
       const limitedValue = newValue.slice(0, MAX_SELECTED_VARIABLES);
+      console.log('🔍 AnalyticsFilters: Limited to 5 variables:', limitedValue);
       onVariablesChange(limitedValue);
       return;
     }
@@ -85,9 +96,12 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
     // Validate selection (max 5 variables)
     const validation = validateVariableSelection(newValue);
     if (validation.isValid) {
+      console.log('🔍 AnalyticsFilters: Validation passed, calling onVariablesChange with:', newValue);
       onVariablesChange(newValue);
+    } else {
+      console.warn('⚠️ AnalyticsFilters: Validation failed:', validation.error);
     }
-  }, [onVariablesChange]);
+  }, [onVariablesChange, selectedVariables]);
 
 
   return (

@@ -1584,14 +1584,16 @@ export class IndexedDBService {
                 // For CALL view: Show only Call Pay surveys
                 surveysByProviderType = surveys.filter(survey => this.isCallPaySurvey(survey));
               } else if (providerType === 'PHYSICIAN') {
-                // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
+                // For PHYSICIAN view: Include only PHYSICIAN compensation surveys, exclude CALL_PAY, MOONLIGHTING, and APP
+                // Moonlighting is a separate survey type, just like Call Pay
                 surveysByProviderType = surveys.filter(survey => {
                   const isCallPay = this.isCallPaySurvey(survey);
                   const isMoonlighting = this.isMoonlightingSurvey(survey);
                   const effectiveProviderType = this.getEffectiveProviderType(survey);
                   return (effectiveProviderType === 'PHYSICIAN') && 
                          !isCallPay && 
-                         (this.isCompensationSurvey(survey) || isMoonlighting);
+                         !isMoonlighting &&
+                         this.isCompensationSurvey(survey);
                 });
               } else if (providerType === 'APP') {
                 // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
@@ -1821,11 +1823,12 @@ export class IndexedDBService {
           // For CALL view: Show only Call Pay surveys
           surveyMatchesProviderType = isCallPay;
         } else if (providerType === 'PHYSICIAN') {
-          // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
-          // MOONLIGHTING is physician-related compensation data
+          // For PHYSICIAN view: Include only PHYSICIAN compensation surveys, exclude CALL_PAY, MOONLIGHTING, and APP
+          // Moonlighting is a separate survey type, just like Call Pay
           const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
                                          !isCallPay && 
-                                         (this.isCompensationSurvey(survey) || isMoonlighting);
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
           surveyMatchesProviderType = isPhysicianCompensation;
         } else if (providerType === 'APP') {
           // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
@@ -2140,11 +2143,12 @@ export class IndexedDBService {
           // For CALL view: Show only Call Pay surveys
           surveyMatchesProviderType = isCallPay;
         } else if (providerType === 'PHYSICIAN') {
-          // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
-          // MOONLIGHTING is physician-related compensation data
+          // For PHYSICIAN view: Include only PHYSICIAN compensation surveys, exclude CALL_PAY, MOONLIGHTING, and APP
+          // Moonlighting is a separate survey type, just like Call Pay
           const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
                                          !isCallPay && 
-                                         (this.isCompensationSurvey(survey) || isMoonlighting);
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
           surveyMatchesProviderType = isPhysicianCompensation;
         } else if (providerType === 'APP') {
           // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
@@ -2323,11 +2327,12 @@ export class IndexedDBService {
           // For CALL view: Show only Call Pay surveys
           surveyMatchesProviderType = isCallPay;
         } else if (providerType === 'PHYSICIAN') {
-          // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
-          // MOONLIGHTING is physician-related compensation data
+          // For PHYSICIAN view: Include only PHYSICIAN compensation surveys, exclude CALL_PAY, MOONLIGHTING, and APP
+          // Moonlighting is a separate survey type, just like Call Pay
           const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
                                          !isCallPay && 
-                                         (this.isCompensationSurvey(survey) || isMoonlighting);
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
           surveyMatchesProviderType = isPhysicianCompensation;
         } else if (providerType === 'APP') {
           // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
@@ -2691,8 +2696,42 @@ export class IndexedDBService {
 
       for (const survey of surveys) {
         // Filter surveys by provider type if specified
-        if (providerType && survey.providerType && survey.providerType !== providerType) {
-          continue;
+        // Use the same logic as getUnmappedSpecialties to properly exclude Call Pay surveys
+        if (providerType !== undefined) {
+          // Determine if this survey matches the requested provider type
+          let surveyMatchesProviderType = false;
+          
+          // Use helper methods for consistent classification
+          const isCallPay = this.isCallPaySurvey(survey);
+          const isMoonlighting = this.isMoonlightingSurvey(survey);
+          const effectiveProviderType = this.getEffectiveProviderType(survey);
+          
+          if (providerType === 'CALL') {
+            // For CALL view: Show only Call Pay surveys
+            surveyMatchesProviderType = isCallPay;
+          } else if (providerType === 'PHYSICIAN') {
+            // For PHYSICIAN view: Include only PHYSICIAN compensation surveys, exclude CALL_PAY, MOONLIGHTING, and APP
+            // Moonlighting is a separate survey type, just like Call Pay
+            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                         !isCallPay && 
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
+            surveyMatchesProviderType = isPhysicianCompensation;
+          } else if (providerType === 'APP') {
+            // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+            surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                     !isCallPay && 
+                                     !isMoonlighting;
+          } else {
+            // For CUSTOM or other types: Match providerType exactly
+            // For CUSTOM surveys, must match exactly (including custom providerType values)
+            surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                     survey.providerType === providerType;
+          }
+          
+          if (!surveyMatchesProviderType) {
+            continue;
+          }
         }
         
         const { rows } = await this.getSurveyData(survey.id);
@@ -2816,7 +2855,36 @@ export class IndexedDBService {
           this.getAllSurveys().then(surveys => {
             const validSurveySources = new Set<string>();
             surveys.forEach(survey => {
-              if (survey.providerType === providerType) {
+              // Use the same logic as getUnmappedSpecialties to properly exclude Call Pay surveys
+              let surveyMatchesProviderType = false;
+              
+              // Use helper methods for consistent classification
+              const isCallPay = this.isCallPaySurvey(survey);
+              const isMoonlighting = this.isMoonlightingSurvey(survey);
+              const effectiveProviderType = this.getEffectiveProviderType(survey);
+              
+              if (providerType === 'CALL') {
+                // For CALL view: Show only Call Pay surveys
+                surveyMatchesProviderType = isCallPay;
+              } else if (providerType === 'PHYSICIAN') {
+                // For PHYSICIAN view: Include PHYSICIAN surveys + MOONLIGHTING, exclude CALL_PAY and APP
+                // MOONLIGHTING is physician-related compensation data
+                const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                             !isCallPay && 
+                                             (this.isCompensationSurvey(survey) || isMoonlighting);
+                surveyMatchesProviderType = isPhysicianCompensation;
+              } else if (providerType === 'APP') {
+                // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
+                surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                         !isCallPay && 
+                                         !isMoonlighting;
+              } else {
+                // For CUSTOM or other types: Match providerType exactly
+                surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                         survey.providerType === providerType;
+              }
+              
+              if (surveyMatchesProviderType) {
                 validSurveySources.add(survey.name);
                 validSurveySources.add(survey.type);
               }

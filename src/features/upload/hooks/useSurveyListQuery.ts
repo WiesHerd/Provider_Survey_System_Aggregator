@@ -33,8 +33,27 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
   // Filter by provider type if provided
   if (providerType && providerType !== 'BOTH') {
     filteredSurveys = filteredSurveys.filter((survey: any) => {
-      // Check both providerType and dataCategory fields
-      const surveyProviderType = survey.providerType || survey.dataCategory || '';
+      const surveyProviderType = survey.providerType || 'PHYSICIAN'; // Default to PHYSICIAN for legacy surveys
+      const surveyDataCategory = survey.dataCategory;
+      
+      // Check if this is a Call Pay survey (by dataCategory or name)
+      const isCallPay = surveyDataCategory === 'CALL_PAY' || 
+                       surveyProviderType === 'CALL' ||
+                       (survey.name && survey.name.toLowerCase().includes('call pay')) ||
+                       (survey.type && survey.type.toLowerCase().includes('call pay'));
+      
+      // If filtering for CALL type, show only Call Pay surveys
+      if (providerType === 'CALL') {
+        return isCallPay;
+      }
+      
+      // For PHYSICIAN and APP views, exclude Call Pay surveys
+      // Only show surveys that match the provider type AND are not Call Pay
+      if (providerType === 'PHYSICIAN' || providerType === 'APP') {
+        return surveyProviderType === providerType && !isCallPay;
+      }
+      
+      // For other provider types (CUSTOM, etc.), use standard filtering
       return surveyProviderType === providerType;
     });
   }

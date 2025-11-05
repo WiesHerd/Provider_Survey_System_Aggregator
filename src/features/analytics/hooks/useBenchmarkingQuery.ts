@@ -17,6 +17,7 @@ import { createQueryFn, createFiltersHash } from '../../../shared/services/query
 import { trackFetch } from '../../../shared/hooks/useQueryTelemetry';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { AnalyticsFilters, AggregatedData } from '../types/analytics';
+import { DynamicAggregatedData } from '../types/variables';
 import { filterAnalyticsData } from '../utils/analyticsCalculations';
 
 interface UseBenchmarkingQueryOptions {
@@ -25,7 +26,7 @@ interface UseBenchmarkingQueryOptions {
 }
 
 interface BenchmarkingQueryData {
-  data: AggregatedData[];
+  data: AggregatedData[] | DynamicAggregatedData[]; // Support both old and new data formats
   mappings: any[];
   columnMappings: any[];
   regionMappings: any[];
@@ -35,8 +36,8 @@ interface BenchmarkingQueryData {
  * Hook return interface - matches UseAnalyticsReturn exactly
  */
 export interface UseBenchmarkingQueryReturn {
-  data: AggregatedData[]; // Filtered data for display
-  allData: AggregatedData[]; // All data for filter options
+  data: AggregatedData[] | DynamicAggregatedData[]; // Filtered data for display (supports both formats)
+  allData: AggregatedData[] | DynamicAggregatedData[]; // All data for filter options (supports both formats)
   loading: boolean;
   loadingProgress: number;
   error: string | null;
@@ -66,16 +67,18 @@ async function fetchBenchmarkingData(
     const dataService = getDataService();
     const analyticsDataService = new AnalyticsDataService();
 
-    // Fetch all data (no filtering at service level - filter in UI)
-    // Use getAnalyticsData with empty filters to get all data
+    // CRITICAL FIX: Use getAnalyticsDataByVariables instead of getAnalyticsData
+    // getAnalyticsData only processes TCC, wRVU, and CF (old format)
+    // getAnalyticsDataByVariables processes ALL variables (base_salary, on_call_compensation, etc.)
+    // Pass empty array to process ALL variables (no filtering)
     const [allData, specialtyMappings, columnMappings, regionMappings] = await Promise.all([
-      analyticsDataService.getAnalyticsData({
+      analyticsDataService.getAnalyticsDataByVariables({
         specialty: '',
         surveySource: '',
         geographicRegion: '',
         providerType: '',
         year: ''
-      }),
+      }, []), // Empty array = process ALL variables
       dataService.getAllSpecialtyMappings(),
       dataService.getAllColumnMappings(),
       dataService.getRegionMappings()

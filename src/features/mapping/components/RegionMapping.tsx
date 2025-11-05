@@ -58,7 +58,7 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
-    
+    clearAllLearnedMappings,
     
     // Search and filters
     setSearchTerm,
@@ -74,10 +74,10 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
   };
 
   // Handle remove learned mapping
-  const handleRemoveLearnedMapping = (original: string) => {
-    if (window.confirm('Remove this learned region mapping?')) {
-      removeLearnedMapping(original);
-    }
+  // Note: Confirmation is handled in LearnedRegionMappings component
+  // This method just performs the deletion without additional confirmation
+  const handleRemoveLearnedMapping = async (original: string) => {
+    await removeLearnedMapping(original);
   };
 
   // Handle create mapping (auto-join like Variable Mapping - no modal)
@@ -147,9 +147,10 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
               onApplyAllLearnedMappings={() => {
                 console.log('Apply all learned region mappings');
               }}
-              onClearAllLearnedMappings={() => {
-                if (window.confirm('Are you sure you want to clear all learned mappings?')) {
-                  console.log('Clear all learned region mappings');
+              onClearAllLearnedMappings={async () => {
+                // Using window.confirm for header action - could be replaced with ConfirmationDialog if needed
+                if (window.confirm('Are you sure you want to clear all learned mappings? This cannot be undone.')) {
+                  await clearAllLearnedMappings();
                 }
               }}
             >
@@ -214,6 +215,11 @@ export const RegionMapping: React.FC<RegionMappingProps> = ({
                   searchTerm={searchTerm}
                   onSearchChange={setSearchTerm}
                   onRemoveMapping={handleRemoveLearnedMapping}
+                  onClearAllMappings={() => {
+                    if (window.confirm('Are you sure you want to clear all learned mappings? This cannot be undone.')) {
+                      clearAllLearnedMappings();
+                    }
+                  }}
                   onApplyAllMappings={() => {
                     // Apply all learned mappings
                     console.log('Apply all learned region mappings');

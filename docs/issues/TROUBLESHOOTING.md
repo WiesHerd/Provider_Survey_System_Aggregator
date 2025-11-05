@@ -2,6 +2,21 @@
 
 ## Common Issues and Resolutions
 
+### 0. Variables Not Showing in Benchmarking Screen
+
+#### Problem
+Only TCC, wRVU, and CF variables are visible. Other variables (Base Salary, Call Pay, etc.) are missing.
+
+#### Root Cause
+The benchmarking screen was using the old `getAnalyticsData()` method which only processes three variables.
+
+#### Solution
+See [Variable Processing Critical Fix](VARIABLE_PROCESSING_CRITICAL_FIX.md) for complete details.
+
+**Quick Fix**: Ensure `useBenchmarkingQuery` uses `getAnalyticsDataByVariables()` instead of `getAnalyticsData()`.
+
+## Common Issues and Resolutions
+
 ### 1. Material-UI (MUI) Type Definition Issues
 
 #### Problem

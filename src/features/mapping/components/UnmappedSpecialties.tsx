@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TextField,
   Typography,
@@ -39,12 +39,43 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
   showAllProviderTypes = false,
   onToggleProviderTypeFilter
 }) => {
+  // State for hidden survey columns
+  const [hiddenSurveys, setHiddenSurveys] = useState<Set<string>>(new Set());
+
+  // Reset hidden surveys when "Show All Surveys" toggle changes
+  useEffect(() => {
+    setHiddenSurveys(new Set());
+  }, [showAllProviderTypes]);
+
+  // Handler to hide a survey column
+  const handleHideSurvey = (source: string) => {
+    setHiddenSurveys(prev => {
+      const newSet = new Set(prev);
+      newSet.add(source);
+      return newSet;
+    });
+  };
+
+  // Handler to show a survey column (if we add a restore feature later)
+  const handleShowSurvey = (source: string) => {
+    setHiddenSurveys(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(source);
+      return newSet;
+    });
+  };
+
   // Group specialties by survey source
   const specialtiesBySurvey = new Map<string, typeof unmappedSpecialties>();
   unmappedSpecialties.forEach(specialty => {
     const current = specialtiesBySurvey.get(specialty.surveySource) || [];
     specialtiesBySurvey.set(specialty.surveySource, [...current, specialty]);
   });
+
+  // Filter out hidden surveys
+  const visibleSurveys = Array.from(specialtiesBySurvey.entries()).filter(
+    ([source]) => !hiddenSurveys.has(source)
+  );
 
   return (
     <>
@@ -165,23 +196,45 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Responsive: On mobile (flex-col), vertical stack; on larger screens (sm:flex-row), horizontal row with scroll */}
           {/* Columns grow to fill space when few columns exist, but maintain minimum width and scroll when many */}
-          {Array.from(specialtiesBySurvey.entries()).map(([source, specialties]) => {
+          {visibleSurveys.map(([source, specialties]) => {
             const color = getSurveySourceColor(source);
             
             return (
               <Paper 
                 key={source} 
-                className="p-3 relative overflow-hidden flex-shrink-0 sm:flex-1 border border-gray-200"
+                className="p-3 relative overflow-hidden flex-shrink-0 sm:flex-1 border border-gray-200 transition-all duration-200"
                 style={{ 
                   minWidth: '320px',
                   maxWidth: '500px' // Prevent columns from becoming too wide on very large screens
                 }}
               >
-              <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium">
+              <Typography variant="h6" className="mb-3 flex items-center justify-between text-sm font-medium relative">
                 <span style={{ color }}>{source}</span>
-                <Typography variant="caption" color="textSecondary" className="text-xs">
-                  {specialties.length} specialties
-                </Typography>
+                <div className="flex items-center gap-2">
+                  <Typography variant="caption" color="textSecondary" className="text-xs">
+                    {specialties.length} specialties
+                  </Typography>
+                  {/* Close button to hide survey column */}
+                  <div className="relative group">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleHideSurvey(source);
+                      }}
+                      className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1"
+                      aria-label="Hide this survey column"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                    {/* Tooltip */}
+                    <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                      <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                        Hide this survey column
+                        <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </Typography>
               <div className="space-y-1.5">
                 {specialties.map((specialty: any) => (
@@ -202,7 +255,7 @@ export const UnmappedSpecialties: React.FC<UnmappedSpecialtiesProps> = ({
       </div>
 
       {/* Empty State - Consistent enterprise pattern */}
-      {Array.from(specialtiesBySurvey.entries()).length === 0 && (
+      {visibleSurveys.length === 0 && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">

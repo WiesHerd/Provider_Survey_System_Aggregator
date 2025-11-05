@@ -310,12 +310,24 @@ const SurveyUpload: React.FC = () => {
             const surveyProviderType = survey.providerType || 'PHYSICIAN'; // Default to PHYSICIAN for legacy surveys
             const surveyDataCategory = survey.dataCategory;
             
-            // If filtering for CALL type, also check dataCategory === 'CALL_PAY'
+            // Check if this is a Call Pay survey (by dataCategory or name)
+            const isCallPay = surveyDataCategory === 'CALL_PAY' || 
+                             surveyProviderType === 'CALL' ||
+                             (survey.name && survey.name.toLowerCase().includes('call pay')) ||
+                             (survey.type && survey.type.toLowerCase().includes('call pay'));
+            
+            // If filtering for CALL type, show only Call Pay surveys
             if (selectedProviderType === 'CALL') {
-              return surveyProviderType === 'CALL' || surveyDataCategory === 'CALL_PAY';
+              return isCallPay;
             }
             
-            // For other provider types, use standard filtering
+            // For PHYSICIAN and APP views, exclude Call Pay surveys
+            // Only show surveys that match the provider type AND are not Call Pay
+            if (selectedProviderType === 'PHYSICIAN' || selectedProviderType === 'APP') {
+              return surveyProviderType === selectedProviderType && !isCallPay;
+            }
+            
+            // For other provider types (CUSTOM, etc.), use standard filtering
             return surveyProviderType === selectedProviderType;
           });
         }

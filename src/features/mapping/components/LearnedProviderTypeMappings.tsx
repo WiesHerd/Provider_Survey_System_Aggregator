@@ -5,13 +5,8 @@ import {
   InputAdornment,
   IconButton,
   Checkbox,
-  Button,
   Box,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
+  Chip
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
@@ -20,6 +15,7 @@ import {
   CheckIcon
 } from '@heroicons/react/24/outline';
 import { MappedProviderTypeItem } from './MappedProviderTypeItem';
+import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
 
 interface LearnedProviderTypeMappingsProps {
   learnedMappings: Record<string, string>;
@@ -46,16 +42,14 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
   
   // Confirmation dialog state
   const [confirmationDialog, setConfirmationDialog] = useState<{
-    open: boolean;
+    isOpen: boolean;
     title: string;
     message: string;
-    items: string[];
     onConfirm: () => void;
   }>({
-    open: false,
+    isOpen: false,
     title: '',
     message: '',
-    items: [],
     onConfirm: () => {}
   });
 
@@ -117,10 +111,9 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
   const handleBulkDelete = useCallback(() => {
     const selectedItems = Array.from(selectedMappings);
     setConfirmationDialog({
-      open: true,
+      isOpen: true,
       title: 'Delete Selected Mappings',
       message: `Are you sure you want to delete ${selectedItems.length} learned mapping(s)? This action cannot be undone.`,
-      items: selectedItems,
       onConfirm: () => {
         selectedItems.forEach(mappingId => {
           // Find the original mapping key for this standardized name
@@ -132,7 +125,7 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
           }
         });
         setSelectedMappings(new Set());
-        setConfirmationDialog(prev => ({ ...prev, open: false }));
+        setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
       }
     });
   }, [selectedMappings, learnedMappingsList, onRemoveMapping]);
@@ -228,12 +221,20 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
             isSelected={selectedMappings.has(mapping.id)}
             onSelect={handleSelectMapping}
             onDelete={() => {
-              if (window.confirm('Remove this learned mapping?')) {
-                // Remove all source provider types for this standardized name
-                mapping.sourceProviderTypes.forEach(source => {
-                  onRemoveMapping(source.providerType);
-                });
-              }
+              // Show single confirmation dialog for deleting all source provider types
+              setConfirmationDialog({
+                isOpen: true,
+                title: 'Remove Learned Mapping',
+                message: `Are you sure you want to remove the learned mapping for "${mapping.standardizedName}"? This will remove ${mapping.sourceProviderTypes.length} mapping(s).`,
+                onConfirm: () => {
+                  // Delete all original mappings that map to this standardized name
+                  // No need for individual confirmations - user already confirmed once
+                  mapping.sourceProviderTypes.forEach(source => {
+                    onRemoveMapping(source.providerType);
+                  });
+                  setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+                }
+              });
             }}
           />
         ))}
@@ -260,44 +261,16 @@ export const LearnedProviderTypeMappings: React.FC<LearnedProviderTypeMappingsPr
       )}
 
       {/* Confirmation Dialog */}
-      <Dialog
-        open={confirmationDialog.open}
-        onClose={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{confirmationDialog.title}</DialogTitle>
-        <DialogContent>
-          <p className="text-gray-600 mb-4">{confirmationDialog.message}</p>
-          {confirmationDialog.items.length > 0 && (
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-2">Selected items:</p>
-              <div className="space-y-1">
-                {confirmationDialog.items.map((item, index) => (
-                  <div key={index} className="text-sm text-gray-600">
-                    • {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-            color="inherit"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={confirmationDialog.onConfirm}
-            color="error"
-            variant="contained"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmationDialog
+        isOpen={confirmationDialog.isOpen}
+        onClose={() => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmationDialog.onConfirm}
+        title={confirmationDialog.title}
+        message={confirmationDialog.message}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };

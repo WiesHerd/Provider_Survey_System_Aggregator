@@ -6,6 +6,7 @@
  */
 
 import { AggregatedData } from '../types/analytics';
+import { DynamicAggregatedData } from '../types/variables';
 import { analyticsComputationCache, cacheUtils } from '../services/analyticsComputationCache';
 import { mapVariableNameToStandard } from './variableFormatters';
 
@@ -144,18 +145,52 @@ export const transformSurveyData = (
  */
 /**
  * Normalize specialty name for fuzzy matching (same logic as AnalyticsDataService)
+ * Enhanced to handle variations like "Pediatrics (general)" vs "Pediatrics: General" vs "General Pediatrics"
  */
 export const normalizeSpecialtyName = (specialty: string): string => {
   if (!specialty) return '';
   
   return specialty
     .toLowerCase()
+    .replace(/[():]/g, ' ')      // Replace parentheses and colons with spaces
     .replace(/\s+and\s+/g, ' ')  // Replace "and" with space
     .replace(/\s+/g, ' ')        // Normalize multiple spaces
     .trim();
 };
 
-export const filterAnalyticsData = (data: AggregatedData[], filters: any): AggregatedData[] => {
+/**
+ * Enhanced specialty matching that handles word order variations
+ * e.g., "Pediatrics (general)" should match "General Pediatrics" or "Pediatrics: General"
+ */
+export const matchSpecialtyName = (filterSpecialty: string, rowSpecialty: string): boolean => {
+  if (!filterSpecialty || !rowSpecialty) return false;
+  
+  const normalizedFilter = normalizeSpecialtyName(filterSpecialty);
+  const normalizedRow = normalizeSpecialtyName(rowSpecialty);
+  
+  // Exact match after normalization
+  if (normalizedFilter === normalizedRow) {
+    return true;
+  }
+  
+  // Word-based matching (order-independent)
+  // Split into words and check if all filter words exist in row specialty
+  const filterWords = normalizedFilter.split(/\s+/).filter(w => w.length >= 2);
+  const rowWords = normalizedRow.split(/\s+/).filter(w => w.length >= 2);
+  
+  if (filterWords.length === 0) return false;
+  
+  // Check if all filter words are present in row (order-independent)
+  const allWordsMatch = filterWords.every(filterWord => 
+    rowWords.some(rowWord => 
+      rowWord.includes(filterWord) || filterWord.includes(rowWord)
+    )
+  );
+  
+  return allWordsMatch;
+};
+
+export const filterAnalyticsData = (data: AggregatedData[] | DynamicAggregatedData[], filters: any): AggregatedData[] | DynamicAggregatedData[] => {
   // Early exit for empty data
   if (!data || data.length === 0) {
     return [];
@@ -183,18 +218,18 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   const cacheKey = cacheUtils.filterKey(dataHash, filterHash);
 
   // Check cache first
-  const cached = analyticsComputationCache.get<AggregatedData[]>(cacheKey);
+  const cached = analyticsComputationCache.get<AggregatedData[] | DynamicAggregatedData[]>(cacheKey);
   if (cached) {
     return cached;
   }
 
-  // Create indexed lookups for faster filtering
-  const specialtyIndex = new Map<string, AggregatedData[]>();
-  const sourceIndex = new Map<string, AggregatedData[]>();
-  const regionIndex = new Map<string, AggregatedData[]>();
-  const providerTypeIndex = new Map<string, AggregatedData[]>();
-  const yearIndex = new Map<string, AggregatedData[]>();
-  const dataCategoryIndex = new Map<string, AggregatedData[]>(); // NEW: Data category index
+  // Create indexed lookups for faster filtering (supports both data formats)
+  const specialtyIndex = new Map<string, (AggregatedData | DynamicAggregatedData)[]>();
+  const sourceIndex = new Map<string, (AggregatedData | DynamicAggregatedData)[]>();
+  const regionIndex = new Map<string, (AggregatedData | DynamicAggregatedData)[]>();
+  const providerTypeIndex = new Map<string, (AggregatedData | DynamicAggregatedData)[]>();
+  const yearIndex = new Map<string, (AggregatedData | DynamicAggregatedData)[]>();
+  const dataCategoryIndex = new Map<string, (AggregatedData | DynamicAggregatedData)[]>(); // NEW: Data category index
 
   // Build indexes
   data.forEach(row => {
@@ -205,8 +240,9 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
     }
     specialtyIndex.get(specialtyKey)!.push(row);
     
-    // Debug logging for MGMA data
-    if (row.surveySource && row.surveySource.toLowerCase().includes('mgma')) {
+    // Debug logging for MGMA data (suppressed - too verbose)
+    // Removed verbose logging to reduce console noise
+    if (false && row.surveySource && row.surveySource.toLowerCase().includes('mgma')) {
       console.log('🔍 MGMA Data Index Building:', {
         surveySource: row.surveySource,
         standardizedName: row.standardizedName,
@@ -216,8 +252,8 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       });
     }
     
-    // Debug logging for SullivanCotter data
-    if (row.surveySource && row.surveySource.toLowerCase().includes('sullivan')) {
+    // Debug logging for SullivanCotter data (reduced verbosity - only log first few)
+    if (row.surveySource && row.surveySource.toLowerCase().includes('sullivan') && specialtyIndex.size < 5) {
       console.log('🔍 SullivanCotter Data Index Building:', {
         surveySource: row.surveySource,
         standardizedName: row.standardizedName,
@@ -299,12 +335,37 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   });
 
   // Apply filters using indexes for faster lookup
-  let filteredData: AggregatedData[] = data;
+  let filteredData: (AggregatedData | DynamicAggregatedData)[] = data;
 
-  // Specialty filter - use indexed lookup
+  // Specialty filter - use indexed lookup with enhanced matching
   if (filters.specialty && filters.specialty !== '') {
     const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
-    const specialtyMatches = specialtyIndex.get(normalizedFilterSpecialty) || [];
+    let specialtyMatches = specialtyIndex.get(normalizedFilterSpecialty) || [];
+    
+    // CRITICAL FIX: If no exact match found, try fuzzy matching with word order variations
+    if (specialtyMatches.length === 0) {
+      // Find all specialty keys that match the filter using word-based matching
+      const matchingKeys: string[] = [];
+      specialtyIndex.forEach((rows, key) => {
+        if (matchSpecialtyName(filters.specialty, key)) {
+          matchingKeys.push(key);
+        }
+      });
+      
+      // Collect all rows from matching keys
+      matchingKeys.forEach(key => {
+        const rows = specialtyIndex.get(key) || [];
+        specialtyMatches.push(...rows);
+      });
+      
+      console.log('🔍 filterAnalyticsData: Fuzzy specialty matching:', {
+        selectedSpecialty: filters.specialty,
+        normalizedFilterSpecialty,
+        exactMatchFound: specialtyIndex.has(normalizedFilterSpecialty),
+        matchingKeys,
+        totalMatches: specialtyMatches.length
+      });
+    }
     
     // ENTERPRISE DEBUG: Check for Call Pay data in specialty matches
     const callPayInMatches = specialtyMatches.filter((row: any) => {
@@ -322,6 +383,7 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
       callPayRowsInMatchesDetails: callPayInMatches.slice(0, 3).map((row: any) => ({
         surveySource: (row as any).surveySource,
         standardizedName: (row as any).standardizedName,
+        surveySpecialty: (row as any).surveySpecialty,
         dataCategory: (row as any).dataCategory,
         hasVariables: !!(row as any).variables,
         variableKeys: (row as any).variables ? Object.keys((row as any).variables) : []
@@ -334,12 +396,28 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
     const mgmaMatches = specialtyMatches.filter(row =>
       row.surveySource && row.surveySource.toLowerCase().includes('mgma')
     );
+    const mgmaCallPayMatches = mgmaMatches.filter((row: any) => {
+      const rowDataCategory = (row as any).dataCategory;
+      const surveySource = (row as any).surveySource || '';
+      return rowDataCategory === 'CALL_PAY' || 
+             (!rowDataCategory && surveySource.toLowerCase().includes('call pay'));
+    });
+    
     console.log('🔍 MGMA in specialty matches:', {
       mgmaMatchesCount: mgmaMatches.length,
+      mgmaCallPayMatchesCount: mgmaCallPayMatches.length,
       mgmaMatches: mgmaMatches.map(row => ({
         surveySource: row.surveySource,
         standardizedName: row.standardizedName,
-        surveySpecialty: row.surveySpecialty
+        surveySpecialty: row.surveySpecialty,
+        dataCategory: (row as any).dataCategory
+      })),
+      mgmaCallPayDetails: mgmaCallPayMatches.slice(0, 3).map((row: any) => ({
+        surveySource: (row as any).surveySource,
+        standardizedName: (row as any).standardizedName,
+        surveySpecialty: (row as any).surveySpecialty,
+        hasVariables: !!(row as any).variables,
+        variableKeys: (row as any).variables ? Object.keys((row as any).variables) : []
       }))
     });
     
@@ -531,7 +609,7 @@ export const filterAnalyticsData = (data: AggregatedData[], filters: any): Aggre
   // Cache the result
   analyticsComputationCache.set(cacheKey, filteredData);
   
-  return filteredData;
+  return filteredData as AggregatedData[] | DynamicAggregatedData[];
 };
 
 /**

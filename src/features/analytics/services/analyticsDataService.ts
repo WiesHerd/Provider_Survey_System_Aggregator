@@ -959,8 +959,8 @@ export class AnalyticsDataService {
   private extractNumber(value: any): number {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
-      // Handle "***" values as 0
-      if (value === '***' || value === '' || value === 'null' || value === 'undefined') return 0;
+      // Handle suppressed values (single or multiple asterisks) as 0
+      if (value === '***' || value === '*' || value === '**' || value === '' || value === 'null' || value === 'undefined') return 0;
       const parsed = parseFloat(value.replace(/[,$]/g, ''));
       return isNaN(parsed) ? 0 : parsed;
     }
@@ -1109,9 +1109,14 @@ export class AnalyticsDataService {
       chunk.forEach(row => {
         const key = `${row.specialty}_${row.providerType}_${row.region}_${row.surveySource}`;
         
-        // Debug MGMA data grouping
-        if (row.surveySource && row.surveySource.toLowerCase().includes('mgma')) {
-          console.log('🎯 MGMA Data Grouping:', {
+        // Debug MGMA data grouping (SUPPRESSED - too verbose)
+        // Only log for target specialty to reduce console noise
+        const isTargetGrouping = row.specialty?.toLowerCase().includes('pediatric') && 
+                                 row.specialty?.toLowerCase().includes('general') &&
+                                 row.surveySource?.toLowerCase().includes('mgma') &&
+                                 row.surveySource?.toLowerCase().includes('call pay');
+        if (isTargetGrouping) {
+          console.log('🔍 [TARGET TRACE] MGMA Data Grouping:', {
             key,
             specialty: row.specialty,
             providerType: row.providerType,
@@ -1272,6 +1277,8 @@ export class AnalyticsDataService {
       mappings.learnedSpecialtyMappings
     );
     
+    // Removed verbose logging - keeping normalization logic clean
+    
     // ENTERPRISE FIX: For Call Pay surveys, use survey's providerType first
     // This ensures Call Pay surveys are correctly identified even if data rows don't have providerType
     let rawProviderType: string;
@@ -1420,8 +1427,10 @@ export class AnalyticsDataService {
       
       const normalizedVarName = normalizeVariableName(variable);
       
-      // Process ALL variables by default, only filter if specific variables are selected
-      const shouldProcess = selectedVariables.length === 0 || selectedVariables.includes(normalizedVarName);
+      // CRITICAL FIX: Always process ALL variables during normalization
+      // Filtering by selectedVariables should only happen at DISPLAY time, not during data processing
+      // This ensures all variables are available when user changes their selection
+      const shouldProcess = true; // Always process - don't filter during normalization
       
       if (shouldProcess) {
         // Extract percentiles with fallback to handle column name variations
@@ -1453,7 +1462,7 @@ export class AnalyticsDataService {
           p90
         };
         
-        // Enhanced logging for Call Pay variables
+        // Enhanced logging for Call Pay variables (suppressed to reduce noise)
         const isCallPayVariable = normalizedVarName === 'on_call_compensation' || 
                                   normalizedVarName.includes('on_call') || 
                                   normalizedVarName.includes('oncall');
@@ -1462,10 +1471,16 @@ export class AnalyticsDataService {
                                 survey.providerType === 'CALL' ||
                                 (survey.name && survey.name.toLowerCase().includes('call pay'));
         
-        if (isCallPayVariable || (isCallPaySurvey && (originalVariable.toLowerCase().includes('on') && originalVariable.toLowerCase().includes('call')))) {
+        // ENTERPRISE DEBUG: Comprehensive logging for Call Pay variable normalization (suppressed to reduce noise)
+        // Removed verbose logging
+        if (false && (isCallPayVariable || (isCallPaySurvey && (originalVariable.toLowerCase().includes('on') && originalVariable.toLowerCase().includes('call'))))) {
           console.log('🔍 Call Pay variable extracted in normalizeRowDynamic:', {
             surveyId: survey.id,
             surveyName: survey.name,
+            surveySource: surveySource,
+            dataCategory: (survey as any).dataCategory,
+            providerType: survey.providerType,
+            specialty: normalizedSpecialty,
             originalVariable,
             mappedVariable: variable,
             normalizedVarName,
@@ -1479,8 +1494,30 @@ export class AnalyticsDataService {
             p90,
             hasP25: !!actualRowData.p25 || !!actualRowData['25th%'],
             hasP50: !!actualRowData.p50 || !!actualRowData['50th%'],
-            rowKeys: Object.keys(actualRowData).slice(0, 10)
+            rowKeys: Object.keys(actualRowData).slice(0, 10),
+            variableStoredWithKey: normalizedVarName,
+            willBeStoredInVariables: {
+              [normalizedVarName]: {
+                variableName: variable,
+                n_orgs,
+                n_incumbents,
+                p25,
+                p50,
+                p75,
+                p90
+              }
+            }
           });
+          
+          // CRITICAL: Verify the key that will be used for storage
+          if (normalizedVarName !== 'on_call_compensation') {
+            console.warn('⚠️ Call Pay variable normalized to unexpected key:', {
+              expected: 'on_call_compensation',
+              actual: normalizedVarName,
+              originalVariable,
+              mappedVariable: variable
+            });
+          }
         }
       }
     } else {
@@ -1510,8 +1547,9 @@ export class AnalyticsDataService {
       
       // Process discovered variables
       variableMap.forEach((varData, normalizedVarName) => {
-        // Only process if no selectedVariables filter or if variable is selected
-        const shouldProcess = selectedVariables.length === 0 || selectedVariables.includes(normalizedVarName);
+        // CRITICAL FIX: Always process ALL variables during normalization
+        // Filtering by selectedVariables should only happen at DISPLAY time, not during data processing
+        const shouldProcess = true; // Always process - don't filter during normalization
         
         if (shouldProcess && varData.p50 && varData.p50 > 0) {
           variables[normalizedVarName] = {
@@ -1566,22 +1604,7 @@ export class AnalyticsDataService {
         : (survey.type || survey.name || 'Unknown');
     }
     
-    // Debug logging for Call Pay surveys in dynamic normalization
-    // FIXED: Check for Call Pay using dataCategory OR old providerType for backward compatibility
-    if ((survey as any).dataCategory === 'CALL_PAY' || survey.providerType === 'CALL') {
-      console.log('🎯 Call Pay Dynamic Normalization:', {
-        surveyName: survey.name,
-        surveyType: survey.type,
-        surveyProviderType: survey.providerType,
-        nameIncludesCallPay: survey.name && survey.name.includes('Call Pay'),
-        dataCategory: (survey as any).dataCategory,
-        source: (survey as any).source,
-        finalSurveySource,
-        finalSurveySourceLength: finalSurveySource.length,
-        variablesCount: Object.keys(variables).length,
-        variableNames: Object.keys(variables)
-      });
-    }
+    // Removed verbose Call Pay logging - keeping normalization logic clean
     
     // CRITICAL FIX: Ensure dataCategory is set correctly, especially for Call Pay surveys
     // If survey doesn't have dataCategory but it's a Call Pay survey, infer it
@@ -1598,6 +1621,8 @@ export class AnalyticsDataService {
         rowDataCategory = 'COMPENSATION'; // Default
       }
     }
+    
+    // Removed verbose logging - keeping normalization logic clean
     
     return {
       specialty: rawSpecialty, // Original specialty name from survey
@@ -1672,8 +1697,11 @@ export class AnalyticsDataService {
       // Aggregate variables from all rows (weighted by n_incumbents)
       const variableMap = new Map<string, VariableMetrics[]>();
       
+      // Removed verbose logging - keeping aggregation logic clean
+      
       rows.forEach(row => {
-        Object.entries(row.variables).forEach(([varName, metrics]) => {
+        
+        Object.entries(row.variables || {}).forEach(([varName, metrics]) => {
           if (!variableMap.has(varName)) {
             variableMap.set(varName, []);
           }
@@ -1696,8 +1724,12 @@ export class AnalyticsDataService {
             p75: baseMetrics.p75,
             p90: baseMetrics.p90
           };
+          
+          // Removed verbose logging - keeping aggregation logic clean
         }
       });
+      
+      // Removed verbose logging - keeping aggregation logic clean
       
       aggregatedData.push(aggregatedRecord);
     }

@@ -5,13 +5,8 @@ import {
   InputAdornment,
   IconButton,
   Checkbox,
-  Button,
   Box,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
+  Chip
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
@@ -20,12 +15,14 @@ import {
   CheckIcon
 } from '@heroicons/react/24/outline';
 import { MappedRegionItem } from './MappedRegionItem';
+import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
 
 interface LearnedRegionMappingsProps {
   learnedMappings: Record<string, string>;
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onRemoveMapping: (original: string) => void;
+  onClearAllMappings?: () => void;
   onApplyAllMappings?: () => void;
 }
 
@@ -34,6 +31,7 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
   searchTerm,
   onSearchChange,
   onRemoveMapping,
+  onClearAllMappings,
   onApplyAllMappings
 }) => {
   // Bulk selection state
@@ -42,16 +40,14 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
   
   // Confirmation dialog state
   const [confirmationDialog, setConfirmationDialog] = useState<{
-    open: boolean;
+    isOpen: boolean;
     title: string;
     message: string;
-    items: string[];
     onConfirm: () => void;
   }>({
-    open: false,
+    isOpen: false,
     title: '',
     message: '',
-    items: [],
     onConfirm: () => {}
   });
   // Group learned mappings by standardized name (like specialty mapping)
@@ -97,10 +93,9 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
   const handleBulkDelete = useCallback(() => {
     const selectedItems = Array.from(selectedMappings);
     setConfirmationDialog({
-      open: true,
+      isOpen: true,
       title: 'Delete Selected Mappings',
       message: `Are you sure you want to delete ${selectedItems.length} learned mapping(s)? This action cannot be undone.`,
-      items: selectedItems,
       onConfirm: () => {
         selectedItems.forEach(mappingId => {
           // Find the original mapping key for this standardized name
@@ -112,7 +107,7 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
           }
         });
         setSelectedMappings(new Set());
-        setConfirmationDialog(prev => ({ ...prev, open: false }));
+        setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
       }
     });
   }, [selectedMappings, learnedMappingsList, onRemoveMapping]);
@@ -204,6 +199,40 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
         </div>
       </div>
 
+      {/* Action Buttons - Apply All and Clear All */}
+      {Object.keys(learnedMappings).length > 0 && (
+        <div className="flex items-center justify-end gap-3 mb-4">
+          {onApplyAllMappings && (
+            <button
+              onClick={onApplyAllMappings}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
+            >
+              <CheckIcon className="h-4 w-4 mr-2" />
+              Apply All ({Object.keys(learnedMappings).length})
+            </button>
+          )}
+          {onClearAllMappings && (
+            <button
+              onClick={() => {
+                setConfirmationDialog({
+                  isOpen: true,
+                  title: 'Clear All Learned Mappings',
+                  message: `Are you sure you want to clear all ${Object.keys(learnedMappings).length} learned mapping(s)? This action cannot be undone.`,
+                  onConfirm: () => {
+                    onClearAllMappings();
+                    setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+                  }
+                });
+              }}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+            >
+              <DeleteIcon className="h-4 w-4 mr-2" />
+              Clear All
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Learned Mappings List - Reuse MappedRegionItem! */}
       <div className="space-y-4">
         {learnedMappingsList.map((mapping) => (
@@ -211,9 +240,20 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
             key={mapping.id}
             mapping={mapping}
             onDelete={() => {
-              if (window.confirm('Remove this learned mapping?')) {
-                onRemoveMapping(mapping.standardizedName);
-              }
+              // Show single confirmation dialog for deleting all source regions
+              setConfirmationDialog({
+                isOpen: true,
+                title: 'Remove Learned Mapping',
+                message: `Are you sure you want to remove the learned mapping for "${mapping.standardizedName}"? This will remove ${mapping.sourceRegions.length} mapping(s).`,
+                onConfirm: () => {
+                  // Delete all original mappings that map to this standardized name
+                  // No need for individual confirmations - user already confirmed once
+                  mapping.sourceRegions.forEach(source => {
+                    onRemoveMapping(source.region);
+                  });
+                  setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+                }
+              });
             }}
           />
         ))}
@@ -237,44 +277,16 @@ export const LearnedRegionMappings: React.FC<LearnedRegionMappingsProps> = ({
       </div>
 
       {/* Confirmation Dialog */}
-      <Dialog
-        open={confirmationDialog.open}
-        onClose={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{confirmationDialog.title}</DialogTitle>
-        <DialogContent>
-          <p className="text-gray-600 mb-4">{confirmationDialog.message}</p>
-          {confirmationDialog.items.length > 0 && (
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-2">Selected items:</p>
-              <div className="space-y-1">
-                {confirmationDialog.items.map((item, index) => (
-                  <div key={index} className="text-sm text-gray-600">
-                    • {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-            color="inherit"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={confirmationDialog.onConfirm}
-            color="error"
-            variant="contained"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmationDialog
+        isOpen={confirmationDialog.isOpen}
+        onClose={() => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmationDialog.onConfirm}
+        title={confirmationDialog.title}
+        message={confirmationDialog.message}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };

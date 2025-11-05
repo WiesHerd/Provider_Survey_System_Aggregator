@@ -165,8 +165,8 @@ export interface AnalyticsFiltersProps {
  * Analytics hook return type
  */
 export interface UseAnalyticsReturn {
-  data: AggregatedData[];
-  allData: AggregatedData[];
+  data: AggregatedData[] | DynamicAggregatedData[];
+  allData: AggregatedData[] | DynamicAggregatedData[];
   loading: boolean;
   loadingProgress: number;
   error: string | null;

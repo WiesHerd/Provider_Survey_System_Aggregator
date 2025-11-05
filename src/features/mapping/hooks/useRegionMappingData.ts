@@ -233,13 +233,34 @@ export const useRegionMappingData = () => {
   }, []);
 
   // Remove learned mapping
-  const removeLearnedMapping = useCallback((original: string) => {
-    setLearnedMappings(prev => {
-      const newMappings = { ...prev };
-      delete newMappings[original];
-      return newMappings;
-    });
-  }, []);
+  const removeLearnedMapping = useCallback(async (original: string) => {
+    try {
+      await dataService.removeLearnedMapping('region', original);
+      setLearnedMappings(prev => {
+        const newMappings = { ...prev };
+        delete newMappings[original];
+        return newMappings;
+      });
+      // Reload data to refresh the UI
+      await loadData();
+    } catch (err) {
+      console.error('Failed to remove learned mapping:', err);
+      setError('Failed to remove learned mapping');
+    }
+  }, [dataService, loadData]);
+
+  // Clear all learned mappings
+  const clearAllLearnedMappings = useCallback(async () => {
+    try {
+      await dataService.clearLearnedMappings('region');
+      setLearnedMappings({});
+      // Reload data to refresh the UI
+      await loadData();
+    } catch (err) {
+      console.error('Failed to clear all learned mappings:', err);
+      setError('Failed to clear all learned mappings');
+    }
+  }, [dataService, loadData]);
 
   // Error handling
   const clearError = useCallback(() => {
@@ -294,7 +315,7 @@ export const useRegionMappingData = () => {
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
-    
+    clearAllLearnedMappings,
     
     // Search and filters
     setSearchTerm,

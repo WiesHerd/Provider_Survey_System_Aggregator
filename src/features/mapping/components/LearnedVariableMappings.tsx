@@ -5,13 +5,8 @@ import {
   InputAdornment,
   IconButton,
   Checkbox,
-  Button,
   Box,
   Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Paper
 } from '@mui/material';
 import { 
@@ -20,6 +15,7 @@ import {
   TrashIcon as DeleteIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
+import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
 
 interface LearnedVariableMappingsProps {
   learnedMappings: Record<string, string>;
@@ -46,16 +42,14 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
   
   // Confirmation dialog state
   const [confirmationDialog, setConfirmationDialog] = useState<{
-    open: boolean;
+    isOpen: boolean;
     title: string;
     message: string;
-    items: string[];
     onConfirm: () => void;
   }>({
-    open: false,
+    isOpen: false,
     title: '',
     message: '',
-    items: [],
     onConfirm: () => {}
   });
 
@@ -110,10 +104,9 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
   const handleBulkDelete = useCallback(() => {
     const selectedItems = Array.from(selectedMappings);
     setConfirmationDialog({
-      open: true,
+      isOpen: true,
       title: 'Delete Selected Mappings',
       message: `Are you sure you want to delete ${selectedItems.length} learned mapping(s)? This action cannot be undone.`,
-      items: selectedItems,
       onConfirm: () => {
         selectedItems.forEach(mappingId => {
           // Find the original mapping key for this standardized name
@@ -125,7 +118,7 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
           }
         });
         setSelectedMappings(new Set());
-        setConfirmationDialog(prev => ({ ...prev, open: false }));
+        setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
       }
     });
   }, [selectedMappings, learnedMappingsList, onRemoveMapping]);
@@ -250,9 +243,18 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => {
-                        // Remove all source variables for this standardized name
-                        mapping.sourceVariables.forEach(source => {
-                          onRemoveMapping(source.variable);
+                        // Show single confirmation dialog for deleting all source variables
+                        setConfirmationDialog({
+                          isOpen: true,
+                          title: 'Remove Learned Mapping',
+                          message: `Are you sure you want to remove the learned mapping for "${mapping.standardizedName}"? This will remove ${mapping.sourceVariables.length} mapping(s).`,
+                          onConfirm: () => {
+                            // Remove all source variables for this standardized name
+                            mapping.sourceVariables.forEach(source => {
+                              onRemoveMapping(source.variable);
+                            });
+                            setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+                          }
                         });
                       }}
                       className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
@@ -323,44 +325,16 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
       )}
 
       {/* Confirmation Dialog */}
-      <Dialog
-        open={confirmationDialog.open}
-        onClose={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{confirmationDialog.title}</DialogTitle>
-        <DialogContent>
-          <p className="text-gray-600 mb-4">{confirmationDialog.message}</p>
-          {confirmationDialog.items.length > 0 && (
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-2">Selected items:</p>
-              <div className="space-y-1">
-                {confirmationDialog.items.map((item, index) => (
-                  <div key={index} className="text-sm text-gray-600">
-                    • {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setConfirmationDialog(prev => ({ ...prev, open: false }))}
-            color="inherit"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={confirmationDialog.onConfirm}
-            color="error"
-            variant="contained"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmationDialog
+        isOpen={confirmationDialog.isOpen}
+        onClose={() => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmationDialog.onConfirm}
+        title={confirmationDialog.title}
+        message={confirmationDialog.message}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };

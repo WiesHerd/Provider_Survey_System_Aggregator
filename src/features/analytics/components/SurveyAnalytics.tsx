@@ -22,6 +22,8 @@ import { VariableFormattingDialog } from './VariableFormattingDialog';
 // import { DEFAULT_VARIABLES } from '../types/variables'; // Not used currently
 import { logMGMA } from '../utils/diagnostics';
 import { SavedViews } from './SavedViews';
+import { AggregatedData } from '../types/analytics';
+import { DynamicAggregatedData } from '../types/variables';
 
 interface SurveyAnalyticsProps {
   providerTypeFilter?: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
@@ -41,11 +43,26 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   // const { currentYear } = useYear(); // Not currently used
   const { selectedProviderType } = useProviderContext();
   
-  // NEW: Variable selection state - Start with common variables selected
+  // NEW: Variable selection state - Start with NO default selections (user must select)
   const [selectedVariables, setSelectedVariables] = useState<string[]>(() => {
-    console.log('🔍 SurveyAnalytics: Initializing selectedVariables with common variables');
-    return ['tcc', 'work_rvus', 'tcc_per_work_rvu']; // Include TCC per Work RVU by default
+    console.log('🔍 SurveyAnalytics: Initializing selectedVariables with NO defaults');
+    return []; // Empty array - user must explicitly select variables
   });
+  
+  // CRITICAL DEBUG: Log whenever selectedVariables changes
+  useEffect(() => {
+    const { formatVariableDisplayName } = require('../utils/variableFormatters');
+    console.log('🔍 SurveyAnalytics: selectedVariables CHANGED:', {
+      count: selectedVariables.length,
+      variables: selectedVariables,
+      hasBaseSalary: selectedVariables.includes('base_salary'),
+      hasOnCallComp: selectedVariables.includes('on_call_compensation'),
+      allVariables: selectedVariables.map(v => ({ 
+        key: v, 
+        displayName: formatVariableDisplayName(v) 
+      }))
+    });
+  }, [selectedVariables]);
   
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // const [isDiscoveringVariables, setIsDiscoveringVariables] = useState(false); // Not used currently
@@ -85,6 +102,10 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       return vars;
     };
     (window as any).diagnoseMGMA = logMGMA;
+    
+    // Setup diagnostic functions for Call Pay data investigation
+    const { setupDiagnostics } = require('../utils/callPayDiagnostics');
+    setupDiagnostics();
   }, []);
 
   // Load formatting rules on mount
@@ -234,18 +255,21 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
           await logMGMA();
         }
         
-        // Keep pre-selected common variables, but update available variables
+        // Update available variables list
         console.log('🔍 SurveyAnalytics: Discovered variables:', variableNames);
-        console.log('🔍 SurveyAnalytics: Keeping pre-selected common variables:', selectedVariables);
+        console.log('🔍 SurveyAnalytics: Current selectedVariables:', selectedVariables);
         
-        // Filter selectedVariables to only include those that were actually discovered
-        const validSelectedVariables = selectedVariables.filter(variable => 
-          variableNames.includes(variable)
-        );
+        // CRITICAL FIX: Don't remove user-selected variables even if not discovered
+        // The user may have selected variables that exist in the data but weren't discovered
+        // We'll let the table show "***" if data isn't found, rather than removing the selection
+        // Since there are no default variables, always keep user selections
+        console.log('🔍 SurveyAnalytics: Keeping user-selected variables (even if not discovered)');
         
-        if (validSelectedVariables.length !== selectedVariables.length) {
-          console.log('🔍 SurveyAnalytics: Updating selectedVariables to match discovered variables');
-          setSelectedVariables(validSelectedVariables);
+        // Check if any selected variables are not in discovered list
+        const missingVariables = selectedVariables.filter(v => !variableNames.includes(v));
+        if (missingVariables.length > 0) {
+          console.log('🔍 SurveyAnalytics: User selected variables not in discovered list:', missingVariables);
+          console.log('🔍 SurveyAnalytics: These will be shown in table; if data missing, will display "***"');
         }
         
         // If no variables were discovered, try to get them from the data directly
@@ -292,13 +316,13 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       
       // DEBUG: Check specialty mapping data structure (simplified)
       console.log('🔍 SurveyAnalytics: DEBUG - Checking specialty mapping data...');
-      const familyMedicineData = allData.filter(row => 
+      const familyMedicineData = (allData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => 
         row.surveySpecialty?.toLowerCase().includes('family') || 
         row.standardizedName?.toLowerCase().includes('family')
       );
       
       console.log('🔍 SurveyAnalytics: DEBUG - Family Medicine related data:');
-      familyMedicineData.forEach((row, index) => {
+      familyMedicineData.forEach((row: AggregatedData | DynamicAggregatedData, index: number) => {
         console.log(`Family Medicine ${index + 1}:`, {
           surveySource: row.surveySource,
           surveySpecialty: row.surveySpecialty,
@@ -309,7 +333,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   }, [allData, selectedVariables, availableVariables.length]);
 
   // Apply provider type filtering, UI filters, and variable filtering
-  const data = useMemo(() => {
+  const data = useMemo((): (AggregatedData | DynamicAggregatedData)[] => {
     console.log('🔍 SurveyAnalytics: Processing data - allData length:', allData.length);
     console.log('🔍 SurveyAnalytics: selectedVariables:', selectedVariables);
     console.log('🔍 SurveyAnalytics: effectiveProviderType:', effectiveProviderType);
@@ -334,7 +358,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     
     if (effectiveProviderType && effectiveProviderType !== 'BOTH' && !isBenchmarkingScreen) {
       // Only apply provider type filtering if NOT on benchmarking screen
-      providerFilteredData = allData.filter(row => {
+      providerFilteredData = (allData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
         if (!row.providerType) return false;
         // Direct match for exact provider types (CALL, PHYSICIAN, APP)
         if (row.providerType === effectiveProviderType) {
@@ -343,7 +367,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         // Also check categorized match for backward compatibility
         const category = categorizeProviderType(row.providerType);
         return category === effectiveProviderType;
-      });
+      }) as AggregatedData[] | DynamicAggregatedData[];
       console.log('🔍 SurveyAnalytics: Provider filtering enabled:', {
         filter: effectiveProviderType,
         before: allData.length,
@@ -454,7 +478,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     
     // If year is selected, filter by year first
     if (filters.year) {
-      cascadingData = cascadingData.filter(row => row.surveyYear === filters.year);
+      cascadingData = (cascadingData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => row.surveyYear === filters.year) as AggregatedData[] | DynamicAggregatedData[];
     }
     
     // If specialty is selected, filter by specialty
@@ -462,19 +486,19 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       // Use the same normalization logic as the main filtering
       const normalizedFilterSpecialty = normalizeSpecialtyName(filters.specialty);
       
-      cascadingData = cascadingData.filter(row => 
+      cascadingData = (cascadingData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => 
         normalizeSpecialtyName(row.standardizedName || '') === normalizedFilterSpecialty
-      );
+      ) as AggregatedData[] | DynamicAggregatedData[];
     }
     
     // If survey source is selected, filter by survey source
     if (filters.surveySource) {
-      cascadingData = cascadingData.filter(row => row.surveySource === filters.surveySource);
+      cascadingData = (cascadingData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => row.surveySource === filters.surveySource) as AggregatedData[] | DynamicAggregatedData[];
     }
     
     // If region is selected, filter by region
     if (filters.geographicRegion) {
-      cascadingData = cascadingData.filter(row => row.geographicRegion === filters.geographicRegion);
+      cascadingData = (cascadingData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => row.geographicRegion === filters.geographicRegion) as AggregatedData[] | DynamicAggregatedData[];
     }
     
     // If data category is selected, filter by data category (NEW)
@@ -495,10 +519,10 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         : filters.dataCategory;
       
       const rowsBeforeFilter = cascadingData.length;
-      cascadingData = cascadingData.filter(row => {
+      cascadingData = (cascadingData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
         const rowDataCategory = (row as any).dataCategory;
         return rowDataCategory === categoryFilter;
-      });
+      }) as AggregatedData[] | DynamicAggregatedData[];
       
       console.log('🔍 SurveyAnalytics: Cascading filter - Data category filtering APPLIED:', {
         selectedCategory: filters.dataCategory,
@@ -508,7 +532,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       });
     } else {
       // ENTERPRISE FIX: When "All Categories" is selected, don't filter by dataCategory
-      const callPayRows = cascadingData.filter((row: any) => {
+      const callPayRows = (cascadingData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
         const rowDataCategory = (row as any).dataCategory;
         return rowDataCategory === 'CALL_PAY' || 
                (!rowDataCategory && ((row as any).surveySource || '').toLowerCase().includes('call pay'));
@@ -580,7 +604,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         providerType: row.providerType,
         specialty: row.standardizedName
       })),
-      mgmaRows: allData.filter(row => row.surveySource && row.surveySource.toLowerCase().includes('mgma')).slice(0, 5).map(row => ({
+      mgmaRows: (allData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => row.surveySource && row.surveySource.toLowerCase().includes('mgma')).slice(0, 5).map((row: AggregatedData | DynamicAggregatedData) => ({
         surveySource: row.surveySource,
         dataCategory: (row as any).dataCategory,
         providerType: row.providerType,
@@ -717,7 +741,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
             availableRegions={filterOptions.regions}
             regionMapping={filterOptions.regionMapping}
             availableProviderTypes={filterOptions.providerTypes}
-            availableDataCategories={filterOptions.dataCategories}
+            availableDataCategories={isBenchmarkingScreen ? [] : filterOptions.dataCategories} // Hide data category filter on benchmarking screen
             availableYears={filterOptions.years}
             selectedVariables={selectedVariables}
             availableVariables={availableVariables}
@@ -728,7 +752,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         {/* Data Table Section - Contained with horizontal scroll */}
         <div className="w-full max-w-full overflow-hidden">
           <AnalyticsTable
-            data={data} // This will be filtered by the hook based on UI filters
+            data={data as AggregatedData[] | DynamicAggregatedData[]} // This will be filtered by the hook based on UI filters
             loading={loading}
             loadingProgress={loadingProgress}
             error={error}
