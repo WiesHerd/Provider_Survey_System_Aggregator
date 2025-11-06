@@ -10,6 +10,8 @@ export { useRegionalData } from './hooks/useRegionalData';
 // Types
 export type {
   RegionalData,
+  VariableRegionalData,
+  VariablePercentileData,
   RegionalChartData,
   RegionalTableConfig,
   RegionalTableRow,

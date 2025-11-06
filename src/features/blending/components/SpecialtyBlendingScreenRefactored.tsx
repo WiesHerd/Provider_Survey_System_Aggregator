@@ -1,32 +1,36 @@
 /**
  * Specialty Blending Screen - Refactored
  * 
- * Main screen for specialty blending functionality with proper separation of concerns
+ * Enterprise-grade specialty blending with improved workflow and UX
  */
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { ChevronDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { useBlendingFilters } from '../hooks/useBlendingFilters';
+import { useSelectionHistory } from '../hooks/useSelectionHistory';
 import { calculateBlendedMetricsNew, generateBlendedReportHTML } from '../utils/blendingCalculations';
-import { BlendConfiguration } from './BlendConfiguration';
+import { BlendingMethodSelector } from './BlendingMethodSelector';
+import { SelectedItemsSummary } from './SelectedItemsSummary';
+import { TemplateManager } from './TemplateManager';
 import { SurveyDataFilters } from './SurveyDataFilters';
 import { SurveyDataTable } from './SurveyDataTable';
+import { BlendedResultsPreview } from './BlendedResultsPreview';
+import { WorkflowProgress } from './WorkflowProgress';
 import { BlendingResults } from './BlendingResults';
-// Chart components are used in BlendingResults
-// import { BlendingChartsContainer } from './BlendingChartsContainer';
-// import { EmptyState } from '../../mapping/components/shared/EmptyState';
-// import { BoltIcon } from '@heroicons/react/24/outline';
 import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
-import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
-import './BlendingCharts.css';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
+import './BlendingCharts.css';
 
 interface SpecialtyBlendingScreenProps {
   onBlendCreated?: (result: any) => void;
   onClose?: () => void;
 }
+
+type WorkflowStep = 'method' | 'filter' | 'select' | 'review';
 
 export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreenProps> = ({
   onBlendCreated,
@@ -48,6 +52,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   const [blendedResult, setBlendedResult] = useState<any>(null);
   const [isDataBrowserCollapsed, setIsDataBrowserCollapsed] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [isBlendCreated, setIsBlendCreated] = useState(false);
   
   // Modal states
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
@@ -55,12 +60,22 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   
-  // Row selection state
-  const [selectedDataRows, setSelectedDataRows] = useState<number[]>([]);
-  
   // Blending method and custom weights
   const [blendingMethod, setBlendingMethod] = useState<'weighted' | 'simple' | 'custom'>('weighted');
   const [customWeights, setCustomWeights] = useState<Record<number, number>>({});
+  
+  // Workflow state
+  const [currentWorkflowStep, setCurrentWorkflowStep] = useState<WorkflowStep>('method');
+  
+  // Selection history for undo/redo
+  const {
+    selection: selectedDataRows,
+    updateSelection,
+    undo,
+    redo,
+    canUndo,
+    canRedo
+  } = useSelectionHistory([]);
   
   const {
     selectedSpecialties,
@@ -70,15 +85,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     isLoading,
     error,
     validation,
-    addSpecialty,
-    removeSpecialty,
-    updateWeight,
-    reorderSpecialties,
-    createBlend,
     saveTemplate,
-    loadTemplate,
     deleteTemplate,
-    resetBlend,
     refreshTemplates
   } = useSpecialtyBlending({
     maxSpecialties: 10,
@@ -116,72 +124,101 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     }
   }, [isLoading, startProgress, completeProgress]);
 
-  // Store template data for restoration after filter changes
-  const [pendingTemplate, setPendingTemplate] = useState<any>(null);
-  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
-  const isApplyingTemplateRef = useRef(false);
-  const templateLoadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Clear selected rows when filters change (except during template loading)
+  // Update workflow step based on selections
   useEffect(() => {
-    // Don't clear if we're applying a template or have a pending template
-    if (isApplyingTemplateRef.current || pendingTemplate) {
-      console.log('🔍 Skipping clear due to template loading in progress');
+    if (selectedDataRows.length > 0 && currentWorkflowStep === 'select') {
+      setCurrentWorkflowStep('review');
+    } else if (filteredSurveyData.length > 0 && currentWorkflowStep === 'filter') {
+      setCurrentWorkflowStep('select');
+    }
+  }, [selectedDataRows.length, filteredSurveyData.length, currentWorkflowStep]);
+
+  // Template loading state
+  const [pendingTemplate, setPendingTemplate] = useState<any>(null);
+  const [pendingTemplateSelections, setPendingTemplateSelections] = useState<number[] | null>(null);
+
+  // Restore selections when filtered data updates after template load
+  useEffect(() => {
+    if (pendingTemplate && pendingTemplateSelections && filteredSurveyData.length > 0) {
+      // Find matching rows in the current filtered data
+      const templateRowIndices: number[] = [];
+      
+      pendingTemplate.specialties.forEach((specialty: any) => {
+        const matchingRows = filteredSurveyData
+          .map((row, index) => ({ row, index }))
+          .filter(({ row }) => 
+            row.surveySpecialty === specialty.name &&
+            row.surveySource === specialty.surveySource &&
+            row.surveyYear === specialty.surveyYear &&
+            row.geographicRegion === specialty.geographicRegion &&
+            row.providerType === specialty.providerType
+          );
+        
+        matchingRows.forEach(({ index }) => {
+          if (!templateRowIndices.includes(index)) {
+            templateRowIndices.push(index);
+          }
+        });
+      });
+      
+      if (templateRowIndices.length > 0) {
+        // Use skipHistory to avoid adding template load to undo history
+        updateSelection(templateRowIndices, true);
+        toast({
+          title: 'Template Loaded Successfully',
+          description: `"${pendingTemplate.name}" has been loaded with ${templateRowIndices.length} rows selected.`
+        });
+        } else {
+        toast({
+          title: 'No Matching Data Found',
+          description: 'The template specialties could not be found in the current filtered data. Try adjusting your filters.',
+          variant: 'destructive'
+        });
+      }
+      
+        setPendingTemplate(null);
+      setPendingTemplateSelections(null);
+      setIsLoadingTemplate(false);
+    }
+  }, [filteredSurveyData, pendingTemplate, pendingTemplateSelections, updateSelection, toast]);
+
+  // Simplified template loading - no complex race condition logic
+  const handleLoadTemplate = useCallback((templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) {
+      toast({
+        title: 'Template Not Found',
+        description: 'The selected template could not be found.',
+        variant: 'destructive'
+      });
       return;
     }
     
-    // Clear any existing timeout
-    if (templateLoadingTimeoutRef.current) {
-      clearTimeout(templateLoadingTimeoutRef.current);
-      templateLoadingTimeoutRef.current = null;
+    setIsLoadingTemplate(true);
+    setSelectedTemplateId(templateId);
+    setBlendName(template.name);
+    setBlendDescription(template.description || '');
+    
+    // Restore filter state if available
+    if (template.filterState) {
+      setSelectedSurvey(template.filterState.selectedSurvey || '');
+      setSelectedYear(template.filterState.selectedYear || '');
+      setSelectedRegion(template.filterState.selectedRegion || '');
+      setSelectedProviderType(template.filterState.selectedProviderType || '');
+      setSpecialtySearch(template.filterState.specialtySearch || '');
+      setBlendingMethod(template.filterState.blendingMethod || 'weighted');
+      setCustomWeights(template.filterState.customWeights || {});
     }
     
-    if (!isLoading && !isLoadingTemplate && !isApplyingTemplate && selectedDataRows.length > 0) {
-      // Only clear if we're not in the middle of loading a template and no template is pending
-      templateLoadingTimeoutRef.current = setTimeout(() => {
-        // Triple-check all protection flags
-        if (selectedDataRows.length > 0 && 
-            !isLoadingTemplate && 
-            !isApplyingTemplate && 
-            !isApplyingTemplateRef.current && 
-            !pendingTemplate &&
-            !templateLoadingTimeoutRef.current) {
-          console.log('🔍 Clearing selected rows due to filter change');
-          setSelectedDataRows([]);
-        } else {
-          console.log('🔍 Skipping clear - template loading detected during timeout');
-        }
-        templateLoadingTimeoutRef.current = null;
-      }, 1000); // Much longer timeout to ensure template loading completes
-    }
-  }, [selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch, isLoadingTemplate, pendingTemplate, isApplyingTemplate]);
-
-  // Watch for filtered data changes and restore template selections if needed
-  useEffect(() => {
-    console.log('🔍 useEffect triggered - pendingTemplate:', !!pendingTemplate, 'filteredData length:', filteredSurveyData.length, 'isLoadingTemplate:', isLoadingTemplate);
-    if (pendingTemplate && filteredSurveyData.length > 0) {
-      console.log('🔍 Filtered data updated, restoring template selections');
-      setIsApplyingTemplate(true);
-      isApplyingTemplateRef.current = true;
-      // Small delay to ensure state is stable
-      setTimeout(() => {
-        loadTemplateSelections(pendingTemplate);
-        setPendingTemplate(null);
-      }, 100);
-    }
-  }, [filteredSurveyData, pendingTemplate]);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (templateLoadingTimeoutRef.current) {
-        clearTimeout(templateLoadingTimeoutRef.current);
-      }
-    };
-  }, []);
+    // Store template to be processed when filtered data updates
+    setPendingTemplate(template);
+    setPendingTemplateSelections(template.specialties ? template.specialties.map(() => -1) : []);
+  }, [templates, setSelectedSurvey, setSelectedYear, setSelectedRegion, setSelectedProviderType, setSpecialtySearch, toast]);
 
   // Calculate blended metrics for selected specialties
   const blendedMetrics = useMemo(() => {
+    if (selectedDataRows.length === 0) return null;
+    
     return calculateBlendedMetricsNew(
       selectedDataRows,
       filteredSurveyData,
@@ -202,7 +239,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       filteredSurveyData
     );
     
-    // Create PDF using browser's print functionality
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (printWindow) {
       printWindow.document.title = 'Blended Compensation Report';
@@ -218,7 +254,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         }, 500);
       };
     } else {
-      // Fallback: download as HTML if popup is blocked
       const blob = new Blob([htmlContent], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -241,28 +276,66 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       return;
     }
     
-    if (!validation.isValid) {
+    if (!blendedMetrics) {
       toast({
-        title: 'Validation Errors',
-        description: validation.errors.join(', '),
+        title: 'No Data Selected',
+        description: 'Please select at least one row to create a blend.',
         variant: 'destructive'
       });
       return;
     }
     
     try {
-      const result = await createBlend(blendName, blendDescription);
+      // Create result directly from calculated metrics
+      const selectedSpecialties = selectedDataRows.map(index => {
+        const row = filteredSurveyData[index];
+        return {
+          id: `${row.surveySpecialty}-${row.surveySource}-${row.surveyYear}-${row.geographicRegion}-${row.providerType}`,
+          name: row.surveySpecialty,
+          records: row.tcc_n_orgs || 0,
+          weight: blendingMethod === 'weighted' 
+            ? (row.tcc_n_incumbents || 0) / (selectedDataRows.reduce((sum, i) => sum + (filteredSurveyData[i]?.tcc_n_incumbents || 0), 0) || 1) * 100
+            : blendingMethod === 'custom'
+            ? (customWeights[index] || 0)
+            : 100 / selectedDataRows.length,
+          surveySource: row.surveySource,
+          surveyYear: row.surveyYear,
+          geographicRegion: row.geographicRegion,
+          providerType: row.providerType
+        };
+      });
       
-      // Enhance the result with chart data
       const enhancedResult = {
-        ...result,
+        id: `blend-${Date.now()}`,
+        blendName: blendName,
+        specialties: selectedSpecialties,
+        blendedData: {
+          tcc_p25: blendedMetrics.tcc_p25,
+          tcc_p50: blendedMetrics.tcc_p50,
+          tcc_p75: blendedMetrics.tcc_p75,
+          tcc_p90: blendedMetrics.tcc_p90,
+          wrvu_p25: blendedMetrics.wrvu_p25,
+          wrvu_p50: blendedMetrics.wrvu_p50,
+          wrvu_p75: blendedMetrics.wrvu_p75,
+          wrvu_p90: blendedMetrics.wrvu_p90,
+          cf_p25: blendedMetrics.cf_p25,
+          cf_p50: blendedMetrics.cf_p50,
+          cf_p75: blendedMetrics.cf_p75,
+          cf_p90: blendedMetrics.cf_p90,
+          n_orgs: blendedMetrics.totalRecords,
+          n_incumbents: blendedMetrics.totalRecords
+        },
         blendingMethod: blendingMethod,
         selectedData: selectedDataRows.map(index => filteredSurveyData[index]).filter(row => row),
-        customWeights: customWeights
+        customWeights: customWeights,
+        confidence: 0.95, // TODO: Calculate actual confidence
+        sampleSize: blendedMetrics.totalRecords,
+        createdAt: new Date()
       };
       
       setBlendedResult(enhancedResult);
       setShowResults(true);
+      setIsBlendCreated(true); // Mark blend as created for workflow progress
       onBlendCreated?.(enhancedResult);
       toast({
         title: 'Blend Created Successfully',
@@ -279,12 +352,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   };
   
   const handleSaveTemplate = () => {
-    console.log('🔍 Save Template clicked');
-    console.log('🔍 Blend name:', blendName);
-    console.log('🔍 Selected rows:', selectedDataRows.length);
-    
     if (!blendName.trim()) {
-      console.log('❌ No blend name provided');
       toast({
         title: 'Template Name Required',
         description: 'Please enter a template name to save your blend.',
@@ -294,7 +362,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     }
     
     if (selectedDataRows.length === 0) {
-      console.log('❌ No data rows selected');
       toast({
         title: 'No Data Selected',
         description: 'Please select at least one row to save as template.',
@@ -303,34 +370,27 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       return;
     }
     
-    console.log('✅ Opening confirmation modal');
     setShowSaveConfirmation(true);
   };
 
   const handleConfirmSave = async () => {
-    console.log('🔍 Confirmation save started');
     setIsSaving(true);
     setShowSaveConfirmation(false);
     
     try {
-      console.log('🔍 Converting selected data rows to specialty items');
-      // Convert selected data rows to specialty items
       const selectedSpecialties = selectedDataRows.map(index => {
         const row = filteredSurveyData[index];
-        console.log('🔍 Processing row:', row);
         return {
           id: `${row.surveySpecialty}-${row.surveySource}-${row.surveyYear}-${row.geographicRegion}-${row.providerType}`,
           name: row.surveySpecialty,
           records: row.tcc_n_orgs || 0,
-          weight: 100 / selectedDataRows.length, // Equal weight distribution
+          weight: 100 / selectedDataRows.length,
           surveySource: row.surveySource,
           surveyYear: row.surveyYear,
           geographicRegion: row.geographicRegion,
           providerType: row.providerType
         };
       });
-      
-      console.log('🔍 Created specialties:', selectedSpecialties);
       
       const templateData = {
         name: blendName,
@@ -340,7 +400,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         createdBy: 'current_user',
         isPublic: false,
         tags: [],
-        // Save filter state for enterprise-grade template restoration
         filterState: {
           selectedSurvey: selectedSurvey,
           selectedYear: selectedYear,
@@ -352,15 +411,11 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         }
       };
       
-      console.log('🔍 Template data:', templateData);
-      console.log('🔍 Calling saveTemplate...');
-      
       await saveTemplate(templateData);
-      
-      console.log('✅ Template saved successfully');
       setShowSaveSuccess(true);
+      await refreshTemplates();
     } catch (err) {
-      console.error('❌ Failed to save template:', err);
+      console.error('Failed to save template:', err);
       toast({
         title: 'Failed to Save Blend',
         description: `An error occurred while saving the blend: ${err instanceof Error ? err.message : 'Unknown error'}`,
@@ -377,6 +432,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       
       if (selectedTemplateId === templateId) {
         setSelectedTemplateId('');
+        setBlendName('');
+        setBlendDescription('');
       }
       
       await refreshTemplates();
@@ -395,199 +452,113 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     }
   };
 
-  const handleLoadTemplate = (templateId: string) => {
-    console.log('🔍 handleLoadTemplate called with templateId:', templateId);
-    const template = templates.find(t => t.id === templateId);
-    if (!template) {
-      console.log('❌ Template not found for ID:', templateId);
-      toast({
-        title: 'Template Not Found',
-        description: 'The selected template could not be found.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    console.log('🔍 Found template:', template.name);
-    console.log('🔍 Template specialties:', template.specialties);
-    console.log('🔍 Template filterState:', template.filterState);
-    
-    setSelectedTemplateId(templateId);
-    setBlendName(template.name);
-    setBlendDescription(template.description);
-    
-    // Restore filter state for enterprise-grade template restoration
-    if (template.filterState) {
-      console.log('🔍 Restoring filter state:', template.filterState);
-      setIsLoadingTemplate(true);
-      setSelectedSurvey(template.filterState.selectedSurvey);
-      setSelectedYear(template.filterState.selectedYear);
-      setSelectedRegion(template.filterState.selectedRegion);
-      setSelectedProviderType(template.filterState.selectedProviderType);
-      setSpecialtySearch(template.filterState.specialtySearch);
-      setBlendingMethod(template.filterState.blendingMethod);
-      setCustomWeights(template.filterState.customWeights || {});
-      
-      // Store template for restoration after filters are applied
-      setPendingTemplate(template);
-      console.log('🔍 Template stored as pending, waiting for filter changes');
-      return;
-    }
-    
-    // If no survey data is loaded yet, show a message and wait
-    if (!filteredSurveyData || filteredSurveyData.length === 0) {
-      console.log('❌ No filtered survey data available');
-      toast({
-        title: 'Loading Survey Data',
-        description: 'Please wait for survey data to load, then try loading the template again.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    console.log('🔍 Loading template selections directly');
-    setIsLoadingTemplate(true);
-    loadTemplateSelections(template);
-    setIsLoadingTemplate(false);
-  };
-  
-  const loadTemplateSelections = (template: any) => {
-    console.log('🔍 Loading template:', template.name);
-    console.log('🔍 Template specialties:', template.specialties);
-    console.log('🔍 Available survey data:', filteredSurveyData.length, 'rows');
-    console.log('🔍 Current selectedDataRows before loading:', selectedDataRows);
-    
-    // Debug: Log the first few rows of filtered data
-    console.log('🔍 First 3 rows of filtered data:', filteredSurveyData.slice(0, 3).map(row => ({
-      specialty: row.surveySpecialty,
-      source: row.surveySource,
-      year: row.surveyYear,
-      region: row.geographicRegion,
-      provider: row.providerType
-    })));
-    
-    // Find and select the corresponding rows in the table
-    const templateRowIndices: number[] = [];
-    
-    if (!template.specialties || template.specialties.length === 0) {
-      console.log('🔍 No specialties in template, clearing selections');
-      setSelectedDataRows([]);
-      setIsLoadingTemplate(false);
-      toast({
-        title: 'Template Loaded',
-        description: `"${template.name}" has been loaded with no selections.`
-      });
-      return;
-    }
-    
-    template.specialties.forEach((specialty: any) => {
-      console.log('🔍 Looking for specialty:', specialty);
-      console.log('🔍 Specialty details:', {
-        name: specialty.name,
-        source: specialty.surveySource,
-        year: specialty.surveyYear,
-        region: specialty.geographicRegion,
-        provider: specialty.providerType
-      });
-      
-      const matchingRows = filteredSurveyData
-        .map((row, index) => ({ row, index }))
-        .filter(({ row, index }) => {
-          const matches = 
-            row.surveySpecialty === specialty.name &&
-            row.surveySource === specialty.surveySource &&
-            row.surveyYear === specialty.surveyYear &&
-            row.geographicRegion === specialty.geographicRegion &&
-            row.providerType === specialty.providerType;
-          
-          if (matches) {
-            console.log('🔍 Found matching row at index', index, ':', row.surveySpecialty);
-          } else {
-            console.log('🔍 No match for row at index', index, ':', {
-              specialty: row.surveySpecialty,
-              source: row.surveySource,
-              year: row.surveyYear,
-              region: row.geographicRegion,
-              provider: row.providerType
-            });
-          }
-          return matches;
-        });
-      
-      console.log('🔍 Found matching rows for', specialty.name, ':', matchingRows.length);
-      
-      matchingRows.forEach(({ index }) => {
-        if (!templateRowIndices.includes(index)) {
-          templateRowIndices.push(index);
-        }
-      });
-    });
-    
-    console.log('🔍 Total selected rows:', templateRowIndices.length);
-    console.log('🔍 Setting selectedDataRows to:', templateRowIndices);
-    
-    // Clear existing selections first
-    setSelectedDataRows([]);
-    
-    // Set new selections after a brief delay to ensure state is cleared
-    setTimeout(() => {
-      setSelectedDataRows(templateRowIndices);
-      console.log('🔍 selectedDataRows set to:', templateRowIndices);
-      
-      // Set loading to false after a much longer delay to ensure selections are applied and protected
-      setTimeout(() => {
-        // Clear any pending clearing timeouts
-        if (templateLoadingTimeoutRef.current) {
-          clearTimeout(templateLoadingTimeoutRef.current);
-          templateLoadingTimeoutRef.current = null;
-        }
-        
-        setIsLoadingTemplate(false);
-        setIsApplyingTemplate(false);
-        isApplyingTemplateRef.current = false;
-        console.log('🔍 Loading template completed, isLoadingTemplate and isApplyingTemplate set to false');
-      }, 500);
-      
-      // Verify the state was set and re-apply if needed
-      setTimeout(() => {
-        console.log('🔍 Final selectedDataRows state:', selectedDataRows);
-        // If selections were cleared, re-apply them
-        if (selectedDataRows.length === 0 && templateRowIndices.length > 0) {
-          console.log('🔍 Re-applying selections that were cleared');
-          setSelectedDataRows(templateRowIndices);
-        }
-      }, 100);
-    }, 50);
-    
-    if (templateRowIndices.length === 0) {
-      toast({
-        title: 'No Matching Data Found',
-        description: 'The template specialties could not be found in the current filtered data. Try adjusting your filters or check if the data has changed.',
-        variant: 'destructive'
-      });
-    } else {
-      toast({
-        title: 'Template Loaded Successfully',
-        description: `"${template.name}" has been loaded with ${templateRowIndices.length} rows selected.`
-      });
-    }
-  };
-  
-  const handleReset = () => {
-    resetBlend();
+  const handleClearBlend = useCallback(() => {
     setBlendName('');
     setBlendDescription('');
     setSelectedTemplateId('');
-    setShowResults(false);
-    setBlendedResult(null);
+    updateSelection([]);
+    setCustomWeights({});
+    toast({
+      title: 'Blend Cleared',
+      description: 'Ready to create a new blend.',
+      variant: 'default'
+    });
+  }, [updateSelection]);
+
+  // Selection handlers
+  const handleRowSelectionChange = useCallback((rows: number[]) => {
+    updateSelection(rows);
+  }, [updateSelection]);
+
+  const handleClearAll = useCallback(() => {
+    updateSelection([]);
+  }, [updateSelection]);
+
+  const handleSelectAll = useCallback(() => {
+    updateSelection(filteredSurveyData.map((_, index) => index));
+  }, [filteredSurveyData, updateSelection]);
+
+  const handleRemoveItem = useCallback((index: number) => {
+    updateSelection(selectedDataRows.filter(i => i !== index));
+  }, [selectedDataRows, updateSelection]);
+
+  const handleSelectBySurvey = useCallback((survey: string) => {
+    const matchingIndices = filteredSurveyData
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.surveySource === survey)
+      .map(({ index }) => index);
+    
+    updateSelection([...new Set([...selectedDataRows, ...matchingIndices])]);
+  }, [filteredSurveyData, selectedDataRows, updateSelection]);
+
+  const handleSelectByYear = useCallback((year: string) => {
+    const matchingIndices = filteredSurveyData
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.surveyYear === year)
+      .map(({ index }) => index);
+    
+    updateSelection([...new Set([...selectedDataRows, ...matchingIndices])]);
+  }, [filteredSurveyData, selectedDataRows, updateSelection]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+A or Cmd+A: Select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        if (filteredSurveyData.length > 0) {
+          handleSelectAll();
+        }
+      }
+      
+      // Escape: Clear all
+      if (e.key === 'Escape') {
+        if (selectedDataRows.length > 0) {
+          handleClearAll();
+        }
+      }
+      
+      // Ctrl+Z or Cmd+Z: Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo) {
+          undo();
+        }
+      }
+      
+      // Ctrl+Shift+Z or Cmd+Shift+Z: Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        if (canRedo) {
+          redo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSelectAll, handleClearAll, canUndo, canRedo, undo, redo, filteredSurveyData.length, selectedDataRows.length]);
+
+  // Custom weight change handler
+  const handleCustomWeightChange = useCallback((index: number, weight: number) => {
+    setCustomWeights(prev => ({ ...prev, [index]: weight }));
+  }, []);
+
+  // Get current workflow step
+  const getCurrentWorkflowStep = (): WorkflowStep => {
+    if (selectedDataRows.length > 0) return 'review';
+    if (filteredSurveyData.length > 0) return 'select';
+    if (selectedSurvey || selectedYear || selectedRegion || selectedProviderType) return 'filter';
+    return 'method';
   };
+
+  const workflowStep = getCurrentWorkflowStep();
   
   if (showResults && blendedResult) {
     return (
       <BlendingResults
         result={blendedResult}
         onBack={() => setShowResults(false)}
-        onClose={onClose || (() => {})}
       />
     );
   }
@@ -595,11 +566,13 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   // Show loading state while data is being fetched
   if (isLoading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading survey data..."
-        recordCount={filteredSurveyData.length}
+        recordCount="auto"
+        data={filteredSurveyData}
         progress={progress}
-        showProgress={true}
+        variant="overlay"
+        loading={isLoading}
       />
     );
   }
@@ -620,8 +593,9 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
               <p className="text-gray-500 mb-4">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
               >
+                <ArrowPathIcon className="w-4 h-4 mr-2" />
                 Retry
               </button>
             </div>
@@ -635,18 +609,23 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     <div className="bg-gray-50 min-h-full">
       <div className="w-full px-2 py-2">
         
+        {/* Workflow Progress Indicator */}
+        <WorkflowProgress currentStep={workflowStep} isCompleted={isBlendCreated} />
+        
         {/* Blend Configuration */}
-        <BlendConfiguration
+        <TemplateManager
           blendName={blendName}
           blendDescription={blendDescription}
           onBlendNameChange={setBlendName}
           onBlendDescriptionChange={setBlendDescription}
           onSaveTemplate={handleSaveTemplate}
+          onClearBlend={handleClearBlend}
           onLoadTemplate={handleLoadTemplate}
           onDeleteTemplate={handleDeleteTemplate}
           templates={templates}
           selectedTemplateId={selectedTemplateId}
           selectedDataRows={selectedDataRows}
+          isLoadingTemplate={isLoadingTemplate}
         />
         
         {/* Error Display */}
@@ -688,6 +667,35 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
             </div>
           </div>
         )}
+
+        {/* Step 1: Blending Method Selector */}
+        <BlendingMethodSelector
+          method={blendingMethod}
+          onMethodChange={setBlendingMethod}
+          selectedCount={selectedDataRows.length}
+          customWeights={customWeights}
+          onCustomWeightChange={handleCustomWeightChange}
+          selectedDataRows={selectedDataRows}
+          filteredSurveyData={filteredSurveyData}
+        />
+
+        {/* Selected Items Summary - Sticky */}
+        <SelectedItemsSummary
+          selectedRows={selectedDataRows}
+          filteredSurveyData={filteredSurveyData}
+          onClearAll={handleClearAll}
+          onSelectAll={handleSelectAll}
+          onRemoveItem={handleRemoveItem}
+          onUndo={canUndo ? undo : undefined}
+          onRedo={canRedo ? redo : undefined}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onSelectBySurvey={handleSelectBySurvey}
+          onSelectByYear={handleSelectByYear}
+          availableSurveys={filterOptions.surveys}
+          availableYears={filterOptions.years}
+          availableRegions={filterOptions.regions}
+        />
         
         {/* Survey Data Browser */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
@@ -695,23 +703,18 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
-                  Survey Data Browser
+                  Step 2 & 3: Filter and Select Data
                 </h2>
-                <p className="text-sm text-gray-600 mt-1">Select specific survey data points for blending</p>
+                <p className="text-sm text-gray-600 mt-1">Filter survey data and select items for blending</p>
               </div>
               <button
                 onClick={() => setIsDataBrowserCollapsed(!isDataBrowserCollapsed)}
                 className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                 aria-label={isDataBrowserCollapsed ? "Expand Survey Data Browser" : "Collapse Survey Data Browser"}
               >
-                <svg 
+                <ChevronDownIcon 
                   className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isDataBrowserCollapsed ? 'rotate-180' : ''}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                />
               </button>
             </div>
           </div>
@@ -729,6 +732,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                 onRegionChange={handleRegionChange}
                 onProviderTypeChange={handleProviderTypeChange}
                 onSpecialtySearchChange={handleSpecialtySearchChange}
+                onClearFilters={resetFilters}
                 filterOptions={filterOptions}
               />
 
@@ -736,7 +740,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
               <SurveyDataTable
                 data={filteredSurveyData}
                 selectedRows={selectedDataRows}
-                onRowSelectionChange={setSelectedDataRows}
+                onRowSelectionChange={handleRowSelectionChange}
                 isLoading={isLoading}
                 progress={progress}
               />
@@ -744,297 +748,17 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           )}
         </div>
 
-        {/* Blending Method Controls */}
-        {selectedDataRows.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Blending Method
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Choose how to blend the selected specialties
-              </p>
-            </div>
-            <div className="px-6 py-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <label className={`flex items-center space-x-3 cursor-pointer p-4 rounded-xl border-2 transition-all ${
-                  blendingMethod === 'weighted' 
-                    ? 'border-indigo-500 bg-indigo-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}>
-                  <input
-                    type="radio"
-                    name="blendingMethod"
-                    value="weighted"
-                    checked={blendingMethod === 'weighted'}
-                    onChange={(e) => setBlendingMethod(e.target.value as any)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                  />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">Weighted Average</div>
-                    <div className="text-xs text-gray-500">Weight by incumbent count</div>
-                  </div>
-                </label>
-                
-                <label className={`flex items-center space-x-3 cursor-pointer p-4 rounded-xl border-2 transition-all ${
-                  blendingMethod === 'simple' 
-                    ? 'border-indigo-500 bg-indigo-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}>
-                  <input
-                    type="radio"
-                    name="blendingMethod"
-                    value="simple"
-                    checked={blendingMethod === 'simple'}
-                    onChange={(e) => setBlendingMethod(e.target.value as any)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                  />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">Simple Average</div>
-                    <div className="text-xs text-gray-500">Equal weights for all</div>
-                  </div>
-                </label>
-                
-                <label className={`flex items-center space-x-3 cursor-pointer p-4 rounded-xl border-2 transition-all ${
-                  blendingMethod === 'custom' 
-                    ? 'border-indigo-500 bg-indigo-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}>
-                  <input
-                    type="radio"
-                    name="blendingMethod"
-                    value="custom"
-                    checked={blendingMethod === 'custom'}
-                    onChange={(e) => setBlendingMethod(e.target.value as any)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                  />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">Custom Weights</div>
-                    <div className="text-xs text-gray-500">Set your own percentages</div>
-                  </div>
-                </label>
-              </div>
-
-              {/* Custom Weight Controls */}
-              {blendingMethod === 'custom' && (
-                <div className="space-y-4 bg-gray-50 rounded-xl p-6">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-gray-900">Set Custom Weights (%)</h3>
-                    <div className={`text-sm font-medium ${
-                      Math.abs(Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0) - 100) < 0.1
-                        ? 'text-green-600' 
-                        : 'text-red-600'
-                    }`}>
-                      Total: {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {selectedDataRows.map((index, i) => {
-                      const row = filteredSurveyData[index];
-                      
-                      if (!row) {
-                        return null;
-                      }
-                      
-                      const currentWeight = customWeights[index] || 0;
-                      return (
-                        <div key={index} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
-                          <div className="space-y-3">
-                            {/* Specialty Info */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-900 truncate">
-                                  {row.surveySpecialty}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {row.surveySource} • {(row.tcc_n_orgs || row.n_orgs || 0).toLocaleString()} records
-                                </div>
-                              </div>
-                              <div className="text-sm font-medium text-indigo-600 ml-4">
-                                {currentWeight.toFixed(1)}%
-                              </div>
-                            </div>
-                            
-                            {/* Slider and Input */}
-                            <div className="space-y-2">
-                              {/* Slider */}
-                              <div className="relative">
-                                <label htmlFor={`weight-slider-${index}`} className="sr-only">
-                                  Set weight percentage for {row.surveySpecialty}
-                                </label>
-                                <input
-                                  id={`weight-slider-${index}`}
-                                  type="range"
-                                  min="0"
-                                  max="100"
-                                  step="0.1"
-                                  value={currentWeight}
-                                  onChange={(e) => {
-                                    const value = parseFloat(e.target.value) || 0;
-                                    setCustomWeights(prev => ({ ...prev, [index]: value }));
-                                  }}
-                                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-slider"
-                                  data-weight={currentWeight}
-                                  style={{ '--weight-percent': `${currentWeight}%` } as React.CSSProperties}
-                                  aria-label={`Set weight percentage for ${row.surveySpecialty}`}
-                                />
-                              </div>
-                              
-                              {/* Number Input */}
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.1"
-                                  value={currentWeight}
-                                  onChange={(e) => {
-                                    const value = parseFloat(e.target.value) || 0;
-                                    setCustomWeights(prev => ({ ...prev, [index]: value }));
-                                  }}
-                                  className={`w-20 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                                    currentWeight > 0 ? 'border-indigo-300 bg-indigo-50' : 'border-gray-300'
-                                  }`}
-                                  placeholder="0"
-                                />
-                                <span className="text-sm text-gray-500">%</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        );
-                    })}
-                  </div>
-                  {Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0) !== 100 && (
-                    <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
-                      💡 Tip: Weights should total 100% for optimal blending
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Blended Results */}
-        {blendedMetrics && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Blended Results
-                  </h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {blendingMethod === 'weighted' && 'Weighted by incumbent count'}
-                    {blendingMethod === 'simple' && 'Simple average (equal weights)'}
-                    {blendingMethod === 'custom' && 'Custom weights applied'}
-                    {' • '}{blendedMetrics.specialties.join(', ')} ({blendedMetrics.totalRecords.toLocaleString()} records)
-                  </p>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleDownloadReport}
-                    className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                    Print Report
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-6">
-              {/* Google-style metrics table */}
-              <div className="overflow-hidden border border-gray-200 rounded-xl">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Metric
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        P25
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        P50
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        P75
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        P90
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
-                          <div className="text-sm font-medium text-gray-900">Total Cash Compensation</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.tcc_p25.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
-                        ${blendedMetrics.tcc_p50.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.tcc_p75.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.tcc_p90.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                          <div className="text-sm font-medium text-gray-900">Work RVUs</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        {blendedMetrics.wrvu_p25.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
-                        {blendedMetrics.wrvu_p50.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        {blendedMetrics.wrvu_p75.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        {blendedMetrics.wrvu_p90.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
-                          <div className="text-sm font-medium text-gray-900">Conversion Factor</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.cf_p25.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
-                        ${blendedMetrics.cf_p50.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.cf_p75.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                        ${blendedMetrics.cf_p90.toFixed(2)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Step 4: Blended Results Preview */}
+        <BlendedResultsPreview
+          metrics={blendedMetrics}
+          blendingMethod={blendingMethod}
+          selectedCount={selectedDataRows.length}
+          onCreateBlend={handleCreateBlend}
+          onDownloadReport={handleDownloadReport}
+          selectedDataRows={selectedDataRows}
+          filteredSurveyData={filteredSurveyData}
+          customWeights={customWeights}
+        />
 
       </div>
       
@@ -1061,7 +785,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         actionText="View Saved Blends"
         onAction={() => {
           setShowSaveSuccess(false);
-          // Focus on the saved blends dropdown
           const selectElement = document.querySelector('[aria-label="Saved Blends"]') as HTMLElement;
           if (selectElement) {
             selectElement.focus();

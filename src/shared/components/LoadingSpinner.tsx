@@ -12,12 +12,12 @@ interface LoadingSpinnerProps {
 }
 
 /**
- * DEPRECATED: Use UnifiedLoadingSpinner instead
+ * DEPRECATED: Use EnterpriseLoadingSpinner instead
  * 
- * This component is deprecated in favor of UnifiedLoadingSpinner.
- * All new implementations should use UnifiedLoadingSpinner for consistency.
+ * This component is deprecated in favor of EnterpriseLoadingSpinner.
+ * All new implementations should use EnterpriseLoadingSpinner for consistency.
  * 
- * @deprecated Use UnifiedLoadingSpinner from './UnifiedLoadingSpinner' instead
+ * @deprecated Use EnterpriseLoadingSpinner from './EnterpriseLoadingSpinner' instead
  */
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
   message = 'Loading...', 

@@ -2,6 +2,7 @@ import { BaseEntity, SurveySource, ProviderType, GeographicRegion } from '../../
 
 /**
  * Regional data structure for comparison tables
+ * LEGACY: Kept for backward compatibility
  */
 export interface RegionalData {
   region: string;
@@ -17,6 +18,25 @@ export interface RegionalData {
   wrvus_p50: number;
   wrvus_p75: number;
   wrvus_p90: number;
+}
+
+/**
+ * Variable-specific percentile data
+ */
+export interface VariablePercentileData {
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+}
+
+/**
+ * Variable-aware regional data structure
+ * Supports any variable dynamically
+ */
+export interface VariableRegionalData {
+  region: string;
+  variables: Record<string, VariablePercentileData>;
 }
 
 /**
@@ -180,7 +200,9 @@ export interface RegionalFiltersProps {
 }
 
 export interface RegionalComparisonProps {
-  data: RegionalData[];
+  data: RegionalData[] | VariableRegionalData[];
+  selectedVariables?: string[]; // Variable names to display (e.g., ['tcc', 'tcc_per_work_rvu', 'work_rvus'])
+  variableMetadata?: Record<string, { label: string; format: (value: number) => string }>; // Variable display metadata
   onRegionClick?: (region: string) => void;
   onMetricClick?: (metric: string, region: string) => void;
   // Optional provenance support

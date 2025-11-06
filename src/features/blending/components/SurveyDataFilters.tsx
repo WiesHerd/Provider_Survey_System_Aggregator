@@ -8,6 +8,7 @@ import React from 'react';
 import { FormControl, InputLabel, Select, MenuItem, TextField } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { formatRegionForDisplay, capitalizeWords } from '../../../shared/utils/formatters';
+import { ClearFilterButton } from '../../../shared/components';
 
 interface SurveyDataFiltersProps {
   selectedSurvey: string;
@@ -22,6 +23,7 @@ interface SurveyDataFiltersProps {
   onProviderTypeChange: (value: string) => void;
   onDataCategoryChange?: (value: string) => void;
   onSpecialtySearchChange: (value: string) => void;
+  onClearFilters?: () => void;
   filterOptions: {
     surveys: string[];
     years: string[];
@@ -44,10 +46,28 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
   onProviderTypeChange,
   onDataCategoryChange,
   onSpecialtySearchChange,
+  onClearFilters,
   filterOptions
 }) => {
+  const hasActiveFilters = (selectedSurvey !== '' && selectedSurvey !== 'all-surveys') || 
+                           selectedYear !== '' || 
+                           selectedRegion !== '' || 
+                           selectedProviderType !== '' || 
+                           specialtySearch !== '';
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-gray-700">Filters</h3>
+        {/* Clear Filters Button */}
+        {hasActiveFilters && onClearFilters && (
+          <ClearFilterButton
+            onClick={onClearFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
       {/* Specialty Search */}
       <div>
         <TextField
@@ -261,6 +281,7 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
             })}
           </Select>
         </FormControl>
+      </div>
       </div>
     </div>
   );

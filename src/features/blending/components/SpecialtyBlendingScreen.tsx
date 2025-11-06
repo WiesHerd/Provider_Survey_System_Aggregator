@@ -24,7 +24,7 @@ import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
 import { ModernPagination } from '../../../shared/components/ModernPagination';
-import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { BookmarkSlashIcon } from '@heroicons/react/24/outline';
 
@@ -867,7 +867,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       <BlendingResults
         result={blendedResult}
         onBack={() => setShowResults(false)}
-        onClose={onClose || (() => {})}
       />
     );
   }
@@ -876,12 +875,13 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
   // Show loading state while data is being fetched
   if (isLoading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading survey data..."
-        recordCount={0}
+        recordCount="auto"
+        data={filteredSurveyData}
         progress={progress}
-        showProgress={true}
-        overlay={true}
+        variant="overlay"
+        loading={isLoading}
       />
     );
   }
@@ -1326,11 +1326,13 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
               </div>
               
                {isLoading ? (
-                 <UnifiedLoadingSpinner
+                 <EnterpriseLoadingSpinner
                    message="Loading survey data..."
-                   recordCount={filteredSurveyData.length}
+                   recordCount="auto"
+                   data={filteredSurveyData}
                    progress={progress}
-                   showProgress={true}
+                   variant="inline"
+                   loading={isLoading}
                  />
                ) : filteredSurveyData.length === 0 ? (
                  <div className="bg-white rounded-b-xl">
@@ -1377,7 +1379,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('specialty', e)}
                                  title="Resize column"
                                />
@@ -1398,7 +1400,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('survey', e)}
                                  title="Resize column"
                                />
@@ -1419,7 +1421,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('year', e)}
                                  title="Resize column"
                                />
@@ -1440,7 +1442,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('region', e)}
                                  title="Resize column"
                                />
@@ -1461,7 +1463,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('provider', e)}
                                  title="Resize column"
                                />
@@ -1482,7 +1484,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('tcc', e)}
                                  title="Resize column"
                                />
@@ -1503,7 +1505,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('wrvu', e)}
                                  title="Resize column"
                                />
@@ -1524,7 +1526,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('cf', e)}
                                  title="Resize column"
                                />
@@ -1545,7 +1547,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                  )}
                                </div>
                                <div 
-                                 className="absolute right-0 top-0 h-full w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize"
+                                 className="absolute right-0 top-0 h-full w-px bg-gray-300 hover:bg-gray-400 cursor-col-resize"
                                  onMouseDown={(e) => handleMouseDown('records', e)}
                                  title="Resize column"
                                />

@@ -1,49 +1,44 @@
 /**
  * Blending Charts Container Component
  * 
- * Displays method-specific charts based on the blending method used
- * - Simple Average: Compensation Range Chart only
- * - Weighted Average: Weight Distribution + Compensation Range Charts
- * - Custom Weights: Custom Weight Distribution + Compensation Range Charts
+ * Displays separate charts for TCC, wRVU, and CF
  */
 
 import React from 'react';
-import { WeightDistributionChart } from './WeightDistributionChart';
-import { CompensationRangeChart } from './CompensationRangeChart';
+import { TCCChart } from './TCCChart';
+import { WRVUChart } from './WRVUChart';
+import { ConversionFactorChart } from './ConversionFactorChart';
 import { BlendedMetrics } from '../types/blending';
 
 interface BlendingChartsContainerProps {
   blendedMetrics: BlendedMetrics;
   blendingMethod: 'simple' | 'weighted' | 'custom';
-  selectedData?: Array<{
-    specialty: string;
-    weight: number;
-    records: number;
-  }>;
-  customWeights?: Record<number, number>;
 }
 
 export const BlendingChartsContainer: React.FC<BlendingChartsContainerProps> = ({
   blendedMetrics,
-  blendingMethod,
-  selectedData = [],
-  customWeights = {}
+  blendingMethod
 }) => {
-  // Debug logging removed for production
-  // Prepare chart data
-  const compensationData = {
+  // Prepare chart data for separate charts
+  const tccData = {
     tcc: {
       p25: blendedMetrics.tcc_p25,
       p50: blendedMetrics.tcc_p50,
       p75: blendedMetrics.tcc_p75,
       p90: blendedMetrics.tcc_p90
-    },
+    }
+  };
+
+  const wrvuData = {
     wrvu: {
       p25: blendedMetrics.wrvu_p25,
       p50: blendedMetrics.wrvu_p50,
       p75: blendedMetrics.wrvu_p75,
       p90: blendedMetrics.wrvu_p90
-    },
+    }
+  };
+
+  const cfData = {
     cf: {
       p25: blendedMetrics.cf_p25,
       p50: blendedMetrics.cf_p50,
@@ -51,35 +46,6 @@ export const BlendingChartsContainer: React.FC<BlendingChartsContainerProps> = (
       p90: blendedMetrics.cf_p90
     }
   };
-
-  // Prepare weight distribution data
-  const getWeightDistributionData = () => {
-    if (blendingMethod === 'simple') {
-      // For simple average, show equal weights
-      return selectedData.map(item => ({
-        specialty: item.specialty,
-        weight: 100 / selectedData.length,
-        records: item.records
-      }));
-    } else if (blendingMethod === 'weighted') {
-      // For weighted average, show actual weights based on incumbent count
-      return selectedData.map(item => ({
-        specialty: item.specialty,
-        weight: item.weight,
-        records: item.records
-      }));
-    } else if (blendingMethod === 'custom') {
-      // For custom weights, show user-defined weights
-      return selectedData.map(item => ({
-        specialty: item.specialty,
-        weight: item.weight,
-        records: item.records
-      }));
-    }
-    return [];
-  };
-
-  const weightData = getWeightDistributionData();
 
   return (
     <div className="space-y-6">
@@ -97,55 +63,47 @@ export const BlendingChartsContainer: React.FC<BlendingChartsContainerProps> = (
         </p>
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Weight Distribution Chart (for weighted and custom methods) */}
-        {(blendingMethod === 'weighted' || blendingMethod === 'custom') && weightData.length > 0 && (
-          <div className="lg:col-span-1">
-            <WeightDistributionChart
-              data={weightData}
-              title={
-                blendingMethod === 'weighted' 
-                  ? 'Weight Distribution (by Incumbent Count)'
-                  : 'Custom Weight Distribution'
-              }
-              height={250}
-              width={400}
-            />
-          </div>
-        )}
+      {/* Three separate charts in a grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* TCC Chart */}
+        <div className="lg:col-span-1">
+          <TCCChart
+            data={tccData}
+            title="Total Cash Compensation (TCC)"
+            height={300}
+            width={400}
+          />
+        </div>
 
-        {/* Compensation Range Chart (for all methods) */}
-        <div className={blendingMethod === 'simple' ? 'lg:col-span-2' : 'lg:col-span-1'}>
-          <CompensationRangeChart
-            data={compensationData}
-            title="Compensation Range Analysis"
-            height={250}
-            width={blendingMethod === 'simple' ? 600 : 400}
+        {/* wRVU Chart */}
+        <div className="lg:col-span-1">
+          <WRVUChart
+            data={wrvuData}
+            title="Work RVU (wRVU)"
+            height={300}
+            width={400}
+          />
+        </div>
+
+        {/* CF Chart */}
+        <div className="lg:col-span-1">
+          <ConversionFactorChart
+            data={cfData}
+            title="Conversion Factor (CF)"
+            height={300}
+            width={400}
           />
         </div>
       </div>
 
-      {/* Method-specific insights */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h4 className="font-medium text-gray-900 mb-2">Analysis Insights</h4>
-        <div className="text-sm text-gray-600 space-y-1">
-          {blendingMethod === 'simple' && (
-            <p>• All specialties contribute equally to the blended result</p>
-          )}
-          {blendingMethod === 'weighted' && (
-            <>
-              <p>• Weights are determined by the number of incumbents (sample size)</p>
-              <p>• Specialties with larger sample sizes have greater influence on the final result</p>
-            </>
-          )}
-          {blendingMethod === 'custom' && (
-            <>
-              <p>• Weights are based on your specific business requirements</p>
-              <p>• Allows for strategic emphasis on particular specialties</p>
-            </>
-          )}
-          <p>• The compensation range shows the spread across percentiles (P25, P50, P75, P90)</p>
+      {/* Analysis insights */}
+      <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+        <h4 className="font-medium text-gray-900 mb-2 text-sm">Analysis Insights</h4>
+        <div className="text-xs text-gray-600 space-y-1">
+          <p>• Each chart shows the percentile distribution (P25, P50, P75, P90) for its respective metric</p>
+          <p>• TCC represents total cash compensation in dollars</p>
+          <p>• Work RVU represents work relative value units</p>
+          <p>• Conversion Factor (CF) represents dollars per work RVU</p>
         </div>
       </div>
     </div>

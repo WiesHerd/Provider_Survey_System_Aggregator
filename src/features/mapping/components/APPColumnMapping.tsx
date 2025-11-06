@@ -20,7 +20,7 @@ import {
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
 import { LearnedColumnMappings } from './LearnedColumnMappings';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 
 interface APPColumnMapping {
   id: string;
@@ -296,10 +296,12 @@ export const APPColumnMapping: React.FC<APPColumnMappingProps> = ({
 
   if (loading || dataLoading) {
     return (
-      <AnalysisProgressBar
+      <EnterpriseLoadingSpinner
         message="Loading APP column mappings..."
-        progress={100}
-        recordCount={0}
+        recordCount="auto"
+        data={mappings}
+        variant="overlay"
+        loading={loading || dataLoading}
       />
     );
   }

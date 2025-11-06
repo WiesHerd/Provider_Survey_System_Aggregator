@@ -10,7 +10,7 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 // Removed Material-UI table imports - using HTML table instead
 import { AnalyticsTableProps } from '../types/analytics';
 import { calculateSummaryRows } from '../utils/analyticsCalculations';
-import { AnalysisProgressBar, ModernPagination } from '../../../shared/components';
+import { EnterpriseLoadingSpinner, ModernPagination } from '../../../shared/components';
 import { BoltIcon, ArrowDownTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { useMemoizedGrouping, useMemoizedColumnGroups } from '../hooks/useMemoizedCalculations';
 import { AnalyticsTableHeader } from './AnalyticsTableHeader';
@@ -134,10 +134,13 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
 
   if (loading) {
     return (
-      <AnalysisProgressBar
+      <EnterpriseLoadingSpinner
         message="Loading analytics data..."
-        progress={loadingProgress || 0}
         recordCount={data.length}
+        data={data}
+        progress={loadingProgress}
+        variant="overlay"
+        loading={loading}
       />
     );
   }

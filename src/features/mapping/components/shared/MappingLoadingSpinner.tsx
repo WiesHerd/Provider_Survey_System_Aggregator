@@ -1,9 +1,10 @@
 import React from 'react';
-import { AnalysisProgressBar } from '../../../../shared/components';
+import { EnterpriseLoadingSpinner } from '../../../../shared/components/EnterpriseLoadingSpinner';
 
 interface MappingLoadingSpinnerProps {
   entityName: string;
   message?: string;
+  data?: any[];
 }
 
 /**
@@ -12,15 +13,18 @@ interface MappingLoadingSpinnerProps {
  */
 export const MappingLoadingSpinner: React.FC<MappingLoadingSpinnerProps> = ({ 
   entityName, 
-  message 
+  message,
+  data
 }) => {
   const defaultMessage = message || `Loading ${entityName.toLowerCase()} mappings...`;
   
   return (
-    <AnalysisProgressBar
+    <EnterpriseLoadingSpinner
       message={defaultMessage}
-      progress={100}
-      recordCount={0}
+      recordCount="auto"
+      data={data}
+      variant="overlay"
+      loading={true}
     />
   );
 };

@@ -985,11 +985,23 @@ export class AnalyticsDataService {
     }
     
     // Second, try exact mapping match
+    // ENTERPRISE FIX: Normalize surveySource to handle year suffixes
+    // surveySource might be "MGMA Call Pay 2025" but mapping has "MGMA Call Pay"
+    const normalizedSurveySource = surveySource.replace(/\s+\d{4}$/, '').trim();
+    
     for (const mapping of mappings) {
-      const hasSourceSpecialty = mapping.sourceSpecialties.some(source => 
-        source.surveySource === surveySource && 
-        source.specialty.toLowerCase() === specialty.toLowerCase()
-      );
+      const hasSourceSpecialty = mapping.sourceSpecialties.some(source => {
+        // Try exact match first
+        if (source.surveySource === surveySource || source.surveySource === normalizedSurveySource) {
+          return source.specialty.toLowerCase() === specialty.toLowerCase();
+        }
+        // Also try normalized comparison (remove year from both)
+        const normalizedMappingSource = source.surveySource.replace(/\s+\d{4}$/, '').trim();
+        if (normalizedMappingSource === normalizedSurveySource) {
+          return source.specialty.toLowerCase() === specialty.toLowerCase();
+        }
+        return false;
+      });
       
       if (hasSourceSpecialty) {
         return mapping.standardizedName;
@@ -1001,7 +1013,10 @@ export class AnalyticsDataService {
     for (const mapping of mappings) {
       const hasSourceSpecialty = mapping.sourceSpecialties.some(source => {
         const normalizedSourceSpecialty = this.normalizeSpecialtyName(source.specialty);
-        return source.surveySource === surveySource && 
+        // ENTERPRISE FIX: Also normalize surveySource for fuzzy matching (handle year suffixes)
+        const sourceSurveySource = source.surveySource.replace(/\s+\d{4}$/, '').trim();
+        const compareSurveySource = normalizedSurveySource;
+        return (source.surveySource === surveySource || sourceSurveySource === compareSurveySource) && 
                normalizedSourceSpecialty === normalizedSpecialty;
       });
       
@@ -1270,12 +1285,30 @@ export class AnalyticsDataService {
                         actualRowData.normalizedSpecialty || actualRowData['Provider Type'] ||
                         row.specialty || 'Unknown';
     
+    // ENTERPRISE DEBUG: Log specialty normalization for Call Pay surveys
+    const isCallPaySurvey = survey.providerType === 'CALL' || 
+                           (survey.name && survey.name.toLowerCase().includes('call pay')) ||
+                           ((survey as any).dataCategory === 'CALL_PAY');
+    
     const normalizedSpecialty = this.normalizeSpecialty(
       rawSpecialty,
       mappings.specialtyMappings,
       survey.type,
       mappings.learnedSpecialtyMappings
     );
+    
+    // ENTERPRISE DEBUG: Log if Call Pay specialty normalization might have failed
+    if (isCallPaySurvey && normalizedSpecialty.toLowerCase() === this.normalizeSpecialtyName(rawSpecialty).toLowerCase()) {
+      // If normalized specialty is just the normalized raw specialty (no mapping found), log it
+      console.log('⚠️ Call Pay specialty normalization - no mapping found:', {
+        surveyId: survey.id,
+        surveyName: survey.name,
+        surveyType: survey.type,
+        rawSpecialty,
+        normalizedSpecialty,
+        expectedMapping: 'Should match mapping with surveySource: "MGMA Call Pay"'
+      });
+    }
     
     // Removed verbose logging - keeping normalization logic clean
     

@@ -1,12 +1,21 @@
-// UNIFIED LOADING SPINNER - Single Source of Truth
+// ENTERPRISE LOADING SPINNER - Single Source of Truth
 // This is the ONLY spinner component that should be used throughout the application
 export { 
-  UnifiedLoadingSpinner,
-  default as UnifiedLoadingSpinnerDefault
-} from './UnifiedLoadingSpinner';
+  EnterpriseLoadingSpinner,
+  default as EnterpriseLoadingSpinnerDefault
+} from './EnterpriseLoadingSpinner';
+export type { EnterpriseLoadingSpinnerProps } from './EnterpriseLoadingSpinner';
+
+// Loading Progress Hook
+export { useLoadingProgress } from '../hooks/useLoadingProgress';
 
 // DEPRECATED: Legacy spinner components - kept for backward compatibility
-// ⚠️ WARNING: These components are deprecated. Use UnifiedLoadingSpinner instead.
+// ⚠️ WARNING: These components are deprecated. Use EnterpriseLoadingSpinner instead.
+// UnifiedLoadingSpinner redirects to EnterpriseLoadingSpinner for backward compatibility
+export { 
+  EnterpriseLoadingSpinner as UnifiedLoadingSpinner,
+  EnterpriseLoadingSpinner as UnifiedLoadingSpinnerDefault
+} from './EnterpriseLoadingSpinner';
 export { 
   default as LoadingSpinner,
   ButtonSpinner,
@@ -38,7 +47,7 @@ export {
 // Standard Form Components
 export { StandardDropdown } from './StandardDropdown';
 
-// Analysis Progress Components
+// Analysis Progress Components (DEPRECATED - Use EnterpriseLoadingSpinner)
 export { AnalysisProgressBar } from './AnalysisProgressBar';
 
 // Pagination Components
@@ -60,3 +69,6 @@ export {
   RichTooltip,
   HelpTooltip
 } from './StandardTooltip';
+
+// Clear Filter Button - REUSABLE COMPONENT for all filter sections
+export { ClearFilterButton } from './ClearFilterButton';

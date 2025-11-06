@@ -330,10 +330,13 @@ export const useSpecialtyBlending = ({
         createdAt: new Date()
       };
       
+      // Save to IndexedDB first
+      await saveTemplateToStorage(newTemplate);
+      
+      // Then update local state
       setTemplates(prev => [...prev, newTemplate]);
       
-      // TODO: Save to IndexedDB or API
-      await saveTemplateToStorage(newTemplate);
+      console.log('🔍 useSpecialtyBlending: Template saved successfully:', newTemplate.name);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save template';
       setError(errorMessage);

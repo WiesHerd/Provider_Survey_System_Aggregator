@@ -5,7 +5,7 @@ import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/mat
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
 import { ISurveyRow } from '../types/survey';
-import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
@@ -1491,12 +1491,13 @@ const SurveyUpload: React.FC = () => {
               <>
                 
                 {isLoading ? (
-                  <UnifiedLoadingSpinner
+                  <EnterpriseLoadingSpinner
                     message="Loading surveys..."
                     recordCount={uploadedSurveys.length}
+                    data={uploadedSurveys}
                     progress={progress}
-                    showProgress={uploadedSurveys.length > 0}
-                    overlay={true}
+                    variant="overlay"
+                    loading={isLoading}
                   />
                 ) : uploadedSurveys.length === 0 ? (
                   <EmptyState
@@ -1617,73 +1618,21 @@ const SurveyUpload: React.FC = () => {
     </div>
       {/* Upload Progress Modal - Fixed Position Overlay */}
       {isUploading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
-            <div className="text-center">
-              {/* Purple/Indigo Arc Spinner */}
-              <div className="w-12 h-12 mx-auto mb-4">
-                <div 
-                  className="w-12 h-12 rounded-full animate-spin"
-                  style={{
-                    background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
-                    mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
-                    WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
-                  }}
-                />
-              </div>
-              
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Uploading survey...</h3>
-              <p className="text-gray-600 mb-4">Processing data for optimal performance...</p>
-              
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              
-              {/* Progress Percentage */}
-              <p className="text-sm text-gray-700 font-medium">{progress.toFixed(2)}% complete</p>
-            </div>
-          </div>
-        </div>
+        <EnterpriseLoadingSpinner
+          message="Uploading survey..."
+          progress={progress}
+          variant="overlay"
+          loading={isUploading}
+        />
       )}
       {/* Deleting Progress Modal - Fixed Position Overlay */}
       {isDeleting && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full mx-4">
-            <div className="text-center">
-              {/* Purple/Indigo Arc Spinner */}
-              <div className="w-12 h-12 mx-auto mb-4">
-                <div 
-                  className="w-12 h-12 rounded-full animate-spin"
-                  style={{
-                    background: 'conic-gradient(from 0deg, #8B5CF6, #A855F7, #C084FC, transparent 70%)',
-                    mask: 'radial-gradient(circle at center, transparent 60%, black 60%)',
-                    WebkitMask: 'radial-gradient(circle at center, transparent 60%, black 60%)'
-                  }}
-                />
-              </div>
-              
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
-              </h3>
-              <p className="text-gray-600 mb-4">Processing data for optimal performance...</p>
-              
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              
-              {/* Progress Percentage */}
-              <p className="text-sm text-gray-700 font-medium">{progress.toFixed(2)}% complete</p>
-            </div>
-          </div>
-        </div>
+        <EnterpriseLoadingSpinner
+          message={isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
+          progress={progress}
+          variant="overlay"
+          loading={isDeleting}
+        />
       )}
 
       {/* Individual Survey Delete Confirmation Modal */}

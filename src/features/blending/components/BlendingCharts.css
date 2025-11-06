@@ -3,11 +3,13 @@
 .chart-container {
   position: relative;
   margin: 0 auto;
+  width: 100%;
+  min-height: 250px;
 }
 
 .chart-container canvas {
   max-width: 100%;
-  height: auto;
+  display: block;
 }
 
 /* Dynamic sizing using data attributes */

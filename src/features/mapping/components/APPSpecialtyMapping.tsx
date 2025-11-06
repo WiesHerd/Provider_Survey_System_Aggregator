@@ -16,7 +16,7 @@ import { APPSpecialtyMapping as APPSpecialtyMappingType, APPSourceSpecialty } fr
 import APPSpecialtyMappingService from '../../../services/APPSpecialtyMappingService';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 
 interface APPSpecialtyMappingProps {
   onMappingChange?: (mappings: APPSpecialtyMappingType[]) => void;
@@ -209,10 +209,12 @@ export const APPSpecialtyMapping: React.FC<APPSpecialtyMappingProps> = ({
 
   if (loading || dataLoading) {
     return (
-      <AnalysisProgressBar
+      <EnterpriseLoadingSpinner
         message="Loading APP specialty mappings..."
-        progress={100}
-        recordCount={0}
+        recordCount="auto"
+        data={mappings}
+        variant="overlay"
+        loading={loading || dataLoading}
       />
     );
   }

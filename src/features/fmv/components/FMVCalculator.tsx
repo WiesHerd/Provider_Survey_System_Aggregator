@@ -10,7 +10,7 @@ import { ResultsPanel } from './ResultsPanel';
 import BlendedResultsPanel from './BlendedResultsPanel';
 import { SavedFMVManager } from './SavedFMVManager';
 import FairMarketValuePrintable from '../../../components/FairMarketValuePrintable';
-import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
 
@@ -148,12 +148,11 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
   // Show loading state
   if (loading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading Fair Market Value data..."
-        recordCount={0}
         progress={progress}
-        showProgress={true}
-        overlay={true}
+        variant="overlay"
+        loading={loading}
       />
     );
   }

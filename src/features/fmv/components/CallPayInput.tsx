@@ -72,10 +72,13 @@ export const CallPayInput: React.FC<CallPayInputProps> = ({
   return (
     <div className="space-y-6">
       {/* Call Pay Rate Input */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         <div className="lg:col-span-2">
+          <label htmlFor="fte-input" className="block text-sm font-medium text-gray-700 mb-2">
+            FTE
+          </label>
           <TextField
-            label="FTE"
+            id="fte-input"
             type="number"
             value={fte}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
@@ -90,25 +93,33 @@ export const CallPayInput: React.FC<CallPayInputProps> = ({
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
+                backgroundColor: 'white',
                 borderRadius: '8px',
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#3b82f6',
+                height: '40px',
+                border: '1px solid #d1d5db',
+                '&:hover': { 
+                  borderColor: '#9ca3af',
+                  borderWidth: '1px'
                 },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                '&.Mui-focused': { 
+                  boxShadow: 'none', 
                   borderColor: '#3b82f6',
-                  borderWidth: '2px',
+                  borderWidth: '1px'
                 },
-              },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: '#3b82f6',
-              },
+                '& fieldset': {
+                  border: 'none'
+                }
+              }
             }}
           />
         </div>
         
         <div className="lg:col-span-10">
+          <label htmlFor="call-pay-rate-input" className="block text-sm font-medium text-gray-700 mb-2">
+            Base Call Pay Rate
+          </label>
           <TextField
-            label="Base Call Pay Rate"
+            id="call-pay-rate-input"
             type="text"
             value={value ? `$${Number(value).toLocaleString()}` : ''}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,186 +130,322 @@ export const CallPayInput: React.FC<CallPayInputProps> = ({
             fullWidth
             size="small"
             placeholder="Enter base call pay rate..."
-            helperText="Enter daily or hourly call pay rate (survey data will be used for comparison)"
             sx={{
               '& .MuiOutlinedInput-root': {
+                backgroundColor: 'white',
                 borderRadius: '8px',
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#3b82f6',
+                height: '40px',
+                border: '1px solid #d1d5db',
+                '&:hover': { 
+                  borderColor: '#9ca3af',
+                  borderWidth: '1px'
                 },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                '&.Mui-focused': { 
+                  boxShadow: 'none', 
                   borderColor: '#3b82f6',
-                  borderWidth: '2px',
+                  borderWidth: '1px'
                 },
-              },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: '#3b82f6',
-              },
+                '& fieldset': {
+                  border: 'none'
+                }
+              }
             }}
           />
         </div>
       </div>
 
       {/* Adjustment Factors Section */}
-      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Adjustment Factors</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Apply premium adjustments for weekends, holidays, frequency, or acuity. 
-          Choose whether to apply adjustments to market data benchmarks or to your input rate.
-        </p>
-
-        {/* Adjustment Application Toggle */}
-        <FormControl component="fieldset" className="mb-6">
-          <FormLabel component="legend" className="text-sm font-semibold text-gray-700 mb-2">
-            Apply Adjustments To:
-          </FormLabel>
-          <RadioGroup
-            row
-            value={adjustments.applyToMarketData ? 'market' : 'input'}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAdjustment('applyToMarketData', e.target.value === 'market')}
-          >
-            <FormControlLabel 
-              value="input" 
-              control={<Radio />} 
-              label={
-                <span className="text-sm">
-                  My Rate (compare adjusted rate vs. unadjusted market)
-                </span>
-              }
-            />
-            <FormControlLabel 
-              value="market" 
-              control={<Radio />} 
-              label={
-                <span className="text-sm">
-                  Market Data (compare my rate vs. adjusted market benchmarks)
-                </span>
-              }
-            />
-          </RadioGroup>
-        </FormControl>
-
-        {/* Adjustment Inputs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Weekend Premium */}
-          <Tooltip title="Weekend call pay premium (typically 25-50% for 1.25x-1.5x multiplier)">
-            <TextField
-              label="Weekend Premium (%)"
-              type="number"
-              value={adjustments.weekendPremium}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                updateAdjustment('weekendPremium', Math.max(0, Math.min(100, Number(e.target.value))))
-              }
-              fullWidth
-              size="small"
-              inputProps={{ min: 0, max: 100, step: 1 }}
-              helperText={`${adjustments.weekendPremium}% = ${(1 + adjustments.weekendPremium / 100).toFixed(2)}x`}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            />
-          </Tooltip>
-
-          {/* Major Holiday Premium */}
-          <Tooltip title="Major holiday premium (typically 100-200% for 2x-3x multiplier)">
-            <TextField
-              label="Major Holiday Premium (%)"
-              type="number"
-              value={adjustments.majorHolidayPremium}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                updateAdjustment('majorHolidayPremium', Math.max(0, Math.min(200, Number(e.target.value))))
-              }
-              fullWidth
-              size="small"
-              inputProps={{ min: 0, max: 200, step: 1 }}
-              helperText={`${adjustments.majorHolidayPremium}% = ${(1 + adjustments.majorHolidayPremium / 100).toFixed(2)}x`}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            />
-          </Tooltip>
-
-          {/* High-Value Holiday Premium */}
-          <Tooltip title="High-value holiday premium (typically 200-300% for 3x-4x multiplier)">
-            <TextField
-              label="High-Value Holiday Premium (%)"
-              type="number"
-              value={adjustments.highValueHolidayPremium}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                updateAdjustment('highValueHolidayPremium', Math.max(0, Math.min(300, Number(e.target.value))))
-              }
-              fullWidth
-              size="small"
-              inputProps={{ min: 0, max: 300, step: 1 }}
-              helperText={`${adjustments.highValueHolidayPremium}% = ${(1 + adjustments.highValueHolidayPremium / 100).toFixed(2)}x`}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            />
-          </Tooltip>
-
-          {/* Frequency Multiplier */}
-          <Tooltip title="Frequency adjustment for high call frequency (typically 10-25% for 1.1x-1.25x multiplier)">
-            <TextField
-              label="Frequency Multiplier (%)"
-              type="number"
-              value={adjustments.frequencyMultiplier}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                updateAdjustment('frequencyMultiplier', Math.max(0, Math.min(50, Number(e.target.value))))
-              }
-              fullWidth
-              size="small"
-              inputProps={{ min: 0, max: 50, step: 1 }}
-              helperText={`${adjustments.frequencyMultiplier}% = ${(1 + adjustments.frequencyMultiplier / 100).toFixed(2)}x`}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            />
-          </Tooltip>
-
-          {/* Acuity Multiplier */}
-          <Tooltip title="Acuity adjustment for high-acuity specialties (typically 10-20% for 1.1x-1.2x multiplier)">
-            <TextField
-              label="Acuity Multiplier (%)"
-              type="number"
-              value={adjustments.acuityMultiplier}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                updateAdjustment('acuityMultiplier', Math.max(0, Math.min(50, Number(e.target.value))))
-              }
-              fullWidth
-              size="small"
-              inputProps={{ min: 0, max: 50, step: 1 }}
-              helperText={`${adjustments.acuityMultiplier}% = ${(1 + adjustments.acuityMultiplier / 100).toFixed(2)}x`}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                },
-              }}
-            />
-          </Tooltip>
-        </div>
-
-        {/* Total Multiplier Display */}
-        {totalMultiplier > 1.0 && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="text-sm text-gray-700">
-              <strong>Total Adjustment Multiplier:</strong> {totalMultiplier.toFixed(3)}x
-              {baseValue > 0 && !adjustments.applyToMarketData && (
-                <span className="ml-2">
-                  (Base: ${baseValue.toLocaleString()} → Adjusted: ${adjustedValue.toLocaleString()})
-                </span>
-              )}
-            </div>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Adjustment Factors</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Apply premium adjustments for weekends, holidays, frequency, or acuity. 
+              Choose whether to apply adjustments to market data benchmarks or to your input rate.
+            </p>
           </div>
-        )}
+        </div>
+        
+        <div className="px-6 py-6">
+          {/* Adjustment Application Toggle */}
+          <div className="mb-6">
+            <FormLabel component="legend" className="text-sm font-semibold text-gray-700 mb-3 block">
+              Apply Adjustments To:
+            </FormLabel>
+            <RadioGroup
+              row
+              value={adjustments.applyToMarketData ? 'market' : 'input'}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAdjustment('applyToMarketData', e.target.value === 'market')}
+              className="gap-6"
+            >
+              <FormControlLabel 
+                value="input" 
+                control={<Radio />} 
+                label={
+                  <span className="text-sm text-gray-700">
+                    My Rate (compare adjusted rate vs. unadjusted market)
+                  </span>
+                }
+                sx={{
+                  '& .MuiFormControlLabel-label': {
+                    marginLeft: '8px'
+                  }
+                }}
+              />
+              <FormControlLabel 
+                value="market" 
+                control={<Radio />} 
+                label={
+                  <span className="text-sm text-gray-700">
+                    Market Data (compare my rate vs. adjusted market benchmarks)
+                  </span>
+                }
+                sx={{
+                  '& .MuiFormControlLabel-label': {
+                    marginLeft: '8px'
+                  }
+                }}
+              />
+            </RadioGroup>
+          </div>
+
+          {/* Adjustment Inputs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Weekend Premium */}
+            <Tooltip title="Weekend call pay premium (typically 25-50% for 1.25x-1.5x multiplier)">
+              <TextField
+                label="Weekend Premium (%)"
+                type="number"
+                value={adjustments.weekendPremium}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  updateAdjustment('weekendPremium', Math.max(0, Math.min(100, Number(e.target.value))))
+                }
+                fullWidth
+                size="small"
+                inputProps={{ min: 0, max: 100, step: 1 }}
+                helperText={`${adjustments.weekendPremium}% = ${(1 + adjustments.weekendPremium / 100).toFixed(2)}x`}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    height: '40px',
+                    border: '1px solid #d1d5db',
+                    '&:hover': { 
+                      borderColor: '#9ca3af',
+                      borderWidth: '1px'
+                    },
+                    '&.Mui-focused': { 
+                      boxShadow: 'none', 
+                      borderColor: '#3b82f6',
+                      borderWidth: '1px'
+                    },
+                    '& fieldset': {
+                      border: 'none'
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    backgroundColor: 'white',
+                    paddingLeft: '4px',
+                    paddingRight: '4px',
+                    '&.Mui-focused': {
+                      color: '#3b82f6'
+                    }
+                  }
+                }}
+              />
+            </Tooltip>
+
+            {/* Major Holiday Premium */}
+            <Tooltip title="Major holiday premium (typically 100-200% for 2x-3x multiplier)">
+              <TextField
+                label="Major Holiday Premium (%)"
+                type="number"
+                value={adjustments.majorHolidayPremium}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  updateAdjustment('majorHolidayPremium', Math.max(0, Math.min(200, Number(e.target.value))))
+                }
+                fullWidth
+                size="small"
+                inputProps={{ min: 0, max: 200, step: 1 }}
+                helperText={`${adjustments.majorHolidayPremium}% = ${(1 + adjustments.majorHolidayPremium / 100).toFixed(2)}x`}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    height: '40px',
+                    border: '1px solid #d1d5db',
+                    '&:hover': { 
+                      borderColor: '#9ca3af',
+                      borderWidth: '1px'
+                    },
+                    '&.Mui-focused': { 
+                      boxShadow: 'none', 
+                      borderColor: '#3b82f6',
+                      borderWidth: '1px'
+                    },
+                    '& fieldset': {
+                      border: 'none'
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    backgroundColor: 'white',
+                    paddingLeft: '4px',
+                    paddingRight: '4px',
+                    '&.Mui-focused': {
+                      color: '#3b82f6'
+                    }
+                  }
+                }}
+              />
+            </Tooltip>
+
+            {/* High-Value Holiday Premium */}
+            <Tooltip title="High-value holiday premium (typically 200-300% for 3x-4x multiplier)">
+              <TextField
+                label="High-Value Holiday Premium (%)"
+                type="number"
+                value={adjustments.highValueHolidayPremium}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  updateAdjustment('highValueHolidayPremium', Math.max(0, Math.min(300, Number(e.target.value))))
+                }
+                fullWidth
+                size="small"
+                inputProps={{ min: 0, max: 300, step: 1 }}
+                helperText={`${adjustments.highValueHolidayPremium}% = ${(1 + adjustments.highValueHolidayPremium / 100).toFixed(2)}x`}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    height: '40px',
+                    border: '1px solid #d1d5db',
+                    '&:hover': { 
+                      borderColor: '#9ca3af',
+                      borderWidth: '1px'
+                    },
+                    '&.Mui-focused': { 
+                      boxShadow: 'none', 
+                      borderColor: '#3b82f6',
+                      borderWidth: '1px'
+                    },
+                    '& fieldset': {
+                      border: 'none'
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    backgroundColor: 'white',
+                    paddingLeft: '4px',
+                    paddingRight: '4px',
+                    '&.Mui-focused': {
+                      color: '#3b82f6'
+                    }
+                  }
+                }}
+              />
+            </Tooltip>
+
+            {/* Frequency Multiplier */}
+            <Tooltip title="Frequency adjustment for high call frequency (typically 10-25% for 1.1x-1.25x multiplier)">
+              <TextField
+                label="Frequency Multiplier (%)"
+                type="number"
+                value={adjustments.frequencyMultiplier}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  updateAdjustment('frequencyMultiplier', Math.max(0, Math.min(50, Number(e.target.value))))
+                }
+                fullWidth
+                size="small"
+                inputProps={{ min: 0, max: 50, step: 1 }}
+                helperText={`${adjustments.frequencyMultiplier}% = ${(1 + adjustments.frequencyMultiplier / 100).toFixed(2)}x`}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    height: '40px',
+                    border: '1px solid #d1d5db',
+                    '&:hover': { 
+                      borderColor: '#9ca3af',
+                      borderWidth: '1px'
+                    },
+                    '&.Mui-focused': { 
+                      boxShadow: 'none', 
+                      borderColor: '#3b82f6',
+                      borderWidth: '1px'
+                    },
+                    '& fieldset': {
+                      border: 'none'
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    backgroundColor: 'white',
+                    paddingLeft: '4px',
+                    paddingRight: '4px',
+                    '&.Mui-focused': {
+                      color: '#3b82f6'
+                    }
+                  }
+                }}
+              />
+            </Tooltip>
+
+            {/* Acuity Multiplier */}
+            <Tooltip title="Acuity adjustment for high-acuity specialties (typically 10-20% for 1.1x-1.2x multiplier)">
+              <TextField
+                label="Acuity Multiplier (%)"
+                type="number"
+                value={adjustments.acuityMultiplier}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  updateAdjustment('acuityMultiplier', Math.max(0, Math.min(50, Number(e.target.value))))
+                }
+                fullWidth
+                size="small"
+                inputProps={{ min: 0, max: 50, step: 1 }}
+                helperText={`${adjustments.acuityMultiplier}% = ${(1 + adjustments.acuityMultiplier / 100).toFixed(2)}x`}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    height: '40px',
+                    border: '1px solid #d1d5db',
+                    '&:hover': { 
+                      borderColor: '#9ca3af',
+                      borderWidth: '1px'
+                    },
+                    '&.Mui-focused': { 
+                      boxShadow: 'none', 
+                      borderColor: '#3b82f6',
+                      borderWidth: '1px'
+                    },
+                    '& fieldset': {
+                      border: 'none'
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    backgroundColor: 'white',
+                    paddingLeft: '4px',
+                    paddingRight: '4px',
+                    '&.Mui-focused': {
+                      color: '#3b82f6'
+                    }
+                  }
+                }}
+              />
+            </Tooltip>
+          </div>
+
+          {/* Total Multiplier Display */}
+          {totalMultiplier > 1.0 && (
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-gray-700">
+                <strong>Total Adjustment Multiplier:</strong> {totalMultiplier.toFixed(3)}x
+                {baseValue > 0 && !adjustments.applyToMarketData && (
+                  <span className="ml-2">
+                    (Base: ${baseValue.toLocaleString()} → Adjusted: ${adjustedValue.toLocaleString()})
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Adjusted Call Pay Display */}

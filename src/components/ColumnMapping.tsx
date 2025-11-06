@@ -5,7 +5,7 @@ import { UnmappedColumns } from '../features/mapping/components/UnmappedColumns'
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useToast } from './ui/use-toast'; // Added toast import
 import { AdvancedErrorBoundary } from '../features/mapping/components/AdvancedErrorBoundary';
-import { AnalysisProgressBar } from '../shared/components';
+import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { ConfirmationDialog } from '../shared';
 
 // Lazy load components for better performance
@@ -470,10 +470,12 @@ const ColumnMapping: React.FC<ColumnMappingProps> = ({
   // Emergency timeout handling
   if (loading && !emergencyTimeout) {
     return (
-      <AnalysisProgressBar
+      <EnterpriseLoadingSpinner
         message="Loading column mappings..."
-        progress={100}
-        recordCount={0}
+        recordCount="auto"
+        data={mappings}
+        variant="overlay"
+        loading={loading}
       />
     );
   }

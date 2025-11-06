@@ -1,16 +1,22 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
 import { FormControl, Autocomplete, TextField, Drawer, Typography, List, ListItem, ListItemText, Divider } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
-import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
-import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
+import { formatSpecialtyForDisplay, formatCurrency, formatNumber } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 // Using new benchmarking query hook for better performance (reuses same data as benchmarking)
 import { useBenchmarkingQuery } from '../features/analytics/hooks/useBenchmarkingQuery';
 import { AggregatedData } from '../features/analytics/types/analytics';
 import { DynamicAggregatedData } from '../features/analytics/types/variables';
+import { VariableDiscoveryService } from '../features/analytics/services/variableDiscoveryService';
+import { formatVariableDisplayName } from '../features/analytics/utils/variableFormatters';
+import { VariableFormattingService } from '../features/analytics/services/variableFormattingService';
+import { matchSpecialtyName } from '../features/analytics/utils/analyticsCalculations';
+import RegionalPrintable from './RegionalPrintable';
 
 // These will be dynamically populated from region mappings
 const DEFAULT_REGION_NAMES = ['National', 'Northeast', 'Midwest', 'South', 'West'];
@@ -105,6 +111,94 @@ const getWrvuP90 = (row: AggregatedData | DynamicAggregatedData): number => {
   return wrvu?.p90 || 0;
 };
 
+/**
+ * Generic helper to extract variable value from either data format
+ * Supports both legacy AggregatedData and dynamic DynamicAggregatedData
+ */
+const getVariableValue = (
+  row: AggregatedData | DynamicAggregatedData,
+  variableName: string,
+  percentile: 'p25' | 'p50' | 'p75' | 'p90'
+): number => {
+  // Legacy format: check direct properties
+  if (isAggregatedData(row)) {
+    // Map standard variable names to legacy field names
+    const legacyFieldMap: Record<string, Record<string, keyof AggregatedData>> = {
+      'tcc': { p25: 'tcc_p25', p50: 'tcc_p50', p75: 'tcc_p75', p90: 'tcc_p90' },
+      'total_cash_compensation': { p25: 'tcc_p25', p50: 'tcc_p50', p75: 'tcc_p75', p90: 'tcc_p90' },
+      'tcc_per_work_rvu': { p25: 'cf_p25', p50: 'cf_p50', p75: 'cf_p75', p90: 'cf_p90' },
+      'conversion_factor': { p25: 'cf_p25', p50: 'cf_p50', p75: 'cf_p75', p90: 'cf_p90' },
+      'cf': { p25: 'cf_p25', p50: 'cf_p50', p75: 'cf_p75', p90: 'cf_p90' },
+      'work_rvus': { p25: 'wrvu_p25', p50: 'wrvu_p50', p75: 'wrvu_p75', p90: 'wrvu_p90' },
+      'work_rvu': { p25: 'wrvu_p25', p50: 'wrvu_p50', p75: 'wrvu_p75', p90: 'wrvu_p90' },
+      'wrvu': { p25: 'wrvu_p25', p50: 'wrvu_p50', p75: 'wrvu_p75', p90: 'wrvu_p90' },
+      'wrvus': { p25: 'wrvu_p25', p50: 'wrvu_p50', p75: 'wrvu_p75', p90: 'wrvu_p90' }
+    };
+    
+    const fieldMap = legacyFieldMap[variableName];
+    if (fieldMap && fieldMap[percentile]) {
+      return (row[fieldMap[percentile]] as number) || 0;
+    }
+    return 0;
+  }
+  
+  // Dynamic format: check variables object
+  const variables = row.variables || {};
+  
+  // Try exact match first
+  if (variables[variableName]) {
+    return variables[variableName][percentile] || 0;
+  }
+  
+  // Try alternative variable name variations
+  const alternativeNames = [
+    // For call pay
+    'on_call_compensation', 'oncall_compensation', 'daily_rate_on_call', 
+    'daily_rate_oncall', 'on_call_rate', 'oncall_rate',
+    // For TCC
+    'total_cash_compensation', 'total_compensation', 'tcc',
+    // For CF
+    'tcc_per_work_rvu', 'tcc_per_work_rvus', 'conversion_factor', 'cf',
+    // For wRVU
+    'work_rvus', 'work_rvu', 'wrvu', 'wrvus'
+  ];
+  
+  // Check if variableName matches any alternative
+  for (const altName of alternativeNames) {
+    if (variableName.includes(altName) || altName.includes(variableName)) {
+      if (variables[altName]) {
+        return variables[altName][percentile] || 0;
+      }
+    }
+  }
+  
+  // Try direct key match with normalization
+  const normalizedKey = variableName.toLowerCase().replace(/\s+/g, '_');
+  if (variables[normalizedKey]) {
+    return variables[normalizedKey][percentile] || 0;
+  }
+  
+  return 0;
+};
+
+/**
+ * Check if row has any valid data for the selected variables
+ */
+const hasValidVariableData = (
+  row: AggregatedData | DynamicAggregatedData,
+  variables: string[]
+): boolean => {
+  if (variables.length === 0) return false;
+  
+  return variables.some(variableName => {
+    const p25 = getVariableValue(row, variableName, 'p25');
+    const p50 = getVariableValue(row, variableName, 'p50');
+    const p75 = getVariableValue(row, variableName, 'p75');
+    const p90 = getVariableValue(row, variableName, 'p90');
+    return p25 > 0 || p50 > 0 || p75 > 0 || p90 > 0;
+  });
+};
+
 export const RegionalAnalytics: React.FC = () => {
   // Use smooth progress for dynamic loading
   const { progress, startProgress, completeProgress } = useSmoothProgress({
@@ -117,6 +211,7 @@ export const RegionalAnalytics: React.FC = () => {
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [selectedProviderType, setSelectedProviderType] = useState<string>('');
   const [selectedSurveySource, setSelectedSurveySource] = useState<string>('');
+  // ENTERPRISE FIX: Initialize with default compensation filter (will be set after data loads)
   const [selectedDataCategory, setSelectedDataCategory] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [mappings, setMappings] = useState<any[]>([]);
@@ -124,6 +219,18 @@ export const RegionalAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [provenanceOpen, setProvenanceOpen] = useState(false);
   const [provenanceRegion, setProvenanceRegion] = useState<string>('');
+  
+  // Variable-aware state
+  const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
+
+  // Print functionality
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    pageStyle: "@page { size: auto; margin: 0; }",
+    documentTitle: "Regional Analytics Report"
+  });
 
   // Use benchmarking query hook for shared data caching (same data as Survey Analytics)
   const {
@@ -142,6 +249,34 @@ export const RegionalAnalytics: React.FC = () => {
     if (queryAllData.length > 0) {
       console.log('🔍 Regional Analytics: Loaded analytics data from cache -', queryAllData.length, 'records');
       
+      // ENTERPRISE DEBUG: Log Call Pay data specifically
+      const callPayData = (queryAllData as (AggregatedData | DynamicAggregatedData)[]).filter((row: any) => {
+        const dataCategory = row.dataCategory || '';
+        const surveySource = row.surveySource || '';
+        return dataCategory === 'CALL_PAY' || surveySource.toLowerCase().includes('call pay');
+      });
+      console.log('🔍 Regional Analytics: Call Pay data found:', callPayData.length, 'rows');
+      if (callPayData.length > 0) {
+        const callPaySpecialties = Array.from(new Set(callPayData.map((r: any) => r.standardizedName)));
+        console.log('🔍 Regional Analytics: Call Pay specialties (standardizedName):', callPaySpecialties);
+        console.log('🔍 Regional Analytics: Sample Call Pay rows:', callPayData.slice(0, 3).map((row: any) => ({
+          standardizedName: row.standardizedName,
+          surveySpecialty: row.surveySpecialty,
+          originalSpecialty: row.originalSpecialty,
+          surveySource: row.surveySource,
+          providerType: row.providerType,
+          dataCategory: row.dataCategory,
+          geographicRegion: row.geographicRegion,
+          surveyYear: row.surveyYear,
+          hasVariables: !!row.variables,
+          variableKeys: row.variables ? Object.keys(row.variables) : [],
+          sampleVariable: row.variables ? Object.keys(row.variables)[0] : null,
+          sampleValue: row.variables && Object.keys(row.variables).length > 0 
+            ? row.variables[Object.keys(row.variables)[0]] 
+            : null
+        })));
+      }
+      
       // Debug: Check what years are in the data
       const yearsInData = Array.from(new Set(queryAllData.map(r => r.surveyYear).filter(Boolean)));
       console.log('🔍 Regional Analytics: Years found in data:', yearsInData);
@@ -153,6 +288,10 @@ export const RegionalAnalytics: React.FC = () => {
       // Debug: Check what regions are actually in the data
       const regionsInData = Array.from(new Set(queryAllData.map(r => r.geographicRegion).filter(Boolean)));
       console.log('🔍 Regional Analytics: Regions found in data:', regionsInData);
+      
+      // Debug: Check specialties
+      const specialtiesInData = Array.from(new Set(queryAllData.map((r: any) => r.standardizedName).filter(Boolean)));
+      console.log('🔍 Regional Analytics: Specialties found in data:', specialtiesInData.slice(0, 10));
       
       // Also load mappings for filter options
       const dataService = getDataService();
@@ -174,21 +313,63 @@ export const RegionalAnalytics: React.FC = () => {
     setLoading(queryLoading);
   }, [queryLoading]);
 
-  // Use standardizedName for dropdown
+  // ENTERPRISE FIX: Populate specialties from actual data, not just mappings
+  // This ensures all specialties in the data are available, even if not yet mapped
   const specialties = useMemo(() => {
-    const specialtyList = mappings.map(m => m.standardizedName).sort();
-    console.log('🔍 Regional Analytics - Specialties for dropdown:', {
-      mappingsCount: mappings.length,
-      specialtiesCount: specialtyList.length,
-      firstFewSpecialties: specialtyList.slice(0, 5),
-      allSpecialties: specialtyList
+    // Extract unique specialties from actual analytics data
+    const specialtiesFromData = Array.from(
+      new Set(
+        analyticsData
+          .map((row: any) => row.standardizedName)
+          .filter((name: string) => name && name.trim())
+      )
+    ).sort();
+    
+    // Also include specialties from mappings (for completeness)
+    const specialtiesFromMappings = mappings.map(m => m.standardizedName);
+    
+    // Combine and deduplicate (case-insensitive)
+    const allSpecialties = new Set<string>();
+    [...specialtiesFromData, ...specialtiesFromMappings].forEach(spec => {
+      if (spec && spec.trim()) {
+        allSpecialties.add(spec);
+      }
     });
+    
+    const specialtyList = Array.from(allSpecialties).sort();
+    
+    console.log('🔍 Regional Analytics - Specialties for dropdown:', {
+      fromData: specialtiesFromData.length,
+      fromMappings: specialtiesFromMappings.length,
+      totalUnique: specialtyList.length,
+      firstFewSpecialties: specialtyList.slice(0, 10),
+      sampleFromData: specialtiesFromData.slice(0, 5),
+      sampleFromMappings: specialtiesFromMappings.slice(0, 5)
+    });
+    
     return specialtyList;
-  }, [mappings]);
+  }, [analyticsData, mappings]);
 
   // Extract unique provider types and survey sources from loaded data
+  // ENTERPRISE FIX: Normalize and deduplicate provider types (case-insensitive, title case)
   const providerTypes = useMemo(() => {
-    const types = Array.from(new Set(analyticsData.map(r => r.providerType || '').filter(Boolean)));
+    // Use a Map to deduplicate case-insensitively and normalize to title case
+    const providerTypeMap = new Map<string, string>(); // Maps lowercase to properly formatted
+    analyticsData.forEach(row => {
+      const providerType = row.providerType || '';
+      if (providerType && providerType.trim()) {
+        const lower = providerType.toLowerCase().trim();
+        if (!providerTypeMap.has(lower)) {
+          // Format to title case: "staff physician" -> "Staff Physician"
+          const formatted = providerType
+            .split(/\s+/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+          providerTypeMap.set(lower, formatted);
+        }
+      }
+    });
+    const types = Array.from(providerTypeMap.values()).sort();
     console.log('🔍 Regional Analytics - Provider types extraction:', {
       totalRows: analyticsData.length,
       providerTypes: types,
@@ -197,7 +378,7 @@ export const RegionalAnalytics: React.FC = () => {
         surveySource: r.surveySource
       }))
     });
-    return types.sort();
+    return types;
   }, [analyticsData]);
   
   const surveySources = useMemo(() => {
@@ -229,9 +410,120 @@ export const RegionalAnalytics: React.FC = () => {
     return categories.sort();
   }, [analyticsData]);
 
+  // ENTERPRISE FIX: Default to "Compensation" only for regional analytics
+  // Regional analytics is designed for annual compensation comparison, not call pay rates
+  // Users can still explicitly select "Call Pay" if they want to analyze call pay regionally
+  // Set default data category after data categories are available
+  useEffect(() => {
+    if (dataCategories.length > 0 && !selectedDataCategory && dataCategories.includes('Compensation')) {
+      setSelectedDataCategory('Compensation');
+      console.log('🔍 Regional Analytics: Defaulting to "Compensation" data category for regional analytics');
+    }
+  }, [dataCategories, selectedDataCategory]);
+
+  // Variable discovery based on data category
+  useEffect(() => {
+    const discoverVariables = async () => {
+      try {
+        const service = VariableDiscoveryService.getInstance();
+        service.clearCache(); // Ensure fresh discovery when category changes
+        
+        // Normalize data category for discovery service
+        const dataCategoryFilter = selectedDataCategory && 
+          selectedDataCategory !== '' && 
+          selectedDataCategory !== 'All Categories'
+          ? selectedDataCategory
+          : undefined;
+        
+        console.log('🔍 Regional Analytics: Discovering variables', dataCategoryFilter ? `(filtered by: ${dataCategoryFilter})` : '(all categories)');
+        const discovered = await service.discoverAllVariables(dataCategoryFilter);
+        const variableNames = discovered.map(v => v.normalizedName);
+        setAvailableVariables(variableNames);
+        
+        console.log('🔍 Regional Analytics: Available variables:', variableNames);
+        
+        // Set smart defaults based on data category
+        let defaultVariables: string[] = [];
+        if (selectedDataCategory === 'Call Pay') {
+          // For Call Pay, find on_call_compensation or similar
+          const callPayVar = variableNames.find(v => 
+            v.includes('on_call') || 
+            v.includes('oncall') || 
+            v.includes('call_pay') ||
+            v.includes('daily_rate')
+          );
+          defaultVariables = callPayVar ? [callPayVar] : (variableNames.length > 0 ? [variableNames[0]] : []);
+          console.log('🔍 Regional Analytics: Call Pay default variable:', defaultVariables);
+        } else if (selectedDataCategory === 'Compensation' || !selectedDataCategory || selectedDataCategory === '') {
+          // For Compensation or All Categories, default to industry standard: TCC, CF, wRVU
+          const tccVar = variableNames.find(v => v === 'tcc' || v === 'total_cash_compensation');
+          const cfVar = variableNames.find(v => 
+            v === 'tcc_per_work_rvu' || 
+            v === 'conversion_factor' || 
+            v === 'cf' ||
+            v === 'tcc_per_work_rvus'
+          );
+          const wrvuVar = variableNames.find(v => 
+            v === 'work_rvus' || 
+            v === 'work_rvu' || 
+            v === 'wrvu' ||
+            v === 'wrvus'
+          );
+          
+          defaultVariables = [];
+          if (tccVar) defaultVariables.push(tccVar);
+          if (cfVar) defaultVariables.push(cfVar);
+          if (wrvuVar) defaultVariables.push(wrvuVar);
+          
+          // If standard variables not found, use first available
+          if (defaultVariables.length === 0 && variableNames.length > 0) {
+            defaultVariables = [variableNames[0]];
+          }
+          
+          console.log('🔍 Regional Analytics: Compensation default variables:', defaultVariables);
+        } else {
+          // For other categories (Moonlighting, Custom), use first available
+          defaultVariables = variableNames.length > 0 ? [variableNames[0]] : [];
+        }
+        
+        // Only update if we have valid defaults and current selection is empty or needs updating
+        if (defaultVariables.length > 0) {
+          // Check if current selection is still valid (all selected vars exist in available)
+          const currentSelectionValid = selectedVariables.length > 0 && 
+            selectedVariables.every(v => variableNames.includes(v));
+          
+          // Only set defaults if:
+          // 1. No variables currently selected, OR
+          // 2. Current selection is invalid (vars don't exist in new available list)
+          // This preserves user's manual selections if they're still valid
+          if (!currentSelectionValid || selectedVariables.length === 0) {
+            setSelectedVariables(defaultVariables);
+            console.log('🔍 Regional Analytics: Set default variables:', defaultVariables);
+          } else {
+            console.log('🔍 Regional Analytics: Preserving user-selected variables:', selectedVariables);
+          }
+        } else if (variableNames.length > 0 && selectedVariables.length === 0) {
+          // Fallback: if no defaults but variables available, use first available
+          setSelectedVariables([variableNames[0]]);
+          console.log('🔍 Regional Analytics: Set fallback variable:', variableNames[0]);
+        }
+      } catch (error) {
+        console.error('🔍 Regional Analytics: Error discovering variables:', error);
+        setAvailableVariables([]);
+      }
+    };
+    
+    if (selectedDataCategory !== undefined) {
+      discoverVariables();
+    }
+  }, [selectedDataCategory]);
+
   // Multi-filter logic with specialty, provider type, survey source, data category, and year
   const filtered = useMemo(() => {
-    if (!selectedSpecialty) return [];
+    if (!selectedSpecialty) {
+      console.log(`⚠️ No specialty selected - returning empty array`);
+      return [];
+    }
     
     console.log(`🔍 Filtering for:`, {
       specialty: selectedSpecialty,
@@ -242,45 +534,118 @@ export const RegionalAnalytics: React.FC = () => {
     });
     console.log(`📊 Total rows to filter: ${analyticsData.length}`);
     
+    // ENTERPRISE DEBUG: Log sample rows before filtering
+    if (analyticsData.length > 0) {
+      console.log(`🔍 Sample rows BEFORE filtering:`, analyticsData.slice(0, 3).map((row: AggregatedData | DynamicAggregatedData) => ({
+        standardizedName: row.standardizedName,
+        providerType: row.providerType,
+        surveySource: row.surveySource,
+        dataCategory: (row as any).dataCategory,
+        geographicRegion: row.geographicRegion,
+        surveyYear: row.surveyYear,
+        hasVariables: !!(row as any).variables,
+        variableKeys: (row as any).variables ? Object.keys((row as any).variables).slice(0, 5) : []
+      })));
+    }
+    
+    let specialtyMatches = 0;
+    let providerTypeMatches = 0;
+    let surveySourceMatches = 0;
+    let dataCategoryMatches = 0;
+    let yearMatches = 0;
+    
     const filteredRows = (analyticsData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
-      // Specialty filter - use standardizedName from AggregatedData
-      if (row.standardizedName !== selectedSpecialty) {
-        return false;
+      // Specialty filter - Use exact match with standardizedName (from specialty mappings)
+      // ENTERPRISE FIX: Handle case-insensitive comparison since dropdown may format names
+      // The standardizedName comes from the specialty mapping system, but dropdown may format it
+      const rowStandardizedName = (row.standardizedName || '').trim();
+      const selectedSpecialtyNormalized = (selectedSpecialty || '').trim();
+      
+      // Try exact match first (most common case)
+      if (rowStandardizedName === selectedSpecialtyNormalized) {
+        specialtyMatches++;
+      } else {
+        // Fallback: case-insensitive comparison (handles "pediatrics: general" vs "Pediatrics: General")
+        if (rowStandardizedName.toLowerCase() !== selectedSpecialtyNormalized.toLowerCase()) {
+          return false;
+        }
+        specialtyMatches++;
       }
       
-      // Provider type filter
-      if (selectedProviderType) {
-        const rowProviderType = String(row.providerType || '');
-        if (rowProviderType.toLowerCase() !== selectedProviderType.toLowerCase()) {
-          return false;
+      // Provider type filter - ENTERPRISE FIX: Handle Call Pay surveys (CALL provider type) specially
+      // Skip filter if "All Provider Types" is selected
+      if (selectedProviderType && selectedProviderType.toLowerCase() !== 'all provider types') {
+        const rowProviderType = String(row.providerType || '').trim();
+        const rowDataCategory = (row as any).dataCategory;
+        
+        // ENTERPRISE FIX: Call Pay surveys may have providerType='CALL' but should match 'Staff Physician'
+        // because Call Pay is physician compensation data
+        const isCallPayData = rowDataCategory === 'CALL_PAY' || 
+                             (row.surveySource || '').toLowerCase().includes('call pay');
+        
+        // If this is Call Pay data and user selected "Staff Physician", allow it through
+        // (Call Pay is physician compensation, so it should be included)
+        if (isCallPayData && 
+            (selectedProviderType.toLowerCase() === 'staff physician' || 
+             selectedProviderType.toLowerCase() === 'physician')) {
+          // Allow through - Call Pay is physician data
+          providerTypeMatches++;
+        } else {
+          // Normalize both to title case for comparison (matches display normalization)
+          const normalizeForComparison = (str: string): string => {
+            if (!str) return '';
+            // Handle special cases
+            if (str.toLowerCase() === 'call') return 'Staff Physician';
+            return str
+              .split(/\s+/)
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join(' ');
+          };
+          const normalizedSelected = normalizeForComparison(selectedProviderType);
+          const normalizedRow = normalizeForComparison(rowProviderType);
+          if (normalizedRow !== normalizedSelected) {
+            return false;
+          }
+          providerTypeMatches++;
         }
       }
       
-      // Survey source filter
-      if (selectedSurveySource) {
+      // Survey source filter - Skip if "All Survey Sources" is selected
+      if (selectedSurveySource && selectedSurveySource.toLowerCase() !== 'all survey sources') {
         const rowSurveySource = String(row.surveySource || '');
         if (rowSurveySource.toLowerCase() !== selectedSurveySource.toLowerCase()) {
           return false;
         }
+        surveySourceMatches++;
       }
       
-      // Data category filter
+      // Data category filter - ENTERPRISE FIX: Handle missing dataCategory (infer from surveySource)
       if (selectedDataCategory) {
-        const rowDataCategory = row.dataCategory || '';
-        // Normalize for comparison (convert display name back to enum or compare directly)
+        let rowDataCategory = row.dataCategory || '';
+        
+        // ENTERPRISE FIX: If dataCategory is missing, infer from surveySource for backward compatibility
+        if (!rowDataCategory) {
+          const surveySource = String(row.surveySource || '').toLowerCase();
+          if (surveySource.includes('call pay')) {
+            rowDataCategory = 'CALL_PAY';
+          } else if (surveySource.includes('moonlighting')) {
+            rowDataCategory = 'MOONLIGHTING';
+          } else {
+            rowDataCategory = 'COMPENSATION'; // Default for old surveys
+          }
+        }
+        
+        // Normalize selected category to enum format
         const normalizedSelected = selectedDataCategory === 'Call Pay' ? 'CALL_PAY'
           : selectedDataCategory === 'Moonlighting' ? 'MOONLIGHTING'
           : selectedDataCategory === 'Compensation' ? 'COMPENSATION'
-          : selectedDataCategory;
-        const normalizedRow = rowDataCategory === 'CALL_PAY' ? 'Call Pay'
-          : rowDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-          : rowDataCategory === 'COMPENSATION' ? 'Compensation'
-          : rowDataCategory;
+          : selectedDataCategory.toUpperCase().replace(/\s+/g, '_');
         
-        // Compare normalized values
-        if (normalizedRow !== selectedDataCategory && rowDataCategory !== normalizedSelected) {
+        // Compare normalized values (case-insensitive)
+        if (rowDataCategory.toUpperCase() !== normalizedSelected.toUpperCase()) {
           return false;
         }
+        dataCategoryMatches++;
       }
       
       // Year filter
@@ -289,26 +654,55 @@ export const RegionalAnalytics: React.FC = () => {
         if (rowYear !== selectedYear) {
           return false;
         }
+        yearMatches++;
       }
       
       return true;
     });
     
     console.log(`✅ Filtered rows found: ${filteredRows.length}`);
+    console.log(`🔍 Filter breakdown:`, {
+      specialtyMatches,
+      providerTypeMatches: selectedProviderType ? providerTypeMatches : 'N/A (no filter)',
+      surveySourceMatches: selectedSurveySource ? surveySourceMatches : 'N/A (no filter)',
+      dataCategoryMatches: selectedDataCategory ? dataCategoryMatches : 'N/A (no filter)',
+      yearMatches: selectedYear ? yearMatches : 'N/A (no filter)'
+    });
     if (filteredRows.length > 0) {
-      console.log(`📋 Sample filtered rows with compensation data:`, filteredRows.slice(0, 3).map((row: AggregatedData | DynamicAggregatedData) => ({
+      console.log(`📋 Sample filtered rows with data:`, filteredRows.slice(0, 3).map((row: AggregatedData | DynamicAggregatedData) => ({
         standardizedName: row.standardizedName,
         surveySource: row.surveySource,
         geographicRegion: row.geographicRegion,
         surveyYear: row.surveyYear,
-          tcc_p50: getTccP50(row),
-          cf_p50: getCfP50(row),
-          wrvu_p50: getWrvuP50(row)
+        providerType: row.providerType,
+        dataCategory: (row as any).dataCategory,
+        tcc_p50: getTccP50(row),
+        cf_p50: getCfP50(row),
+        wrvu_p50: getWrvuP50(row),
+        hasVariables: !!(row as any).variables,
+        variableKeys: (row as any).variables ? Object.keys((row as any).variables) : []
       })));
+    } else {
+      // ENTERPRISE DEBUG: Log why no rows matched
+      console.log(`⚠️ No filtered rows found. Debugging filter criteria:`, {
+        selectedSpecialty,
+        selectedProviderType,
+        selectedSurveySource,
+        selectedDataCategory,
+        selectedYear,
+        totalDataRows: analyticsData.length,
+        sampleRow: analyticsData[0] ? {
+          standardizedName: analyticsData[0].standardizedName,
+          providerType: analyticsData[0].providerType,
+          surveySource: analyticsData[0].surveySource,
+          dataCategory: (analyticsData[0] as any).dataCategory,
+          geographicRegion: analyticsData[0].geographicRegion
+        } : null
+      });
     }
     
     return filteredRows;
-  }, [selectedSpecialty, selectedProviderType, selectedSurveySource, selectedYear, analyticsData]);
+  }, [selectedSpecialty, selectedProviderType, selectedSurveySource, selectedDataCategory, selectedYear, analyticsData]);
 
   // Helper to average a field
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -329,8 +723,31 @@ export const RegionalAnalytics: React.FC = () => {
       tcc_p50: getTccP50(r)
     })));
     
-    // Filter out any rows with invalid data - more lenient check
+    // Filter out any rows with invalid data - ENTERPRISE FIX: Use variable-aware validation
     const validRows = (filtered as (AggregatedData | DynamicAggregatedData)[]).filter((r: AggregatedData | DynamicAggregatedData) => {
+      // If variables are selected, check if row has data for any selected variable
+      if (selectedVariables.length > 0) {
+        const hasValidData = hasValidVariableData(r, selectedVariables);
+        // ENTERPRISE DEBUG: Log call pay data validation
+        const isCallPay = (r as any).dataCategory === 'CALL_PAY' || (r.surveySource || '').toLowerCase().includes('call pay');
+        if (isCallPay && !hasValidData) {
+          console.log(`🔍 Call Pay row filtered out - no valid variable data:`, {
+            standardizedName: r.standardizedName,
+            surveySource: r.surveySource,
+            selectedVariables,
+            hasVariables: !!(r as any).variables,
+            variableKeys: (r as any).variables ? Object.keys((r as any).variables) : [],
+            sampleValues: selectedVariables.map(v => ({
+              variable: v,
+              p50: getVariableValue(r, v, 'p50'),
+              p75: getVariableValue(r, v, 'p75')
+            }))
+          });
+        }
+        return hasValidData;
+      }
+      
+      // Otherwise, check legacy TCC/CF/wRVU fields (backward compatibility)
       const hasValidTCC = getTccP50(r) > 0 || getTccP25(r) > 0 || getTccP75(r) > 0 || getTccP90(r) > 0;
       const hasValidCF = getCfP50(r) > 0 || getCfP25(r) > 0 || getCfP75(r) > 0 || getCfP90(r) > 0;
       const hasValidWRVU = getWrvuP50(r) > 0 || getWrvuP25(r) > 0 || getWrvuP75(r) > 0 || getWrvuP90(r) > 0;
@@ -338,6 +755,14 @@ export const RegionalAnalytics: React.FC = () => {
     });
     
     console.log(`✅ Valid rows with data: ${validRows.length} out of ${filtered.length}`);
+    if (validRows.length === 0 && filtered.length > 0) {
+      console.log(`⚠️ All filtered rows were invalid. Sample invalid row:`, {
+        row: filtered[0],
+        selectedVariables,
+        hasVariables: !!(filtered[0] as any).variables,
+        variableKeys: (filtered[0] as any).variables ? Object.keys((filtered[0] as any).variables) : []
+      });
+    }
     
     // Helper function to map to parent region names (from Region Mapping screen)
     const mapToParentRegion = (region: string): string => {
@@ -348,7 +773,8 @@ export const RegionalAnalytics: React.FC = () => {
       console.log(`🔍 Mapping region "${region}" to parent region...`);
       
       // Map to parent region names from Region Mapping screen
-      if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || 
+      // ENTERPRISE FIX: Handle "eastern" as equivalent to "northeast" (as per region mapping screen)
+      if (lower.includes('eastern') || lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || 
           lower.includes('north central') || lower.includes('new england') || lower.includes('atlantic')) {
         console.log(`  → Mapped to northeast`);
         return 'northeast';
@@ -430,35 +856,71 @@ export const RegionalAnalytics: React.FC = () => {
         return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
       };
       
-      const regionData = {
-        region: regionName,
-        tcc_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP25(r))),
-        tcc_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP50(r))),
-        tcc_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP75(r))),
-        tcc_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP90(r))),
-        cf_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP25(r))),
-        cf_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP50(r))),
-        cf_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP75(r))),
-        cf_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP90(r))),
-        wrvus_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP25(r))),
-        wrvus_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP50(r))),
-        wrvus_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP75(r))),
-        wrvus_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP90(r))),
+      // Capitalize region name for display (e.g., "eastern" -> "Eastern", "northeast" -> "Northeast")
+      const capitalizeRegionName = (name: string): string => {
+        if (!name) return name;
+        return name.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
       };
       
-      console.log(`📋 ${regionName}: ${regionRows.length} rows, TCC P50: $${regionData.tcc_p50.toLocaleString()}, CF P50: $${regionData.cf_p50.toLocaleString()}`);
+      // Build variable-aware regional data
+      // Use VariableRegionalData structure if variables are selected, otherwise legacy RegionalData
+      let regionData: any;
+      if (selectedVariables.length > 0) {
+        // Variable-aware structure
+        const variablesData: Record<string, { p25: number; p50: number; p75: number; p90: number }> = {};
+        
+        selectedVariables.forEach(variableName => {
+          variablesData[variableName] = {
+            p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getVariableValue(r, variableName, 'p25'))),
+            p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getVariableValue(r, variableName, 'p50'))),
+            p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getVariableValue(r, variableName, 'p75'))),
+            p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getVariableValue(r, variableName, 'p90')))
+          };
+        });
+        
+        regionData = {
+          region: capitalizeRegionName(regionName),
+          variables: variablesData
+        };
+      } else {
+        // Legacy structure for backward compatibility
+        regionData = {
+          region: capitalizeRegionName(regionName),
+          tcc_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP25(r))),
+          tcc_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP50(r))),
+          tcc_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP75(r))),
+          tcc_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP90(r))),
+          cf_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP25(r))),
+          cf_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP50(r))),
+          cf_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP75(r))),
+          cf_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getCfP90(r))),
+          wrvus_p25: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP25(r))),
+          wrvus_p50: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP50(r))),
+          wrvus_p75: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP75(r))),
+          wrvus_p90: calculateAverage(regionRows.map((r: AggregatedData | DynamicAggregatedData) => getWrvuP90(r))),
+        };
+      }
+      
+      // Log based on data structure
+      if (selectedVariables.length > 0 && 'variables' in regionData) {
+        const firstVar = selectedVariables[0];
+        const firstVarData = regionData.variables[firstVar];
+        console.log(`📋 ${regionName}: ${regionRows.length} rows, ${firstVar} P50: ${firstVarData?.p50 || 0}`);
+      } else if ('tcc_p50' in regionData) {
+        console.log(`📋 ${regionName}: ${regionRows.length} rows, TCC P50: $${regionData.tcc_p50.toLocaleString()}, CF P50: $${regionData.cf_p50.toLocaleString()}`);
+      }
       
       // Additional debugging for National calculation
       if (regionName.toLowerCase() === 'national') {
         console.log(`🔍 National calculation details:`, {
           totalRows: regionRows.length,
-          sampleTCCValues: regionRows.slice(0, 5).map((r: AggregatedData | DynamicAggregatedData) => ({ 
+          selectedVariables: selectedVariables.length > 0 ? selectedVariables : ['legacy: tcc, cf, wrvu'],
+          sampleRows: regionRows.slice(0, 3).map((r: AggregatedData | DynamicAggregatedData) => ({ 
             standardizedName: r.standardizedName, 
-            region: r.geographicRegion, 
-            tcc_p50: getTccP50(r) 
-          })),
-          allTCCP50Values: regionRows.map((r: AggregatedData | DynamicAggregatedData) => getTccP50(r)).slice(0, 10),
-          calculatedAverage: regionData.tcc_p50
+            region: r.geographicRegion
+          }))
         });
       }
       
@@ -467,7 +929,7 @@ export const RegionalAnalytics: React.FC = () => {
     
     console.log(`✅ Regional comparison data calculated:`, result);
     return result;
-  }, [filtered, regionMappings]);
+  }, [filtered, regionMappings, selectedVariables]);
 
   // Build provenance (mapping summary) for tooltips and drawer
   const { regionTooltips, provenanceDetails } = useMemo(() => {
@@ -489,7 +951,8 @@ export const RegionalAnalytics: React.FC = () => {
     const mapToParentRegion = (region: string): string => {
       if (!region || region.toLowerCase() === 'national') return 'national';
       const lower = region.toLowerCase().trim();
-      if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || lower.includes('north central') || lower.includes('new england') || lower.includes('atlantic')) {
+      // ENTERPRISE FIX: Handle "eastern" as equivalent to "northeast" (as per region mapping screen)
+      if (lower.includes('eastern') || lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne') || lower.includes('north central') || lower.includes('new england') || lower.includes('atlantic')) {
         return 'northeast';
       } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se') || lower.includes('south central') || lower.includes('south') || lower.includes('gulf')) {
         return 'south';
@@ -559,12 +1022,13 @@ export const RegionalAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading regional analytics..."
-        recordCount={0}
-        progress={progress}
-        showProgress={true}
-        overlay={true}
+        recordCount="auto"
+        data={analyticsData}
+        progress={queryProgress}
+        variant="overlay"
+        loading={loading}
       />
     );
   }
@@ -576,45 +1040,71 @@ export const RegionalAnalytics: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Data Filters</h3>
-              <p className="text-gray-600 text-sm">Choose filters to analyze regional compensation patterns</p>
+              <h3 className="text-xl font-semibold text-gray-900">
+                {selectedDataCategory === 'Call Pay' 
+                  ? 'Call Pay by Region' 
+                  : selectedDataCategory === 'Compensation' 
+                  ? 'Regional Compensation Analytics'
+                  : 'Regional Analytics'}
+              </h3>
+              <p className="text-gray-600 text-sm">
+                {selectedDataCategory === 'Call Pay'
+                  ? 'Analyze regional call pay rates across percentiles'
+                  : 'Choose filters to analyze regional compensation patterns'}
+              </p>
             </div>
-            {/* Clear Filters Button - Top Right */}
-            {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedDataCategory || selectedYear) && (
-              <div className="relative group">
+            {/* Print and Clear Filters Buttons - Top Right */}
+            <div className="flex items-center gap-2">
+              {/* Print Button */}
+              {selectedSpecialty && regionalComparisonData.length > 0 && (
                 <button
-                  onClick={() => {
-                    setSelectedSpecialty('');
-                    setSelectedProviderType('');
-                    setSelectedSurveySource('');
-                    setSelectedDataCategory('');
-                    setSelectedYear('');
-                  }}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full border border-gray-200 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
-                  aria-label="Clear all filters"
+                  onClick={handlePrint}
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
-                  <div className="relative w-4 h-4">
-                    {/* Funnel Icon */}
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
-                    </svg>
-                    {/* X Overlay - Only show when filters are active */}
-                    {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedYear) && (
-                      <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </div>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Report
                 </button>
-                {/* Tooltip */}
-                <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                  <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
-                    Clear Filters
-                    <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+              )}
+              {/* Clear Filters Button */}
+              {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedDataCategory || selectedYear) && (
+                <div className="relative group">
+                  <button
+                    onClick={() => {
+                      setSelectedSpecialty('');
+                      setSelectedProviderType('');
+                      setSelectedSurveySource('');
+                      setSelectedDataCategory('');
+                      setSelectedYear('');
+                      setSelectedVariables([]); // Clear variable selection
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full border border-gray-200 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                    aria-label="Clear all filters"
+                  >
+                    <div className="relative w-4 h-4">
+                      {/* Funnel Icon */}
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
+                      </svg>
+                      {/* X Overlay - Only show when filters are active */}
+                      {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedYear) && (
+                        <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-red-500 bg-white rounded-full" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                  {/* Tooltip */}
+                  <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                    <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                      Clear Filters
+                      <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
@@ -950,6 +1440,33 @@ export const RegionalAnalytics: React.FC = () => {
           <div className="mt-6">
             <RegionalComparison 
               data={regionalComparisonData}
+              selectedVariables={selectedVariables}
+              variableMetadata={selectedVariables.length > 0 ? selectedVariables.reduce((acc, varName) => {
+                const formattingService = VariableFormattingService.getInstance();
+                const rule = formattingService.getRuleForVariable(varName);
+                acc[varName] = {
+                  label: formatVariableDisplayName(varName),
+                  format: (value: number) => {
+                    if (value === 0) return '0';
+                    if (rule && rule.showCurrency) {
+                      return formatCurrency(value, rule.decimals || 0);
+                    }
+                    if (rule && rule.decimals !== undefined) {
+                      return formatNumber(value, rule.decimals);
+                    }
+                    // Default formatting based on variable name
+                    const lower = varName.toLowerCase();
+                    if (lower.includes('tcc') || lower.includes('compensation') || lower.includes('salary') || lower.includes('call')) {
+                      return formatCurrency(value, 0);
+                    }
+                    if (lower.includes('per') || lower.includes('factor') || lower.includes('conversion')) {
+                      return formatCurrency(value, 2);
+                    }
+                    return formatNumber(value);
+                  }
+                };
+                return acc;
+              }, {} as Record<string, { label: string; format: (value: number) => string }>) : {}}
               regionTooltips={regionTooltips}
               onRegionInfoClick={(region) => { setProvenanceRegion(region); setProvenanceOpen(true); }}
             />
@@ -1033,6 +1550,51 @@ export const RegionalAnalytics: React.FC = () => {
             </div>
           </div>
         </Drawer>
+
+        {/* Hidden printable component for react-to-print */}
+        {selectedSpecialty && regionalComparisonData.length > 0 && (
+          <div style={{ position: 'absolute', left: '-9999px', top: 0, visibility: 'hidden' }}>
+            <RegionalPrintable
+              ref={printRef}
+              data={regionalComparisonData}
+              selectedVariables={selectedVariables}
+              variableMetadata={selectedVariables.length > 0 ? selectedVariables.reduce((acc, varName) => {
+                const formattingService = VariableFormattingService.getInstance();
+                const rule = formattingService.getRuleForVariable(varName);
+                acc[varName] = {
+                  label: formatVariableDisplayName(varName),
+                  format: (value: number) => {
+                    if (value === 0) return '0';
+                    if (rule && rule.showCurrency) {
+                      return formatCurrency(value, rule.decimals || 0);
+                    }
+                    if (rule && rule.decimals !== undefined) {
+                      return formatNumber(value, rule.decimals);
+                    }
+                    // Default formatting based on variable name
+                    const lower = varName.toLowerCase();
+                    if (lower.includes('tcc') || lower.includes('compensation') || lower.includes('salary') || lower.includes('call')) {
+                      return formatCurrency(value, 0);
+                    }
+                    if (lower.includes('per') || lower.includes('factor') || lower.includes('conversion')) {
+                      return formatCurrency(value, 2);
+                    }
+                    return formatNumber(value);
+                  }
+                };
+                return acc;
+              }, {} as Record<string, { label: string; format: (value: number) => string }>) : {}}
+              filters={{
+                specialty: selectedSpecialty,
+                providerType: selectedProviderType,
+                surveySource: selectedSurveySource,
+                year: selectedYear,
+                dataCategory: selectedDataCategory
+              }}
+              regionNames={regionalComparisonData.map(region => region.region)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

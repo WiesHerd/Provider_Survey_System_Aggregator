@@ -1,5 +1,5 @@
 import React from 'react';
-import { UnifiedLoadingSpinner } from './UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from './EnterpriseLoadingSpinner';
 
 interface AnalysisProgressBarProps {
   message: string;
@@ -9,10 +9,10 @@ interface AnalysisProgressBarProps {
 }
 
 /**
- * DEPRECATED: Use UnifiedLoadingSpinner directly instead
+ * DEPRECATED: Use EnterpriseLoadingSpinner directly instead
  * This component is kept for backward compatibility only
  * 
- * @deprecated Use UnifiedLoadingSpinner directly for new implementations
+ * @deprecated Use EnterpriseLoadingSpinner from './EnterpriseLoadingSpinner' for new implementations
  */
 export const AnalysisProgressBar: React.FC<AnalysisProgressBarProps> = ({
   message,
@@ -20,14 +20,15 @@ export const AnalysisProgressBar: React.FC<AnalysisProgressBarProps> = ({
   recordCount = 0,
   className = ''
 }) => {
+  console.warn('⚠️ AnalysisProgressBar is deprecated. Use EnterpriseLoadingSpinner instead.');
   return (
-    <UnifiedLoadingSpinner
+    <EnterpriseLoadingSpinner
       message={message}
       recordCount={recordCount}
       progress={progress}
-      showProgress={true}
+      variant="overlay"
       className={className}
-      overlay={true}
+      loading={true}
     />
   );
 };

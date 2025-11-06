@@ -11,7 +11,7 @@ import {
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
-import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import AgGridWrapper from './AgGridWrapper';
 
@@ -844,11 +844,13 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         {/* Subtle refreshing overlay - positioned above the grid */}
         {isRefreshing && (
           <div className="absolute top-0 left-0 right-0 bg-white bg-opacity-90 flex items-center justify-center z-10 py-4">
-            <UnifiedLoadingSpinner
+            <EnterpriseLoadingSpinner
               message="Updating data..."
-              recordCount={0}
+              recordCount="auto"
+              data={previewData}
               progress={progress}
-              showProgress={true}
+              variant="inline"
+              loading={isRefreshing}
             />
           </div>
         )}

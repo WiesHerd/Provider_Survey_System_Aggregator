@@ -15,7 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import { AnalysisProgressBar } from '../../../shared/components';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 
 interface APPSupervisionLevelMapping {
   id: string;
@@ -278,10 +278,12 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
 
   if (loading || dataLoading) {
     return (
-      <AnalysisProgressBar
+      <EnterpriseLoadingSpinner
         message="Loading APP supervision level mappings..."
-        progress={100}
-        recordCount={0}
+        recordCount="auto"
+        data={mappings}
+        variant="overlay"
+        loading={loading || dataLoading}
       />
     );
   }

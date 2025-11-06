@@ -4,8 +4,6 @@ import {
   Select, 
   MenuItem, 
   TextField, 
-  Card, 
-  CardContent, 
   Typography,
   Chip,
   Box,
@@ -19,7 +17,7 @@ import {
   TableRow,
   Paper
 } from '@mui/material';
-import { UnifiedLoadingSpinner } from '../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { SelectChangeEvent } from '@mui/material/Select';
 import { 
@@ -1423,20 +1421,22 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   if (loading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading analytics data..."
-        recordCount={0}
+        recordCount="auto"
+        data={surveyData}
         progress={progress}
-        showProgress={true}
-        overlay={true}
+        variant="overlay"
+        loading={loading}
       />
     );
   }
 
   return (
-    <div className="w-full flex flex-col gap-4">
-      {/* Action Buttons - Top of page */}
-      <div className="flex justify-between items-center">
+    <div className="bg-gray-50 min-h-full">
+      <div className="w-full px-2 py-2">
+        {/* Action Buttons - Top of page */}
+        <div className="flex justify-between items-center mb-6">
       <div className="flex gap-2">
         <button
           onClick={saveCurrentReport}
@@ -1512,11 +1512,14 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       </div>
       
       {/* Report Builder - First, define what you want to build */}
-      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <CardContent className="p-6">
-          <Typography variant="h6" className="mb-4 text-gray-900 font-semibold">
-            Report Builder
-          </Typography>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Report Builder</h2>
+            <p className="text-sm text-gray-600 mt-1">Configure your report dimensions, metrics, and filters</p>
+          </div>
+        </div>
+        <div className="px-6 py-6">
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Report Name */}
@@ -1809,15 +1812,18 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </Select>
             </FormControl>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Filters - Then filter the data */}
-      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <CardContent className="p-6">
-          <Typography variant="h6" className="mb-4 text-gray-900 font-semibold">
-            Filters
-          </Typography>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
+            <p className="text-sm text-gray-600 mt-1">Select specialties, regions, survey sources, and provider types to include in your report</p>
+          </div>
+        </div>
+        <div className="px-6 py-6">
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Specialty Filter */}
@@ -2257,36 +2263,36 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               />
             </FormControl>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
 
       {/* Chart Preview */}
-      <Card className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <Typography variant="h6" className="text-gray-900 font-semibold">
-                {currentConfig.name || 'Report Preview'}
-              </Typography>
-                            <Typography variant="body2" className="text-gray-600">
-                {(() => {
-                  const metricLabelMap: Record<string, string> = {
-                    'tcc_p25': 'TCC 25th', 'tcc_p50': 'TCC 50th', 'tcc_p75': 'TCC 75th', 'tcc_p90': 'TCC 90th',
-                    'wrvu_p25': 'wRVU 25th', 'wrvu_p50': 'wRVU 50th', 'wrvu_p75': 'wRVU 75th', 'wrvu_p90': 'wRVU 90th',
-                    'cf_p25': 'CF 25th', 'cf_p50': 'CF 50th', 'cf_p75': 'CF 75th', 'cf_p90': 'CF 90th'
-                  };
-                  const yearsText = currentConfig.filters.years.length > 0 ? `(${currentConfig.filters.years.join(', ')})` : '';
-                  const regionsText = currentConfig.filters.regions.length > 0 ? `${currentConfig.filters.regions.length} regions` : 'All regions';
-                  const sourcesText = currentConfig.filters.surveySources.length > 0 ? `${currentConfig.filters.surveySources.length} sources` : 'All sources';
-                  const specialtiesText = currentConfig.dimension === 'specialty' ? (
-                    currentConfig.filters.specialties.length > 0 ? `${currentConfig.filters.specialties.length} specialties` : 'All specialties'
-                  ) : '';
-                  return `${currentConfig.dimension.replace('_',' ')} × ${metricLabelMap[currentConfig.metric] || currentConfig.metric} ${yearsText} • ${chartData.length} items • ${regionsText} • ${sourcesText}${specialtiesText ? ' • ' + specialtiesText : ''}`;
-                })()}
-              </Typography>
-            </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {currentConfig.name || 'Report Preview'}
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {(() => {
+                const metricLabelMap: Record<string, string> = {
+                  'tcc_p25': 'TCC 25th', 'tcc_p50': 'TCC 50th', 'tcc_p75': 'TCC 75th', 'tcc_p90': 'TCC 90th',
+                  'wrvu_p25': 'wRVU 25th', 'wrvu_p50': 'wRVU 50th', 'wrvu_p75': 'wRVU 75th', 'wrvu_p90': 'wRVU 90th',
+                  'cf_p25': 'CF 25th', 'cf_p50': 'CF 50th', 'cf_p75': 'CF 75th', 'cf_p90': 'CF 90th'
+                };
+                const yearsText = currentConfig.filters.years.length > 0 ? `(${currentConfig.filters.years.join(', ')})` : '';
+                const regionsText = currentConfig.filters.regions.length > 0 ? `${currentConfig.filters.regions.length} regions` : 'All regions';
+                const sourcesText = currentConfig.filters.surveySources.length > 0 ? `${currentConfig.filters.surveySources.length} sources` : 'All sources';
+                const specialtiesText = currentConfig.dimension === 'specialty' ? (
+                  currentConfig.filters.specialties.length > 0 ? `${currentConfig.filters.specialties.length} specialties` : 'All specialties'
+                ) : '';
+                return `${currentConfig.dimension.replace('_',' ')} × ${metricLabelMap[currentConfig.metric] || currentConfig.metric} ${yearsText} • ${chartData.length} items • ${regionsText} • ${sourcesText}${specialtiesText ? ' • ' + specialtiesText : ''}`;
+              })()}
+            </p>
           </div>
+        </div>
+        <div className="px-6 py-6">
 
           {/* Chart and Data Table - Show single empty state when no data */}
           {chartData.length > 0 ? (
@@ -2294,10 +2300,10 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               {renderChart()}
               
               {/* Data Table */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-8">
-                <Typography variant="h6" className="text-gray-900 font-semibold mb-4">
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   Data Table
-                </Typography>
+                </h3>
                 <div className="overflow-x-auto">
                 <TableContainer 
                   component={Paper} 
@@ -2524,7 +2530,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               </div>
             </>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-8">
+            <div className="mt-6">
               <EmptyState
                 icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
                 title="No Data Available"
@@ -2535,10 +2541,11 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               />
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Data Viewer Modal - Completely removed for cleaner interface */}
+      </div>
     </div>
   );
 };

@@ -2806,8 +2806,23 @@ export class IndexedDBService {
         const surveySource = survey.type || survey.name || 'Unknown';
         
         rows.forEach(row => {
-          // Look for region in different possible column names
-          const region = row.geographicRegion || row['Geographic Region'] || row.geographic_region || row.region || row.Region;
+          // ENTERPRISE FIX: Handle both WIDE format (direct properties) and LONG format (nested in data)
+          // Type guard: row.data might be an object (ISurveyRow) or string/number
+          let rowData: any = row;
+          if (row && typeof row === 'object' && 'data' in row && row.data && typeof row.data === 'object') {
+            rowData = row.data;
+          }
+          
+          // Look for region in different possible column names (check both row and rowData)
+          const region = (rowData && typeof rowData === 'object' 
+            ? (rowData.geographicRegion || rowData['Geographic Region'] || 
+               rowData.geographic_region || rowData.region || rowData.Region)
+            : null) ||
+            (row && typeof row === 'object'
+              ? (row.geographicRegion || (row as any)['Geographic Region'] || 
+                 (row as any).geographic_region || (row as any).region || (row as any).Region)
+              : null);
+          
           if (region && typeof region === 'string' && !mappedNames.has(region.toLowerCase())) {
             const key = region.toLowerCase();
             const current = regionCounts.get(key) || { count: 0, sources: new Set() };

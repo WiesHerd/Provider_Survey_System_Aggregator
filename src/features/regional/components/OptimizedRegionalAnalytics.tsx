@@ -29,7 +29,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useOptimizedRegionalData } from '../hooks/useOptimizedRegionalData';
 import { PerformanceDashboard } from '../../mapping/components/PerformanceDashboard';
-import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 
 /**
@@ -116,12 +116,13 @@ export const OptimizedRegionalAnalytics: React.FC = () => {
   // Loading state with progress
   if (loading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading regional analytics..."
-        recordCount={0}
+        recordCount="auto"
+        data={analyticsData}
         progress={progress}
-        showProgress={true}
-        overlay={true}
+        variant="overlay"
+        loading={loading}
       />
     );
   }

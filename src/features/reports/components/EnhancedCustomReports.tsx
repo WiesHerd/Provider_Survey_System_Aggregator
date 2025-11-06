@@ -38,7 +38,7 @@ import {
 import { ReportBuilder, ReportTemplates, VisualFilterBuilder } from '../index';
 import { getDataService } from '../../../services/DataService';
 import { useYear } from '../../../contexts/YearContext';
-import { UnifiedLoadingSpinner } from '../../../shared/components/UnifiedLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 
 interface EnhancedCustomReportsProps {
@@ -247,11 +247,13 @@ export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({
   // Show loading state
   if (loading) {
     return (
-      <UnifiedLoadingSpinner
+      <EnterpriseLoadingSpinner
         message="Loading custom reports..."
-        recordCount={0}
+        recordCount="auto"
+        data={propData}
         progress={progress}
-        showProgress={true}
+        variant="overlay"
+        loading={loading}
       />
     );
   }

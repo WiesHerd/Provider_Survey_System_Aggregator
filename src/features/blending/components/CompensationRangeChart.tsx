@@ -1,8 +1,9 @@
 /**
  * Compensation Range Bar Chart Component
  * 
- * Shows the percentile ranges (P25, P50, P75, P90) for TCC, wRVU, and CF
- * Used for all blending methods to visualize the spread of compensation data
+ * Shows the percentile ranges (P25, P50, P75, P90) for TCC and wRVU
+ * Uses dual Y-axis for proper scaling of both metrics
+ * CF is shown in a separate chart (ConversionFactorChart)
  */
 
 import React from 'react';
@@ -25,7 +26,6 @@ interface CompensationRangeChartProps {
   data: {
     tcc: { p25: number; p50: number; p75: number; p90: number };
     wrvu: { p25: number; p50: number; p75: number; p90: number };
-    cf: { p25: number; p50: number; p75: number; p90: number };
   };
   title?: string;
   height?: number;
@@ -34,43 +34,47 @@ interface CompensationRangeChartProps {
 
 export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
   data,
-  title = "Compensation Range Analysis",
-  height = 400,
-  width = 600
+  title = "TCC & Work RVU Range Analysis",
+  height = 250,
+  width = 400
 }) => {
+  // Format values for data labels
+  const formatTCC = (value: number) => `$${(value / 1000).toFixed(0)}K`;
+  const formatWRVU = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
   const chartData = {
     labels: ['P25', 'P50 (Median)', 'P75', 'P90'],
     datasets: [
       {
         label: 'Total Cash Compensation (TCC)',
         data: [data.tcc.p25, data.tcc.p50, data.tcc.p75, data.tcc.p90],
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        borderColor: '#3B82F6',
-        borderWidth: 2,
-        hoverBackgroundColor: 'rgba(59, 130, 246, 0.9)',
-        hoverBorderColor: '#1D4ED8',
-        yAxisID: 'y'
+        backgroundColor: '#1E3A8A', // Professional navy blue
+        borderColor: '#1E40AF',
+        borderWidth: 0,
+        hoverBackgroundColor: '#1E40AF',
+        hoverBorderColor: '#1E3A8A',
+        yAxisID: 'y',
+        barThickness: 50,
+        maxBarThickness: 60,
+        categoryPercentage: 0.7,
+        barPercentage: 0.85,
+        borderRadius: 4
       },
       {
         label: 'Work RVUs (wRVU)',
         data: [data.wrvu.p25, data.wrvu.p50, data.wrvu.p75, data.wrvu.p90],
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
-        borderColor: '#10B981',
-        borderWidth: 2,
-        hoverBackgroundColor: 'rgba(16, 185, 129, 0.9)',
-        hoverBorderColor: '#059669',
-        yAxisID: 'y1'
+        backgroundColor: '#0D9488', // Professional teal
+        borderColor: '#14B8A6',
+        borderWidth: 0,
+        hoverBackgroundColor: '#14B8A6',
+        hoverBorderColor: '#0D9488',
+        yAxisID: 'y1',
+        barThickness: 50,
+        maxBarThickness: 60,
+        categoryPercentage: 0.7,
+        barPercentage: 0.85,
+        borderRadius: 4
       },
-      {
-        label: 'Conversion Factor (CF)',
-        data: [data.cf.p25, data.cf.p50, data.cf.p75, data.cf.p90],
-        backgroundColor: 'rgba(245, 158, 11, 0.8)',
-        borderColor: '#F59E0B',
-        borderWidth: 2,
-        hoverBackgroundColor: 'rgba(245, 158, 11, 0.9)',
-        hoverBorderColor: '#D97706',
-        yAxisID: 'y2'
-      }
     ]
   };
 
@@ -87,24 +91,30 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
         display: true,
         text: title,
         font: {
-          size: 16,
+          size: 18,
           weight: 'bold' as const,
-          family: 'Inter, sans-serif'
+          family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
         },
-        color: '#1F2937',
-        padding: 20
+        color: '#111827',
+        padding: { bottom: 24, top: 8 }
       },
       legend: {
         position: 'top' as const,
+        align: 'end' as const,
         labels: {
           usePointStyle: true,
-          padding: 20,
+          pointStyle: 'circle',
+          padding: 16,
           font: {
-            size: 12,
-            family: 'Inter, sans-serif'
+            size: 13,
+            weight: 'normal' as const,
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
           },
           color: '#374151'
         }
+      },
+      datalabels: {
+        display: false // We'll use afterDraw instead
       },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -126,8 +136,6 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
               return `${label}: $${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             } else if (label?.includes('wRVU')) {
               return `${label}: ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            } else if (label?.includes('CF')) {
-              return `${label}: $${value.toFixed(2)}`;
             }
             return `${label}: ${value}`;
           }
@@ -136,6 +144,7 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
     },
     scales: {
       x: {
+        type: 'category' as const,
         display: true,
         title: {
           display: true,
@@ -152,10 +161,16 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
         },
         ticks: {
           font: {
-            size: 11,
-            family: 'Inter, sans-serif'
+            size: 12,
+            weight: 'bold' as const,
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
           },
-          color: '#6B7280'
+          color: '#111827',
+          padding: 12
+        },
+        stacked: false,
+        border: {
+          display: false
         }
       },
       y: {
@@ -168,23 +183,29 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
           font: {
             size: 12,
             weight: 'bold' as const,
-            family: 'Inter, sans-serif'
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
           },
-          color: '#3B82F6'
+          color: '#374151',
+          padding: { top: 0, bottom: 12 }
         },
         grid: {
-          color: 'rgba(59, 130, 246, 0.1)'
+          color: 'rgba(0, 0, 0, 0.05)',
+          drawBorder: false,
+          lineWidth: 1
         },
         ticks: {
           font: {
             size: 11,
-            family: 'Inter, sans-serif'
+            weight: 'normal' as const,
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
           },
-          color: '#3B82F6',
+          color: '#6B7280',
+          padding: 8,
           callback: function(value: any) {
-            return '$' + value.toLocaleString();
+            return '$' + (value / 1000).toFixed(0) + 'K';
           }
-        }
+        },
+        beginAtZero: true
       },
       y1: {
         type: 'linear' as const,
@@ -196,9 +217,10 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
           font: {
             size: 12,
             weight: 'bold' as const,
-            family: 'Inter, sans-serif'
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
           },
-          color: '#10B981'
+          color: '#374151',
+          padding: { top: 0, bottom: 12 }
         },
         grid: {
           drawOnChartArea: false,
@@ -206,52 +228,112 @@ export const CompensationRangeChart: React.FC<CompensationRangeChartProps> = ({
         ticks: {
           font: {
             size: 11,
-            family: 'Inter, sans-serif'
+            weight: 'normal' as const,
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
           },
-          color: '#10B981',
+          color: '#6B7280',
+          padding: 8,
           callback: function(value: any) {
-            return value.toLocaleString();
+            return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
           }
-        }
+        },
+        beginAtZero: true
       },
-      y2: {
-        type: 'linear' as const,
-        display: false,
-        position: 'right' as const,
-        title: {
-          display: true,
-          text: 'CF ($)',
-          font: {
-            size: 12,
-            weight: 'bold' as const,
-            family: 'Inter, sans-serif'
-          },
-          color: '#F59E0B'
-        },
-        grid: {
-          drawOnChartArea: false,
-        },
-        ticks: {
-          font: {
-            size: 11,
-            family: 'Inter, sans-serif'
-          },
-          color: '#F59E0B',
-          callback: function(value: any) {
-            return '$' + value.toFixed(2);
-          }
-        }
-      }
     },
     animation: {
-      duration: 1000,
-      easing: 'easeInOutQuart' as const
+      duration: 800,
+      easing: 'easeOutQuart' as const,
+      onComplete: (chart: any) => {
+        // Safety checks
+        if (!chart || !chart.data || !chart.data.datasets || !chart.ctx) {
+          return;
+        }
+        
+        const ctx = chart.ctx;
+        const datasets = chart.data.datasets;
+        
+        if (!Array.isArray(datasets) || datasets.length === 0) {
+          return;
+        }
+        
+        datasets.forEach((dataset: any, datasetIndex: number) => {
+          if (!dataset || !dataset.data) return;
+          
+          const meta = chart.getDatasetMeta(datasetIndex);
+          if (!meta || !meta.data || !Array.isArray(meta.data)) return;
+          
+          meta.data.forEach((bar: any, index: number) => {
+            if (!bar || typeof bar.x === 'undefined' || typeof bar.y === 'undefined') return;
+            
+            const value = dataset.data[index];
+            if (typeof value !== 'number' || isNaN(value)) return;
+            
+            const x = bar.x;
+            const y = bar.y - 8;
+            
+            // Format based on dataset
+            let labelText = '';
+            if (dataset.label?.includes('TCC')) {
+              labelText = formatTCC(value);
+            } else if (dataset.label?.includes('wRVU')) {
+              labelText = formatWRVU(value);
+            }
+            
+            if (!labelText) return;
+            
+            // Draw label background
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.strokeStyle = '#E5E7EB';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            const textWidth = ctx.measureText(labelText).width;
+            const padding = 6;
+            const labelX = x;
+            const labelY = y - 10;
+            
+            // Use roundRect if available, otherwise fallback to rect
+            if (ctx.roundRect) {
+              ctx.roundRect(
+                labelX - textWidth / 2 - padding,
+                labelY - 10,
+                textWidth + padding * 2,
+                18,
+                4
+              );
+            } else {
+              ctx.rect(
+                labelX - textWidth / 2 - padding,
+                labelY - 10,
+                textWidth + padding * 2,
+                18
+              );
+            }
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw label text
+            ctx.fillStyle = '#111827';
+            ctx.font = 'bold 11px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(labelText, labelX, labelY - 1);
+            ctx.restore();
+          });
+        });
+      }
+    },
+    layout: {
+      padding: {
+        top: 20,
+        bottom: 10
+      }
     }
   };
 
   return (
-    <div className="w-full bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="chart-container">
+    <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="chart-container" style={{ height: `${height}px` }}>
         <Bar data={chartData} options={options} />
       </div>
     </div>

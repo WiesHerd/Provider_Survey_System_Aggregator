@@ -1,8 +1,11 @@
 import React from 'react';
 import { Box, Typography, Alert, Tooltip, IconButton } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { RegionalComparisonProps, RegionalData } from '../types/regional';
-import { REGIONAL_METRICS, PERCENTILES } from '../utils/regionalCalculations';
+import { RegionalComparisonProps, RegionalData, VariableRegionalData } from '../types/regional';
+import { PERCENTILES } from '../utils/regionalCalculations';
+import { formatVariableDisplayName } from '../../../features/analytics/utils/variableFormatters';
+import { VariableFormattingService } from '../../../features/analytics/services/variableFormattingService';
+import { formatCurrency, formatNumber } from '../../../shared/utils/formatters';
 
 /**
  * Regional Comparison component for displaying regional data in HTML tables
@@ -14,6 +17,8 @@ import { REGIONAL_METRICS, PERCENTILES } from '../utils/regionalCalculations';
  */
 export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
   data,
+  selectedVariables = [],
+  variableMetadata = {},
   onRegionClick,
   onMetricClick,
   regionTooltips,
@@ -21,11 +26,15 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
   className = ''
 }) => {
   const regionNames = data.map(region => region.region);
+  const formattingService = VariableFormattingService.getInstance();
 
   // Helper function to get min/max values for highlighting
   const getMinMax = (values: number[]) => {
-    let min = Math.min(...values);
-    let max = Math.max(...values);
+    if (values.length === 0) return { min: 0, max: 0 };
+    const validValues = values.filter(v => v > 0);
+    if (validValues.length === 0) return { min: 0, max: 0 };
+    let min = Math.min(...validValues);
+    let max = Math.max(...validValues);
     return { min, max };
   };
 
@@ -38,31 +47,106 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
     );
   }
 
+  // Determine if using variable-aware format
+  const isVariableAware = data.length > 0 && 'variables' in data[0];
+  
+  // Get variables to display
+  let variablesToDisplay: string[] = [];
+  if (isVariableAware && selectedVariables.length > 0) {
+    variablesToDisplay = selectedVariables;
+  } else if (!isVariableAware) {
+    // Legacy format: use TCC, CF, wRVU
+    variablesToDisplay = ['tcc', 'tcc_per_work_rvu', 'work_rvus'];
+  } else {
+    // Fallback: extract from data if available
+    const firstData = data[0] as VariableRegionalData;
+    if (firstData.variables) {
+      variablesToDisplay = Object.keys(firstData.variables);
+    }
+  }
+
+  // Get variable formatting function
+  const getVariableFormat = (variableName: string): (value: number) => string => {
+    // Check if metadata provides format function
+    if (variableMetadata[variableName] && typeof variableMetadata[variableName].format === 'function') {
+      return variableMetadata[variableName].format;
+    }
+    
+    // Use formatting service
+    const formattingRule = formattingService.getRuleForVariable(variableName);
+    if (formattingRule) {
+      return (value: number) => {
+        if (value === 0) return '0';
+        if (formattingRule.showCurrency) {
+          return formatCurrency(value, formattingRule.decimals || 0);
+        }
+        if (formattingRule.decimals !== undefined) {
+          return formatNumber(value, formattingRule.decimals);
+        }
+        return formatNumber(value);
+      };
+    }
+    
+    // Default formatting based on variable name patterns
+    const lower = variableName.toLowerCase();
+    if (lower.includes('tcc') || lower.includes('compensation') || lower.includes('salary') || lower.includes('call')) {
+      return (value: number) => formatCurrency(value, 0);
+    }
+    if (lower.includes('per') || lower.includes('factor') || lower.includes('conversion')) {
+      return (value: number) => formatCurrency(value, 2);
+    }
+    return (value: number) => formatNumber(value);
+  };
+
+  // Get variable label
+  const getVariableLabel = (variableName: string): string => {
+    if (variableMetadata[variableName]?.label) {
+      return variableMetadata[variableName].label;
+    }
+    return formatVariableDisplayName(variableName);
+  };
+
+  // Get value from data (supports both formats)
+  const getValue = (regionData: RegionalData | VariableRegionalData, variableName: string, percentile: string): number => {
+    if ('variables' in regionData) {
+      // Variable-aware format
+      const varData = regionData.variables[variableName];
+      return varData?.[percentile as 'p25' | 'p50' | 'p75' | 'p90'] || 0;
+    } else {
+      // Legacy format - map variable names to legacy fields
+      const legacyMap: Record<string, Record<string, keyof RegionalData>> = {
+        'tcc': { p25: 'tcc_p25', p50: 'tcc_p50', p75: 'tcc_p75', p90: 'tcc_p90' },
+        'tcc_per_work_rvu': { p25: 'cf_p25', p50: 'cf_p50', p75: 'cf_p75', p90: 'cf_p90' },
+        'work_rvus': { p25: 'wrvus_p25', p50: 'wrvus_p50', p75: 'wrvus_p75', p90: 'wrvus_p90' }
+      };
+      
+      const fieldMap = legacyMap[variableName];
+      if (fieldMap && fieldMap[percentile]) {
+        return (regionData[fieldMap[percentile]] as number) || 0;
+      }
+      return 0;
+    }
+  };
+
   return (
     <Box className={`space-y-8 ${className}`}>
-      {REGIONAL_METRICS.map(metric => (
-        <Box key={metric.key} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+      {variablesToDisplay.map(variableName => {
+        const variableLabel = getVariableLabel(variableName);
+        const formatValue = getVariableFormat(variableName);
+        
+        return (
+          <Box key={variableName} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
           {/* Table Header */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                {metric.key === 'tcc' ? (
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                  </svg>
-                ) : metric.key === 'cf' ? (
-                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                )}
               </div>
               <div>
                 <Typography variant="h6" className="text-gray-900 font-semibold">
-                  {metric.label}
+                    {variableLabel}
                 </Typography>
                 <Typography variant="body2" className="text-gray-600">
                   Regional comparison across percentiles
@@ -95,7 +179,9 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
               </thead>
               <tbody>
                 {PERCENTILES.map((p, index) => {
-                  const values = data.map(r => r[`${metric.key}_${p.key}` as keyof RegionalData] as number);
+                  // Type assertion to help TypeScript with union type arrays
+                  const typedData = data as (RegionalData | VariableRegionalData)[];
+                  const values = typedData.map(r => getValue(r, variableName, p.key));
                   const { min, max } = getMinMax(values);
                   
                   return (
@@ -109,24 +195,24 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
                         {p.label}
                       </td>
                       {regionNames.map(region => {
-                        const regionData = data.find(d => d.region === region);
-                        const value = regionData ? regionData[`${metric.key}_${p.key}` as keyof RegionalData] as number : 0;
+                        const regionData = typedData.find(d => d.region === region);
+                        const value = regionData ? getValue(regionData, variableName, p.key) : 0;
                         
                         let cellClass = 'text-center py-4 px-4 font-medium';
                         let tooltip = '';
                         let badgeClass = '';
                         
-                        if (value === max) {
-                          cellClass += ' text-green-700';
-                          badgeClass = 'bg-green-100 text-green-800 border-green-200';
+                        if (value > 0 && value === max) {
+                          // Highest value: subtle green background with rounded corners
+                          badgeClass = 'bg-green-50 text-green-700';
                           tooltip = 'Highest value';
-                        } else if (value === min) {
-                          cellClass += ' text-red-700';
-                          badgeClass = 'bg-red-100 text-red-800 border-red-200';
+                        } else if (value > 0 && value === min) {
+                          // Lowest value: subtle red background with rounded corners
+                          badgeClass = 'bg-red-50 text-red-700';
                           tooltip = 'Lowest value';
                         } else {
-                          cellClass += ' text-gray-900';
-                          badgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
+                          // Default: subtle gray background with rounded corners
+                          badgeClass = value > 0 ? 'bg-gray-50 text-gray-700' : 'bg-transparent text-gray-400';
                         }
                         
                         return (
@@ -135,8 +221,8 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
                             className={cellClass}
                             title={tooltip}
                           >
-                            <span className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-semibold border ${badgeClass}`}>
-                              {metric.format(value)}
+                            <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-semibold min-w-[80px] ${badgeClass}`}>
+                              {value > 0 ? formatValue(value) : '—'}
                             </span>
                           </td>
                         );
@@ -147,10 +233,9 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
               </tbody>
             </table>
           </div>
-
-
         </Box>
-      ))}
+        );
+      })}
     </Box>
   );
 };

@@ -1,206 +1,233 @@
 /**
  * Template Manager Component
  * 
- * This component manages saved specialty blend templates,
- * allowing users to save, load, and organize their blends.
+ * Simplified template management with proper state machine
+ * Handles loading, saving, and deleting templates
  */
 
 import React, { useState } from 'react';
+import { FormControl, Select, MenuItem, IconButton } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
+import { BookmarkSlashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { SpecialtyBlendTemplate } from '../types/blending';
+import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
+
+type TemplateLoadingState = 'idle' | 'loading' | 'applying' | 'complete' | 'error';
 
 interface TemplateManagerProps {
   templates: SpecialtyBlendTemplate[];
+  selectedTemplateId: string;
   onLoadTemplate: (templateId: string) => void;
-  onBack: () => void;
-  onClose: () => void;
+  onDeleteTemplate: (templateId: string) => void;
+  blendName: string;
+  blendDescription: string;
+  onBlendNameChange: (name: string) => void;
+  onBlendDescriptionChange: (description: string) => void;
+  onSaveTemplate: () => void;
+  onClearBlend: () => void;
+  selectedDataRows: number[];
+  isLoadingTemplate?: boolean;
 }
 
 export const TemplateManager: React.FC<TemplateManagerProps> = ({
   templates,
+  selectedTemplateId,
   onLoadTemplate,
-  onBack,
-  onClose
+  onDeleteTemplate,
+  blendName,
+  blendDescription,
+  onBlendNameChange,
+  onBlendDescriptionChange,
+  onSaveTemplate,
+  onClearBlend,
+  selectedDataRows,
+  isLoadingTemplate = false
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string>('all');
-  
-  // Get unique tags from templates
-  const allTags = Array.from(
-    new Set(templates.flatMap(template => template.tags))
-  );
-  
-  // Filter templates based on search and tag
-  const filteredTemplates = templates.filter(template => {
-    const matchesSearch = template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         template.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTag = selectedTag === 'all' || template.tags.includes(selectedTag);
-    return matchesSearch && matchesTag;
-  });
-  
-  const handleLoadTemplate = (templateId: string) => {
-    onLoadTemplate(templateId);
-  };
-  
-  const handleDeleteTemplate = (templateId: string) => {
-    if (window.confirm('Are you sure you want to delete this template?')) {
-      // TODO: Implement delete functionality
-      console.log('Delete template:', templateId);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [loadingState, setLoadingState] = useState<TemplateLoadingState>('idle');
+
+  const handleTemplateSelect = (templateId: string) => {
+    if (!templateId) return;
+    
+    setLoadingState('loading');
+    try {
+      onLoadTemplate(templateId);
+      setLoadingState('applying');
+      // State will be updated by parent component
+      setTimeout(() => {
+        setLoadingState('complete');
+        setTimeout(() => setLoadingState('idle'), 1000);
+      }, 500);
+    } catch (error) {
+      setLoadingState('error');
+      setTimeout(() => setLoadingState('idle'), 2000);
     }
   };
-  
+
+  const handleDeleteClick = (e: React.MouseEvent, templateId: string) => {
+    e.stopPropagation();
+    setDeleteConfirmId(templateId);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmId) {
+      onDeleteTemplate(deleteConfirmId);
+      setDeleteConfirmId(null);
+    }
+  };
+
+  const isLoading = isLoadingTemplate || loadingState !== 'idle';
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+    <>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+        <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Template Manager</h1>
-              <p className="text-gray-600 mt-1">Manage your saved specialty blend templates</p>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={onBack}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Back to Blending
-              </button>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        {/* Search and Filter */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Templates
-              </label>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Search by name or description..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Tag
-              </label>
-              <select
-                value={selectedTag}
-                onChange={(e) => setSelectedTag(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Filter templates by tag"
-              >
-                <option value="all">All Tags</option>
-                {allTags.map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-        
-        {/* Templates Grid */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Saved Templates ({filteredTemplates.length})
-            </h2>
-          </div>
-          
-          {filteredTemplates.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="mt-2">No templates found</p>
-              <p className="text-sm">Create and save your first template</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTemplates.map((template) => (
-                <div
-                  key={template.id}
-                  className="bg-gray-50 rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-900 truncate">
-                        {template.name}
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {template.description || 'No description'}
-                      </p>
-                    </div>
-                    <div className="flex space-x-1 ml-2">
-                      <button
-                        onClick={() => handleDeleteTemplate(template.id)}
-                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
-                        title="Delete template"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2 mb-4">
-                    <div className="text-xs text-gray-600">
-                      <span className="font-medium">{template.specialties.length}</span> specialties
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      Created: {new Date(template.createdAt).toLocaleDateString()}
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      By: {template.createdBy}
-                    </div>
-                  </div>
-                  
-                  {/* Tags */}
-                  {template.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-4">
-                      {template.tags.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+            <h2 className="text-lg font-semibold text-gray-900">Blend Configuration</h2>
+            <div className="flex items-center space-x-3">
+              {/* Saved Blends Dropdown */}
+              {templates.length > 0 && (
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <Select
+                    value={selectedTemplateId || ""}
+                    onChange={(e: SelectChangeEvent<string>) => {
+                      const templateId = e.target.value;
+                      if (templateId) {
+                        handleTemplateSelect(templateId);
+                      }
+                    }}
+                    displayEmpty
+                    disabled={isLoading}
+                    renderValue={(selected: string) => {
+                      if (!selected) {
+                        return <em>📁 Saved Blends</em>;
+                      }
+                      const template = templates.find(t => t.id === selected);
+                      return template ? (
+                        <div className="flex items-center">
+                          <span className="mr-2">📁</span>
+                          <span className="truncate">{template.name}</span>
+                          {isLoading && (
+                            <svg className="animate-spin ml-2 h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          )}
+                        </div>
+                      ) : <em>📁 Saved Blends</em>;
+                    }}
+                    aria-label="Saved Blends"
+                    sx={{
+                      backgroundColor: 'white',
+                      borderRadius: '8px',
+                      fontSize: '0.875rem',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#d1d5db',
+                        borderWidth: '1px',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#9ca3af',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#3b82f6',
+                        borderWidth: '1px',
+                      }
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      <em>📁 Saved Blends</em>
+                    </MenuItem>
+                    {templates.map((template) => (
+                      <MenuItem key={template.id} value={template.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div className="font-medium text-gray-900">{template.name}</div>
+                          {template.description && template.description !== template.name && (
+                            <div className="text-xs text-gray-500">{template.description}</div>
+                          )}
+                        </div>
+                        <IconButton 
+                          size="small" 
+                          onClick={(e: React.MouseEvent) => handleDeleteClick(e, template.id)}
+                          sx={{ 
+                            color: '#ef4444',
+                            '&:hover': { backgroundColor: '#fee2e2' }
+                          }}
                         >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Actions */}
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleLoadTemplate(template.id)}
-                      className="flex-1 px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      Load Template
-                    </button>
-                    <button
-                      onClick={() => {/* TODO: Implement edit functionality */}}
-                      className="px-3 py-2 bg-gray-600 text-white text-xs font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              ))}
+                          <BookmarkSlashIcon className="h-3 w-3" />
+                        </IconButton>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+        <div className="px-6 py-6">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Blend Name *
+                </label>
+                  <input
+                    type="text"
+                    value={blendName}
+                    onChange={(e) => onBlendNameChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Enter blend name"
+                  />
+              </div>
+              <div className="lg:col-span-2">
+                <div className="flex items-end space-x-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={blendDescription}
+                      onChange={(e) => onBlendDescriptionChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Enter description (optional)"
+                    />
+                  </div>
+                  <button
+                    onClick={onClearBlend}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 shadow-sm whitespace-nowrap"
+                    title="Clear current blend and start a new one"
+                  >
+                    <XMarkIcon className="w-4 h-4 mr-2" />
+                    Clear
+                  </button>
+                  <button
+                    onClick={onSaveTemplate}
+                    disabled={selectedDataRows.length === 0 || !blendName.trim()}
+                    className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    Save Blend
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmId !== null}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Blend Template"
+        message={`Are you sure you want to delete "${templates.find(t => t.id === deleteConfirmId)?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="error"
+      />
+    </>
   );
 };

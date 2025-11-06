@@ -200,20 +200,11 @@ export const useFMVData = () => {
   const callPayFTEAdjusted = useMemo(() => applyFTEAdjustment(callPayAdjustedValue, filters.fte), [callPayAdjustedValue, filters.fte]);
 
   /**
-   * Calculates filter values - Enterprise-grade UX: Always show ALL available options
-   * This allows users to easily change any filter at any time without being locked into cascading behavior
+   * Calculates filter values with cascading logic
+   * Options are filtered based on currently selected filters to show only valid combinations
    */
-  const calculateFilterValues = useCallback(async () => {
+  const calculateFilterValues = useCallback(async (currentFilters?: FMVFilters) => {
     try {
-      // Check cache first
-      if (fmvCache.hasFreshUniqueValues()) {
-        const cachedValues = fmvCache.getCachedUniqueValues();
-        if (cachedValues) {
-          console.log('🚀 Using cached FMV filter values (fast!)');
-          return cachedValues;
-        }
-      }
-      
       // Use the same AnalyticsDataService as the Analytics screen
       // This benefits from TanStack Query cache if benchmarking route is also loaded
       const analyticsDataService = new AnalyticsDataService();
@@ -225,20 +216,96 @@ export const useFMVData = () => {
         year: ''
       });
 
+      // CRITICAL: Apply cascading filters to show only valid options
+      // Start with all data, then filter progressively based on selected filters
+      let cascadingData = allData;
       
+      // If survey source is selected, filter by it first (most restrictive)
+      if (currentFilters?.surveySource && currentFilters.surveySource !== 'All Sources') {
+        cascadingData = cascadingData.filter(row => row.surveySource === currentFilters.surveySource);
+        console.log('🔍 FMV Cascading: Filtered by survey source', {
+          surveySource: currentFilters.surveySource,
+          rowsAfterFilter: cascadingData.length
+        });
+      }
+      
+      // If year is selected, filter by year
+      if (currentFilters?.year && currentFilters.year !== 'All Years') {
+        cascadingData = cascadingData.filter(row => row.surveyYear === currentFilters.year);
+        console.log('🔍 FMV Cascading: Filtered by year', {
+          year: currentFilters.year,
+          rowsAfterFilter: cascadingData.length
+        });
+      }
+      
+      // If specialty is selected, filter by specialty
+      if (currentFilters?.specialty && currentFilters.specialty !== '') {
+        const normalizeForSpecialtyMatch = (str: string) => str.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const normalizedFilter = normalizeForSpecialtyMatch(currentFilters.specialty);
+        cascadingData = cascadingData.filter(row => {
+          const rowSpecialty = row.standardizedName || row.surveySpecialty || '';
+          const normalizedRow = normalizeForSpecialtyMatch(rowSpecialty);
+          return normalizedRow === normalizedFilter;
+        });
+        console.log('🔍 FMV Cascading: Filtered by specialty', {
+          specialty: currentFilters.specialty,
+          rowsAfterFilter: cascadingData.length
+        });
+      }
+      
+      // If provider type is selected, filter by provider type
+      if (currentFilters?.providerType && currentFilters.providerType !== 'All Types') {
+        const normalizeForComparison = (str: string) => str
+          .split(/\s+/)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        cascadingData = cascadingData.filter(row => {
+          const rowProviderType = row.providerType || '';
+          return normalizeForComparison(rowProviderType) === normalizeForComparison(currentFilters.providerType);
+        });
+        console.log('🔍 FMV Cascading: Filtered by provider type', {
+          providerType: currentFilters.providerType,
+          rowsAfterFilter: cascadingData.length
+        });
+      }
+      
+      // If region is selected, filter by region
+      if (currentFilters?.region && currentFilters.region !== 'All Regions') {
+        const normalizeForComparison = (str: string) => str
+          .split(/\s+/)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        cascadingData = cascadingData.filter(row => {
+          const rowRegion = row.geographicRegion || '';
+          return normalizeForComparison(rowRegion) === normalizeForComparison(currentFilters.region);
+        });
+        console.log('🔍 FMV Cascading: Filtered by region', {
+          region: currentFilters.region,
+          rowsAfterFilter: cascadingData.length
+        });
+      }
+      
+      // Extract unique values from cascading-filtered data
       const specialtySet = new Set<string>();
       const providerTypeSet = new Set<string>();
       const regionSet = new Set<string>();
       const surveySourceSet = new Set<string>();
       const yearSet = new Set<string>();
       
-      // Extract unique values from all data
-      allData.forEach(row => {
+      // Extract unique values from cascading data
+      cascadingData.forEach(row => {
         if (row.standardizedName) specialtySet.add(row.standardizedName);
         if (row.providerType) providerTypeSet.add(row.providerType);
         if (row.geographicRegion) regionSet.add(row.geographicRegion);
         if (row.surveySource) surveySourceSet.add(row.surveySource);
         if (row.surveyYear) yearSet.add(row.surveyYear);
+      });
+      
+      // CRITICAL: Survey sources should always show ALL options (not cascading)
+      // This allows users to switch survey sources easily
+      const allSurveySources = new Set<string>();
+      allData.forEach(row => {
+        if (row.surveySource) allSurveySources.add(row.surveySource);
       });
       
       // Use all specialties - don't filter out valid specialties like "General Pediatrics"
@@ -297,13 +364,18 @@ export const useFMVData = () => {
         specialties: allSpecialties,
         providerTypes: normalizedProviderTypes,
         regions: normalizedRegions,
-        surveySources: Array.from(surveySourceSet).sort(),
+        surveySources: Array.from(allSurveySources).sort(), // Always show all survey sources
         years: Array.from(yearSet).sort()
       };
       
-      // Cache the result
-      fmvCache.setCachedUniqueValues(result);
-      console.log('💾 Cached FMV filter values for future use');
+      console.log('🔍 FMV Cascading Filter Results:', {
+        surveySource: currentFilters?.surveySource || 'All Sources',
+        specialties: allSpecialties.length,
+        providerTypes: normalizedProviderTypes.length,
+        regions: normalizedRegions.length,
+        years: Array.from(yearSet).length,
+        sampleRegions: normalizedRegions.slice(0, 5)
+      });
       
       return result;
     } catch (error) {
@@ -320,16 +392,17 @@ export const useFMVData = () => {
 
   /**
    * Fetches unique filter values from survey data and mappings
+   * Now uses cascading logic - options update based on current filter selections
    */
   const fetchUniqueValues = useCallback(async () => {
     try {
-      // Generate filter options from the normalized data
-      const filterValues = await calculateFilterValues();
+      // Generate filter options with cascading logic based on current filters
+      const filterValues = await calculateFilterValues(filters);
       setUniqueValues(filterValues);
     } catch (err) {
       setError('Failed to load filter options');
     }
-  }, [calculateFilterValues]);
+  }, [calculateFilterValues, filters]);
 
   /**
    * Process market data with current filters (extracted for reuse)
@@ -380,11 +453,14 @@ export const useFMVData = () => {
         // 1. dataCategory flag
         // 2. Survey source name contains "call pay"
         // 3. Row has Call Pay variables (on_call_compensation, etc.) - MOST IMPORTANT
+        // Check for all possible Call Pay variable names for robustness
         const hasCallPayVariables = !!(
           variables.on_call_compensation ||
           variables.oncall_compensation ||
           variables.daily_rate_on_call ||
-          variables.daily_rate_oncall
+          variables.daily_rate_oncall ||
+          variables.call_pay ||
+          variables.callpay
         );
         
         // Determine which detection method matched
@@ -629,6 +705,7 @@ export const useFMVData = () => {
       
       // CRITICAL FIX: Extract Call Pay data from variable-based structure
       // Call Pay surveys use "Daily Rate On-Call Compensation" variable stored in variables.on_call_compensation
+      // When using getAnalyticsDataByVariables(), data comes as DynamicAggregatedData[] with variables structure
       let callPayMetrics = {
         n_orgs: (row as any).callPay_n_orgs || 0,
         n_incumbents: (row as any).callPay_n_incumbents || 0,
@@ -640,16 +717,21 @@ export const useFMVData = () => {
       
       let extractionMethod = 'direct_callPay_fields';
       
-      // If this is a Call Pay row but metrics are zero, try extracting from variables structure
-      if (isCallPayRow && callPayMetrics.p50 === 0 && (row as any).variables) {
+      // CRITICAL FIX: For Call Pay data, prioritize extracting from variables structure
+      // This handles DynamicAggregatedData[] from getAnalyticsDataByVariables()
+      if (isCallPayData && (row as any).variables) {
         const variables = (row as any).variables;
         // Check for on_call_compensation variable (normalized from "Daily Rate On-Call Compensation")
+        // Try multiple possible variable names for robustness
         const onCallVar = variables.on_call_compensation || 
                         variables.oncall_compensation || 
                         variables.daily_rate_on_call ||
-                        variables.daily_rate_oncall;
+                        variables.daily_rate_oncall ||
+                        variables.call_pay ||
+                        variables.callpay;
         
-        if (onCallVar) {
+        if (onCallVar && onCallVar.p50 > 0) {
+          // Use variables structure if it has valid data
           callPayMetrics = {
             n_orgs: onCallVar.n_orgs || 0,
             n_incumbents: onCallVar.n_incumbents || 0,
@@ -669,11 +751,12 @@ export const useFMVData = () => {
                 k.toLowerCase().includes('call') || k.toLowerCase().includes('oncall')
               ) || 'on_call_compensation',
               metrics: callPayMetrics,
-              extractionMethod
+              extractionMethod,
+              allVariableKeys: Object.keys(variables)
             });
           }
-        } else {
-          // Fallback to TCC structure if no variable found
+        } else if (isCallPayRow && callPayMetrics.p50 === 0) {
+          // If variables exist but no Call Pay variable found, try fallback to TCC
           callPayMetrics = {
             n_orgs: row.tcc_n_orgs || 0,
             n_incumbents: row.tcc_n_incumbents || 0,
@@ -682,10 +765,10 @@ export const useFMVData = () => {
             p75: row.tcc_p75 || 0,
             p90: row.tcc_p90 || 0,
           };
-          extractionMethod = 'tcc_fallback_no_variables';
+          extractionMethod = 'tcc_fallback_no_callpay_variable';
           
-          if (isCallPayData && index < 3) {
-            console.log('⚠️ FMV: Call Pay row has no variables, using TCC fallback:', {
+          if (index < 3) {
+            console.log('⚠️ FMV: Call Pay row has variables but no Call Pay variable, using TCC fallback:', {
               surveySource: row.surveySource,
               specialty: row.standardizedName,
               availableVariables: Object.keys(variables),
@@ -698,6 +781,36 @@ export const useFMVData = () => {
               extractionMethod
             });
           }
+        }
+      } else if (isCallPayRow && callPayMetrics.p50 === 0 && (row as any).variables) {
+        // Legacy path: If direct fields are zero but variables exist, try extracting from variables
+        const variables = (row as any).variables;
+        const onCallVar = variables.on_call_compensation || 
+                        variables.oncall_compensation || 
+                        variables.daily_rate_on_call ||
+                        variables.daily_rate_oncall;
+        
+        if (onCallVar) {
+          callPayMetrics = {
+            n_orgs: onCallVar.n_orgs || 0,
+            n_incumbents: onCallVar.n_incumbents || 0,
+            p25: onCallVar.p25 || 0,
+            p50: onCallVar.p50 || 0,
+            p75: onCallVar.p75 || 0,
+            p90: onCallVar.p90 || 0,
+          };
+          extractionMethod = 'variables_structure_legacy';
+        } else {
+          // Fallback to TCC structure if no variable found
+          callPayMetrics = {
+            n_orgs: row.tcc_n_orgs || 0,
+            n_incumbents: row.tcc_n_incumbents || 0,
+            p25: row.tcc_p25 || 0,
+            p50: row.tcc_p50 || 0,
+            p75: row.tcc_p75 || 0,
+            p90: row.tcc_p90 || 0,
+          };
+          extractionMethod = 'tcc_fallback_no_variables';
         }
       } else if (isCallPayRow && callPayMetrics.p50 === 0) {
         // Fallback to TCC structure for Call Pay surveys without variables structure
@@ -902,20 +1015,33 @@ export const useFMVData = () => {
 
     try {
       // Check cache first for all data
+      // CRITICAL FIX: For Call Pay, we need DynamicAggregatedData[] with variables structure
+      // Don't use cache if it might have the wrong data type (AggregatedData[] vs DynamicAggregatedData[])
+      // We can detect this by checking if the first row has a 'variables' property
       if (fmvCache.hasFreshData()) {
         const cachedData = fmvCache.getCachedData();
-        if (cachedData) {
-          console.log('🚀 Using cached FMV market data (fast!)');
-          // Trigger background refresh if data is getting stale
-          if (fmvCache.hasStaleData()) {
-            // Background refresh without blocking UI
-            setTimeout(() => {
-              fetchMarketDataInBackground();
-            }, 0);
+        if (cachedData && cachedData.length > 0) {
+          const hasVariablesStructure = !!(cachedData[0] as any).variables;
+          const needsVariablesStructure = compareType === 'CallPay';
+          
+          // Only use cache if data structure matches what we need
+          if (hasVariablesStructure === needsVariablesStructure) {
+            console.log('🚀 Using cached FMV market data (fast!)');
+            // Trigger background refresh if data is getting stale
+            if (fmvCache.hasStaleData()) {
+              // Background refresh without blocking UI
+              setTimeout(() => {
+                fetchMarketDataInBackground();
+              }, 0);
+            }
+            // Process cached data with current filters
+            await processMarketData(cachedData);
+            return;
+          } else {
+            console.log('🔄 Cache has wrong data structure, fetching fresh data');
+            // Clear cache to force fresh fetch
+            fmvCache.clearCache();
           }
-          // Process cached data with current filters
-          await processMarketData(cachedData);
-          return;
         }
       }
       
@@ -923,13 +1049,30 @@ export const useFMVData = () => {
       // This benefits from shared IndexedDB cache and will benefit from TanStack Query
       // if benchmarking route is also open (data will be in memory cache)
       const analyticsDataService = new AnalyticsDataService();
-      const allData = await analyticsDataService.getAnalyticsData({
-        specialty: '',
-        surveySource: '',
-        geographicRegion: '',
-        providerType: '',
-        year: ''
-      });
+      
+      // CRITICAL FIX: For Call Pay, use getAnalyticsDataByVariables() to get data with variables structure
+      // Call Pay data is stored in the variables object, which is only available in DynamicAggregatedData[]
+      let allData: any[];
+      if (compareType === 'CallPay') {
+        console.log('🔍 FMV: Loading Call Pay data using getAnalyticsDataByVariables()');
+        // Pass empty array to get all variables (including Call Pay)
+        allData = await analyticsDataService.getAnalyticsDataByVariables({
+          specialty: '',
+          surveySource: '',
+          geographicRegion: '',
+          providerType: '',
+          year: ''
+        }, []); // Empty array means get all variables
+      } else {
+        // For TCC, wRVUs, CF, use the standard getAnalyticsData() method
+        allData = await analyticsDataService.getAnalyticsData({
+          specialty: '',
+          surveySource: '',
+          geographicRegion: '',
+          providerType: '',
+          year: ''
+        });
+      }
       
       // Cache the raw data
       fmvCache.setCachedData(allData);
@@ -942,7 +1085,7 @@ export const useFMVData = () => {
     } finally {
       setLoading(false);
     }
-  }, [processMarketData]);
+  }, [processMarketData, compareType]);
 
   /**
    * Updates filters and triggers market data recalculation
@@ -1022,10 +1165,10 @@ export const useFMVData = () => {
     setCompareType('TCC');
   }, [resetFilters, clearCompComponents]);
 
-  // Load unique values on mount
+  // Load unique values on mount and when filters change (cascading behavior)
   useEffect(() => {
     fetchUniqueValues();
-  }, [fetchUniqueValues]);
+  }, [fetchUniqueValues, filters.surveySource, filters.year, filters.specialty, filters.providerType, filters.region]);
 
   // Recalculate market data when dependencies change
   useEffect(() => {

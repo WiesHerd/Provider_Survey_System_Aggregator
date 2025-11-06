@@ -94,11 +94,26 @@ export const WeightDistributionChart: React.FC<WeightDistributionChartProps> = (
           generateLabels: (chart: any) => {
             const data = chart.data;
             if (data.labels.length && data.datasets.length) {
+              const dataset = data.datasets[0];
+              const total = dataset.data.reduce((sum: number, val: number) => sum + (val || 0), 0);
+              
+              if (total === 0 || isNaN(total) || !isFinite(total)) {
+                return data.labels.map((label: string, index: number) => ({
+                  text: `${label} (0%)`,
+                  fillStyle: dataset.backgroundColor[index],
+                  strokeStyle: dataset.borderColor[index],
+                  lineWidth: dataset.borderWidth,
+                  pointStyle: 'circle',
+                  hidden: false,
+                  index: index
+                }));
+              }
+              
               return data.labels.map((label: string, index: number) => {
-                const dataset = data.datasets[0];
-                const value = dataset.data[index];
-                const total = dataset.data.reduce((sum: number, val: number) => sum + val, 0);
-                const percentage = ((value / total) * 100).toFixed(1);
+                const value = dataset.data[index] || 0;
+                const percentage = total > 0 && !isNaN(value) && isFinite(value) 
+                  ? ((value / total) * 100).toFixed(1) 
+                  : '0.0';
                 
                 return {
                   text: `${label} (${percentage}%)`,
@@ -128,9 +143,11 @@ export const WeightDistributionChart: React.FC<WeightDistributionChartProps> = (
             return context[0].label;
           },
           label: (context: any) => {
-            const value = context.parsed;
-            const total = context.dataset.data.reduce((sum: number, val: number) => sum + val, 0);
-            const percentage = ((value / total) * 100).toFixed(1);
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((sum: number, val: number) => sum + (val || 0), 0);
+            const percentage = total > 0 && !isNaN(value) && isFinite(value) && !isNaN(total) && isFinite(total)
+              ? ((value / total) * 100).toFixed(1)
+              : '0.0';
             const records = data[context.dataIndex]?.records || 0;
             
             return [

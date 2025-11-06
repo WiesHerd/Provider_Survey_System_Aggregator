@@ -5,6 +5,7 @@
  */
 
 import { generatePieChartHTML, generateBarChartHTML, WeightDistributionData, CompensationRangeData } from './chartGenerators';
+import { calculateSimilarity, normalizeSpecialty } from '../../../shared/utils/specialtyMatching';
 
 export interface BlendedMetrics {
   tcc_p25: number;
@@ -33,6 +34,7 @@ export type BlendingMethod = 'weighted' | 'simple' | 'custom';
  * @param totalWeight - Total weight percentage
  * @returns Validation result
  */
+
 export const validateBlend = (specialties: any[], totalWeight: number = 100): {
   isValid: boolean;
   errors: string[];
@@ -40,11 +42,13 @@ export const validateBlend = (specialties: any[], totalWeight: number = 100): {
   totalWeight: number;
   missingSpecialties: string[];
   duplicateSpecialties: string[];
+  similarSpecialties: Array<{ name1: string; name2: string; similarity: number }>;
 } => {
   const errors: string[] = [];
   const warnings: string[] = [];
   const missingSpecialties: string[] = [];
   const duplicateSpecialties: string[] = [];
+  const similarSpecialties: Array<{ name1: string; name2: string; similarity: number }> = [];
 
   // Check if specialties exist
   if (!specialties || specialties.length === 0) {
@@ -55,17 +59,62 @@ export const validateBlend = (specialties: any[], totalWeight: number = 100): {
       warnings,
       totalWeight: 0,
       missingSpecialties,
-      duplicateSpecialties
+      duplicateSpecialties,
+      similarSpecialties
     };
   }
 
-  // Check for duplicates
+  // Check for exact duplicates
   const specialtyNames = specialties.map(s => s.name);
   const uniqueNames = new Set(specialtyNames);
   if (uniqueNames.size !== specialtyNames.length) {
     const duplicates = specialtyNames.filter((name, index) => specialtyNames.indexOf(name) !== index);
     duplicateSpecialties.push(...duplicates);
     errors.push(`Duplicate specialties found: ${duplicates.join(', ')}`);
+  }
+
+  // Check for semantically similar specialties (potential duplicates)
+  for (let i = 0; i < specialties.length; i++) {
+    for (let j = i + 1; j < specialties.length; j++) {
+      const spec1 = specialties[i];
+      const spec2 = specialties[j];
+      
+      // Skip if already flagged as exact duplicate
+      if (spec1.name === spec2.name) continue;
+      
+      // Calculate similarity
+      const similarity = calculateSimilarity(spec1.name, spec2.name);
+      
+      // If similarity is high (>= 0.75), flag as potential duplicate
+      if (similarity >= 0.75) {
+        similarSpecialties.push({
+          name1: spec1.name,
+          name2: spec2.name,
+          similarity
+        });
+        
+        // Create a normalized comparison for better detection
+        const norm1 = normalizeSpecialty(spec1.name);
+        const norm2 = normalizeSpecialty(spec2.name);
+        
+        // Check for common patterns that indicate duplicates
+        const isLikelyDuplicate = 
+          // Family medicine / family practice variations
+          (norm1.includes('family') && norm2.includes('family') && 
+           (norm1.includes('ob') || norm1.includes('obstetrics')) &&
+           (norm2.includes('ob') || norm2.includes('obstetrics'))) ||
+          // Same base specialty with minor variations
+          (similarity >= 0.85);
+        
+        if (isLikelyDuplicate) {
+          warnings.push(
+            `Potential duplicate detected: "${spec1.name}" (${spec1.surveySource}) and "${spec2.name}" (${spec2.surveySource}) ` +
+            `appear to be the same specialty with different naming conventions. ` +
+            `Consider reviewing if these should be combined.`
+          );
+        }
+      }
+    }
   }
 
   // Check total weight
@@ -80,7 +129,8 @@ export const validateBlend = (specialties: any[], totalWeight: number = 100): {
     warnings,
     totalWeight: actualTotalWeight,
     missingSpecialties,
-    duplicateSpecialties
+    duplicateSpecialties,
+    similarSpecialties
   };
 };
 
@@ -352,26 +402,114 @@ export const calculateBlendedMetricsNew = (
     blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
   }
 
-  selectedData.forEach((row, index) => {
-    const weight = weights[index] || 0;
+  // Helper function to check if a value is valid (not null, undefined, 0, or '***')
+  const isValidValue = (value: any): boolean => {
+    if (value === null || value === undefined) return false;
+    if (value === '***' || value === '') return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'number' && (isNaN(value) || !isFinite(value))) return false;
+    return true;
+  };
+
+  // Helper function to get CF value, deriving from TCC/wRVU if CF is missing
+  const getCFValue = (cf: any, tcc: any, wrvu: any): number | null => {
+    // If CF is valid, use it
+    if (isValidValue(cf)) {
+      const cfNum = typeof cf === 'string' ? parseFloat(cf) : cf;
+      if (!isNaN(cfNum) && isFinite(cfNum) && cfNum > 0) {
+        return cfNum;
+      }
+    }
     
-    // TCC metrics
-    blended.tcc_p25 += (row.tcc_p25 || 0) * weight;
-    blended.tcc_p50 += (row.tcc_p50 || 0) * weight;
-    blended.tcc_p75 += (row.tcc_p75 || 0) * weight;
-    blended.tcc_p90 += (row.tcc_p90 || 0) * weight;
+    // If CF is missing but TCC and wRVU are available, derive CF
+    if (isValidValue(tcc) && isValidValue(wrvu)) {
+      const tccNum = typeof tcc === 'string' ? parseFloat(tcc) : tcc;
+      const wrvuNum = typeof wrvu === 'string' ? parseFloat(wrvu) : wrvu;
+      if (!isNaN(tccNum) && !isNaN(wrvuNum) && isFinite(tccNum) && isFinite(wrvuNum) && wrvuNum > 0) {
+        return tccNum / wrvuNum;
+      }
+    }
     
-    // wRVU metrics
-    blended.wrvu_p25 += (row.wrvu_p25 || 0) * weight;
-    blended.wrvu_p50 += (row.wrvu_p50 || 0) * weight;
-    blended.wrvu_p75 += (row.wrvu_p75 || 0) * weight;
-    blended.wrvu_p90 += (row.wrvu_p90 || 0) * weight;
+    return null; // No valid CF value available
+  };
+
+  // Calculate each percentile separately, only including rows with valid data
+  const percentiles = ['p25', 'p50', 'p75', 'p90'] as const;
+  
+  percentiles.forEach(percentile => {
+    // TCC percentile - only include rows with valid TCC data
+    const tccRows = selectedData.filter(row => isValidValue(row[`tcc_${percentile}`]));
+    if (tccRows.length > 0) {
+      const tccTotalWeight = tccRows.reduce((sum, row, idx) => {
+        const originalIndex = selectedData.indexOf(row);
+        return sum + (weights[originalIndex] || 0);
+      }, 0);
+      
+      if (tccTotalWeight > 0) {
+        tccRows.forEach(row => {
+          const originalIndex = selectedData.indexOf(row);
+          const normalizedWeight = (weights[originalIndex] || 0) / tccTotalWeight;
+          const value = typeof row[`tcc_${percentile}`] === 'string' 
+            ? parseFloat(row[`tcc_${percentile}`]) 
+            : row[`tcc_${percentile}`];
+          if (!isNaN(value) && isFinite(value)) {
+            blended[`tcc_${percentile}`] += value * normalizedWeight;
+          }
+        });
+      }
+    }
     
-    // CF metrics
-    blended.cf_p25 += (row.cf_p25 || 0) * weight;
-    blended.cf_p50 += (row.cf_p50 || 0) * weight;
-    blended.cf_p75 += (row.cf_p75 || 0) * weight;
-    blended.cf_p90 += (row.cf_p90 || 0) * weight;
+    // wRVU percentile - only include rows with valid wRVU data
+    const wrvuRows = selectedData.filter(row => isValidValue(row[`wrvu_${percentile}`]));
+    if (wrvuRows.length > 0) {
+      const wrvuTotalWeight = wrvuRows.reduce((sum, row, idx) => {
+        const originalIndex = selectedData.indexOf(row);
+        return sum + (weights[originalIndex] || 0);
+      }, 0);
+      
+      if (wrvuTotalWeight > 0) {
+        wrvuRows.forEach(row => {
+          const originalIndex = selectedData.indexOf(row);
+          const normalizedWeight = (weights[originalIndex] || 0) / wrvuTotalWeight;
+          const value = typeof row[`wrvu_${percentile}`] === 'string' 
+            ? parseFloat(row[`wrvu_${percentile}`]) 
+            : row[`wrvu_${percentile}`];
+          if (!isNaN(value) && isFinite(value)) {
+            blended[`wrvu_${percentile}`] += value * normalizedWeight;
+          }
+        });
+      }
+    }
+    
+    // CF percentile - only include rows with valid CF data (or derive from TCC/wRVU)
+    const cfRows = selectedData.filter(row => {
+      const cf = row[`cf_${percentile}`];
+      const tcc = row[`tcc_${percentile}`];
+      const wrvu = row[`wrvu_${percentile}`];
+      return getCFValue(cf, tcc, wrvu) !== null;
+    });
+    
+    if (cfRows.length > 0) {
+      const cfTotalWeight = cfRows.reduce((sum, row, idx) => {
+        const originalIndex = selectedData.indexOf(row);
+        return sum + (weights[originalIndex] || 0);
+      }, 0);
+      
+      if (cfTotalWeight > 0) {
+        cfRows.forEach(row => {
+          const originalIndex = selectedData.indexOf(row);
+          const normalizedWeight = (weights[originalIndex] || 0) / cfTotalWeight;
+          const cf = row[`cf_${percentile}`];
+          const tcc = row[`tcc_${percentile}`];
+          const wrvu = row[`wrvu_${percentile}`];
+          const cfValue = getCFValue(cf, tcc, wrvu);
+          
+          if (cfValue !== null && !isNaN(cfValue) && isFinite(cfValue)) {
+            blended[`cf_${percentile}`] += cfValue * normalizedWeight;
+          }
+        });
+      }
+    }
   });
   
   // Round to 2 decimal places for currency and percentage values
