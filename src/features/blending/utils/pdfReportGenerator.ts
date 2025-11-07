@@ -420,9 +420,81 @@ const createBarChartConfig = (
 };
 
 /**
+ * Loads logo image and converts to data URL for PDF
+ */
+const loadLogoAsDataURL = (): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    // Fetch SVG as text and convert to data URL
+    const logoPath = `${process.env.PUBLIC_URL || ''}/benchpoint-icon.svg`;
+    
+    fetch(logoPath)
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to fetch logo');
+        return response.text();
+      })
+      .then(svgText => {
+        // Convert SVG to data URL
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; // SVG viewBox is 64x64
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              const dataURL = canvas.toDataURL('image/png');
+              URL.revokeObjectURL(url); // Clean up
+              resolve(dataURL);
+            } else {
+              URL.revokeObjectURL(url);
+              reject(new Error('Could not get canvas context'));
+            }
+          } catch (error) {
+            URL.revokeObjectURL(url);
+            reject(error);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Failed to load logo image'));
+        };
+        img.src = url;
+      })
+      .catch(error => {
+        reject(error);
+      });
+  });
+};
+
+/**
  * Adds header page to PDF with all content (single page layout)
  */
 const addHeaderPage = async (pdf: jsPDF, data: BlendedReportData): Promise<void> => {
+  // Add logo and branding to header (top right)
+  try {
+    const logoDataURL = await loadLogoAsDataURL();
+    const logoWidth = 0.35; // 0.35 inches
+    const logoHeight = 0.35; // 0.35 inches
+    const logoX = PDF_WIDTH - PDF_MARGIN - 1.2; // Leave space for text
+    const logoY = PDF_MARGIN + 0.05;
+    pdf.addImage(logoDataURL, 'PNG', logoX, logoY, logoWidth, logoHeight);
+    
+    // Add BenchPoint text next to logo
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(79, 70, 229); // #4F46E5 (indigo)
+    pdf.text('Bench', logoX + logoWidth + 0.05, logoY + 0.12);
+    pdf.setTextColor(124, 58, 237); // #7C3AED (purple)
+    pdf.text('Point', logoX + logoWidth + 0.05, logoY + 0.25);
+  } catch (error) {
+    console.warn('Could not load logo for PDF:', error);
+    // Continue without logo if it fails to load
+  }
+  
   // Header with consistent typography
   pdf.setFontSize(TYPOGRAPHY.TITLE);
   pdf.setTextColor(COLORS.PRIMARY_TEXT[0], COLORS.PRIMARY_TEXT[1], COLORS.PRIMARY_TEXT[2]);
@@ -545,7 +617,7 @@ const addHeaderPage = async (pdf: jsPDF, data: BlendedReportData): Promise<void>
         }
       );
       
-      yPos += SPACING.SUBSECTION;
+      yPos += SPACING.SECTION + 0.15; // Extra spacing between custom weights and metrics tables
       
       // Add metrics table right after custom weights section
       const finalY = addMetricsTable(pdf, data, yPos);
