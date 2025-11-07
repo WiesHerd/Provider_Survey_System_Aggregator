@@ -8,14 +8,14 @@
 import React, { useState } from 'react';
 import { 
   DocumentArrowDownIcon, 
-  PrinterIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  DocumentChartBarIcon
 } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import { BlendedResult } from '../types/blending';
 import { BlendingChartsContainer } from './BlendingChartsContainer';
 import { useToast } from '../../../components/ui/use-toast';
-import { generateBlendingResultsHTML } from '../utils/blendingResultsPrint';
+import { generateBlendedReportPDF, BlendedReportData } from '../utils/pdfReportGenerator';
 
 interface BlendingResultsProps {
   result: BlendedResult;
@@ -28,57 +28,76 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
 }) => {
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   
-  // Print functionality using HTML window approach
-  const handlePrint = () => {
+  
+  // PDF export functionality - generates professional PDF report
+  const handleExportToPDF = async () => {
     try {
-      const htmlContent = generateBlendingResultsHTML(result);
+      setIsExportingPDF(true);
       
-      const printWindow = window.open('', '_blank', 'width=900,height=1100');
-      if (printWindow) {
-        printWindow.document.title = 'Specialty Blending Results';
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-        
-        // Wait for content to load, then trigger print dialog
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-            // Close the window after printing (user can cancel if needed)
-            setTimeout(() => {
-              printWindow.close();
-            }, 1000);
-          }, 500);
-        };
-      } else {
-        // Fallback: download as HTML if popup is blocked
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `blending-results-${result.blendName?.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'untitled'}-${new Date().toISOString().split('T')[0]}.html`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        toast({
-          title: 'Print Window Blocked',
-          description: 'HTML file downloaded. Open it in your browser to print.',
-          variant: 'default'
-        });
-      }
-    } catch (error) {
-      console.error('Error generating print HTML:', error);
       toast({
-        title: 'Print Failed',
-        description: error instanceof Error ? error.message : 'Failed to generate print document.',
+        title: 'Generating PDF Report',
+        description: 'Creating your professional report... This may take a few seconds.',
+      });
+      
+      // Convert BlendedResult to BlendedReportData format
+      const reportData: BlendedReportData = {
+        title: 'Blended Compensation Report',
+        generatedAt: new Date(result.createdAt).toLocaleString(),
+        blendMethod: result.blendingMethod || 'weighted',
+        specialties: result.specialties?.map(s => s.name) || [],
+        totalRecords: result.sampleSize || 0,
+        customWeights: result.customWeights && result.specialties ? result.specialties.map((spec, index) => ({
+          specialty: spec.name,
+          weight: spec.weight || 0,
+          records: spec.records || 0
+        })) : undefined,
+        metrics: {
+          tcc: {
+            p25: result.blendedData.tcc_p25,
+            p50: result.blendedData.tcc_p50,
+            p75: result.blendedData.tcc_p75,
+            p90: result.blendedData.tcc_p90
+          },
+          wrvu: {
+            p25: result.blendedData.wrvu_p25,
+            p50: result.blendedData.wrvu_p50,
+            p75: result.blendedData.wrvu_p75,
+            p90: result.blendedData.wrvu_p90
+          },
+          cf: {
+            p25: result.blendedData.cf_p25,
+            p50: result.blendedData.cf_p50,
+            p75: result.blendedData.cf_p75,
+            p90: result.blendedData.cf_p90
+          }
+        }
+      };
+      
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `${result.blendName?.replace(/[^a-z0-9]/gi, '-') || 'Blended-Report'}-${timestamp}.pdf`;
+      
+      // Generate PDF
+      await generateBlendedReportPDF(reportData, filename);
+      
+      setIsExportingPDF(false);
+      
+      toast({
+        title: 'Report Generated Successfully',
+        description: `Your PDF report "${filename}" has been downloaded. Check your downloads folder.`,
+      });
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      setIsExportingPDF(false);
+      toast({
+        title: 'Export Failed',
+        description: error instanceof Error ? error.message : 'Failed to generate PDF. Please check the browser console for details.',
         variant: 'destructive'
       });
     }
   };
-  
-  
+
   const handleExportToExcel = () => {
     setIsExporting(true);
     try {
@@ -159,6 +178,8 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
   
   return (
     <div className="space-y-6">
+      {/* Content area */}
+      <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between">
@@ -308,12 +329,17 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
           />
         </div>
 
-        {/* Actions */}
+        {/* Timestamp - included in PDF */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Created: {new Date(result.createdAt).toLocaleString()}
-            </div>
+          <div className="text-sm text-gray-600">
+            Created: {new Date(result.createdAt).toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+        {/* Actions - excluded from PDF */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-end">
             <div className="flex space-x-3">
               <button
                 onClick={handleExportToExcel}
@@ -323,22 +349,14 @@ export const BlendingResults: React.FC<BlendingResultsProps> = ({
                 <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                 {isExporting ? 'Exporting...' : 'Export to Excel'}
               </button>
-              <div className="relative group">
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  <PrinterIcon className="w-4 h-4 mr-2" />
-                  Print
-                </button>
-                {/* Tooltip */}
-                <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                  <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
-                    Print blending results
-                    <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={handleExportToPDF}
+                disabled={isExportingPDF}
+                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg"
+              >
+                <DocumentChartBarIcon className="w-4 h-4 mr-2" />
+                {isExportingPDF ? 'Exporting...' : 'Export to PDF'}
+              </button>
             </div>
           </div>
         </div>

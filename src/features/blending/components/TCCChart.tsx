@@ -16,9 +16,10 @@ import {
   Legend,
   Title
 } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 // Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title, ChartDataLabels);
 
 interface TCCChartProps {
   data: {
@@ -35,8 +36,8 @@ export const TCCChart: React.FC<TCCChartProps> = ({
   height = 300,
   width = 600
 }) => {
-  // Format values for data labels
-  const formatTCC = (value: number) => `$${(value / 1000).toFixed(0)}K`;
+  // Format values for data labels - in 100,000s (e.g., 250,000 -> "250K")
+  const formatTCC = (value: number) => `${(value / 1000).toFixed(0)}K`;
 
   const chartData = {
     labels: ['P25', 'P50 (Median)', 'P75', 'P90'],
@@ -50,10 +51,10 @@ export const TCCChart: React.FC<TCCChartProps> = ({
         hoverBackgroundColor: '#1E40AF',
         hoverBorderColor: '#1E3A8A',
         yAxisID: 'y',
-        barThickness: 70,
-        maxBarThickness: 90,
-        categoryPercentage: 0.75,
-        barPercentage: 0.9,
+        barThickness: 30,
+        maxBarThickness: 35,
+        categoryPercentage: 0.5,
+        barPercentage: 0.6,
         borderRadius: 4
       }
     ]
@@ -96,8 +97,32 @@ export const TCCChart: React.FC<TCCChartProps> = ({
           },
           label: (context: any) => {
             const value = context.parsed.y;
-            return `Total Cash Compensation (TCC): $${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return `Total Cash Compensation (TCC): ${value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
           }
+        }
+      },
+      datalabels: {
+        anchor: 'end' as const,
+        align: 'top' as const,
+        offset: 4,
+        color: '#111827',
+        font: {
+          size: 12,
+          weight: 'bold' as const,
+          family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+        },
+        formatter: (value: number) => {
+          return formatTCC(value);
+        },
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: '#374151',
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: {
+          top: 4,
+          bottom: 4,
+          left: 6,
+          right: 6
         }
       }
     },
@@ -161,7 +186,7 @@ export const TCCChart: React.FC<TCCChartProps> = ({
           color: '#6B7280',
           padding: 8,
           callback: function(value: any) {
-            return '$' + (value / 1000).toFixed(0) + 'K';
+            return (value / 1000).toFixed(0) + 'K';
           }
         },
         beginAtZero: true
@@ -169,82 +194,11 @@ export const TCCChart: React.FC<TCCChartProps> = ({
     },
     animation: {
       duration: 800,
-      easing: 'easeOutQuart' as const,
-      onComplete: (chart: any) => {
-        // Safety checks
-        if (!chart || !chart.data || !chart.data.datasets || !chart.ctx) {
-          return;
-        }
-        
-        const datasets = chart.data.datasets;
-        if (!Array.isArray(datasets) || datasets.length === 0) {
-          return;
-        }
-        
-        const dataset = datasets[0];
-        if (!dataset || !dataset.data) return;
-        
-        const meta = chart.getDatasetMeta(0);
-        if (!meta || !meta.data || !Array.isArray(meta.data)) return;
-        
-        const ctx = chart.ctx;
-        
-        meta.data.forEach((bar: any, index: number) => {
-          if (!bar || typeof bar.x === 'undefined' || typeof bar.y === 'undefined') return;
-          
-          const value = dataset.data[index];
-          if (typeof value !== 'number' || isNaN(value)) return;
-          
-          const x = bar.x;
-          const y = bar.y - 8;
-          const labelText = formatTCC(value);
-          
-          if (!labelText) return;
-          
-          // Draw label background
-          ctx.save();
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-          ctx.strokeStyle = '#E5E7EB';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          const textWidth = ctx.measureText(labelText).width;
-          const padding = 6;
-          const labelX = x;
-          const labelY = y - 10;
-          
-          // Use roundRect if available, otherwise fallback to rect
-          if (ctx.roundRect) {
-            ctx.roundRect(
-              labelX - textWidth / 2 - padding,
-              labelY - 10,
-              textWidth + padding * 2,
-              18,
-              4
-            );
-          } else {
-            ctx.rect(
-              labelX - textWidth / 2 - padding,
-              labelY - 10,
-              textWidth + padding * 2,
-              18
-            );
-          }
-          ctx.fill();
-          ctx.stroke();
-          
-          // Draw label text
-          ctx.fillStyle = '#111827';
-          ctx.font = 'bold 11px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(labelText, labelX, labelY - 1);
-          ctx.restore();
-        });
-      }
+      easing: 'easeOutQuart' as const
     },
     layout: {
       padding: {
-        top: 20,
+        top: 50,
         bottom: 10
       }
     }
@@ -258,4 +212,5 @@ export const TCCChart: React.FC<TCCChartProps> = ({
     </div>
   );
 };
+
 

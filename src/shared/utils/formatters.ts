@@ -239,7 +239,10 @@ export const capitalizeWords = (text: string): string => {
  * ```
  */
 export const formatSpecialtyForDisplay = (specialty: string): string => {
-  if (!specialty) return '';
+  // Defensive check - ensure we have a valid string
+  if (!specialty || typeof specialty !== 'string') {
+    return String(specialty || '').trim();
+  }
   
   // Handle common abbreviations and special cases
   const specialCases: Record<string, string> = {

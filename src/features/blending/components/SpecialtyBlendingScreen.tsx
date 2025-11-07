@@ -27,6 +27,7 @@ import { ModernPagination } from '../../../shared/components/ModernPagination';
 import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { BookmarkSlashIcon } from '@heroicons/react/24/outline';
+import { generateBlendedReportPDF, BlendedReportData } from '../utils/pdfReportGenerator';
 
 // Removed AG Grid - using HTML table instead
 
@@ -374,306 +375,97 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     return blended;
   }, [selectedDataRows, filteredSurveyData, blendingMethod, customWeights]);
 
-  // Download report handler
-  const handleDownloadReport = useCallback(() => {
-    if (!blendedMetrics) return;
-    
-    // Create a nicely formatted report
-    const reportData = {
-      title: 'Blended Compensation Report',
-      generatedAt: new Date().toLocaleString(),
-      blendMethod: blendingMethod,
-      specialties: blendedMetrics.specialties,
-      totalRecords: blendedMetrics.totalRecords,
-      // Include custom weights for transparency when custom blending is used
-      customWeights: blendingMethod === 'custom' ? selectedDataRows.map((index, i) => {
-        const row = filteredSurveyData[index];
-        const weight = customWeights[index] || 0;
-        return {
-          specialty: row?.surveySpecialty || 'Unknown',
-          weight: weight,
-          records: row?.tcc_n_orgs || row?.n_orgs || 0
-        };
-      }).filter(item => item.specialty !== 'Unknown') : null,
-      metrics: {
-        tcc: {
-          p25: blendedMetrics.tcc_p25,
-          p50: blendedMetrics.tcc_p50,
-          p75: blendedMetrics.tcc_p75,
-          p90: blendedMetrics.tcc_p90
-        },
-        wrvu: {
-          p25: blendedMetrics.wrvu_p25,
-          p50: blendedMetrics.wrvu_p50,
-          p75: blendedMetrics.wrvu_p75,
-          p90: blendedMetrics.wrvu_p90
-        },
-        cf: {
-          p25: blendedMetrics.cf_p25,
-          p50: blendedMetrics.cf_p50,
-          p75: blendedMetrics.cf_p75,
-          p90: blendedMetrics.cf_p90
-        }
-      }
-    };
-    
-    // Create HTML report
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Blended Compensation Report</title>
-        <style>
-          @media print {
-            body { margin: 0; padding: 0.25in; }
-            .no-print { display: none; }
-            .page-break { page-break-before: always; }
-            .avoid-break { page-break-inside: avoid; }
-            .footer { page-break-inside: avoid; }
-            @page {
-              margin: 0.25in;
-              @top-left { content: ""; }
-              @top-center { content: ""; }
-              @top-right { content: ""; }
-              @bottom-left { content: ""; }
-              @bottom-center { content: ""; }
-              @bottom-right { content: ""; }
-            }
-          }
-          
-          body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            margin: 0; 
-            padding: 20px; 
-            line-height: 1.5; 
-            color: #333; 
-            background: white;
-          }
-          .header { 
-            border-bottom: 2px solid #6366f1; 
-            padding-bottom: 15px; 
-            margin-bottom: 20px; 
-            margin-top: 0;
-          }
-          .title { 
-            font-size: 28px; 
-            font-weight: bold; 
-            color: #1f2937; 
-            margin: 0; 
-          }
-          .subtitle { 
-            font-size: 16px; 
-            color: #6b7280; 
-            margin: 8px 0 0 0; 
-          }
-          .info-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 20px; 
-            margin: 20px 0; 
-          }
-          .info-item { 
-            background: #f9fafb; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border: 1px solid #e5e7eb;
-          }
-          .info-label { 
-            font-weight: 600; 
-            color: #374151; 
-            margin-bottom: 5px; 
-          }
-          .info-value { 
-            color: #6b7280; 
-          }
-          .metrics-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin: 20px 0; 
-            page-break-inside: avoid;
-          }
-          .metrics-table th { 
-            background: #f3f4f6; 
-            padding: 8px; 
-            text-align: left; 
-            font-weight: 600; 
-            color: #374151; 
-            border: 1px solid #d1d5db; 
-          }
-          .metrics-table td { 
-            padding: 8px; 
-            border: 1px solid #d1d5db; 
-          }
-          .metrics-table tr:nth-child(even) { 
-            background: #f9fafb; 
-          }
-          .metric-name { 
-            font-weight: 600; 
-          }
-          .percentile-value { 
-            text-align: right; 
-            font-family: 'SF Mono', Monaco, monospace; 
-          }
-          .p50 { 
-            font-weight: bold; 
-            background: #fef3c7; 
-          }
-          .footer { 
-            margin-top: 20px; 
-            padding-top: 15px; 
-            border-top: 1px solid #e5e7eb; 
-            color: #6b7280; 
-            font-size: 12px; 
-            page-break-inside: avoid;
-          }
-          .info-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-            margin: 15px 0; 
-          }
-          .info-item { 
-            background: #f9fafb; 
-            padding: 12px; 
-            border-radius: 6px; 
-            border: 1px solid #e5e7eb;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1 class="title">Blended Compensation Report</h1>
-          <p class="subtitle">Generated on ${reportData.generatedAt}</p>
-        </div>
-        
-        <div class="info-grid">
-          <div class="info-item">
-            <div class="info-label">Blending Method</div>
-            <div class="info-value">${reportData.blendMethod === 'weighted' ? 'Weighted by incumbent count' : reportData.blendMethod === 'simple' ? 'Simple average (equal weights)' : 'Custom weights applied'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Specialties Included</div>
-            <div class="info-value">${reportData.specialties.join(', ')}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Total Records</div>
-            <div class="info-value">${reportData.totalRecords.toLocaleString()}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Report Type</div>
-            <div class="info-value">Compensation Benchmarking Analysis</div>
-          </div>
-        </div>
-        
-        ${reportData.customWeights ? `
-        <div class="custom-weights-section">
-          <h3 style="color: #374151; margin: 30px 0 15px 0; font-size: 18px; font-weight: 600;">Custom Weight Distribution</h3>
-          <p style="color: #6b7280; margin-bottom: 20px; font-size: 14px;">The following percentages were applied to each specialty in the blended calculation:</p>
-          <table class="metrics-table" style="margin-bottom: 30px;">
-            <thead>
-              <tr>
-                <th>Specialty</th>
-                <th style="text-align: right;">Weight Applied</th>
-                <th style="text-align: right;">Records</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${reportData.customWeights.map(item => `
-                <tr>
-                  <td class="metric-name">${item.specialty}</td>
-                  <td class="percentile-value">${item.weight.toFixed(1)}%</td>
-                  <td class="percentile-value">${item.records.toLocaleString()}</td>
-                </tr>
-              `).join('')}
-              <tr style="background: #f3f4f6; font-weight: 600;">
-                <td class="metric-name">Total</td>
-                <td class="percentile-value">${reportData.customWeights.reduce((sum, item) => sum + item.weight, 0).toFixed(1)}%</td>
-                <td class="percentile-value">${reportData.customWeights.reduce((sum, item) => sum + item.records, 0).toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        ` : ''}
-        
-        <table class="metrics-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>P25</th>
-              <th>P50 (Median)</th>
-              <th>P75</th>
-              <th>P90</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="metric-name">Total Cash Compensation</td>
-              <td class="percentile-value">$${reportData.metrics.tcc.p25.toLocaleString()}</td>
-              <td class="percentile-value p50">$${reportData.metrics.tcc.p50.toLocaleString()}</td>
-              <td class="percentile-value">$${reportData.metrics.tcc.p75.toLocaleString()}</td>
-              <td class="percentile-value">$${reportData.metrics.tcc.p90.toLocaleString()}</td>
-            </tr>
-            <tr>
-              <td class="metric-name">Work RVUs</td>
-              <td class="percentile-value">${reportData.metrics.wrvu.p25.toLocaleString()}</td>
-              <td class="percentile-value p50">${reportData.metrics.wrvu.p50.toLocaleString()}</td>
-              <td class="percentile-value">${reportData.metrics.wrvu.p75.toLocaleString()}</td>
-              <td class="percentile-value">${reportData.metrics.wrvu.p90.toLocaleString()}</td>
-            </tr>
-            <tr>
-              <td class="metric-name">Conversion Factor</td>
-              <td class="percentile-value">$${reportData.metrics.cf.p25.toFixed(2)}</td>
-              <td class="percentile-value p50">$${reportData.metrics.cf.p50.toFixed(2)}</td>
-              <td class="percentile-value">$${reportData.metrics.cf.p75.toFixed(2)}</td>
-              <td class="percentile-value">$${reportData.metrics.cf.p90.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-        
-        <div class="footer">
-          <p>This report was generated by the Survey Aggregator system. The data represents blended compensation metrics based on the selected specialties and blending method.</p>
-          ${reportData.customWeights ? `
-          <p><strong>Custom Blending Methodology:</strong> This report used custom weight percentages for each specialty as shown in the Custom Weight Distribution table above. These weights were applied to calculate the blended percentiles shown in the compensation metrics.</p>
-          ` : ''}
-          <p><strong>Note:</strong> P50 values represent the median (50th percentile) and are highlighted for emphasis.</p>
-          <p><strong>Transparency:</strong> ${reportData.blendMethod === 'custom' ? 'Custom weights are disclosed above for full transparency and reproducibility.' : 'Blending methodology is clearly indicated in the report header.'}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    // Create PDF using browser's print functionality
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (printWindow) {
-      // Set a proper title to avoid "about:blank"
-      printWindow.document.title = 'Blended Compensation Report';
-      
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      
-      // Wait for content to load, then trigger print dialog
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-          // Close the window after printing (user can cancel if needed)
-          setTimeout(() => {
-            printWindow.close();
-          }, 1000);
-        }, 500);
-      };
-    } else {
-      // Fallback: download as HTML if popup is blocked
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `blended-compensation-report-${new Date().toISOString().split('T')[0]}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+  // Download report handler - generates professional PDF report
+  const handleDownloadReport = useCallback(async () => {
+    if (!blendedMetrics) {
+      toast({
+        title: 'No Data Available',
+        description: 'Please select specialties and calculate blended metrics before generating a report.',
+        variant: 'destructive'
+      });
+      return;
     }
-  }, [blendedMetrics, blendingMethod]);
+    
+    try {
+      // Show loading toast
+      const loadingToast = toast({
+        title: 'Generating PDF Report',
+        description: 'Creating your professional report... This may take a few seconds.',
+      });
+      
+      console.log('🔍 Starting PDF report generation...');
+      console.log('🔍 Blended metrics:', blendedMetrics);
+      
+      // Prepare report data
+      const reportData: BlendedReportData = {
+        title: 'Blended Compensation Report',
+        generatedAt: new Date().toLocaleString(),
+        blendMethod: blendingMethod,
+        specialties: blendedMetrics.specialties,
+        totalRecords: blendedMetrics.totalRecords,
+        // Include custom weights for transparency when custom blending is used
+        customWeights: blendingMethod === 'custom' ? selectedDataRows.map((index) => {
+          const row = filteredSurveyData[index];
+          const weight = customWeights[index] || 0;
+          return {
+            specialty: row?.surveySpecialty || 'Unknown',
+            weight: weight,
+            records: row?.tcc_n_orgs || row?.n_orgs || 0
+          };
+        }).filter(item => item.specialty !== 'Unknown') : undefined,
+        metrics: {
+          tcc: {
+            p25: blendedMetrics.tcc_p25,
+            p50: blendedMetrics.tcc_p50,
+            p75: blendedMetrics.tcc_p75,
+            p90: blendedMetrics.tcc_p90
+          },
+          wrvu: {
+            p25: blendedMetrics.wrvu_p25,
+            p50: blendedMetrics.wrvu_p50,
+            p75: blendedMetrics.wrvu_p75,
+            p90: blendedMetrics.wrvu_p90
+          },
+          cf: {
+            p25: blendedMetrics.cf_p25,
+            p50: blendedMetrics.cf_p50,
+            p75: blendedMetrics.cf_p75,
+            p90: blendedMetrics.cf_p90
+          }
+        }
+      };
+      
+      console.log('🔍 Report data prepared:', reportData);
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `Blended-Compensation-Report-${timestamp}.pdf`;
+      
+      console.log('🔍 Generating PDF with filename:', filename);
+      
+      // Generate and download PDF
+      await generateBlendedReportPDF(reportData, filename);
+      
+      console.log('✅ PDF generation completed successfully');
+      
+      // Show success toast
+      toast({
+        title: 'Report Generated Successfully',
+        description: `Your PDF report "${filename}" has been downloaded. Check your downloads folder.`,
+      });
+    } catch (error) {
+      console.error('❌ Error generating PDF report:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An error occurred while generating the report. Please check the browser console for details.';
+      
+      toast({
+        title: 'Report Generation Failed',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    }
+  }, [blendedMetrics, blendingMethod, selectedDataRows, filteredSurveyData, customWeights, toast]);
   
   const handleCreateBlend = async () => {
     if (!blendName.trim()) {
@@ -1555,7 +1347,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                            </th>
                          </tr>
                        </thead>
-                       <tbody className="bg-white divide-y divide-gray-50">
+                       <tbody className="divide-y divide-gray-50">
                          {paginatedData.map((row, index) => {
                            const actualIndex = (currentPage - 1) * itemsPerPage + index;
                            return (
@@ -1855,12 +1647,12 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                 <div className="flex space-x-3">
                   <button
                     onClick={() => handleDownloadReport()}
-                    className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
-                    Print Report
+                    Export to PDF
                   </button>
                 </div>
               </div>
@@ -1888,8 +1680,8 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    <tr className="hover:bg-gray-50">
+                  <tbody className="divide-y divide-gray-200">
+                    <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
@@ -1909,7 +1701,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                         ${blendedMetrics.tcc_p90.toLocaleString()}
                       </td>
                     </tr>
-                    <tr className="hover:bg-gray-50">
+                    <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
@@ -1929,7 +1721,7 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                         {blendedMetrics.wrvu_p90.toLocaleString()}
                       </td>
                     </tr>
-                    <tr className="hover:bg-gray-50">
+                    <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>

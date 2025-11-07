@@ -609,7 +609,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                 )}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-50 border-t border-gray-50">
+            <tbody className="divide-y divide-gray-50 border-t border-gray-50">
               {paginatedData.map((row, index) => {
                 const actualIndex = (currentPage - 1) * itemsPerPage + index;
                 return (

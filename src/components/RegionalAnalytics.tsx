@@ -10,6 +10,8 @@ import { formatSpecialtyForDisplay, formatCurrency, formatNumber } from '../shar
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 // Using new benchmarking query hook for better performance (reuses same data as benchmarking)
 import { useBenchmarkingQuery } from '../features/analytics/hooks/useBenchmarkingQuery';
+import { useSpecialtyOptions } from '../shared/hooks/useSpecialtyOptions';
+import { SpecialtyDropdown } from '../shared/components';
 import { AggregatedData } from '../features/analytics/types/analytics';
 import { DynamicAggregatedData } from '../features/analytics/types/variables';
 import { VariableDiscoveryService } from '../features/analytics/services/variableDiscoveryService';
@@ -312,6 +314,9 @@ export const RegionalAnalytics: React.FC = () => {
   useEffect(() => {
     setLoading(queryLoading);
   }, [queryLoading]);
+
+  // NEW: Get specialty options with mapping transparency
+  const { specialties: specialtyOptions } = useSpecialtyOptions();
 
   // ENTERPRISE FIX: Populate specialties from actual data, not just mappings
   // This ensures all specialties in the data are available, even if not yet mapped
@@ -1175,50 +1180,61 @@ export const RegionalAnalytics: React.FC = () => {
                 Specialty <span className="text-red-500">*</span>
               </label>
             <FormControl sx={{ width: '100%' }}>
-              <Autocomplete
-                value={selectedSpecialty}
-                onChange={(event: any, newValue: string | null) => setSelectedSpecialty(newValue || '')}
-                options={specialties}
-                getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
-                renderInput={(params: any) => (
-                  <TextField
-                    {...params}
-                    placeholder="Search for a specialty..."
-                    size="small"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: 'white',
-                        borderRadius: '8px',
-                        height: '40px',
-                        border: '1px solid #d1d5db !important',
-                        '&:hover': { 
-                          borderColor: '#9ca3af !important',
-                          borderWidth: '1px !important'
-                        },
-                        '&.Mui-focused': { 
-                          boxShadow: 'none', 
-                          borderColor: '#3b82f6 !important',
-                          borderWidth: '1px !important'
-                        },
-                        '& fieldset': {
-                          border: 'none !important'
+              {specialtyOptions && specialtyOptions.length > 0 ? (
+                <SpecialtyDropdown
+                  value={selectedSpecialty}
+                  onChange={(value) => setSelectedSpecialty(value)}
+                  specialtyOptions={specialtyOptions}
+                  label="Specialty"
+                  placeholder="Search for a specialty..."
+                  useAdvancedSearch={true}
+                  size="small"
+                />
+              ) : (
+                <Autocomplete
+                  value={selectedSpecialty}
+                  onChange={(event: any, newValue: string | null) => setSelectedSpecialty(newValue || '')}
+                  options={specialties}
+                  getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+                  renderInput={(params: any) => (
+                    <TextField
+                      {...params}
+                      placeholder="Search for a specialty..."
+                      size="small"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          height: '40px',
+                          border: '1px solid #d1d5db !important',
+                          '&:hover': { 
+                            borderColor: '#9ca3af !important',
+                            borderWidth: '1px !important'
+                          },
+                          '&.Mui-focused': { 
+                            boxShadow: 'none', 
+                            borderColor: '#3b82f6 !important',
+                            borderWidth: '1px !important'
+                          },
+                          '& fieldset': {
+                            border: 'none !important'
+                          }
                         }
-                      }
-                    }}
-                  />
-                )}
-                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue, 100)}
-                sx={{
-                  '& .MuiAutocomplete-paper': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '8px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                    maxHeight: '300px'
-                  },
-                  '& .MuiAutocomplete-option': {
-                    '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                      }}
+                    />
+                  )}
+                  filterOptions={(options: string[], { inputValue }: { inputValue: string }) => filterSpecialtyOptions(options, inputValue, 100)}
+                  sx={{
+                    '& .MuiAutocomplete-paper': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '8px',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                      maxHeight: '300px'
+                    },
+                    '& .MuiAutocomplete-option': {
+                      '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' },
                     '&.Mui-selected': { 
                       backgroundColor: 'rgba(59, 130, 246, 0.15)',
                       '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.2)' }
@@ -1229,6 +1245,7 @@ export const RegionalAnalytics: React.FC = () => {
                 clearOnBlur={false}
                 blurOnSelect={true}
               />
+              )}
             </FormControl>
           </div>
 

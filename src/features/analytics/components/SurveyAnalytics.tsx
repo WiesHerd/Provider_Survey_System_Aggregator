@@ -24,6 +24,9 @@ import { logMGMA } from '../utils/diagnostics';
 import { SavedViews } from './SavedViews';
 import { AggregatedData } from '../types/analytics';
 import { DynamicAggregatedData } from '../types/variables';
+import { useSpecialtyOptions } from '../../../shared/hooks/useSpecialtyOptions';
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { exportToExcel as exportToExcelUtil } from '../utils/exportUtils';
 
 interface SurveyAnalyticsProps {
   providerTypeFilter?: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
@@ -195,6 +198,9 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     providerType: '', // Don't pre-select provider type in filters
     year: ''
   }, selectedVariables); // NEW: Pass selected variables to hook
+
+  // NEW: Get specialty options with mapping transparency
+  const { specialties: specialtyOptions } = useSpecialtyOptions();
 
   // CRITICAL FIX: Discover variables on mount and when dataCategory filter changes
   useEffect(() => {
@@ -715,20 +721,53 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // setFilters and setSelectedVariables are stable from useState/useAnalyticsData
 
+  // Handle Excel export with current displayed data
+  const handleExportToExcel = useCallback(() => {
+    if (data.length === 0) {
+      console.warn('No data to export');
+      return;
+    }
+    
+    // Use the currently displayed data (after all filtering)
+    exportToExcelUtil(
+      data as AggregatedData[] | DynamicAggregatedData[],
+      filters,
+      selectedVariables,
+      {
+        includeFilters: true,
+        includeSummary: true,
+        filename: `benchmarking-data-${new Date().toISOString().split('T')[0]}.xlsx`
+      }
+    );
+  }, [data, filters, selectedVariables]);
+
   return (
     <AnalyticsErrorBoundary>
       <div className="flex flex-col space-y-6">
-        {/* Save/Load Views - Page-level actions above filters */}
-        <div className="flex items-center justify-end w-full">
-          <SavedViews
-            filters={filters}
-            selectedVariables={selectedVariables}
-            onLoadView={handleLoadView}
-            viewName={viewName}
-            onViewNameChange={setViewName}
-            showSaveModal={showSaveModal}
-            onShowSaveModal={setShowSaveModal}
-          />
+        {/* Save/Load Views and Export - Page-level actions above filters */}
+        <div className="flex items-center justify-between w-full">
+          <div className="flex-1"></div>
+          <div className="flex items-center gap-3">
+            {/* Download to Excel Button */}
+            <button
+              onClick={handleExportToExcel}
+              disabled={data.length === 0 || loading}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-full text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 shadow-sm"
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              Export to Excel
+            </button>
+            
+            <SavedViews
+              filters={filters}
+              selectedVariables={selectedVariables}
+              onLoadView={handleLoadView}
+              viewName={viewName}
+              onViewNameChange={setViewName}
+              showSaveModal={showSaveModal}
+              onShowSaveModal={setShowSaveModal}
+            />
+          </div>
         </div>
 
         {/* Fixed Filters Section - Left-aligned, reasonable width */}
@@ -746,6 +785,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
             selectedVariables={selectedVariables}
             availableVariables={availableVariables}
             onVariablesChange={setSelectedVariables}
+            availableSpecialtyOptions={specialtyOptions} // NEW: Pass enriched specialty options with mapping transparency
           />
         </div>
 

@@ -7,7 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { formatNumber } from '../../../shared/utils/formatters';
-import { CheckCircleIcon, PrinterIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 interface BlendedMetrics {
   tcc_p25: number;
@@ -32,7 +32,6 @@ interface BlendedResultsPreviewProps {
   blendingMethod: 'weighted' | 'simple' | 'custom';
   selectedCount: number;
   onCreateBlend: () => void;
-  onDownloadReport?: () => void;
   isCreating?: boolean;
   selectedDataRows?: number[];
   filteredSurveyData?: any[];
@@ -44,7 +43,6 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
   blendingMethod,
   selectedCount,
   onCreateBlend,
-  onDownloadReport,
   isCreating = false,
   selectedDataRows = [],
   filteredSurveyData = [],
@@ -88,15 +86,6 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
             </p>
           </div>
           <div className="flex space-x-3">
-            {onDownloadReport && (
-              <button
-                onClick={onDownloadReport}
-                className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-              >
-                <PrinterIcon className="w-4 h-4 mr-2" />
-                Preview Report
-              </button>
-            )}
             <button
               onClick={onCreateBlend}
               disabled={isCreating}
@@ -113,7 +102,7 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
               ) : (
                 <>
                   <CheckCircleIcon className="w-4 h-4 mr-2" />
-                  Create Blend
+                  Create Report
                 </>
               )}
             </button>
@@ -143,8 +132,8 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              <tr className="hover:bg-gray-50">
+            <tbody className="divide-y divide-gray-200">
+              <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
@@ -164,7 +153,7 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                   {formatNumber(metrics.tcc_p90, 0)}
                 </td>
               </tr>
-              <tr className="hover:bg-gray-50">
+              <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
@@ -184,7 +173,7 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                   {formatNumber(metrics.wrvu_p90, 0)}
                 </td>
               </tr>
-              <tr className={`hover:bg-gray-50 ${hasPercentileIssues ? 'bg-amber-50' : ''}`}>
+              <tr className={`hover:bg-gray-50 border-t-2 border-gray-200 ${hasPercentileIssues ? 'bg-amber-50' : ''}`}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>

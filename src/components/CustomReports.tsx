@@ -19,7 +19,11 @@ import {
 } from '@mui/material';
 import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
+import { useSpecialtyOptions } from '../shared/hooks/useSpecialtyOptions';
 import { SelectChangeEvent } from '@mui/material/Select';
+import { SpecialtyOption } from '../shared/types/specialtyOptions';
+import { LinkIcon } from '@heroicons/react/24/outline';
+import { ListSubheader, Drawer, Divider, List, ListItem, ListItemText } from '@mui/material';
 import { 
   LineChart, 
   Line, 
@@ -271,6 +275,120 @@ const CustomReports: React.FC<CustomReportsProps> = ({
   // Year context
   const { currentYear } = useYear();
   
+  // NEW: Get specialty options with mapping transparency
+  const { specialties: specialtyOptions } = useSpecialtyOptions();
+  
+  // State for mapping details drawer
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedMappingOption, setSelectedMappingOption] = useState<SpecialtyOption | null>(null);
+  
+  // Handle icon click to show drawer
+  const handleIconClick = (e: React.MouseEvent<HTMLElement>, option: SpecialtyOption) => {
+    e.stopPropagation();
+    setSelectedMappingOption(option);
+    setDrawerOpen(true);
+  };
+  
+  // Close drawer
+  const handleCloseDrawer = () => {
+    setDrawerOpen(false);
+    setSelectedMappingOption(null);
+  };
+  
+  // Group specialty options
+  const groupedSpecialtyOptions = useMemo(() => {
+    const mapped: SpecialtyOption[] = [];
+    const unmapped: SpecialtyOption[] = [];
+    
+    specialtyOptions.forEach(option => {
+      if (option.isMapped) {
+        mapped.push(option);
+      } else {
+        unmapped.push(option);
+      }
+    });
+    
+    mapped.sort((a, b) => a.name.localeCompare(b.name));
+    unmapped.sort((a, b) => a.name.localeCompare(b.name));
+    
+    return [...mapped, ...unmapped];
+  }, [specialtyOptions]);
+  
+  // Group function for Autocomplete
+  const groupBySpecialty = (option: SpecialtyOption) => {
+    return option.isMapped ? 'Mapped' : 'Unmapped';
+  };
+  
+  // Render group header
+  const renderSpecialtyGroup = (params: any) => (
+    <li key={params.key} style={{ margin: 0, padding: 0, backgroundColor: 'white' }}>
+      <ListSubheader
+        component="div"
+        sx={{
+          backgroundColor: '#f9fafb !important',
+          fontWeight: 600,
+          color: '#7C3AED',
+          fontSize: '0.875rem',
+          py: 1,
+          px: 2,
+          borderBottom: '1px solid #e5e7eb',
+          margin: 0,
+          lineHeight: 1.5,
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
+        {params.group}
+      </ListSubheader>
+      <Box sx={{ backgroundColor: 'white', margin: 0, padding: 0 }}>
+        {params.children}
+      </Box>
+    </li>
+  );
+  
+  // Render specialty option with mapping indicator
+  const renderSpecialtyOption = (props: any, option: SpecialtyOption) => {
+    return (
+      <Box
+        {...props}
+        component="li"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          py: 0.5,
+          backgroundColor: 'white !important',
+          margin: 0,
+          '&:hover': {
+            backgroundColor: '#f3f4f6 !important'
+          }
+        }}
+      >
+        <Typography variant="body2" sx={{ flex: 1 }}>
+          {formatSpecialtyForDisplay(option.name)}
+        </Typography>
+        {option.isMapped && option.sourceSpecialties.length > 0 && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              ml: 1,
+              color: '#6366f1',
+              cursor: 'pointer',
+              '&:hover': {
+                color: '#4f46e5'
+              }
+            }}
+            onClick={(e: React.MouseEvent<HTMLElement>) => handleIconClick(e, option)}
+          >
+            <LinkIcon className="w-4 h-4" />
+          </Box>
+        )}
+      </Box>
+    );
+  };
+  
   // State management
   const [loading, setLoading] = useState(true);
   const [surveyData, setSurveyData] = useState<ISurveyRow[]>([]);
@@ -298,6 +416,23 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       years: [currentYear] // Default to current year
     }
   });
+  
+  // Memoize selected specialty options for Autocomplete value (must be after currentConfig declaration)
+  const selectedSpecialtyOptions = useMemo(() => {
+    if (!Array.isArray(specialtyOptions) || !Array.isArray(currentConfig.filters.specialties)) {
+      return [];
+    }
+    return specialtyOptions
+      .filter((opt): opt is SpecialtyOption => {
+        return opt !== null && 
+               opt !== undefined && 
+               typeof opt === 'object' && 
+               'name' in opt && 
+               typeof opt.name === 'string' && 
+               opt.name.length > 0 &&
+               currentConfig.filters.specialties.includes(opt.name);
+      });
+  }, [specialtyOptions, currentConfig.filters.specialties]);
 
   // Available options
   const [availableOptions, setAvailableOptions] = useState({
@@ -320,6 +455,40 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
   // Services
   const dataService = useMemo(() => getDataService(), []);
+  
+  // Load specialty mappings for filtering
+  const [specialtyMappings, setSpecialtyMappings] = useState<Map<string, Set<string>>>(new Map());
+  
+  // Build a map of standardized name -> all source specialties that map to it
+  useEffect(() => {
+    const loadMappings = async () => {
+      try {
+        const mappings = await dataService.getAllSpecialtyMappings();
+        const mappingMap = new Map<string, Set<string>>();
+        
+        mappings.forEach(mapping => {
+          const standardizedName = mapping.standardizedName.toLowerCase();
+          if (!mappingMap.has(standardizedName)) {
+            mappingMap.set(standardizedName, new Set());
+          }
+          
+          // Add the standardized name itself
+          mappingMap.get(standardizedName)!.add(standardizedName);
+          
+          // Add all source specialties that map to this standardized name
+          mapping.sourceSpecialties?.forEach(source => {
+            mappingMap.get(standardizedName)!.add(source.specialty.toLowerCase());
+          });
+        });
+        
+        setSpecialtyMappings(mappingMap);
+      } catch (error) {
+        console.error('Error loading specialty mappings:', error);
+      }
+    };
+    
+    loadMappings();
+  }, [dataService]);
 
   // Load data - Custom Reports needs raw ISurveyRow data, so we load directly
   // But we can benefit from shared query cache for surveys list and mappings
@@ -653,15 +822,27 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       const beforeSpecialtyFilter = filteredData.length;
       console.log('🔍 Applying specialty filter:', currentConfig.filters.specialties);
       
-      // Direct raw specialty filtering (NO mapping)
+      // Build a set of all valid specialty names (standardized + all mapped source specialties)
+      const validSpecialtyNames = new Set<string>();
+      currentConfig.filters.specialties.forEach(filterSpecialty => {
+        const filterSpecialtyLower = filterSpecialty.toLowerCase();
+        validSpecialtyNames.add(filterSpecialtyLower);
+        
+        // If this is a mapped specialty, add all source specialties that map to it
+        if (specialtyMappings.has(filterSpecialtyLower)) {
+          const mappedNames = specialtyMappings.get(filterSpecialtyLower);
+          mappedNames?.forEach(name => validSpecialtyNames.add(name));
+        }
+      });
+      
       filteredData = filteredData.filter(row => {
-        const rowSpecialty = getSpecialtyField(row);
-        const matches = currentConfig.filters.specialties.includes(rowSpecialty);
+        const rowSpecialty = getSpecialtyField(row).toLowerCase();
+        const matches = validSpecialtyNames.has(rowSpecialty);
         
         if (!matches && Math.random() < 0.01) { // Log 1% of non-matching rows for debugging
           console.log('❌ Specialty filter miss:', { 
             rowSpecialty, 
-            lookingFor: currentConfig.filters.specialties,
+            lookingFor: Array.from(validSpecialtyNames),
             row: { specialty: row.specialty, normalizedSpecialty: row.normalizedSpecialty }
           });
         }
@@ -1105,7 +1286,7 @@ const CustomReports: React.FC<CustomReportsProps> = ({
       console.log('✅ Returning other dimension data:', allData.slice(0, 20).length, 'items (limited to 20)');
       return allData.slice(0, 20); // Limit other dimensions to top 20
     }
-  }, [surveyData, currentConfig]);
+  }, [surveyData, currentConfig, specialtyMappings]);
 
   // Table sort: default to value desc for table-first clarity
   const [tableSortDesc, setTableSortDesc] = useState(true);
@@ -1746,26 +1927,117 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }}
                   />
                 )}
-                renderTags={(value: string[], getTagProps: any) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {value.map((option: string, index: number) => (
-                      <Chip
-                        {...getTagProps({ index })}
-                        key={`${option}-${index}`}
-                        label={option}
-                        size="small"
-                        sx={{
-                          backgroundColor: '#10B981',
-                          color: 'white',
-                          '& .MuiChip-deleteIcon': {
-                            color: 'rgba(255, 255, 255, 0.8)',
-                            '&:hover': { color: 'white' }
+                renderTags={(value: any[], getTagProps: any) => {
+                  // Safely convert value array to display strings - handle any type MUI might pass
+                  if (!Array.isArray(value) || value.length === 0) {
+                    return null;
+                  }
+                  
+                  const validTags: Array<{ name: string; index: number }> = [];
+                  
+                  value.forEach((option: any, index: number) => {
+                    try {
+                      // Handle both SpecialtyOption objects and string fallback
+                      let specialtyName: string | null = null;
+                      
+                      // Debug: log what we're receiving
+                      if (process.env.NODE_ENV === 'development') {
+                        console.log('renderTags option:', option, 'type:', typeof option);
+                      }
+                      
+                      if (typeof option === 'string') {
+                        specialtyName = option.trim();
+                      } else if (option && typeof option === 'object') {
+                        // Try multiple ways to get the name
+                        if (option.name !== undefined && option.name !== null) {
+                          const nameValue = option.name;
+                          if (typeof nameValue === 'string') {
+                            specialtyName = nameValue.trim();
+                          } else {
+                            // Try to convert to string
+                            specialtyName = String(nameValue).trim();
                           }
-                        }}
-                      />
-                    ))}
-                  </Box>
-                )}
+                        } else if ('value' in option && option.value) {
+                          // Some Autocomplete implementations use 'value' property
+                          specialtyName = String(option.value).trim();
+                        } else {
+                          // Last resort: try JSON.stringify and extract name
+                          const str = JSON.stringify(option);
+                          const nameMatch = str.match(/"name"\s*:\s*"([^"]+)"/);
+                          if (nameMatch && nameMatch[1]) {
+                            specialtyName = nameMatch[1].trim();
+                          }
+                        }
+                      }
+                      
+                      // Only add if we have a valid non-empty string
+                      if (specialtyName && specialtyName.length > 0 && typeof specialtyName === 'string') {
+                        validTags.push({ name: specialtyName, index });
+                      } else {
+                        console.warn('Could not extract specialty name from option:', option);
+                      }
+                    } catch (error) {
+                      // Skip invalid options
+                      console.warn('Invalid option in renderTags:', option, error);
+                    }
+                  });
+                  
+                  if (validTags.length === 0) {
+                    return null;
+                  }
+                  
+                  return (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {validTags.map((tag) => {
+                        // Final safety check before calling formatSpecialtyForDisplay
+                        let displayName = '';
+                        try {
+                          if (tag && tag.name) {
+                            const nameValue = tag.name;
+                            if (typeof nameValue === 'string' && nameValue.length > 0) {
+                              displayName = nameValue;
+                            } else {
+                              displayName = String(nameValue || '').trim();
+                            }
+                          }
+                        } catch (error) {
+                          console.warn('Error extracting display name:', tag, error);
+                          displayName = '';
+                        }
+                        
+                        if (!displayName || typeof displayName !== 'string') {
+                          return null;
+                        }
+                        
+                        // Safe wrapper for formatSpecialtyForDisplay
+                        let formattedLabel = displayName;
+                        try {
+                          formattedLabel = formatSpecialtyForDisplay(displayName);
+                        } catch (error) {
+                          console.warn('Error formatting specialty:', displayName, error);
+                          formattedLabel = displayName; // Fallback to raw name
+                        }
+                        
+                        return (
+                          <Chip
+                            {...getTagProps({ index: tag.index })}
+                            key={`${displayName}-${tag.index}`}
+                            label={formattedLabel}
+                            size="small"
+                            sx={{
+                              backgroundColor: '#10B981',
+                              color: 'white',
+                              '& .MuiChip-deleteIcon': {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                '&:hover': { color: 'white' }
+                              }
+                            }}
+                          />
+                        );
+                      }).filter(Boolean)}
+                    </Box>
+                  );
+                }}
                 sx={{
                   '& .MuiAutocomplete-paper': {
                     backgroundColor: 'white',
@@ -1831,44 +2103,24 @@ const CustomReports: React.FC<CustomReportsProps> = ({
               <Typography variant="body2" className="mb-2 text-gray-700 font-medium">
                 Specialties ({(availableOptions.specialties || []).length} available)
               </Typography>
-              <Autocomplete
+              <Autocomplete<SpecialtyOption, true>
                 multiple
-                value={currentConfig.filters.specialties}
-                onChange={(event: any, newValue: string[]) => {
-                  handleFilterChange('specialties', newValue);
+                value={selectedSpecialtyOptions}
+                onChange={(event: any, newValue: SpecialtyOption[]) => {
+                  const specialtyNames = newValue
+                    .map(opt => opt?.name)
+                    .filter((name): name is string => Boolean(name && typeof name === 'string'));
+                  handleFilterChange('specialties', specialtyNames);
                 }}
-                options={availableOptions.specialties || []}
-                getOptionKey={(option: string) => option}
-                onOpen={() => {
+                options={groupedSpecialtyOptions}
+                getOptionKey={(option: SpecialtyOption) => option.name}
+                getOptionLabel={(option: SpecialtyOption) => {
+                  if (!option || !option.name || typeof option.name !== 'string') return '';
+                  return formatSpecialtyForDisplay(option.name);
                 }}
-                getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
-                disableListWrap={false}
-                disablePortal={false}
-                ListboxProps={{
-                  style: {
-                    maxHeight: '300px',
-                    overflow: 'auto'
-                  }
-                }}
-                noOptionsText="No specialties found"
-                filterOptions={(options: string[], { inputValue }: { inputValue: string }) => {
-                  const searchTerms = inputValue.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
-                  const filtered = options.filter((option: string) => {
-                    const displayName = formatSpecialtyForDisplay(option).toLowerCase();
-                    
-                    // If no search terms, show all options
-                    if (searchTerms.length === 0) return true;
-                    
-                    // Check if all search terms are found in the display name (order doesn't matter)
-                    // This allows "pediatric general" to match "General: Pediatrics"
-                    return searchTerms.every(term => displayName.includes(term));
-                  });
-                  return filtered;
-                }}
-                freeSolo={false}
-                selectOnFocus
-                clearOnBlur
-                handleHomeEndKeys
+                groupBy={groupBySpecialty}
+                renderGroup={renderSpecialtyGroup}
+                renderOption={renderSpecialtyOption}
                 renderInput={(params: any) => (
                   <TextField
                     {...params}
@@ -1893,26 +2145,74 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }}
                   />
                 )}
-                renderTags={(value: string[], getTagProps: any) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {value.map((option: string, index: number) => (
-                      <Chip
-                        {...getTagProps({ index })}
-                        key={`${option}-${index}`}
-                        label={formatSpecialtyForDisplay(option)}
-                        size="small"
-                        sx={{ 
-                          backgroundColor: '#6366f1', 
-                          color: 'white',
-                          '& .MuiChip-deleteIcon': {
-                            color: 'rgba(255, 255, 255, 0.8)',
-                            '&:hover': { color: 'white' }
-                          }
-                        }}
-                      />
-                    ))}
-                  </Box>
-                )}
+                disableListWrap={false}
+                disablePortal={false}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '300px',
+                    overflow: 'auto'
+                  }
+                }}
+                noOptionsText="No specialties found"
+                filterOptions={(options: SpecialtyOption[], { inputValue }: { inputValue: string }) => {
+                  const searchTerms = inputValue.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
+                  const filtered = options.filter((option: SpecialtyOption) => {
+                    const displayName = formatSpecialtyForDisplay(option.name).toLowerCase();
+                    
+                    // If no search terms, show all options
+                    if (searchTerms.length === 0) return true;
+                    
+                    // Check if all search terms are found in the display name (order doesn't matter)
+                    // This allows "pediatric general" to match "General: Pediatrics"
+                    return searchTerms.every(term => displayName.includes(term));
+                  });
+                  return filtered;
+                }}
+                freeSolo={false}
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
+                renderTags={(value: any[], getTagProps: any) => {
+                  // Safely convert value array to display strings - handle SpecialtyOption objects
+                  if (!Array.isArray(value) || value.length === 0) {
+                    return null;
+                  }
+                  
+                  return (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {value.map((option: any, index: number) => {
+                        // Extract specialty name from SpecialtyOption object or string
+                        let specialtyName = '';
+                        if (typeof option === 'string') {
+                          specialtyName = option;
+                        } else if (option && typeof option === 'object' && option.name) {
+                          specialtyName = String(option.name);
+                        } else {
+                          return null; // Skip invalid options
+                        }
+                        
+                        if (!specialtyName) return null;
+                        
+                        return (
+                          <Chip
+                            {...getTagProps({ index })}
+                            key={`${specialtyName}-${index}`}
+                            label={formatSpecialtyForDisplay(specialtyName)}
+                            size="small"
+                            sx={{ 
+                              backgroundColor: '#6366f1', 
+                              color: 'white',
+                              '& .MuiChip-deleteIcon': {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                '&:hover': { color: 'white' }
+                              }
+                            }}
+                          />
+                        );
+                      }).filter(Boolean)}
+                    </Box>
+                  );
+                }}
                 componentsProps={{
                   popper: {
                     style: {
@@ -1978,11 +2278,9 @@ const CustomReports: React.FC<CustomReportsProps> = ({
                     }
                   }
                 }}
-                renderOption={(props: any, option: string) => (
-                  <Box component="li" {...props} key={option}>
-                    {formatSpecialtyForDisplay(option)}
-                  </Box>
-                )}
+                isOptionEqualToValue={(option: SpecialtyOption, value: SpecialtyOption) => {
+                  return option.name === value.name;
+                }}
               />
             </FormControl>
 
@@ -2546,6 +2844,88 @@ const CustomReports: React.FC<CustomReportsProps> = ({
 
       {/* Data Viewer Modal - Completely removed for cleaner interface */}
       </div>
+      
+      {/* Mapping Details Drawer */}
+      <Drawer anchor="right" open={drawerOpen} onClose={handleCloseDrawer}>
+        <div style={{ width: 380 }} className="p-4">
+          {selectedMappingOption && (
+            <>
+              <Typography 
+                variant="h6" 
+                className="mb-1" 
+                sx={{ fontWeight: 700, color: '#7C3AED' }}
+              >
+                {selectedMappingOption.name}
+              </Typography>
+              <Typography variant="body2" className="text-gray-600 mb-4">
+                Specialty mapping details
+              </Typography>
+              <Divider />
+              <div className="mt-4">
+                {selectedMappingOption.sourceSpecialties.length > 0 ? (
+                  <>
+                    <Typography variant="subtitle2" className="mb-3" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                      Mapped to:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {(() => {
+                        const groupedBySource: Record<string, SpecialtyOption['sourceSpecialties']> = {};
+                        selectedMappingOption.sourceSpecialties.forEach(source => {
+                          if (!groupedBySource[source.surveySource]) {
+                            groupedBySource[source.surveySource] = [];
+                          }
+                          groupedBySource[source.surveySource].push(source);
+                        });
+
+                        return Object.entries(groupedBySource).map(([surveySource, specialties], index, array) => (
+                          <Box key={surveySource}>
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                fontWeight: 600, 
+                                color: '#7C3AED', 
+                                fontSize: '0.75rem',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                display: 'block',
+                                mb: 0.5
+                              }}
+                            >
+                              {surveySource}
+                            </Typography>
+                            {specialties.map((source, idx) => (
+                              <Typography 
+                                key={`${surveySource}-${idx}`}
+                                variant="body2" 
+                                sx={{ 
+                                  color: '#6b7280', 
+                                  fontSize: '0.875rem',
+                                  pl: 1.5,
+                                  lineHeight: 1.6,
+                                  mb: idx < specialties.length - 1 ? 0.5 : 0
+                                }}
+                              >
+                                {source.specialty}
+                              </Typography>
+                            ))}
+                            {index < array.length - 1 && (
+                              <Divider sx={{ mt: 1.5, mb: 0 }} />
+                            )}
+                          </Box>
+                        ));
+                      })()}
+                    </Box>
+                  </>
+                ) : (
+                  <Typography variant="body2" className="text-gray-600">
+                    No mapping details available.
+                  </Typography>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 };

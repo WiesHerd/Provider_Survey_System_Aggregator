@@ -3,6 +3,8 @@ import { Card, Typography, Divider, Grid, TextField, MenuItem, InputAdornment, B
 import { LocalStorageService } from '../services/StorageService';
 import { SpecialtyMappingService } from '../services/SpecialtyMappingService';
 import { getDataService } from '../services/DataService';
+import { useSpecialtyOptions } from '../shared/hooks/useSpecialtyOptions';
+import { SpecialtyDropdown } from '../shared/components';
 import Autocomplete from '@mui/material/Autocomplete';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { keyframes } from '@mui/system';
@@ -30,9 +32,10 @@ interface FilterBarProps {
     dataCategories: string[];
     years: string[];
   };
+  specialtyOptions?: import('../shared/types/specialtyOptions').SpecialtyOption[];
 }
 
-const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues }) => (
+const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues, specialtyOptions }) => (
   <Grid container spacing={2} sx={{ mb: 3 }}>
     <Grid item xs={12} md={4}>
       <TextField
@@ -55,24 +58,35 @@ const FilterBar: React.FC<FilterBarProps> = ({ filters, setFilters, uniqueValues
       </TextField>
     </Grid>
     <Grid item xs={12} md={4}>
-      <TextField
-        select
-        label="Specialty"
-        value={filters.specialty}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, specialty: e.target.value }))}
-        fullWidth
-        size="small"
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-          }
-        }}
-      >
-        <MenuItem value="">All Specialties</MenuItem>
-        {uniqueValues.specialties.map(option => (
-          <MenuItem key={option} value={option}>{option}</MenuItem>
-        ))}
-      </TextField>
+      {specialtyOptions && specialtyOptions.length > 0 ? (
+        <SpecialtyDropdown
+          value={filters.specialty}
+          onChange={(value: string) => setFilters((f: any) => ({ ...f, specialty: value }))}
+          specialtyOptions={specialtyOptions}
+          label="Specialty"
+          placeholder="Select specialty..."
+          size="small"
+        />
+      ) : (
+        <TextField
+          select
+          label="Specialty"
+          value={filters.specialty}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters((f: any) => ({ ...f, specialty: e.target.value }))}
+          fullWidth
+          size="small"
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '8px',
+            }
+          }}
+        >
+          <MenuItem value="">All Specialties</MenuItem>
+          {uniqueValues.specialties.map(option => (
+            <MenuItem key={option} value={option}>{option}</MenuItem>
+          ))}
+        </TextField>
+      )}
     </Grid>
     <Grid item xs={12} md={4}>
       <TextField
@@ -566,6 +580,9 @@ const normalizeSurveyRow = (row: any, surveyMeta: any, cm: any = {}) => {
 const normalizeString = (str: string) => (str || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 const FMVCalculator: React.FC = () => {
+  // NEW: Get specialty options with mapping transparency
+  const { specialties: specialtyOptions } = useSpecialtyOptions();
+
   // Filters
   const [filters, setFilters] = useState({
     specialty: '',
@@ -866,7 +883,7 @@ const FMVCalculator: React.FC = () => {
           </Typography>
           <Divider sx={{ mb: 2 }} />
           <Box sx={{ mb: 5 }}>
-            <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} />
+            <FilterBar filters={filters} setFilters={setFilters} uniqueValues={uniqueValues} specialtyOptions={specialtyOptions} />
           </Box>
           <CompareTypeSelector compareType={compareType} setCompareType={setCompareType} />
           {compareType === 'TCC' && (

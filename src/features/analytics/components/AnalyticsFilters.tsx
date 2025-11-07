@@ -14,7 +14,8 @@ import {
 } from '@mui/material';
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
-import { StandardDropdown } from '../../../shared/components';
+import { StandardDropdown, SpecialtyDropdown } from '../../../shared/components';
+import { SpecialtyOption } from '../../../shared/types/specialtyOptions';
 import { 
   formatVariableDisplayName, 
   getVariableColor,
@@ -46,7 +47,9 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   // NEW: Variable selection props
   selectedVariables,
   availableVariables,
-  onVariablesChange
+  onVariablesChange,
+  // NEW: Specialty options with mapping transparency
+  availableSpecialtyOptions
 }) => {
   
   // Handler for standard filter changes (specialty, region, etc.)
@@ -167,17 +170,29 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
         />
 
         {/* Specialty Filter */}
-        <StandardDropdown
-          value={filters.specialty}
-          onChange={(value) => handleFilterChange('specialty', value)}
-          options={availableSpecialties}
-          label="Specialty"
-          placeholder="Search specialties..."
-          getOptionLabel={formatSpecialtyForDisplay}
-          variant="autocomplete"
-          useAdvancedSearch={true}
-          size="small"
-        />
+        {availableSpecialtyOptions && availableSpecialtyOptions.length > 0 ? (
+          <SpecialtyDropdown
+            value={filters.specialty}
+            onChange={(value) => handleFilterChange('specialty', value)}
+            specialtyOptions={availableSpecialtyOptions}
+            label="Specialty"
+            placeholder="Search specialties..."
+            useAdvancedSearch={true}
+            size="small"
+          />
+        ) : (
+          <StandardDropdown
+            value={filters.specialty}
+            onChange={(value) => handleFilterChange('specialty', value)}
+            options={availableSpecialties}
+            label="Specialty"
+            placeholder="Search specialties..."
+            getOptionLabel={formatSpecialtyForDisplay}
+            variant="autocomplete"
+            useAdvancedSearch={true}
+            size="small"
+          />
+        )}
 
         {/* Geographic Region Filter */}
         <StandardDropdown

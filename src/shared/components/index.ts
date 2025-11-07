@@ -46,6 +46,8 @@ export {
 
 // Standard Form Components
 export { StandardDropdown } from './StandardDropdown';
+export { SpecialtyDropdown } from './SpecialtyDropdown';
+export type { SpecialtyDropdownProps } from './SpecialtyDropdown';
 
 // Analysis Progress Components (DEPRECATED - Use EnterpriseLoadingSpinner)
 export { AnalysisProgressBar } from './AnalysisProgressBar';

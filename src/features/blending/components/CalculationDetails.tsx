@@ -246,7 +246,7 @@ export const CalculationDetails: React.FC<CalculationDetailsProps> = ({
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">CF P90</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200">
                   {sourceData.map((row, idx) => {
                     const cfFromTccWrvu = row.tcc_p50 > 0 && row.wrvu_p50 > 0 
                       ? row.tcc_p50 / row.wrvu_p50 

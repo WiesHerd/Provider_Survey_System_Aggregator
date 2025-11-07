@@ -158,6 +158,8 @@ export interface AnalyticsFiltersProps {
   selectedVariables: string[];
   availableVariables: string[];
   onVariablesChange: (variables: string[]) => void;
+  // NEW: Specialty options with mapping transparency (optional - falls back to availableSpecialties if not provided)
+  availableSpecialtyOptions?: import('../../../shared/types/specialtyOptions').SpecialtyOption[];
 }
 
 

@@ -9,7 +9,7 @@ import { ChevronDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { useBlendingFilters } from '../hooks/useBlendingFilters';
 import { useSelectionHistory } from '../hooks/useSelectionHistory';
-import { calculateBlendedMetricsNew, generateBlendedReportHTML } from '../utils/blendingCalculations';
+import { calculateBlendedMetricsNew } from '../utils/blendingCalculations';
 import { BlendingMethodSelector } from './BlendingMethodSelector';
 import { SelectedItemsSummary } from './SelectedItemsSummary';
 import { TemplateManager } from './TemplateManager';
@@ -227,45 +227,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     );
   }, [selectedDataRows, filteredSurveyData, blendingMethod, customWeights]);
 
-  // Download report handler
-  const handleDownloadReport = useCallback(() => {
-    if (!blendedMetrics) return;
-    
-    const htmlContent = generateBlendedReportHTML(
-      blendedMetrics,
-      blendingMethod,
-      customWeights,
-      selectedDataRows,
-      filteredSurveyData
-    );
-    
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (printWindow) {
-      printWindow.document.title = 'Blended Compensation Report';
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-          setTimeout(() => {
-            printWindow.close();
-          }, 1000);
-        }, 500);
-      };
-    } else {
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `blended-compensation-report-${new Date().toISOString().split('T')[0]}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }
-  }, [blendedMetrics, blendingMethod, customWeights, selectedDataRows, filteredSurveyData]);
-  
   const handleCreateBlend = async () => {
     if (!blendName.trim()) {
       toast({
@@ -754,7 +715,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           blendingMethod={blendingMethod}
           selectedCount={selectedDataRows.length}
           onCreateBlend={handleCreateBlend}
-          onDownloadReport={handleDownloadReport}
           selectedDataRows={selectedDataRows}
           filteredSurveyData={filteredSurveyData}
           customWeights={customWeights}
