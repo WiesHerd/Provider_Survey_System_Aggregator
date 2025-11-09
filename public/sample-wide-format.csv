@@ -1,0 +1,11 @@
+Provider Name,Specialty,Geographic Region,Provider Type,Compensation
+Cardiology Provider,Cardiology,National,Staff Physician,525000
+Cardiology Provider,Cardiology,Northeast,Staff Physician,550000
+Cardiology Provider,Cardiology,West,Staff Physician,510000
+Internal Medicine Provider,Internal Medicine,National,Staff Physician,400000
+Internal Medicine Provider,Internal Medicine,South,Staff Physician,385000
+Internal Medicine Provider,Internal Medicine,West,Staff Physician,415000
+Emergency Medicine Provider,Emergency Medicine,National,Staff Physician,380000
+Emergency Medicine Provider,Emergency Medicine,Northeast,Staff Physician,395000
+Emergency Medicine Provider,Emergency Medicine,South,Staff Physician,375000
+

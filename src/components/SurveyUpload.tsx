@@ -24,6 +24,13 @@ import { getShortenedSurveyType as getShortenedSurveyTypeShared } from '../share
 import { BoltIcon } from '@heroicons/react/24/outline';
 import { ColumnMappingDialog } from '../features/upload/components/ColumnMappingDialog';
 import { downloadGeneratedSample } from '../utils/generateSampleFile';
+import { ValidationBanner } from '../features/upload/components/ValidationBanner';
+import { SheetSelector } from '../features/upload/components/SheetSelector';
+import { ValidationPreviewTable } from '../features/upload/components/ValidationPreviewTable';
+import { parseFile } from '../features/upload/utils/fileParser';
+import { validateAll, CompleteValidationResult } from '../features/upload/utils/validationEngine';
+import { getExcelSheetNames } from '../features/upload/utils/excelParser';
+import { isExcelFile } from '../features/upload/utils/fileParser';
 
 
 // Provider type categories for survey selection
@@ -236,6 +243,13 @@ const SurveyUpload: React.FC = () => {
     sampleData: Record<string, any>[];
   } | null>(null);
 
+  // New validation system state
+  const [validationResult, setValidationResult] = useState<CompleteValidationResult | null>(null);
+  const [excelSheets, setExcelSheets] = useState<Array<{ name: string; rowCount: number; columnCount: number }>>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [parsedData, setParsedData] = useState<{ headers: string[]; rows: any[][] } | null>(null);
+  const [cleanedData, setCleanedData] = useState<{ headers: string[]; rows: any[][] } | null>(null);
+
   // Add state for collapsible sections
   const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
   const [isUploadedSurveysCollapsed, setIsUploadedSurveysCollapsed] = useState(false);
@@ -417,16 +431,43 @@ const SurveyUpload: React.FC = () => {
     setColumnValidation(null);
     setPreUploadValidation(null);
     setDataValidation(null);
+    setValidationResult(null);
+    setExcelSheets([]);
+    setSelectedSheet('');
     setIsValidating(true);
     
     try {
+      // Load Excel sheet info if Excel file
+      if (isExcelFile(file)) {
+        try {
+          const sheets = await getExcelSheetNames(file);
+          setExcelSheets(sheets);
+          if (sheets.length > 0) {
+            setSelectedSheet(sheets[0].name);
+          }
+        } catch (error) {
+          console.error('Error loading Excel sheets:', error);
+        }
+      }
+
       // Step 1: Pre-upload validation (< 500ms)
       const structureValidation = await validateFileStructure(file);
       
-      // Step 2: Header validation (< 1s)
+      // Step 2: Parse file using unified parser
+      // For Excel files, use the first sheet if no sheet is selected yet
+      const selectedSheetName = isExcelFile(file) 
+        ? (selectedSheet || excelSheets[0]?.name || undefined)
+        : undefined;
+      const parseResult = await parseFile(file, selectedSheetName);
+      
+      // Step 3: Run new three-tier validation
+      const newValidationResult = validateAll(parseResult.headers, parseResult.rows);
+      setValidationResult(newValidationResult);
+      
+      // Step 4: Header validation (< 1s) - keep for backward compatibility
       const headerValidation = await validateHeaders(file);
       
-      // Step 3: Format detection
+      // Step 5: Format detection
       let formatDetection;
       if (headerValidation.headers.length > 0) {
         formatDetection = detectFormat(headerValidation.headers);
@@ -438,33 +479,29 @@ const SurveyUpload: React.FC = () => {
         formatDetection
       });
       
-      // Step 4: Full column validation
+      // Step 6: Full column validation - keep for backward compatibility
       if (headerValidation.headers.length > 0) {
         const fullValidation = validateColumns(headerValidation.headers);
         setColumnValidation(fullValidation);
         
-        // Step 5: If file is valid so far, do data validation (async)
+        // Step 7: If file is valid so far, do data validation (async)
         if (fullValidation.isValid && !structureValidation.errors.some((e: ValidationError) => e.severity === 'critical')) {
-          // Read file for data validation
-          const { text } = await readCSVFile(file);
-          const rows = text.split('\n').filter(row => row.trim());
-          const headers = parseCSVLine(rows[0]);
-          const dataRows = rows.slice(1).filter(row => row.trim()).map(row => {
-            const values = parseCSVLine(row);
+          // Use parsed data for validation
+          const dataRows = parseResult.rows.map(row => {
             const rowData: any = {};
-            headers.forEach((header: string, index: number) => {
-              rowData[header] = values[index] || '';
+            parseResult.headers.forEach((header: string, index: number) => {
+              rowData[header] = row[index] || '';
             });
             return rowData;
           });
           
           // Validate data types
-          const dataTypeValidation = validateDataTypes(headers, dataRows.slice(0, 100), formatDetection?.format); // Limit to first 100 rows for performance
+          const dataTypeValidation = validateDataTypes(parseResult.headers, dataRows.slice(0, 100), formatDetection?.format);
           
           // Validate business rules
           const businessRuleValidation = validateBusinessRules(
             dataRows.slice(0, 100),
-            headers,
+            parseResult.headers,
             providerType,
             dataCategory,
             surveySource === 'Custom' ? customSurveySource : surveySource
@@ -484,10 +521,32 @@ const SurveyUpload: React.FC = () => {
     }
   }, [providerType, dataCategory, surveySource, customSurveySource]);
 
+  // Re-validate when sheet selection changes for Excel files
+  useEffect(() => {
+    if (files.length > 0 && isExcelFile(files[0]) && selectedSheet && excelSheets.length > 0) {
+      const file = files[0];
+      const validateFile = async () => {
+        try {
+          setIsValidating(true);
+          const parseResult = await parseFile(file, selectedSheet);
+          const newValidationResult = validateAll(parseResult.headers, parseResult.rows);
+          setValidationResult(newValidationResult);
+        } catch (error) {
+          console.error('Error re-validating file:', error);
+        } finally {
+          setIsValidating(false);
+        }
+      };
+      validateFile();
+    }
+  }, [selectedSheet]);
+
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
     accept: {
-      'text/csv': ['.csv']
+      'text/csv': ['.csv'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
     },
     multiple: false,
     maxFiles: 1
@@ -930,26 +989,72 @@ const SurveyUpload: React.FC = () => {
     }, 60000); // 60 second timeout (increased from 30)
 
     try {
-      // Read the CSV file with encoding detection and normalization
-      const { text, encoding, issues, normalized } = await readCSVFile(file);
+      // Use cleaned data if available, otherwise parse file
+      let headers: string[];
+      let dataRows: string[];
       
-      if (issues.length > 0) {
-        console.warn('Encoding issues detected during upload:', issues);
+      if (cleanedData) {
+        // Use cleaned data from preview table
+        headers = cleanedData.headers;
+        // Convert cleaned rows back to CSV format for processing
+        dataRows = cleanedData.rows.map(row => {
+          // Convert row array back to CSV line
+          return row.map(val => {
+            const str = String(val || '');
+            // Escape commas and quotes
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          }).join(',');
+        });
+        console.log('📤 Using cleaned data from preview table:', {
+          rowCount: cleanedData.rows.length,
+          headerCount: headers.length
+        });
+      } else if (parsedData) {
+        // Use parsed data (no edits made)
+        headers = parsedData.headers;
+        dataRows = parsedData.rows.map(row => {
+          return row.map(val => {
+            const str = String(val || '');
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          }).join(',');
+        });
+        console.log('📤 Using parsed data');
+      } else {
+        // Fallback: Read and parse file
+        const { text, encoding, issues, normalized } = await readCSVFile(file);
+        
+        if (issues.length > 0) {
+          console.warn('Encoding issues detected during upload:', issues);
+        }
+        if (normalized) {
+          console.log('Character normalization applied to uploaded file');
+        }
+        
+        const rows = text.split('\n').filter(row => row.trim());
+        headers = parseCSVLine(rows[0]);
+        dataRows = rows.slice(1).filter(row => row.trim());
       }
-      if (normalized) {
-        console.log('Character normalization applied to uploaded file');
-      }
-      
-      const rows = text.split('\n').filter(row => row.trim());
-      const headers = parseCSVLine(rows[0]);
-      const dataRows = rows.slice(1).filter(row => row.trim());
 
-      // Validate columns before processing
-      const validation = validateColumns(headers);
-      setColumnValidation(validation);
+      // Validate columns before processing (skip if using cleaned data)
+      let validation;
+      let needsMapping = false;
       
-      // Check if columns need explicit mapping
-      const needsMapping = checkIfMappingNeeded(headers, validation);
+      if (!cleanedData) {
+        validation = validateColumns(headers);
+        setColumnValidation(validation);
+        
+        // Check if columns need explicit mapping
+        needsMapping = checkIfMappingNeeded(headers, validation);
+      } else {
+        // For cleaned data, assume validation passed (user already fixed issues)
+        validation = { isValid: true, format: 'normalized' } as any;
+      }
       
       if (needsMapping) {
         // Show mapping dialog instead of blocking
@@ -977,7 +1082,7 @@ const SurveyUpload: React.FC = () => {
         return;
       }
       
-      if (!validation.isValid) {
+      if (!cleanedData && validation && !validation.isValid) {
         setError('File has missing required columns. Please check the validation details below.');
         setIsUploading(false);
         completeProgress(); // Complete progress even on validation error
@@ -986,15 +1091,29 @@ const SurveyUpload: React.FC = () => {
 
       // Progress is handled by useSmoothProgress hook
 
-      // Parse CSV data
-      const parsedRows = dataRows.map(row => {
-        const values = parseCSVLine(row);
-        const rowData: any = {};
-        headers.forEach((header: string, index: number) => {
-          rowData[header] = values[index] || '';
+      // Parse CSV data (or use cleaned data directly)
+      let parsedRows: any[];
+      
+      if (cleanedData) {
+        // Use cleaned data directly (already in object format)
+        parsedRows = cleanedData.rows.map(row => {
+          const rowData: any = {};
+          headers.forEach((header: string, index: number) => {
+            rowData[header] = row[index] || '';
+          });
+          return rowData;
         });
-        return rowData;
-      });
+      } else {
+        // Parse from CSV strings
+        parsedRows = dataRows.map(row => {
+          const values = parseCSVLine(row);
+          const rowData: any = {};
+          headers.forEach((header: string, index: number) => {
+            rowData[header] = values[index] || '';
+          });
+          return rowData;
+        });
+      }
 
       // Process the uploaded data
       await processUploadedData(parsedRows, file, headers);
@@ -1514,9 +1633,10 @@ const SurveyUpload: React.FC = () => {
                       (surveySource === 'Custom' && !customSurveySource.trim()) ||
                       // Provider type validation  
                       (providerType === 'CUSTOM' && !customProviderType.trim()) ||
-                      // Critical validation errors
+                      // Critical validation errors (check both old and new validation)
                       (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') || false) ||
-                      (columnValidation && !columnValidation.isValid)
+                      (columnValidation && !columnValidation.isValid) ||
+                      (validationResult && !validationResult.canProceed)
                     }
                     title={
                       files.length === 0 ? 'Please select a file to upload' :
@@ -1541,7 +1661,7 @@ const SurveyUpload: React.FC = () => {
               {/* Selected File Preview - Modern Design */}
               {files.length > 0 && (
                 <div className="mt-4">
-                  <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                     {/* File Icon */}
                     <div className="flex-shrink-0">
                       <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -1592,8 +1712,53 @@ const SurveyUpload: React.FC = () => {
                       <XMarkIcon className="h-4 w-4" />
                     </button>
                   </div>
+
+                  {/* Sheet Selector for Excel files */}
+                  {isExcelFile(files[0]) && excelSheets.length > 1 && (
+                    <div className="mt-3">
+                      <SheetSelector
+                        sheets={excelSheets}
+                        selectedSheet={selectedSheet || excelSheets[0]?.name || ''}
+                        onSheetSelect={setSelectedSheet}
+                        disabled={isValidating || isUploading}
+                      />
+                    </div>
+                  )}
+
+                  {/* Validation Banner */}
+                  {validationResult && (
+                    <div className="mt-3">
+                      <ValidationBanner
+                        validationResult={validationResult}
+                        collapsible={true}
+                      />
+                    </div>
+                  )}
+
+                  {/* Validation Preview Table */}
+                  <div className="mt-4">
+                    <ValidationPreviewTable
+                      headers={parsedData?.headers || []}
+                      rows={parsedData?.rows || []}
+                      validationResult={validationResult || null}
+                      onDataChange={(cleaned) => {
+                        setCleanedData(cleaned);
+                        // Re-validate cleaned data
+                        const newValidation = validateAll(cleaned.headers, cleaned.rows);
+                        setValidationResult(newValidation);
+                        // Update parsed data to cleaned data
+                        setParsedData(cleaned);
+                      }}
+                      onValidationChange={(newValidation) => {
+                        setValidationResult(newValidation);
+                      }}
+                      maxPreviewRows={20}
+                      disabled={isValidating || isUploading}
+                    />
+                  </div>
                 </div>
               )}
+
 
               {/* Column Validation Display */}
               {(columnValidation || preUploadValidation) && (

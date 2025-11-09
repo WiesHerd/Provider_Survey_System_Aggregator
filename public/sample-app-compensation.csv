@@ -1,0 +1,11 @@
+specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90
+Family Medicine,Advanced Practice Provider,National,TCC,120,950,120000,135000,150000,165000
+Family Medicine,Advanced Practice Provider,National,Work RVUs,120,950,3500,4000,4500,5000
+Family Medicine,Advanced Practice Provider,National,CFs,120,950,32,37,42,47
+Internal Medicine,Advanced Practice Provider,National,TCC,150,1100,125000,140000,155000,170000
+Internal Medicine,Advanced Practice Provider,National,Work RVUs,150,1100,3600,4100,4600,5100
+Internal Medicine,Advanced Practice Provider,National,CFs,150,1100,33,38,43,48
+Emergency Medicine,Advanced Practice Provider,National,TCC,100,800,130000,145000,160000,175000
+Emergency Medicine,Advanced Practice Provider,National,Work RVUs,100,800,3800,4300,4800,5300
+Emergency Medicine,Advanced Practice Provider,National,CFs,100,800,34,39,44,49
+

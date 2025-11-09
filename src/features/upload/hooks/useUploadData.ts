@@ -39,6 +39,10 @@ import {
   calculateUploadSummary
 } from '../utils/uploadCalculations';
 import { readCSVFile } from '../../../shared/utils';
+import { parseFile } from '../utils/fileParser';
+import { validateAll, CompleteValidationResult } from '../utils/validationEngine';
+import { getExcelSheetNames } from '../utils/excelParser';
+import { isExcelFile } from '../utils/fileParser';
 
 interface UseUploadDataReturn {
   // File state
@@ -81,6 +85,10 @@ interface UseUploadDataReturn {
   // Validation
   formValidation: UploadValidationResult;
   fileValidation: UploadValidationResult;
+  validationResults: Map<string, CompleteValidationResult>;
+  excelSheetInfo: Map<string, Array<{ name: string; rowCount: number; columnCount: number }>>;
+  selectedSheets: Map<string, string>;
+  setSelectedSheet: (fileId: string, sheetName: string) => void;
   
   // Actions
   uploadFiles: () => Promise<void>;
@@ -166,6 +174,11 @@ export const useUploadData = (
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Validation state
+  const [validationResults, setValidationResults] = useState<Map<string, CompleteValidationResult>>(new Map());
+  const [selectedSheets, setSelectedSheets] = useState<Map<string, string>>(new Map()); // fileId -> sheetName
+  const [excelSheetInfo, setExcelSheetInfo] = useState<Map<string, Array<{ name: string; rowCount: number; columnCount: number }>>>(new Map());
+
   // Enhanced upload state
   const [uploadState, setUploadState] = useState<UploadState>({
     progress: {
@@ -218,11 +231,11 @@ export const useUploadData = (
     const allErrors: string[] = [];
     const allWarnings: string[] = [];
     
-    // Note: validateFileUpload is async, so we'll do basic validation here
-    // and full validation will happen during upload
+    // Basic file type and size validation
     files.forEach(file => {
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        allErrors.push(`${file.name} is not a CSV file`);
+      const fileName = file.name.toLowerCase();
+      if (!fileName.endsWith('.csv') && !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+        allErrors.push(`${file.name} is not a supported file type (CSV or Excel)`);
       }
       if (file.size === 0) {
         allErrors.push(`${file.name} is empty`);
@@ -239,6 +252,15 @@ export const useUploadData = (
     };
   }, [files]);
 
+  // Sheet selection handler
+  const setSelectedSheet = useCallback((fileId: string, sheetName: string) => {
+    setSelectedSheets(prev => {
+      const newMap = new Map(prev);
+      newMap.set(fileId, sheetName);
+      return newMap;
+    });
+  }, []);
+
   // File management actions
   const addFiles = useCallback((newFiles: File[]) => {
     const filesWithPreview = newFiles.map(file => Object.assign(file, {
@@ -247,6 +269,30 @@ export const useUploadData = (
     }));
     
     setFiles(prev => [...prev, ...filesWithPreview]);
+
+    // Load Excel sheet info for Excel files
+    filesWithPreview.forEach(async (file) => {
+      if (isExcelFile(file)) {
+        try {
+          const sheets = await getExcelSheetNames(file);
+          setExcelSheetInfo(prev => {
+            const newMap = new Map(prev);
+            newMap.set(file.id!, sheets);
+            return newMap;
+          });
+          // Set first sheet as default selection
+          if (sheets.length > 0) {
+            setSelectedSheets(prev => {
+              const newMap = new Map(prev);
+              newMap.set(file.id!, sheets[0].name);
+              return newMap;
+            });
+          }
+        } catch (error) {
+          console.error('Error loading Excel sheet info:', error);
+        }
+      }
+    });
   }, []);
 
   const removeFile = useCallback((file: FileWithPreview) => {
@@ -254,6 +300,22 @@ export const useUploadData = (
     if (file.preview) {
       URL.revokeObjectURL(file.preview);
     }
+    // Clean up validation results and sheet info
+    setValidationResults(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(file.id!);
+      return newMap;
+    });
+    setSelectedSheets(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(file.id!);
+      return newMap;
+    });
+    setExcelSheetInfo(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(file.id!);
+      return newMap;
+    });
   }, []);
 
   const clearFiles = useCallback(() => {
@@ -263,6 +325,9 @@ export const useUploadData = (
       }
     });
     setFiles([]);
+    setValidationResults(new Map());
+    setSelectedSheets(new Map());
+    setExcelSheetInfo(new Map());
   }, [files]);
 
   // Form state actions
@@ -738,6 +803,63 @@ export const useUploadData = (
     }
   }, [autoLoad, loadSurveys]);
 
+  // Validate files when they change or sheet selection changes
+  useEffect(() => {
+    const validateFiles = async () => {
+      for (const file of files) {
+        if (!file.id) continue;
+        
+        try {
+          const selectedSheet = selectedSheets.get(file.id);
+          const parseResult = await parseFile(file, selectedSheet);
+          
+          // Run validation
+          const validationResult = validateAll(parseResult.headers, parseResult.rows);
+          
+          setValidationResults(prev => {
+            const newMap = new Map(prev);
+            newMap.set(file.id!, validationResult);
+            return newMap;
+          });
+        } catch (error) {
+          console.error(`Error validating file ${file.name}:`, error);
+          // Set invalid validation result
+          setValidationResults(prev => {
+            const newMap = new Map(prev);
+            newMap.set(file.id!, {
+              tier1: {
+                isValid: false,
+                errors: [{
+                  severity: 'critical',
+                  tier: 'tier1' as any,
+                  category: 'structure',
+                  message: `Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                  fixInstructions: ['Check file format and try again']
+                }],
+                blocked: true
+              },
+              tier2: { isValid: true, warnings: [], blocked: false },
+              tier3: { isValid: true, info: [], blocked: false },
+              isValid: false,
+              canProceed: false,
+              totalIssues: 1,
+              errorCount: 1,
+              warningCount: 0,
+              infoCount: 0
+            });
+            return newMap;
+          });
+        }
+      }
+    };
+
+    if (files.length > 0) {
+      validateFiles();
+    } else {
+      setValidationResults(new Map());
+    }
+  }, [files, selectedSheets]);
+
   // Cleanup file previews on unmount
   useEffect(() => {
     return () => {
@@ -791,6 +913,10 @@ export const useUploadData = (
     // Validation
     formValidation,
     fileValidation,
+    validationResults,
+    excelSheetInfo,
+    selectedSheets,
+    setSelectedSheet,
     
     // Actions
     uploadFiles,

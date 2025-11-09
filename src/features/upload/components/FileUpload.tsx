@@ -25,6 +25,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { FileUploadProps } from '../types/upload';
 import { formatFileSize } from '../../../shared/utils';
+import { detectFileType } from '../utils/fileParser';
 
 /**
  * File Upload component for drag-and-drop file handling
@@ -49,8 +50,8 @@ export const FileUpload: React.FC<FileUploadProps> = memo(({
     onDrop,
     accept: {
       'text/csv': ['.csv'],
-      'application/vnd.ms-excel': ['.csv'],
-      'application/csv': ['.csv']
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
     },
     maxSize: 10 * 1024 * 1024, // 10MB
     maxFiles: 10,
@@ -100,7 +101,7 @@ export const FileUpload: React.FC<FileUploadProps> = memo(({
         />
         
         <Typography variant="h6" sx={{ mb: 1 }}>
-          {isDragActive ? 'Drop files here' : 'Drag & drop CSV files here'}
+          {isDragActive ? 'Drop files here' : 'Drag & drop CSV or Excel files here'}
         </Typography>
         
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -171,7 +172,7 @@ export const FileUpload: React.FC<FileUploadProps> = memo(({
                         sx={{ borderRadius: '4px' }}
                       />
                       <Chip 
-                        label="CSV" 
+                        label={detectFileType(file.name).toUpperCase()} 
                         size="small" 
                         color="primary" 
                         variant="outlined"
@@ -201,7 +202,7 @@ export const FileUpload: React.FC<FileUploadProps> = memo(({
       {files.length === 0 && !uploadProgress.isUploading && (
         <Alert severity="info" sx={{ mt: 2 }}>
           <Typography variant="body2">
-            <strong>Supported formats:</strong> CSV files only<br />
+            <strong>Supported formats:</strong> CSV and Excel files (.csv, .xlsx, .xls)<br />
             <strong>File size limit:</strong> 10MB per file<br />
             <strong>Maximum files:</strong> 10 files per upload
           </Typography>

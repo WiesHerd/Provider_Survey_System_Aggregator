@@ -1,0 +1,11 @@
+specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90
+Cardiology,Staff Physician,National,TCC,150,1200,450000,525000,600000,675000
+Cardiology,Staff Physician,National,Work RVUs,150,1200,6500,7500,8500,9500
+Cardiology,Staff Physician,National,CFs,150,1200,65,75,85,95
+Cardiology,Staff Physician,Northeast,TCC,125,980,475000,550000,625000,700000
+Cardiology,Staff Physician,Northeast,Work RVUs,125,980,6800,7800,8800,9800
+Cardiology,Staff Physician,Northeast,CFs,125,980,68,78,88,98
+Internal Medicine,Staff Physician,National,TCC,200,1800,350000,400000,450000,500000
+Internal Medicine,Staff Physician,National,Work RVUs,200,1800,5500,6500,7500,8500
+Internal Medicine,Staff Physician,National,CFs,200,1800,60,70,80,90
+

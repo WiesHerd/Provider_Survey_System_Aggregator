@@ -12,6 +12,10 @@ export { FileUpload } from './components/FileUpload';
 export { UploadedSurveys } from './components/UploadedSurveys';
 export { ColumnValidationDisplay } from './components/ColumnValidationDisplay';
 export { EncodingWarning } from './components/EncodingWarning';
+export { ValidationBanner } from './components/ValidationBanner';
+export { SheetSelector } from './components/SheetSelector';
+export { ValidationPreviewTable } from './components/ValidationPreviewTable';
+export { EditableCell } from './components/EditableCell';
 
 // Hooks
 export { useUploadData } from './hooks/useUploadData';

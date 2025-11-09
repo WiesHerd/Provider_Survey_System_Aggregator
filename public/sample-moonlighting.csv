@@ -1,0 +1,7 @@
+specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90
+Emergency Medicine,Staff Physician,National,Moonlighting Rate,60,450,200,250,300,350
+Emergency Medicine,Staff Physician,Northeast,Moonlighting Rate,55,420,210,260,310,360
+Internal Medicine,Staff Physician,National,Moonlighting Rate,80,600,180,230,280,330
+Internal Medicine,Staff Physician,South,Moonlighting Rate,75,560,175,225,275,325
+Family Medicine,Staff Physician,National,Moonlighting Rate,70,520,190,240,290,340
+

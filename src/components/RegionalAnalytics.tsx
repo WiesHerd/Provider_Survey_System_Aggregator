@@ -470,14 +470,24 @@ export const RegionalAnalytics: React.FC = () => {
     return categories.sort();
   }, [analyticsData]);
 
+  // Track if filters have been explicitly cleared by user
+  const filtersClearedRef = useRef(false);
+
   // ENTERPRISE FIX: Default to "Compensation" only for regional analytics
   // Regional analytics is designed for annual compensation comparison, not call pay rates
   // Users can still explicitly select "Call Pay" if they want to analyze call pay regionally
-  // Set default data category after data categories are available
+  // Set default data category after data categories are available (but only if filters weren't explicitly cleared)
   useEffect(() => {
-    if (dataCategories.length > 0 && !selectedDataCategory && dataCategories.includes('Compensation')) {
+    if (dataCategories.length > 0 && !selectedDataCategory && dataCategories.includes('Compensation') && !filtersClearedRef.current) {
       setSelectedDataCategory('Compensation');
       console.log('🔍 Regional Analytics: Defaulting to "Compensation" data category for regional analytics');
+    }
+    // Reset the flag after a short delay to allow for initial load
+    if (filtersClearedRef.current) {
+      const timer = setTimeout(() => {
+        filtersClearedRef.current = false;
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [dataCategories, selectedDataCategory]);
 
@@ -1356,6 +1366,7 @@ export const RegionalAnalytics: React.FC = () => {
                 <Tooltip title="Clear Filters" placement="top" arrow>
                   <button
                     onClick={() => {
+                      filtersClearedRef.current = true; // Mark that filters were explicitly cleared
                       setSelectedSpecialty('');
                       setSelectedProviderType('');
                       setSelectedSurveySource('');

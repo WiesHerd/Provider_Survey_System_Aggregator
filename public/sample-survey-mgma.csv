@@ -1,10 +1,14 @@
-specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90
-General Pediatrics,Staff Physician,National,TCC,108,1054,510610,567345,624079,680814
-General Pediatrics,Staff Physician,National,Work RVUs,108,1054,7326,8140,8954,9768
-General Pediatrics,Staff Physician,National,CFs,108,1054,69,77,84,92
-General Pediatrics,Staff Physician,Northeast,TCC,125,901,546353,607059,667765,728471
-General Pediatrics,Staff Physician,Northeast,Work RVUs,125,901,7326,8140,8954,9768
-General Pediatrics,Staff Physician,Northeast,CFs,125,901,69,77,84,92
-General Pediatrics,Program Director,National,TCC,32,144,602520,669467,736414,803361
-General Pediatrics,Program Director,National,Work RVUs,32,144,5976,6640,7304,7968
-General Pediatrics,Program Director,National,CFs,32,144,103,112,121,130
+specialty,provider_type,geographic_region,n_orgs,n_incumbents,tcc_p25,tcc_p50,tcc_p75,tcc_p90,wrvu_p25,wrvu_p50,wrvu_p75,wrvu_p90,cf_p25,cf_p50,cf_p75,cf_p90
+General Pediatrics,Staff Physician,National,108,1054,510610,567345,624079,680814,7326,8140,8954,9768,69,77,84,92
+General Pediatrics,Staff Physician,Northeast,125,901,546353,607059,667765,728471,7326,8140,8954,9768,69,77,84,92
+General Pediatrics,Staff Physician,North Central,149,1334,485080,538978,592875,646773,7326,8140,8954,9768,69,77,84,92
+General Pediatrics,Staff Physician,South,57,464,495292,550325,605357,660939,7326,8140,8954,9768,69,77,84,92
+General Pediatrics,Staff Physician,West,99,1031,561671,624080,686487,748896,7326,8140,8954,9768,69,77,84,92
+General Pediatrics,Program Director,National,32,144,602520,669467,736414,803361,5976,6640,7304,7968,103,112,121,130
+General Pediatrics,Program Director,Northeast,34,93,644697,716330,787963,859596,5123,5692,6262,6831,77,86,95,104
+General Pediatrics,Program Director,North Central,75,149,572394,635994,699593,763193,4060,5111,5622,6134,94,105,115,126
+General Pediatrics,Program Director,South,74,193,584445,649383,714321,779260,5504,6116,6727,7339,94,105,115,126
+General Pediatrics,Program Director,West,52,113,667222,736414,810055,883697,5976,6640,7304,7968,103,112,121,130
+General Pediatrics,Division Chief,National,76,82,653581,726202,798822,871442,6522,7246,7971,8695,81,90,98,108
+General Pediatrics,Division Chief,Northeast,66,59,699332,777036,854739,932443,6264,6960,7656,8352,81,90,98,108
+General Pediatrics,Division Chief,North Central,30,177,620902,689892,758880,827870,4396,4885,5373,5862,82,91,100,109
