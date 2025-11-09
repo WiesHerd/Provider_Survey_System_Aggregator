@@ -31,7 +31,11 @@ export const WelcomeBanner: React.FC<WelcomeBannerProps> = ({ onDismiss }) => {
           transition={{ duration: 0.3 }}
           className="mb-8"
         >
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-indigo-500 p-5 relative">
+          <div 
+            className="bg-white rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-indigo-500 p-5 relative"
+            role="status"
+            aria-live="polite"
+          >
             {/* Dismiss Button */}
             <button
               onClick={handleDismiss}
