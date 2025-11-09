@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
-import { FormControl, Select, MenuItem, Autocomplete, TextField } from '@mui/material';
+import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
 import { ISurveyRow } from '../types/survey';
@@ -15,6 +15,10 @@ import { ColumnValidationDisplay } from '../features/upload';
 import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
 import { readCSVFile } from '../shared/utils';
+import { validateFileStructure, validateHeaders, ValidationError } from '../features/upload/utils/preUploadValidation';
+import { detectFormat, getExpectedFormat } from '../features/upload/utils/formatDetection';
+import { validateDataTypes, validateBusinessRules } from '../features/upload/utils/dataValidation';
+import { ProviderType, DataCategory } from '../types/provider';
 import { EmptyState } from '../features/mapping/components/shared/EmptyState';
 import { getShortenedSurveyType as getShortenedSurveyTypeShared } from '../shared/utils/surveyFormatters';
 import { BoltIcon } from '@heroicons/react/24/outline';
@@ -113,8 +117,7 @@ const validateProviderTypeMatch = (formProviderType: string, dataProviderTypes: 
   return { isValid: true };
 };
 
-// Provider type enum for type safety
-type ProviderType = 'PHYSICIAN' | 'APP' | 'CALL' | 'CUSTOM';
+// Provider type enum - using imported type from types/provider
 
 interface FileWithPreview extends File {
   preview?: string;
@@ -214,6 +217,15 @@ const SurveyUpload: React.FC = () => {
 
   // Add state for column validation
   const [columnValidation, setColumnValidation] = useState<any>(null);
+  
+  // Add state for pre-upload validation
+  const [preUploadValidation, setPreUploadValidation] = useState<{
+    structure: any;
+    headers: any;
+    formatDetection?: any;
+  } | null>(null);
+  const [dataValidation, setDataValidation] = useState<any>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Add state for column mapping dialog
   const [showMappingDialog, setShowMappingDialog] = useState(false);
@@ -391,15 +403,86 @@ const SurveyUpload: React.FC = () => {
     loadSurveys();
   }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedSurvey]);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newFiles = acceptedFiles.map(file => Object.assign(file, {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0) return;
+    
+    const file = acceptedFiles[0];
+    const newFiles = [Object.assign(file, {
       preview: URL.createObjectURL(file),
       id: Math.random().toString(36).substring(7)
-    }));
-    setFiles(prev => [...prev, ...newFiles]);
+    })];
+    
+    setFiles(newFiles);
     setError('');
-    setColumnValidation(null); // Clear previous validation
-  }, []);
+    setColumnValidation(null);
+    setPreUploadValidation(null);
+    setDataValidation(null);
+    setIsValidating(true);
+    
+    try {
+      // Step 1: Pre-upload validation (< 500ms)
+      const structureValidation = await validateFileStructure(file);
+      
+      // Step 2: Header validation (< 1s)
+      const headerValidation = await validateHeaders(file);
+      
+      // Step 3: Format detection
+      let formatDetection;
+      if (headerValidation.headers.length > 0) {
+        formatDetection = detectFormat(headerValidation.headers);
+      }
+      
+      setPreUploadValidation({
+        structure: structureValidation,
+        headers: headerValidation,
+        formatDetection
+      });
+      
+      // Step 4: Full column validation
+      if (headerValidation.headers.length > 0) {
+        const fullValidation = validateColumns(headerValidation.headers);
+        setColumnValidation(fullValidation);
+        
+        // Step 5: If file is valid so far, do data validation (async)
+        if (fullValidation.isValid && !structureValidation.errors.some((e: ValidationError) => e.severity === 'critical')) {
+          // Read file for data validation
+          const { text } = await readCSVFile(file);
+          const rows = text.split('\n').filter(row => row.trim());
+          const headers = parseCSVLine(rows[0]);
+          const dataRows = rows.slice(1).filter(row => row.trim()).map(row => {
+            const values = parseCSVLine(row);
+            const rowData: any = {};
+            headers.forEach((header: string, index: number) => {
+              rowData[header] = values[index] || '';
+            });
+            return rowData;
+          });
+          
+          // Validate data types
+          const dataTypeValidation = validateDataTypes(headers, dataRows.slice(0, 100), formatDetection?.format); // Limit to first 100 rows for performance
+          
+          // Validate business rules
+          const businessRuleValidation = validateBusinessRules(
+            dataRows.slice(0, 100),
+            headers,
+            providerType,
+            dataCategory,
+            surveySource === 'Custom' ? customSurveySource : surveySource
+          );
+          
+          setDataValidation({
+            dataTypes: dataTypeValidation,
+            businessRules: businessRuleValidation
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Validation error:', error);
+      setError(`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsValidating(false);
+    }
+  }, [providerType, dataCategory, surveySource, customSurveySource]);
 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
@@ -673,6 +756,10 @@ const SurveyUpload: React.FC = () => {
       completeProgress();
       setPendingUpload(null);
       setShowMappingDialog(false);
+      // Clear validation state after successful upload
+      setColumnValidation(null);
+      setPreUploadValidation(null);
+      setDataValidation(null);
     } catch (error: any) {
       clearTimeout(uploadTimeout);
       setIsUploading(false);
@@ -811,6 +898,14 @@ const SurveyUpload: React.FC = () => {
       newValue: surveyId,
       url: window.location.href
     }));
+    
+    // Also dispatch custom event for immediate same-tab updates
+    window.dispatchEvent(new CustomEvent('survey-uploaded', { detail: { surveyId } }));
+    
+    // Clear validation state after successful upload
+    setColumnValidation(null);
+    setPreUploadValidation(null);
+    setDataValidation(null);
   };
 
   const handleSurveyUpload = async () => {
@@ -923,8 +1018,11 @@ const SurveyUpload: React.FC = () => {
         setRefreshTrigger(prev => prev + 1);
       }, 50);
 
-      // Clear form
+      // Clear form and validation state
       setFiles([]);
+      setColumnValidation(null);
+      setPreUploadValidation(null);
+      setDataValidation(null);
       setSurveySource('');
       setSurveyYear('');
       setCustomSurveySource('');
@@ -1407,6 +1505,7 @@ const SurveyUpload: React.FC = () => {
                       files.length === 0 || 
                       !surveyYear || 
                       isUploading ||
+                      isValidating ||
                       // Data category validation
                       !dataCategory ||
                       (dataCategory === 'CUSTOM' && !customDataCategory.trim()) ||
@@ -1414,7 +1513,10 @@ const SurveyUpload: React.FC = () => {
                       !surveySource ||
                       (surveySource === 'Custom' && !customSurveySource.trim()) ||
                       // Provider type validation  
-                      (providerType === 'CUSTOM' && !customProviderType.trim())
+                      (providerType === 'CUSTOM' && !customProviderType.trim()) ||
+                      // Critical validation errors
+                      (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') || false) ||
+                      (columnValidation && !columnValidation.isValid)
                     }
                     title={
                       files.length === 0 ? 'Please select a file to upload' :
@@ -1436,46 +1538,96 @@ const SurveyUpload: React.FC = () => {
                 {/* Upload progress is displayed in a modal overlay below */}
               </div>
 
-              {/* Selected File Preview */}
+              {/* Selected File Preview - Modern Design */}
               {files.length > 0 && (
-                <div className="mt-6 border-t border-gray-200 pt-4">
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Selected File</h3>
-                  <div className="bg-gray-50 px-3 py-2 rounded-lg flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center text-gray-500">
-                        <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="mt-4">
+                  <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                    {/* File Icon */}
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span className="text-sm font-medium">{files[0].name}</span>
+                      </div>
+                    </div>
+                    
+                    {/* File Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {files[0].name}
+                        </p>
+                        {dataCategory && surveySource && surveyYear && (
+                          <span className="flex-shrink-0 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            {(files[0].size / 1024).toFixed(1)} KB
+                          </span>
+                        )}
                       </div>
                       {dataCategory && surveySource && surveyYear ? (
-                        <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                          {surveySource === 'Custom' ? customSurveySource : surveySource} • {dataCategory === 'CUSTOM' ? customDataCategory : (dataCategory === 'CALL_PAY' ? 'Call Pay' : dataCategory === 'MOONLIGHTING' ? 'Moonlighting' : 'Compensation')} • {surveyYear}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-600">
+                            {surveySource === 'Custom' ? customSurveySource : surveySource}
+                          </span>
+                          <span className="text-xs text-gray-400">•</span>
+                          <span className="text-xs text-gray-600">
+                            {dataCategory === 'CUSTOM' ? customDataCategory : (dataCategory === 'CALL_PAY' ? 'Call Pay' : dataCategory === 'MOONLIGHTING' ? 'Moonlighting' : 'Compensation')}
+                          </span>
+                          <span className="text-xs text-gray-400">•</span>
+                          <span className="text-xs text-gray-600">{surveyYear}</span>
+                        </div>
                       ) : (
-                        <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                          ⚠️ Select Data Category, Survey Source, and Provider Type to continue
-                        </span>
+                        <p className="text-xs text-amber-600">
+                          Complete the form above to continue
+                        </p>
                       )}
                     </div>
+                    
+                    {/* Remove Button */}
                     <button
                       onClick={() => files[0].id && removeFile(files[0].id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
+                      className="flex-shrink-0 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Remove file"
                       aria-label="Remove selected file"
                     >
-                      <XMarkIcon className="h-5 w-5" />
+                      <XMarkIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Column Validation Display */}
-              {columnValidation && (
+              {(columnValidation || preUploadValidation) && (
                 <ColumnValidationDisplay 
-                  validation={columnValidation} 
-                  fileName={files[0]?.name || ''} 
+                  validation={columnValidation || { isValid: false, detectedColumns: [], missingColumns: [], suggestions: [], errors: [] }} 
+                  fileName={files[0]?.name || ''}
+                  formatDetection={preUploadValidation?.formatDetection}
+                  expectedFormat={surveySource ? getExpectedFormat(surveySource === 'Custom' ? customSurveySource : surveySource) : undefined}
+                  surveySource={surveySource === 'Custom' ? customSurveySource : surveySource}
+                  preUploadErrors={preUploadValidation?.structure?.errors || []}
+                  preUploadWarnings={preUploadValidation?.structure?.warnings || []}
+                  preUploadInfo={preUploadValidation?.structure?.info || []}
+                  dataValidationErrors={dataValidation?.dataTypes?.errors || []}
+                  dataValidationWarnings={[
+                    ...(dataValidation?.dataTypes?.warnings || []),
+                    ...(dataValidation?.businessRules || [])
+                  ]}
+                  onDownloadSample={(format) => {
+                    const sampleFile = format === 'normalized' ? 'sample-normalized-format.csv' :
+                                      format === 'wide' ? 'sample-wide-format.csv' :
+                                      'sample-wide-variable-format.csv';
+                    window.open(`/${sampleFile}`, '_blank');
+                  }}
                 />
+              )}
+              
+              {/* Validation Progress */}
+              {isValidating && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Validating file...
+                  </Typography>
+                  <LinearProgress />
+                </Box>
               )}
             </>
             )}
