@@ -51,7 +51,7 @@ export const WelcomeBanner: React.FC<WelcomeBannerProps> = ({ onDismiss }) => {
               {/* Text Content */}
               <div className="flex-1">
                 <h3 className="text-base font-semibold text-gray-900 mb-1">
-                  Welcome to BenchPoint!
+                  Welcome to <span className="text-indigo-600">Bench</span><span className="text-purple-600">Point</span>!
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
                   To get started, upload your first survey by clicking <strong className="text-gray-900">"New Survey"</strong> above.
