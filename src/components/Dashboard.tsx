@@ -266,7 +266,7 @@ const Dashboard: React.FC = () => {
 
               {/* Modern Card Grid */}
               <div className={cn(
-                "grid gap-4",
+                "grid gap-4 items-stretch",
                 section.cards.length === 4 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" :
                 section.cards.length === 6 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
                 section.cards.length === 5 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
@@ -299,14 +299,14 @@ const Dashboard: React.FC = () => {
                       transition: { duration: 0.2 }
                     }}
                     whileTap={{ scale: 0.98 }}
-                    className="group"
+                    className="group h-full"
                   >
                     <button
                       onClick={() => navigate(card.path)}
                       className="w-full h-full"
                     >
                       <div className={cn(
-                        "relative h-full min-h-[160px] bg-white rounded-xl border p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col",
+                        "relative h-full bg-white rounded-xl border p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col",
                         shouldHighlight 
                           ? "border-indigo-400 shadow-md ring-2 ring-indigo-400/50" 
                           : "border-gray-200"
@@ -335,11 +335,11 @@ const Dashboard: React.FC = () => {
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 flex flex-col">
-                          <h3 className="text-base font-medium text-gray-900 mb-2">
+                        <div className="flex-1 flex flex-col min-h-0">
+                          <h3 className="text-base font-medium text-gray-900 mb-2 flex-shrink-0">
                             {card.title}
                           </h3>
-                          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3 flex-1">
+                          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3 flex-1 overflow-hidden">
                             {card.description}
                           </p>
                         </div>
