@@ -266,7 +266,7 @@ const Dashboard: React.FC = () => {
 
               {/* Modern Card Grid */}
               <div className={cn(
-                "grid gap-4 items-stretch",
+                "grid gap-4 items-stretch overflow-visible",
                 section.cards.length === 4 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" :
                 section.cards.length === 6 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
                 section.cards.length === 5 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
@@ -295,21 +295,25 @@ const Dashboard: React.FC = () => {
                       }
                     } : {}}
                     whileHover={{ 
-                      y: -4,
+                      scale: 1.01,
                       transition: { duration: 0.2 }
                     }}
                     whileTap={{ scale: 0.98 }}
                     className="group h-full"
+                    style={{ 
+                      willChange: 'transform',
+                      transformOrigin: 'center'
+                    }}
                   >
                     <button
                       onClick={() => navigate(card.path)}
                       className="w-full h-full"
                     >
                       <div className={cn(
-                        "relative h-full bg-white rounded-xl border p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col",
+                        "relative h-full bg-white rounded-xl border p-5 transition-all duration-200 flex flex-col",
                         shouldHighlight 
                           ? "border-indigo-400 shadow-md ring-2 ring-indigo-400/50" 
-                          : "border-gray-200"
+                          : "border-gray-200 group-hover:shadow-lg group-hover:border-gray-300"
                       )}>
                         {/* Icon */}
                         <div className="mb-4">
