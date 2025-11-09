@@ -14,7 +14,6 @@ export { usePerformanceMonitor } from './usePerformanceMonitor';
 export { usePerformanceAnalytics } from './usePerformanceAnalytics';
 
 // Optimized hooks
-export { useOptimizedColumnMappingData } from './useOptimizedColumnMappingData';
 export { useOptimizedMappingData } from './useOptimizedMappingData';
 export { useOptimizedProviderTypeMappingData } from './useOptimizedProviderTypeMappingData';
 export { useOptimizedRegionMappingData } from './useOptimizedRegionMappingData';

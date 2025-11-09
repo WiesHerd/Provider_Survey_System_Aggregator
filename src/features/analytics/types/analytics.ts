@@ -160,6 +160,10 @@ export interface AnalyticsFiltersProps {
   onVariablesChange: (variables: string[]) => void;
   // NEW: Specialty options with mapping transparency (optional - falls back to availableSpecialties if not provided)
   availableSpecialtyOptions?: import('../../../shared/types/specialtyOptions').SpecialtyOption[];
+  // NEW: Loading state for specialty options (prevents showing empty dropdown before data loads)
+  specialtyOptionsLoading?: boolean;
+  // NEW: Error state for specialty options (shows user-friendly error message if loading fails)
+  specialtyOptionsError?: string | null;
 }
 
 

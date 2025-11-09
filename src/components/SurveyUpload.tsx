@@ -14,6 +14,7 @@ import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { ColumnValidationDisplay } from '../features/upload';
 import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
+import { readCSVFile } from '../shared/utils';
 import { EmptyState } from '../features/mapping/components/shared/EmptyState';
 import { getShortenedSurveyType as getShortenedSurveyTypeShared } from '../shared/utils/surveyFormatters';
 import { BoltIcon } from '@heroicons/react/24/outline';
@@ -625,6 +626,45 @@ const SurveyUpload: React.FC = () => {
         return rowData;
       });
 
+      // Save mappings as learned mappings for future years
+      const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
+      const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
+      const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+      const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
+        : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+        : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
+        : finalDataCategory;
+      const surveySourceForMapping = finalSource ? `${finalSource} ${categoryDisplay}` : undefined;
+      
+      if (surveySourceForMapping) {
+        try {
+          console.log('💾 Saving column mappings as learned mappings for future years:', {
+            surveySource: surveySourceForMapping,
+            providerType: finalProviderType,
+            mappingsCount: Object.keys(mappings).length
+          });
+          
+          // Save each mapping as a learned mapping
+          for (const [originalColumn, standardizedColumn] of Object.entries(mappings)) {
+            if (originalColumn !== standardizedColumn) {
+              await dataService.saveLearnedMapping(
+                'column',
+                originalColumn,
+                standardizedColumn,
+                finalProviderType,
+                surveySourceForMapping
+              );
+              console.log(`✅ Saved learned mapping: ${originalColumn} -> ${standardizedColumn} for ${surveySourceForMapping}`);
+            }
+          }
+          
+          console.log('✅ All column mappings saved as learned mappings for cross-year persistence');
+        } catch (error) {
+          console.error('❌ Error saving learned mappings (non-blocking):', error);
+          // Don't block upload if learned mapping save fails
+        }
+      }
+
       // Continue with normal upload flow...
       await processUploadedData(parsedRows, file, mappedHeaders);
       
@@ -795,8 +835,15 @@ const SurveyUpload: React.FC = () => {
     }, 60000); // 60 second timeout (increased from 30)
 
     try {
-      // Read the CSV file
-      const text = await file.text();
+      // Read the CSV file with encoding detection and normalization
+      const { text, encoding, issues, normalized } = await readCSVFile(file);
+      
+      if (issues.length > 0) {
+        console.warn('Encoding issues detected during upload:', issues);
+      }
+      if (normalized) {
+        console.log('Character normalization applied to uploaded file');
+      }
       
       const rows = text.split('\n').filter(row => row.trim());
       const headers = parseCSVLine(rows[0]);
@@ -1448,6 +1495,18 @@ const SurveyUpload: React.FC = () => {
               format={pendingUpload.format}
               sampleData={pendingUpload.sampleData}
               surveyType={surveySource === 'Custom' ? customSurveySource : surveySource}
+              surveySource={(() => {
+                // Construct survey source from source + dataCategory + providerType
+                const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
+                const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
+                const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+                const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
+                  : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+                  : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
+                  : finalDataCategory;
+                return finalSource ? `${finalSource} ${categoryDisplay}` : undefined;
+              })()}
+              providerType={providerType === 'CUSTOM' ? customProviderType : providerType}
             />
           )}
           {/* Uploaded Surveys Section (compact tabs) */}

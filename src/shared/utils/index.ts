@@ -25,6 +25,8 @@ export {
   capitalizeWords,
   formatSpecialtyForDisplay,
   formatRegionForDisplay,
+  formatProviderTypeForDisplay,
+  formatFieldNameForDisplay,
   sortSpecialtiesForDisplay
 } from './formatters';
 
@@ -44,3 +46,16 @@ export {
   parseCSVContent,
   testCSVParsing
 } from './csvParser';
+
+// Text encoding utilities
+export {
+  readCSVFile,
+  readFileWithEncoding,
+  normalizeText,
+  detectEncodingIssues
+} from './textEncoding';
+
+export type {
+  EncodingIssue,
+  FileEncodingResult
+} from './textEncoding';

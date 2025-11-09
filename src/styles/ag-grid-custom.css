@@ -8,45 +8,48 @@
   border-radius: 4px;
   outline: none;
   transition: all 0.2s ease;
+  accent-color: #9333ea !important;
 }
 
 .range-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
-  background: #4f46e5;
-  cursor: pointer;
-  border: 2px solid #ffffff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 20px !important;
+  width: 20px !important;
+  border-radius: 50% !important;
+  background: #9333ea !important;
+  cursor: pointer !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.2s ease !important;
 }
 
 .range-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+  transform: scale(1.1) !important;
+  box-shadow: 0 4px 8px rgba(147, 51, 234, 0.4) !important;
+  background: #9333ea !important;
 }
 
 .range-slider::-moz-range-thumb {
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
-  background: #4f46e5;
-  cursor: pointer;
-  border: 2px solid #ffffff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
+  height: 20px !important;
+  width: 20px !important;
+  border-radius: 50% !important;
+  background: #9333ea !important;
+  cursor: pointer !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.2s ease !important;
 }
 
 .range-slider::-moz-range-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+  transform: scale(1.1) !important;
+  box-shadow: 0 4px 8px rgba(147, 51, 234, 0.4) !important;
+  background: #9333ea !important;
 }
 
 .range-slider:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 /* Use AG Grid's CSS variables for consistent theming */

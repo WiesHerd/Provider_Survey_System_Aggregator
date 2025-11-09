@@ -200,7 +200,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
   }, selectedVariables); // NEW: Pass selected variables to hook
 
   // NEW: Get specialty options with mapping transparency
-  const { specialties: specialtyOptions } = useSpecialtyOptions();
+  const { specialties: specialtyOptions, loading: specialtyOptionsLoading, error: specialtyOptionsError } = useSpecialtyOptions();
 
   // CRITICAL FIX: Discover variables on mount and when dataCategory filter changes
   useEffect(() => {
@@ -786,6 +786,8 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
             availableVariables={availableVariables}
             onVariablesChange={setSelectedVariables}
             availableSpecialtyOptions={specialtyOptions} // NEW: Pass enriched specialty options with mapping transparency
+            specialtyOptionsLoading={specialtyOptionsLoading} // NEW: Pass loading state to prevent showing empty dropdown
+            specialtyOptionsError={specialtyOptionsError} // NEW: Pass error state for user-friendly error messages
           />
         </div>
 

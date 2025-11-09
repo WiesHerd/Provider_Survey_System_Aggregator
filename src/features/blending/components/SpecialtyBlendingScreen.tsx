@@ -1586,8 +1586,9 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
                                   }}
                                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-slider"
                                   style={{
-                                    background: `linear-gradient(to right, #4f46e5 0%, #4f46e5 ${currentWeight}%, #e5e7eb ${currentWeight}%, #e5e7eb 100%)`
-                                  }}
+                                    background: `linear-gradient(to right, #9333ea 0%, #9333ea ${currentWeight}%, #e5e7eb ${currentWeight}%, #e5e7eb 100%)`,
+                                    accentColor: '#9333ea'
+                                  } as React.CSSProperties}
                                   aria-label={`Set weight percentage for ${row.surveySpecialty}`}
                                 />
                               </div>

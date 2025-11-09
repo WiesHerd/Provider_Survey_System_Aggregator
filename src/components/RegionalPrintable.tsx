@@ -114,7 +114,7 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
         maxWidth: 650,
         margin: '0 auto',
         p: 4,
-        paddingBottom: '80px',
+        paddingBottom: '60px',
         boxSizing: 'border-box',
         '@media print': {
           color: 'black',
@@ -122,7 +122,7 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
           boxShadow: 'none',
           '-webkit-print-color-adjust': 'exact',
           printColorAdjust: 'exact',
-          padding: '32px',
+          padding: '20px 24px',
           maxWidth: '650px',
           margin: '0 auto',
         }
@@ -133,63 +133,76 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
         @media print {
           body { background: white !important; }
           * { box-sizing: border-box; }
-          .regional-print-title { font-size: 24px !important; font-weight: 700 !important; letter-spacing: 0.3px; }
-          .regional-print-section { font-size: 18px !important; font-weight: 700 !important; margin-bottom: 8px; }
+          .regional-print-title { font-size: 20px !important; font-weight: 700 !important; letter-spacing: 0.3px; }
+          .regional-print-section { font-size: 16px !important; font-weight: 700 !important; margin-bottom: 6px; }
           .regional-print-table, .regional-print-table th, .regional-print-table td {
             border: 2px solid #222 !important;
-            font-size: 13px !important;
+            font-size: 11px !important;
             font-weight: 500 !important;
             color: #111 !important;
           }
-          .regional-print-table th, .regional-print-table td { padding: 8px 10px !important; }
+          .regional-print-table th, .regional-print-table td { padding: 5px 8px !important; }
           .regional-print-bold { font-weight: 800 !important; }
-          .regional-print-variable-title { font-size: 16px !important; font-weight: 700 !important; margin-bottom: 8px !important; }
+          .regional-print-variable-title { font-size: 14px !important; font-weight: 700 !important; margin-bottom: 4px !important; }
           .regional-print-avoid-break { page-break-inside: avoid; }
           .regional-print-section-wrapper { page-break-inside: avoid; margin-bottom: 24px !important; }
-          /* Smart page breaks: break after every 2nd table, or when needed */
-          .regional-print-section-wrapper:nth-of-type(2n) {
-            page-break-after: auto;
+          /* Prevent page breaks between tables to keep all on one page */
+          .regional-print-section-wrapper {
+            page-break-after: avoid !important;
           }
         }
       `}</style>
       
-      {/* Header with title and filters */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Typography className="regional-print-title" sx={{ color: 'black', fontSize: 24, fontWeight: 700 }}>
-          Regional Analytics Report
-        </Typography>
-      </Box>
-      
-      {/* Filter Summary */}
-      {filterSummary && (
-        <Box sx={{ mb: 1.5 }}>
-          <Typography sx={{ fontSize: 13, color: '#666' }}>
-            {filterSummary}
+      {/* Header with title, logo, and generated date */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, '@media print': { mb: 2.5 } }}>
+        <Box sx={{ flex: 1 }}>
+          <Typography className="regional-print-title" sx={{ color: 'black', fontSize: 24, fontWeight: 700, '@media print': { fontSize: 20 } }}>
+            Regional Analytics Report
+          </Typography>
+          {/* Filter Summary */}
+          {filterSummary && (
+            <Box sx={{ mt: 0.5, '@media print': { mt: 0.25 } }}>
+              <Typography sx={{ fontSize: 13, color: '#666', '@media print': { fontSize: 11 } }}>
+                {filterSummary}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <img src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} alt="BenchPoint Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            <Typography sx={{ fontWeight: 700, fontSize: 16, letterSpacing: 1, fontFamily: 'inherit', '@media print': { fontSize: 14 } }}>
+              <span style={{ color: '#4F46E5' }}>Bench</span>
+              <span style={{ color: '#7C3AED' }}>Point</span>
+            </Typography>
+          </Box>
+          <Typography sx={{ fontSize: 12, color: '#666', '@media print': { fontSize: 10 } }}>
+            Generated: {new Date().toLocaleDateString()}
           </Typography>
         </Box>
-      )}
-      
-      <Box sx={{ borderBottom: '2px solid #222', mb: 2 }} />
+      </Box>
       
       {/* Variable Tables */}
       {variablesToDisplay.map((variableName, varIndex) => {
         const variableLabel = getVariableLabel(variableName);
         const formatValue = getVariableFormat(variableName);
-        // Smart page breaks: break after every 2nd table (0-indexed: after 1st, 3rd, 5th, etc.)
-        const shouldBreakAfter = varIndex > 0 && varIndex % 2 === 1 && varIndex < variablesToDisplay.length - 1;
         
         return (
           <Box
             key={variableName}
             className="regional-print-section-wrapper"
             sx={{
-              mb: 3,
-              pageBreakAfter: shouldBreakAfter ? 'always' : 'auto',
+              mb: 4,
+              '@media print': {
+                mb: 3,
+                pageBreakAfter: 'avoid',
+                pageBreakInside: 'avoid'
+              },
               pageBreakInside: 'avoid'
             }}
           >
             {/* Variable Title */}
-            <Typography className="regional-print-variable-title" sx={{ color: 'black', mb: 1 }}>
+            <Typography className="regional-print-variable-title" sx={{ color: 'black', mb: 0.5, '@media print': { mb: 0.25, fontSize: 14 } }}>
               {variableLabel}
             </Typography>
             
@@ -201,7 +214,13 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
                 mb: 0, 
                 width: '100%', 
                 border: '2px solid #222',
-                pageBreakInside: 'avoid'
+                pageBreakInside: 'avoid',
+                '@media print': {
+                  '& .MuiTableCell-root': {
+                    padding: '5px 8px',
+                    fontSize: '11px'
+                  }
+                }
               }}
             >
               <TableHead>
@@ -211,7 +230,11 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
                     fontWeight: 700, 
                     borderRight: '1.5px solid #222',
                     backgroundColor: '#f5f5f5',
-                    padding: '8px 10px'
+                    padding: '8px 10px',
+                    '@media print': {
+                      fontSize: '11px',
+                      padding: '5px 8px'
+                    }
                   }}>
                     Percentile
                   </TableCell>
@@ -224,7 +247,11 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
                         textAlign: 'center',
                         borderRight: region !== regionNames[regionNames.length - 1] ? '1.5px solid #222' : 'none',
                         backgroundColor: '#f5f5f5',
-                        padding: '8px 10px'
+                        padding: '8px 10px',
+                        '@media print': {
+                          fontSize: '11px',
+                          padding: '5px 8px'
+                        }
                       }}
                     >
                       {region}
@@ -243,7 +270,11 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
                         fontWeight: 500, 
                         borderRight: '1.5px solid #222',
                         backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
-                        padding: '8px 10px'
+                        padding: '8px 10px',
+                        '@media print': {
+                          fontSize: '11px',
+                          padding: '5px 8px'
+                        }
                       }}>
                         {p.label}
                       </TableCell>
@@ -260,7 +291,11 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
                               textAlign: 'right',
                               borderRight: region !== regionNames[regionNames.length - 1] ? '1.5px solid #222' : 'none',
                               backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
-                              padding: '8px 10px'
+                              padding: '8px 10px',
+                              '@media print': {
+                                fontSize: '11px',
+                                padding: '5px 8px'
+                              }
                             }}
                           >
                             {value > 0 ? formatValue(value) : '—'}
@@ -276,31 +311,6 @@ const RegionalPrintable = forwardRef<HTMLDivElement, Props>(({
         );
       })}
       
-      {/* Footer - positioned at bottom of page */}
-      <Box sx={{ 
-        position: 'fixed', 
-        bottom: 0, 
-        left: 0, 
-        right: 0, 
-        mt: 6, 
-        pt: 3, 
-        borderTop: '1px solid #ccc',
-        backgroundColor: 'white',
-        padding: '12px 24px'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <img src={process.env.PUBLIC_URL + '/benchpoint-icon.svg'} alt="BenchPoint Logo" style={{ width: 32, height: 32, objectFit: 'contain' }} />
-            <Typography sx={{ fontWeight: 700, fontSize: 16, letterSpacing: 1, fontFamily: 'inherit' }}>
-              <span style={{ color: '#4F46E5' }}>Bench</span>
-              <span style={{ color: '#7C3AED' }}>Point</span>
-            </Typography>
-          </Box>
-          <Typography sx={{ fontSize: 12, color: '#666' }}>
-            Generated: {new Date().toLocaleDateString()}
-          </Typography>
-        </Box>
-      </Box>
     </Box>
   );
 });

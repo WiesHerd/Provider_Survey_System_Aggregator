@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { ISurveyData, ISurveyRow } from '../types/survey';
 import { parseCSVLine } from '../shared/utils/csvParser';
+import { readCSVFile } from '../shared/utils/textEncoding';
 
 /* eslint-disable no-restricted-globals */
 const ctx = self;
@@ -49,8 +50,16 @@ async function processSurveyData(messageData: ProcessMessageData) {
   const { file, surveyProvider, year, id, columnMappings, specialtyMappings } = messageData;
 
   try {
-    console.log('Worker: Reading file contents');
-    const text = await file.text();
+    console.log('Worker: Reading file contents with encoding detection');
+    const { text, encoding, issues, normalized } = await readCSVFile(file);
+    
+    if (issues.length > 0) {
+      console.warn('Worker: Encoding issues detected:', issues);
+    }
+    if (normalized) {
+      console.log('Worker: Character normalization applied');
+    }
+    
     const lines = text.split('\n');
     
     if (lines.length === 0) {

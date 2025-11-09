@@ -23,5 +23,5 @@
 
 /* Range slider styles */
 .range-slider[data-weight] {
-  background: linear-gradient(to right, #4f46e5 0%, #4f46e5 var(--weight-percent, 0%), #e5e7eb var(--weight-percent, 0%), #e5e7eb 100%);
+  background: linear-gradient(to right, #9333ea 0%, #9333ea var(--weight-percent, 0%), #e5e7eb var(--weight-percent, 0%), #e5e7eb 100%);
 }

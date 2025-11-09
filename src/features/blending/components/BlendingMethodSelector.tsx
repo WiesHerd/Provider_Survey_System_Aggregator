@@ -216,7 +216,12 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
                               onCustomWeightChange(index, value);
                             }}
                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-slider"
-                            style={{ '--weight-percent': `${currentWeight}%` } as React.CSSProperties}
+                            style={{
+                              '--weight-percent': `${currentWeight}%`,
+                              background: `linear-gradient(to right, #9333ea 0%, #9333ea ${currentWeight}%, #e5e7eb ${currentWeight}%, #e5e7eb 100%)`,
+                              accentColor: '#9333ea'
+                            } as React.CSSProperties}
+                            data-weight={currentWeight}
                             aria-label={`Set weight percentage for ${row.surveySpecialty}`}
                           />
                         </div>

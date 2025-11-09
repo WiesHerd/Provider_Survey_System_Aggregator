@@ -224,7 +224,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                     type="checkbox"
                     checked={selectedRows.length === data.length && data.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded accent-purple-600"
                     aria-label="Select all rows"
                     title="Select all rows"
                   />
@@ -628,7 +628,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                         e.stopPropagation();
                         handleCheckboxChange(actualIndex, e.target.checked);
                       }}
-                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded accent-purple-600"
                       aria-label={`Select row ${index + 1}`}
                       title={`Select row ${index + 1}`}
                     />

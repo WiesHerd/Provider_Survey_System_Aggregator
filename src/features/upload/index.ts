@@ -11,6 +11,7 @@ export { UploadForm } from './components/UploadForm';
 export { FileUpload } from './components/FileUpload';
 export { UploadedSurveys } from './components/UploadedSurveys';
 export { ColumnValidationDisplay } from './components/ColumnValidationDisplay';
+export { EncodingWarning } from './components/EncodingWarning';
 
 // Hooks
 export { useUploadData } from './hooks/useUploadData';

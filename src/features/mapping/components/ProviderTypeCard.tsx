@@ -3,6 +3,7 @@ import { Paper, Typography } from '@mui/material';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import { ProviderTypeCardProps } from '../types/mapping';
 import { getSurveySourceColor } from '../utils/mappingCalculations';
+import { formatProviderTypeForDisplay } from '../../../shared/utils';
 
 /**
  * ProviderTypeCard component for displaying individual unmapped provider types
@@ -41,24 +42,10 @@ export const ProviderTypeCard: React.FC<ProviderTypeCardProps> = ({
         </div>
       )}
       
-      <div className="flex justify-between items-center">
-        <div className="flex-1">
-          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-            {providerType.name}
-          </Typography>
-          <Typography variant="caption" className="text-gray-500 text-xs">
-            Frequency: {providerType.frequency}
-          </Typography>
-        </div>
-        <div className="ml-2">
-          <Typography 
-            variant="caption" 
-            style={{ color: getSurveySourceColor(providerType.surveySource) }} 
-            className="text-xs font-medium whitespace-nowrap"
-          >
-            {providerType.surveySource}
-          </Typography>
-        </div>
+      <div className="flex items-center">
+        <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+          {formatProviderTypeForDisplay(providerType.name)}
+        </Typography>
       </div>
     </Paper>
   );

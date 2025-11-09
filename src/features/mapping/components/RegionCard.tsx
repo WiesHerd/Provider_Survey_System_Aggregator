@@ -3,6 +3,7 @@ import { Paper, Typography } from '@mui/material';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import { RegionCardProps } from '../types/mapping';
 import { getSurveySourceColor } from '../utils/mappingCalculations';
+import { formatRegionForDisplay } from '../../../shared/utils';
 
 /**
  * RegionCard component for displaying individual unmapped regions
@@ -41,24 +42,10 @@ export const RegionCard: React.FC<RegionCardProps> = ({
         </div>
       )}
       
-      <div className="flex justify-between items-center">
-        <div className="flex-1">
-          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-            {region.name}
-          </Typography>
-          <Typography variant="caption" className="text-gray-500 text-xs">
-            Frequency: {region.frequency}
-          </Typography>
-        </div>
-        <div className="ml-2">
-          <Typography 
-            variant="caption" 
-            style={{ color: getSurveySourceColor(region.surveySource) }} 
-            className="text-xs font-medium whitespace-nowrap"
-          >
-            {region.surveySource}
-          </Typography>
-        </div>
+      <div className="flex items-center">
+        <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+          {formatRegionForDisplay(region.name)}
+        </Typography>
       </div>
     </Paper>
   );

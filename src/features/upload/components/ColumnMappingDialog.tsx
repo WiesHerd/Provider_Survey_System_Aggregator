@@ -6,15 +6,18 @@
  * Only appears when columns don't match expected format.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import { getDataService } from '../../../services/DataService';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 interface ColumnMapping {
   csvColumn: string;
   expectedColumn: string;
   isRequired: boolean;
   autoMatched: boolean;
+  fromLearnedMapping?: boolean;
 }
 
 interface ColumnMappingDialogProps {
@@ -30,6 +33,8 @@ interface ColumnMappingDialogProps {
   format: 'normalized' | 'wide';
   sampleData?: Record<string, any>[];
   surveyType?: string;
+  surveySource?: string;
+  providerType?: string;
 }
 
 export const ColumnMappingDialog: React.FC<ColumnMappingDialogProps> = ({
@@ -40,49 +45,117 @@ export const ColumnMappingDialog: React.FC<ColumnMappingDialogProps> = ({
   expectedColumns,
   format,
   sampleData = [],
-  surveyType
+  surveyType,
+  surveySource,
+  providerType
 }) => {
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [loadingLearnedMappings, setLoadingLearnedMappings] = useState(false);
+  const { selectedProviderType } = useProviderContext();
+  const dataService = getDataService();
 
   // Initialize mappings when dialog opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
-      const initialMappings: ColumnMapping[] = detectedColumns.map(csvCol => {
-        // Try to auto-match based on column name
-        const matchedExpected = expectedColumns.find(expCol => {
-          const csvLower = csvCol.toLowerCase().trim();
-          const expLower = expCol.name.toLowerCase();
+      const initializeMappings = async () => {
+        setLoadingLearnedMappings(true);
+        
+        try {
+          // Load learned mappings for this survey source and provider type
+          const effectiveProviderType = providerType || selectedProviderType;
+          const learnedMappingsWithSource = await dataService.getLearnedMappingsWithSource('column', effectiveProviderType);
           
-          // Direct match
-          if (csvLower === expLower) return true;
+          // Filter learned mappings by survey source
+          const relevantLearnedMappings = learnedMappingsWithSource.filter(m => {
+            if (!surveySource) return false;
+            // Match survey source (handle variations like "MGMA Physician" vs "MGMA")
+            const mappingSource = m.surveySource || '';
+            const normalizedMappingSource = mappingSource.replace(/\s+\d{4}$/, '').trim(); // Remove year if present
+            const normalizedSurveySource = surveySource.replace(/\s+\d{4}$/, '').trim();
+            
+            return mappingSource === surveySource || 
+                   normalizedMappingSource === normalizedSurveySource ||
+                   mappingSource.includes(surveySource) ||
+                   surveySource.includes(mappingSource);
+          });
           
-          // Common variations
-          if (expLower === 'variable' && (csvLower.includes('benchmark') || csvLower.includes('variable'))) return true;
-          if (expLower === 'n_orgs' && (csvLower.includes('group count') || csvLower.includes('organizations'))) return true;
-          if (expLower === 'n_incumbents' && (csvLower.includes('indv count') || csvLower.includes('incumbents'))) return true;
-          if (expLower === 'p25' && csvLower.includes('25th')) return true;
-          if (expLower === 'p50' && csvLower.includes('50th')) return true;
-          if (expLower === 'p75' && csvLower.includes('75th')) return true;
-          if (expLower === 'p90' && csvLower.includes('90th')) return true;
-          if (expLower === 'specialty' && csvLower.includes('specialty')) return true;
-          if (expLower === 'geographic_region' && (csvLower.includes('region') || csvLower.includes('geographic'))) return true;
-          if (expLower === 'provider_type' && (csvLower.includes('provider') || csvLower.includes('type'))) return true;
+          // Create a lookup map for learned mappings
+          const learnedMappingLookup = new Map<string, string>();
+          relevantLearnedMappings.forEach(m => {
+            learnedMappingLookup.set(m.original.toLowerCase().trim(), m.corrected);
+          });
           
-          return false;
-        });
+          console.log('🔍 Loaded learned mappings for column mapping:', {
+            surveySource,
+            providerType: effectiveProviderType,
+            totalLearned: learnedMappingsWithSource.length,
+            relevantLearned: relevantLearnedMappings.length,
+            learnedMappings: relevantLearnedMappings
+          });
+          
+          // Initialize mappings with ONLY learned mappings and exact matches (no fuzzy matching)
+          const initialMappings: ColumnMapping[] = detectedColumns.map(csvCol => {
+            const csvLower = csvCol.toLowerCase().trim();
+            
+            // FIRST: Check learned mappings (highest priority - from previous uploads)
+            const learnedMapping = learnedMappingLookup.get(csvLower);
+            if (learnedMapping) {
+              const matchedExpected = expectedColumns.find(expCol => expCol.name === learnedMapping);
+              if (matchedExpected) {
+                console.log('✅ Applied learned mapping:', csvCol, '->', learnedMapping);
+                return {
+                  csvColumn: csvCol,
+                  expectedColumn: learnedMapping,
+                  isRequired: matchedExpected.required || false,
+                  autoMatched: true,
+                  fromLearnedMapping: true
+                };
+              }
+            }
+            
+            // SECOND: Only exact case-insensitive match (no fuzzy/pattern matching)
+            const matchedExpected = expectedColumns.find(expCol => {
+              const expLower = expCol.name.toLowerCase().trim();
+              return csvLower === expLower;
+            });
 
-        return {
-          csvColumn: csvCol,
-          expectedColumn: matchedExpected?.name || '',
-          isRequired: matchedExpected?.required || false,
-          autoMatched: !!matchedExpected
-        };
-      });
+            return {
+              csvColumn: csvCol,
+              expectedColumn: matchedExpected?.name || '',
+              isRequired: matchedExpected?.required || false,
+              autoMatched: !!matchedExpected,
+              fromLearnedMapping: false
+            };
+          });
 
-      setMappings(initialMappings);
+          setMappings(initialMappings);
+        } catch (error) {
+          console.error('❌ Error loading learned mappings:', error);
+          // Fallback to ONLY exact matches if learned mappings fail to load (no fuzzy matching)
+          const fallbackMappings: ColumnMapping[] = detectedColumns.map(csvCol => {
+            const csvLower = csvCol.toLowerCase().trim();
+            const matchedExpected = expectedColumns.find(expCol => {
+              const expLower = expCol.name.toLowerCase().trim();
+              return csvLower === expLower; // Only exact match
+            });
+            return {
+              csvColumn: csvCol,
+              expectedColumn: matchedExpected?.name || '',
+              isRequired: matchedExpected?.required || false,
+              autoMatched: !!matchedExpected,
+              fromLearnedMapping: false
+            };
+          });
+          setMappings(fallbackMappings);
+        } finally {
+          setLoadingLearnedMappings(false);
+        }
+      };
+
+      initializeMappings();
     }
-  }, [open, detectedColumns, expectedColumns]);
+  }, [open, detectedColumns, expectedColumns, surveySource, providerType, selectedProviderType, dataService]);
 
   const handleMappingChange = (csvColumn: string, expectedColumn: string) => {
     setMappings(prev => prev.map(mapping => 
@@ -151,8 +224,20 @@ export const ColumnMappingDialog: React.FC<ColumnMappingDialogProps> = ({
           <p className="text-sm text-gray-700 leading-relaxed">
             Select the expected column name for each of your CSV columns. 
             <span className="font-medium text-gray-900"> Required columns</span> must be mapped to proceed.
+            {surveySource && (
+              <span className="block mt-1 text-xs text-gray-600">
+                Mappings from previous {surveySource} uploads are automatically applied (marked with "✓ Learned" badge) and will be saved for future years. All other columns require manual selection.
+              </span>
+            )}
           </p>
         </div>
+        
+        {/* Loading indicator */}
+        {loadingLearnedMappings && (
+          <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800">Loading learned mappings from previous uploads...</p>
+          </div>
+        )}
 
         {/* Mapping Table - Google-style clean table */}
         <div className="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -204,8 +289,14 @@ export const ColumnMappingDialog: React.FC<ColumnMappingDialogProps> = ({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {mapping.expectedColumn ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          ✓ Mapped
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${
+                          mapping.fromLearnedMapping 
+                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                            : mapping.autoMatched
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                            : 'bg-gray-100 text-gray-800 border-gray-200'
+                        }`}>
+                          {mapping.fromLearnedMapping ? '✓ Learned' : mapping.autoMatched ? '✓ Exact Match' : '✓ Manual'}
                         </span>
                       ) : mapping.isRequired ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-800 border border-red-200">

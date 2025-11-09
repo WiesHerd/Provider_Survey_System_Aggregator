@@ -48,8 +48,12 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
   selectedVariables,
   availableVariables,
   onVariablesChange,
-  // NEW: Specialty options with mapping transparency
-  availableSpecialtyOptions
+    // NEW: Specialty options with mapping transparency
+    availableSpecialtyOptions,
+    // NEW: Loading state for specialty options
+    specialtyOptionsLoading = false,
+    // NEW: Error state for specialty options
+    specialtyOptionsError = null
 }) => {
   
   // Handler for standard filter changes (specialty, region, etc.)
@@ -179,6 +183,8 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
             placeholder="Search specialties..."
             useAdvancedSearch={true}
             size="small"
+            loading={specialtyOptionsLoading}
+            error={specialtyOptionsError ? 'Unable to load specialties. Please refresh the page.' : undefined}
           />
         ) : (
           <StandardDropdown

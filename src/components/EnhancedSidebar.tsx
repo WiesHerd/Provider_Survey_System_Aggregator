@@ -9,7 +9,6 @@ import {
 	ArrowUpTrayIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	TableCellsIcon,
 	PresentationChartLineIcon,
 	MapIcon,
 	CalculatorIcon,
@@ -64,7 +63,6 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				{ name: 'Provider Types', icon: UserIcon, path: '/provider-type-mapping' },
 				{ name: 'Regions', icon: MapIcon, path: '/region-mapping' },
 				{ name: 'Comp Metrics', icon: CurrencyDollarIcon, path: '/variable-mapping' },
-				{ name: 'Column Mappings', icon: TableCellsIcon, path: '/column-mapping' },
 			]
 		},
 		{

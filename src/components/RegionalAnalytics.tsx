@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { FormControl, Autocomplete, TextField, Drawer, Typography, List, ListItem, ListItemText, Divider } from '@mui/material';
+import { FormControl, Autocomplete, TextField, Drawer, Typography, List, ListItem, ListItemText, Divider, Tooltip } from '@mui/material';
+import { PrinterIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { ISurveyRow } from '../types/survey';
 import { getDataService } from '../services/DataService';
 import { RegionalComparison } from '../features/regional';
@@ -148,15 +149,57 @@ const getVariableValue = (
   const variables = row.variables || {};
   
   // Try exact match first
-  if (variables[variableName]) {
+  if (variables[variableName] && variables[variableName][percentile]) {
     return variables[variableName][percentile] || 0;
   }
   
-  // Try alternative variable name variations
+  // For Call Pay variables, try comprehensive matching
+  const isCallPayVariable = variableName.toLowerCase().includes('call') || 
+                             variableName.toLowerCase().includes('on_call') ||
+                             variableName.toLowerCase().includes('oncall') ||
+                             variableName.toLowerCase().includes('daily_rate');
+  
+  if (isCallPayVariable) {
+    // Try all possible Call Pay variable name variations
+    const callPayVariations = [
+      'on_call_compensation',
+      'oncall_compensation', 
+      'daily_rate_on_call',
+      'daily_rate_oncall',
+      'daily_rate_on_call_compensation',
+      'daily_rate_oncall_compensation',
+      'on_call_rate',
+      'oncall_rate',
+      'call_pay',
+      'callpay',
+      'on_call',
+      'oncall'
+    ];
+    
+    // Also check all variable keys in the row for any that contain call/oncall keywords
+    const allVariableKeys = Object.keys(variables);
+    const callPayKeys = allVariableKeys.filter(key => {
+      const lower = key.toLowerCase();
+      return lower.includes('call') || lower.includes('oncall') || lower.includes('daily');
+    });
+    
+    // Try variations first
+    for (const variation of callPayVariations) {
+      if (variables[variation] && variables[variation][percentile]) {
+        return variables[variation][percentile] || 0;
+      }
+    }
+    
+    // Then try any call pay keys found in the data
+    for (const key of callPayKeys) {
+      if (variables[key] && variables[key][percentile]) {
+        return variables[key][percentile] || 0;
+      }
+    }
+  }
+  
+  // Try alternative variable name variations for other variables
   const alternativeNames = [
-    // For call pay
-    'on_call_compensation', 'oncall_compensation', 'daily_rate_on_call', 
-    'daily_rate_oncall', 'on_call_rate', 'oncall_rate',
     // For TCC
     'total_cash_compensation', 'total_compensation', 'tcc',
     // For CF
@@ -168,16 +211,28 @@ const getVariableValue = (
   // Check if variableName matches any alternative
   for (const altName of alternativeNames) {
     if (variableName.includes(altName) || altName.includes(variableName)) {
-      if (variables[altName]) {
+      if (variables[altName] && variables[altName][percentile]) {
         return variables[altName][percentile] || 0;
       }
     }
   }
   
   // Try direct key match with normalization
-  const normalizedKey = variableName.toLowerCase().replace(/\s+/g, '_');
-  if (variables[normalizedKey]) {
+  const normalizedKey = variableName.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+  if (variables[normalizedKey] && variables[normalizedKey][percentile]) {
     return variables[normalizedKey][percentile] || 0;
+  }
+  
+  // Last resort: try case-insensitive partial match on all keys
+  const lowerVarName = variableName.toLowerCase();
+  for (const key of Object.keys(variables)) {
+    if (key.toLowerCase() === lowerVarName || 
+        key.toLowerCase().includes(lowerVarName) || 
+        lowerVarName.includes(key.toLowerCase())) {
+      if (variables[key] && variables[key][percentile]) {
+        return variables[key][percentile] || 0;
+      }
+    }
   }
   
   return 0;
@@ -451,14 +506,23 @@ export const RegionalAnalytics: React.FC = () => {
         let defaultVariables: string[] = [];
         if (selectedDataCategory === 'Call Pay') {
           // For Call Pay, find on_call_compensation or similar
-          const callPayVar = variableNames.find(v => 
-            v.includes('on_call') || 
-            v.includes('oncall') || 
-            v.includes('call_pay') ||
-            v.includes('daily_rate')
-          );
+          const callPayVar = variableNames.find(v => {
+            const lower = v.toLowerCase();
+            return lower.includes('on_call') || 
+                   lower.includes('oncall') || 
+                   lower.includes('call_pay') ||
+                   lower.includes('callpay') ||
+                   lower.includes('daily_rate') ||
+                   lower.includes('daily') ||
+                   lower.includes('call');
+          });
           defaultVariables = callPayVar ? [callPayVar] : (variableNames.length > 0 ? [variableNames[0]] : []);
-          console.log('🔍 Regional Analytics: Call Pay default variable:', defaultVariables);
+          console.log('🔍 Regional Analytics: Call Pay variable discovery:', {
+            allVariables: variableNames,
+            foundCallPayVar: callPayVar,
+            defaultVariables,
+            selectedDataCategory
+          });
         } else if (selectedDataCategory === 'Compensation' || !selectedDataCategory || selectedDataCategory === '') {
           // For Compensation or All Categories, default to industry standard: TCC, CF, wRVU
           const tccVar = variableNames.find(v => v === 'tcc' || v === 'total_cash_compensation');
@@ -539,6 +603,18 @@ export const RegionalAnalytics: React.FC = () => {
     });
     console.log(`📊 Total rows to filter: ${analyticsData.length}`);
     
+    // ENTERPRISE DEBUG: Log available specialties in data (especially for Call Pay)
+    if (selectedDataCategory === 'Call Pay' && analyticsData.length > 0) {
+      const callPayRows = (analyticsData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
+        const dataCat = (row as any).dataCategory || '';
+        const source = row.surveySource || '';
+        return dataCat === 'CALL_PAY' || source.toLowerCase().includes('call pay');
+      });
+      const callPaySpecialties = Array.from(new Set(callPayRows.map((r: AggregatedData | DynamicAggregatedData) => r.standardizedName).filter(Boolean)));
+      console.log(`🔍 Call Pay specialties in data:`, callPaySpecialties);
+      console.log(`🔍 Looking for specialty: "${selectedSpecialty}"`);
+    }
+    
     // ENTERPRISE DEBUG: Log sample rows before filtering
     if (analyticsData.length > 0) {
       console.log(`🔍 Sample rows BEFORE filtering:`, analyticsData.slice(0, 3).map((row: AggregatedData | DynamicAggregatedData) => ({
@@ -560,18 +636,52 @@ export const RegionalAnalytics: React.FC = () => {
     let yearMatches = 0;
     
     const filteredRows = (analyticsData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => {
-      // Specialty filter - Use exact match with standardizedName (from specialty mappings)
-      // ENTERPRISE FIX: Handle case-insensitive comparison since dropdown may format names
-      // The standardizedName comes from the specialty mapping system, but dropdown may format it
+      // Specialty filter - Use flexible matching with standardizedName (from specialty mappings)
+      // ENTERPRISE FIX: Handle case-insensitive comparison and normalize variations
       const rowStandardizedName = (row.standardizedName || '').trim();
       const selectedSpecialtyNormalized = (selectedSpecialty || '').trim();
       
-      // Try exact match first (most common case)
-      if (rowStandardizedName === selectedSpecialtyNormalized) {
+      if (!selectedSpecialtyNormalized) {
+        return false; // No specialty selected
+      }
+      
+      // Normalize both for comparison: lowercase and normalize spacing/colons
+      const normalizeSpecialtyName = (name: string): string => {
+        return name
+          .toLowerCase()
+          .replace(/\s*:\s*/g, ':') // Normalize colon spacing: "pediatrics : general" -> "pediatrics:general"
+          .replace(/\s+/g, ' ') // Normalize multiple spaces
+          .trim();
+      };
+      
+      const normalizedRow = normalizeSpecialtyName(rowStandardizedName);
+      const normalizedSelected = normalizeSpecialtyName(selectedSpecialtyNormalized);
+      
+      // Try exact normalized match first
+      if (normalizedRow === normalizedSelected) {
         specialtyMatches++;
       } else {
-        // Fallback: case-insensitive comparison (handles "pediatrics: general" vs "Pediatrics: General")
-        if (rowStandardizedName.toLowerCase() !== selectedSpecialtyNormalized.toLowerCase()) {
+        // Also try partial matching for cases like "pediatrics: general" vs "pediatrics:general"
+        // or "general pediatrics" vs "pediatrics: general"
+        const rowParts = normalizedRow.split(/[:,\s]+/).filter(p => p.length > 0);
+        const selectedParts = normalizedSelected.split(/[:,\s]+/).filter(p => p.length > 0);
+        
+        // Check if all selected parts are found in row (order-independent)
+        const allPartsMatch = selectedParts.length > 0 && 
+          selectedParts.every(part => rowParts.some(rowPart => rowPart.includes(part) || part.includes(rowPart)));
+        
+        if (!allPartsMatch) {
+          // Debug logging for specialty mismatches (limit to avoid spam)
+          if (specialtyMatches < 3) {
+            console.log(`🔍 Specialty mismatch:`, {
+              rowStandardizedName,
+              selectedSpecialtyNormalized,
+              normalizedRow,
+              normalizedSelected,
+              rowParts,
+              selectedParts
+            });
+          }
           return false;
         }
         specialtyMatches++;
@@ -708,6 +818,7 @@ export const RegionalAnalytics: React.FC = () => {
     
     return filteredRows;
   }, [selectedSpecialty, selectedProviderType, selectedSurveySource, selectedDataCategory, selectedYear, analyticsData]);
+
 
   // Helper to average a field
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -936,6 +1047,162 @@ export const RegionalAnalytics: React.FC = () => {
     return result;
   }, [filtered, regionMappings, selectedVariables]);
 
+  // Handle Excel export - exports formatted regional comparison table (what you see on screen)
+  // Defined after regionalComparisonData to avoid dependency issues
+  const handleExportToExcel = useCallback(() => {
+    if (!selectedSpecialty || regionalComparisonData.length === 0) {
+      return;
+    }
+
+    // Import XLSX dynamically
+    import('xlsx').then((XLSX) => {
+      const workbook = XLSX.utils.book_new();
+
+      // Get variable metadata for formatting
+      const formattingService = VariableFormattingService.getInstance();
+      const variablesToExport = selectedVariables.length > 0 
+        ? selectedVariables 
+        : (regionalComparisonData[0] && 'variables' in regionalComparisonData[0] 
+          ? Object.keys(regionalComparisonData[0].variables) 
+          : ['tcc', 'tcc_per_work_rvu', 'work_rvus']);
+
+      // Create variable metadata (same as used in RegionalComparison)
+      const variableMetadata: Record<string, { label: string; format: (value: number) => string }> = 
+        selectedVariables.length > 0 ? selectedVariables.reduce((acc, varName) => {
+          const rule = formattingService.getRuleForVariable(varName);
+          acc[varName] = {
+            label: formatVariableDisplayName(varName),
+            format: (value: number) => {
+              if (value === 0) return '0';
+              if (rule && rule.showCurrency) {
+                return formatCurrency(value, rule.decimals || 0);
+              }
+              if (rule && rule.decimals !== undefined) {
+                return formatNumber(value, rule.decimals);
+              }
+              // Default formatting based on variable name
+              const lower = varName.toLowerCase();
+              if (lower.includes('tcc') || lower.includes('compensation') || lower.includes('call')) {
+                return formatCurrency(value, 0);
+              }
+              if (lower.includes('per') || lower.includes('factor') || lower.includes('conversion')) {
+                return formatCurrency(value, 2);
+              }
+              return formatNumber(value);
+            }
+          };
+          return acc;
+        }, {} as Record<string, { label: string; format: (value: number) => string }>) : {};
+
+      // Export each variable as a separate sheet
+      variablesToExport.forEach((variableName, varIndex) => {
+        const variableLabel = variableMetadata[variableName]?.label || formatVariableDisplayName(variableName);
+        const formatValue = variableMetadata[variableName]?.format || ((v: number) => {
+          if (v === 0) return '—';
+          const rule = formattingService.getRuleForVariable(variableName);
+          if (rule?.showCurrency) {
+            return formatCurrency(v, rule.decimals || 0);
+          }
+          if (rule?.decimals !== undefined) {
+            return formatNumber(v, rule.decimals);
+          }
+          const lower = variableName.toLowerCase();
+          if (lower.includes('tcc') || lower.includes('compensation') || lower.includes('call')) {
+            return formatCurrency(v, 0);
+          }
+          if (lower.includes('per') || lower.includes('factor') || lower.includes('conversion')) {
+            return formatCurrency(v, 2);
+          }
+          return formatNumber(v);
+        });
+
+        // Build table data: rows = percentiles, columns = regions
+        const percentiles = [
+          { key: 'p25', label: '25th Percentile' },
+          { key: 'p50', label: '50th Percentile' },
+          { key: 'p75', label: '75th Percentile' },
+          { key: 'p90', label: '90th Percentile' }
+        ];
+
+        // Create header row
+        const headerRow = ['Percentile', ...regionalComparisonData.map(r => r.region)];
+
+        // Create data rows
+        const dataRows = percentiles.map(p => {
+          const row: any[] = [p.label];
+          regionalComparisonData.forEach(regionData => {
+            let value = 0;
+            if ('variables' in regionData && regionData.variables[variableName]) {
+              value = regionData.variables[variableName][p.key as 'p25' | 'p50' | 'p75' | 'p90'] || 0;
+            } else if ('tcc_p25' in regionData) {
+              // Legacy format - map variable names to legacy fields
+              const legacyMap: Record<string, Record<string, keyof typeof regionData>> = {
+                'tcc': { p25: 'tcc_p25', p50: 'tcc_p50', p75: 'tcc_p75', p90: 'tcc_p90' },
+                'tcc_per_work_rvu': { p25: 'cf_p25', p50: 'cf_p50', p75: 'cf_p75', p90: 'cf_p90' },
+                'work_rvus': { p25: 'wrvus_p25', p50: 'wrvus_p50', p75: 'wrvus_p75', p90: 'wrvus_p90' }
+              };
+              const fieldMap = legacyMap[variableName];
+              if (fieldMap && fieldMap[p.key]) {
+                value = (regionData[fieldMap[p.key]] as number) || 0;
+              }
+            }
+            row.push(value > 0 ? formatValue(value) : '—');
+          });
+          return row;
+        });
+
+        // Combine header and data
+        const worksheetData = [headerRow, ...dataRows];
+
+        // Create worksheet
+        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+        // Set column widths
+        const columnWidths = [
+          { wch: 18 }, // Percentile column
+          ...regionalComparisonData.map(() => ({ wch: 15 })) // Region columns
+        ];
+        worksheet['!cols'] = columnWidths;
+
+        // Style header row (bold)
+        const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+        for (let col = 0; col <= headerRange.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+          if (!worksheet[cellAddress]) continue;
+          worksheet[cellAddress].s = {
+            font: { bold: true },
+            alignment: { horizontal: 'center' },
+            fill: { fgColor: { rgb: 'F3F4F6' } }
+          };
+        }
+
+        // Add sheet to workbook (limit sheet name to 31 chars for Excel)
+        const sheetName = variableLabel.length > 31 ? variableLabel.substring(0, 28) + '...' : variableLabel;
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      });
+
+      // Add filters summary sheet
+      const filtersData = [
+        ['Filter', 'Value'],
+        ['Specialty', formatSpecialtyForDisplay(selectedSpecialty)],
+        ['Provider Type', selectedProviderType || 'All Types'],
+        ['Survey Source', selectedSurveySource || 'All Sources'],
+        ['Data Category', selectedDataCategory || 'All Categories'],
+        ['Year', selectedYear || 'All Years'],
+        ['Generated', new Date().toLocaleString()]
+      ];
+      const filtersSheet = XLSX.utils.aoa_to_sheet(filtersData);
+      filtersSheet['!cols'] = [{ wch: 20 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(workbook, filtersSheet, 'Filters');
+
+      // Generate filename
+      const filename = `regional-analytics-${selectedSpecialty.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Download
+      XLSX.writeFile(workbook, filename);
+    });
+  }, [selectedSpecialty, selectedProviderType, selectedSurveySource, selectedDataCategory, selectedYear, regionalComparisonData, selectedVariables]);
+
   // Build provenance (mapping summary) for tooltips and drawer
   const { regionTooltips, provenanceDetails } = useMemo(() => {
     const tooltips: Record<string, string> = {};
@@ -1058,23 +1325,35 @@ export const RegionalAnalytics: React.FC = () => {
                   : 'Choose filters to analyze regional compensation patterns'}
               </p>
             </div>
-            {/* Print and Clear Filters Buttons - Top Right */}
+            {/* Print, Export, and Clear Filters Buttons - Top Right */}
             <div className="flex items-center gap-2">
-              {/* Print Button */}
+              {/* Print Button - Circular Icon */}
               {selectedSpecialty && regionalComparisonData.length > 0 && (
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  Print Report
-                </button>
+                <Tooltip title="Print Report" placement="top" arrow>
+                  <button
+                    onClick={handlePrint}
+                    className="p-1.5 rounded-full border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                    aria-label="Print Report"
+                  >
+                    <PrinterIcon className="h-4 w-4" />
+                  </button>
+                </Tooltip>
+              )}
+              {/* Download to Excel Button - Circular Icon */}
+              {selectedSpecialty && regionalComparisonData.length > 0 && (
+                <Tooltip title="Download to Excel" placement="top" arrow>
+                  <button
+                    onClick={handleExportToExcel}
+                    className="p-1.5 rounded-full border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                    aria-label="Download to Excel"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4" />
+                  </button>
+                </Tooltip>
               )}
               {/* Clear Filters Button */}
               {(selectedSpecialty || selectedProviderType || selectedSurveySource || selectedDataCategory || selectedYear) && (
-                <div className="relative group">
+                <Tooltip title="Clear Filters" placement="top" arrow>
                   <button
                     onClick={() => {
                       setSelectedSpecialty('');
@@ -1084,7 +1363,7 @@ export const RegionalAnalytics: React.FC = () => {
                       setSelectedYear('');
                       setSelectedVariables([]); // Clear variable selection
                     }}
-                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full border border-gray-200 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                    className="p-1.5 rounded-full border border-gray-200 hover:border-gray-300 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-500"
                     aria-label="Clear all filters"
                   >
                     <div className="relative w-4 h-4">
@@ -1100,14 +1379,7 @@ export const RegionalAnalytics: React.FC = () => {
                       )}
                     </div>
                   </button>
-                  {/* Tooltip */}
-                  <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                    <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
-                      Clear Filters
-                      <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
-                    </div>
-                  </div>
-                </div>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -1504,7 +1776,7 @@ export const RegionalAnalytics: React.FC = () => {
         )}
         {/* Provenance Drawer */}
         <Drawer anchor="right" open={provenanceOpen} onClose={() => setProvenanceOpen(false)}>
-          <div style={{ width: 380 }} className="p-4">
+          <div style={{ width: 420 }} className="p-6">
             {(() => {
               const pretty = (s: string) => s
                 ? s.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
@@ -1524,45 +1796,99 @@ export const RegionalAnalytics: React.FC = () => {
                 </>
               );
             })()}
-            <Divider />
+            <Divider className="my-4" />
             <div className="mt-4">
               {provenanceRegion && provenanceDetails[provenanceRegion] ? (
                 <>
-                  <Typography variant="subtitle2" className="mb-2">Survey → Source Regions</Typography>
-                  <List dense>
-                    {Object.entries(provenanceDetails[provenanceRegion].bySource)
-                      .sort((a,b)=> b[1]-a[1])
-                      .map(([src, total]) => (
-                        <li key={src} className="mb-2">
-                          <Typography variant="body2" className="font-medium">{src} • Rows: {total}</Typography>
-                          <List dense>
-                            {Object.entries(provenanceDetails[provenanceRegion].bySourceRegions?.[src] || {})
-                              .sort((a,b)=> b[1]-a[1])
-                              .slice(0,15)
-                              .map(([rg, count]) => {
-                                const totalAll = provenanceDetails[provenanceRegion].total || 0;
-                                const pct = totalAll > 0 ? Math.round((count / totalAll) * 100) : 0;
-                                const prettyRg = rg.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                                const isNational = rg.toLowerCase() === 'national';
-                                const isZero = count === 0;
+                  <Typography variant="body2" className="text-gray-600 mb-4 text-sm">
+                    Source region names from each survey that map to this region:
+                  </Typography>
+
+                  {/* Survey Sources with their mapped region names */}
+                  <div className="space-y-4">
+                    {Object.entries(provenanceDetails[provenanceRegion].bySourceRegions || {})
+                      .sort((a, b) => {
+                        // Sort by total rows for this survey
+                        const aTotal = provenanceDetails[provenanceRegion].bySource[a[0]] || 0;
+                        const bTotal = provenanceDetails[provenanceRegion].bySource[b[0]] || 0;
+                        return bTotal - aTotal;
+                      })
+                      .map(([surveySource, sourceRegionsMap]) => {
+                        const totalRows = provenanceDetails[provenanceRegion].bySource[surveySource] || 0;
+                        // Get all source region names (keys) that map to this parent region
+                        // Only show regions that have actual data (count > 0)
+                        const sourceRegionNames = Object.keys(sourceRegionsMap)
+                          .filter(name => {
+                            // Only show regions with actual data rows
+                            return (sourceRegionsMap[name] || 0) > 0;
+                          })
+                          .sort((a, b) => {
+                            // Sort by count descending, then alphabetically
+                            const countA = sourceRegionsMap[a] || 0;
+                            const countB = sourceRegionsMap[b] || 0;
+                            if (countB !== countA) return countB - countA;
+                            return a.localeCompare(b);
+                          });
+
+                        // Only show surveys that have at least one mapped region name
+                        if (sourceRegionNames.length === 0) return null;
+
+                        return (
+                          <div key={surveySource} className="border-b border-gray-200 pb-4 last:border-b-0 last:pb-0">
+                            {/* Survey Source Header */}
+                            <Typography variant="body2" className="font-semibold text-gray-900 mb-2">
+                              {surveySource}
+                            </Typography>
+
+                            {/* Source Region Names */}
+                            <div className="ml-4 space-y-1">
+                              {sourceRegionNames.map((regionName) => {
+                                const count = sourceRegionsMap[regionName] || 0;
+                                const prettyName = regionName.toLowerCase()
+                                  .split(' ')
+                                  .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                                  .join(' ');
+                                const hasData = count > 0;
+
                                 return (
-                                  <ListItem key={`${src}-${rg}`} sx={{ py: 0 }}>
-                                    <ListItemText 
-                                      primaryTypographyProps={{ fontWeight: isNational ? 700 : 500, color: isZero ? '#6B7280' : undefined }}
-                                      primary={prettyRg}
-                                      secondary={`Rows: ${count}${pct ? ` (${pct}%)` : ''}`}
-                                    />
-                                </ListItem>
+                                  <div 
+                                    key={`${surveySource}-${regionName}`} 
+                                    className="flex items-center justify-between py-1"
+                                  >
+                                    <Typography 
+                                      variant="body2" 
+                                      className="text-sm text-gray-900"
+                                    >
+                                      {prettyName}
+                                    </Typography>
+                                    <span className="text-xs text-gray-500 ml-2">
+                                      {count.toLocaleString()} {count === 1 ? 'row' : 'rows'}
+                                    </span>
+                                  </div>
                                 );
                               })}
-                          </List>
-                          <Divider className="my-1" />
-                        </li>
-                      ))}
-                  </List>
+                            </div>
+                          </div>
+                        );
+                      })
+                      .filter(Boolean)}
+                  </div>
+
+                  {/* Empty state if no mappings */}
+                  {Object.keys(provenanceDetails[provenanceRegion].bySourceRegions || {}).length === 0 && (
+                    <div className="text-center py-6">
+                      <Typography variant="body2" className="text-gray-500">
+                        No region mappings found for this region.
+                      </Typography>
+                    </div>
+                  )}
                 </>
               ) : (
-                <Typography variant="body2" className="text-gray-600">No mapping details available.</Typography>
+                <div className="text-center py-6">
+                  <Typography variant="body2" className="text-gray-500">
+                    No mapping details available.
+                  </Typography>
+                </div>
               )}
             </div>
           </div>

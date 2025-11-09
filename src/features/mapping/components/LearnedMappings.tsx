@@ -1,22 +1,20 @@
 import React, { useState, useCallback } from 'react';
 import {
   TextField,
-  Typography,
   InputAdornment,
-  IconButton,
-  Checkbox,
-  Box,
-  Chip
+  IconButton
 } from '@mui/material';
 import { 
   MagnifyingGlassIcon as SearchIcon,
   XMarkIcon,
   TrashIcon,
-  CheckIcon
+  RectangleStackIcon
 } from '@heroicons/react/24/outline';
+import { 
+  RectangleStackIcon as RectangleStackIconSolid
+} from '@heroicons/react/24/solid';
 import { LearnedMappingsProps } from '../types/mapping';
 import { MappedSpecialtyItem } from './MappedSpecialtyItem';
-import { StandardTooltip } from '../../../shared/components';
 import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
 
 /**
@@ -137,6 +135,18 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
     });
   }, []);
 
+  // Handle Select All - selects all visible mappings if none selected, deselects all if some/all selected
+  const handleSelectAll = useCallback(() => {
+    if (selectedMappings.size === 0 || selectedMappings.size < learnedMappingsList.length) {
+      // Select all visible mappings
+      const allIds = new Set(learnedMappingsList.map(m => m.id));
+      setSelectedMappings(allIds);
+    } else {
+      // Deselect all
+      setSelectedMappings(new Set());
+    }
+  }, [selectedMappings, learnedMappingsList]);
+
 
   const handleBulkDelete = useCallback(() => {
     if (selectedMappings.size === 0) return;
@@ -158,133 +168,173 @@ export const LearnedMappings: React.FC<LearnedMappingsProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Header with Search and Action Buttons */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex-1 mr-4">
-          <TextField
-            fullWidth
-            placeholder="Search learned mappings..."
-            value={searchTerm}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-            size="small"
-            sx={{ 
-              '& .MuiOutlinedInput-root': {
-                fontSize: '0.875rem',
-                height: '40px'
-              }
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon className="h-4 w-4 text-gray-400" />
-                </InputAdornment>
-              ),
-              endAdornment: searchTerm && (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => onSearchChange('')}
-                    sx={{
-                      padding: '4px',
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                      }
-                    }}
-                    aria-label="Clear search"
-                  >
-                    <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
-        </div>
-        
-        <div className="flex items-center space-x-3 whitespace-nowrap">
-          {/* Bulk Selection Controls */}
-          {isBulkMode && (
-            <>
-              <Chip 
-                label={`${selectedMappings.size} selected`} 
-                size="small" 
-                color="primary"
-                variant="outlined"
-              />
+      {/* Search Bar */}
+      <div className="mb-4">
+        <TextField
+          fullWidth
+          placeholder="Search learned mappings..."
+          value={searchTerm}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
+          size="small"
+          sx={{ 
+            '& .MuiOutlinedInput-root': {
+              fontSize: '0.875rem',
+              height: '40px'
+            }
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon className="h-4 w-4 text-gray-400" />
+              </InputAdornment>
+            ),
+            endAdornment: searchTerm && (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => onSearchChange('')}
+                  sx={{
+                    padding: '4px',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                  aria-label="Clear search"
+                >
+                  <XMarkIcon className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+      </div>
+
+      {/* Bulk Action Bar - Icon-only toolbar (matching UnmappedSpecialties pattern) */}
+      {isBulkMode && (
+        <div className="mb-4 flex items-center justify-between">
+          {selectedMappings.size > 0 ? (
+            <div className="text-sm text-gray-600 font-medium">
+              {selectedMappings.size} selected
+            </div>
+          ) : (
+            <div></div>
+          )}
+          
+          <div className="flex items-center gap-2">
+            {/* Select All - Icon Button */}
+            <div className="relative group">
+              <button
+                onClick={handleSelectAll}
+                className={`p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  selectedMappings.size > 0
+                    ? 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-300 hover:border-indigo-400 focus:ring-indigo-500'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-300 hover:border-gray-400 focus:ring-gray-500'
+                }`}
+                aria-label={selectedMappings.size > 0 ? 'Deselect all' : 'Select all mappings'}
+              >
+                {selectedMappings.size > 0 ? (
+                  <RectangleStackIconSolid className="h-4 w-4" />
+                ) : (
+                  <RectangleStackIcon className="h-4 w-4" />
+                )}
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  {selectedMappings.size > 0 ? 'Deselect All' : 'Select All'}
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Delete Selected - Icon Button */}
+            <div className="relative group">
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedMappings.size === 0}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Delete selected mappings"
+                className="p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed text-red-500 hover:text-red-700 hover:bg-red-50 border-red-300 hover:border-red-400 focus:ring-red-500"
+                aria-label="Delete selected mappings"
               >
-                <TrashIcon className="h-4 w-4 mr-2" />
-                Delete Selected
+                <TrashIcon className="h-4 w-4" />
               </button>
-            </>
-          )}
-          
-          <button
-            onClick={handleToggleBulkMode}
-            className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              isBulkMode 
-                ? 'text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 border border-blue-600' 
-                : 'text-gray-700 bg-white hover:bg-gray-50 focus:ring-gray-500 border border-gray-300 hover:border-gray-400'
-            }`}
-            title={isBulkMode ? 'Exit bulk selection mode' : 'Enter bulk selection mode'}
-          >
-            {isBulkMode ? (
-              <>
-                <CheckIcon className="h-4 w-4 mr-2" />
-                Exit Bulk Mode
-              </>
-            ) : (
-              'Bulk Select'
-            )}
-          </button>
-        </div>
-      </div>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  Delete Selected
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
 
-      {/* Learned Mappings List - Now Grouped! */}
-      <div className="space-y-4">
-        {learnedMappingsList.map((mapping) => (
-          <div key={mapping.id} className="flex items-start space-x-3">
-            {/* Bulk Selection Checkbox */}
-            {isBulkMode && (
-              <Checkbox
-                checked={selectedMappings.has(mapping.id)}
-                onChange={() => handleSelectMapping(mapping.id)}
-                size="small"
-                sx={{ 
-                  padding: '4px',
-                  '&.Mui-checked': {
-                    color: '#3b82f6'
-                  }
-                }}
-              />
-            )}
-            
-            {/* Mapping Item */}
-            <div className="flex-1">
-              <MappedSpecialtyItem
-                mapping={mapping}
-                onDelete={() => {
-                  // Show single confirmation dialog for deleting all source specialties
-                  setConfirmationDialog({
-                    isOpen: true,
-                    title: 'Remove Learned Mapping',
-                    message: `Are you sure you want to remove the learned mapping for "${mapping.standardizedName}"? This will remove ${mapping.sourceSpecialties.length} mapping(s).`,
-                    onConfirm: () => {
-                      // Remove all source specialties for this standardized name
-                      // No need for individual confirmations - user already confirmed once
-                      mapping.sourceSpecialties.forEach(source => {
-                        onRemoveLearnedMapping(source.specialty);
-                      });
-                      setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
-                    }
-                  });
-                }}
-              />
+            {/* Exit Bulk Mode - Icon Button */}
+            <div className="relative group">
+              <button
+                onClick={handleToggleBulkMode}
+                className="p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-300 hover:border-gray-400 focus:ring-gray-500"
+                aria-label="Exit bulk selection mode"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                  Exit Bulk Mode
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Bulk Select Toggle Button - Icon-only when not in bulk mode */}
+      {!isBulkMode && (
+        <div className="mb-4 flex items-center justify-end">
+          <div className="relative group">
+            <button
+              onClick={handleToggleBulkMode}
+              className="p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-300 hover:border-gray-400 focus:ring-gray-500"
+              aria-label="Enter bulk selection mode"
+            >
+              <RectangleStackIcon className="h-4 w-4" />
+            </button>
+            {/* Tooltip */}
+            <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                Bulk Select
+                <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Learned Mappings List */}
+      <div className="space-y-4">
+        {learnedMappingsList.map((mapping) => (
+          <MappedSpecialtyItem
+            key={mapping.id}
+            mapping={mapping}
+            isSelected={selectedMappings.has(mapping.id)}
+            isBulkMode={isBulkMode}
+            onSelect={() => handleSelectMapping(mapping.id)}
+            onDelete={() => {
+              // Show single confirmation dialog for deleting all source specialties
+              setConfirmationDialog({
+                isOpen: true,
+                title: 'Remove Learned Mapping',
+                message: `Are you sure you want to remove the learned mapping for "${mapping.standardizedName}"? This will remove ${mapping.sourceSpecialties.length} mapping(s).`,
+                onConfirm: () => {
+                  // Remove all source specialties for this standardized name
+                  // No need for individual confirmations - user already confirmed once
+                  mapping.sourceSpecialties.forEach(source => {
+                    onRemoveLearnedMapping(source.specialty);
+                  });
+                  setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+                }
+              });
+            }}
+          />
         ))}
 
         {/* Empty State - Consistent enterprise pattern */}

@@ -87,7 +87,6 @@ const SpecialtyMapping = lazy(() => import('./features/mapping/components/Specia
 const ProviderTypeMapping = lazy(() => import('./features/mapping/components/ProviderTypeMapping').then(module => ({ default: module.ProviderTypeMapping })));
 const RegionMapping = lazy(() => import('./features/mapping/components/RegionMapping').then(module => ({ default: module.RegionMapping })));
 const VariableMapping = lazy(() => import('./features/mapping/components/VariableMapping').then(module => ({ default: module.VariableMapping })));
-const ColumnMapping = lazy(() => import('./components/ColumnMapping'));
 const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
@@ -298,11 +297,6 @@ const PageContent = () => {
             title: 'Physician Variable Mapping',
             description: 'Map compensation variables for physician data'
           };
-        case '/physician/column-mapping':
-          return {
-            title: 'Physician Column Mapping',
-            description: 'Map data columns for physician surveys'
-          };
       }
     }
 
@@ -332,11 +326,6 @@ const PageContent = () => {
           return {
             title: 'APP Variable Mapping',
             description: 'Map compensation variables for APP data'
-          };
-        case '/app/column-mapping':
-          return {
-            title: 'APP Column Mapping',
-            description: 'Map data columns for APP surveys'
           };
       }
     }
@@ -392,11 +381,6 @@ const PageContent = () => {
         return {
           title: 'Variable Mapping',
           description: 'Map compensation variables to standardized metrics'
-        };
-      case '/column-mapping':
-        return {
-          title: 'Column Mapping',
-          description: 'Map data columns to required fields'
         };
       case '/normalized-data':
         return {
@@ -472,7 +456,6 @@ const PageContent = () => {
               <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
               <Route path="/region-mapping" element={<RegionMapping />} />
               <Route path="/variable-mapping" element={<VariableMapping />} />
-              <Route path="/column-mapping" element={<ColumnMapping />} />
               <Route path="/benchmarking" element={<SurveyAnalytics />} />
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
@@ -485,7 +468,6 @@ const PageContent = () => {
               <Route path="/physician/provider-type-mapping" element={<ProviderTypeMapping />} />
               <Route path="/physician/region-mapping" element={<RegionMapping />} />
               <Route path="/physician/variable-mapping" element={<VariableMapping />} />
-              <Route path="/physician/column-mapping" element={<ColumnMapping />} />
               <Route path="/physician/analytics" element={<SurveyAnalytics />} />
               <Route path="/physician/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/physician/fair-market-value" element={<FairMarketValue />} />
@@ -496,7 +478,6 @@ const PageContent = () => {
               <Route path="/app/practice-setting-mapping" element={<ProviderTypeMapping />} />
               <Route path="/app/supervision-level-mapping" element={<ProviderTypeMapping />} />
               <Route path="/app/variable-mapping" element={<VariableMapping />} />
-              <Route path="/app/column-mapping" element={<ColumnMapping />} />
               <Route path="/app/analytics" element={<SurveyAnalytics />} />
               <Route path="/app/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/app/fair-market-value" element={<FairMarketValue />} />

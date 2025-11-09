@@ -1,16 +1,21 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Paper, Typography, IconButton, Tooltip } from '@mui/material';
 import { 
   PencilIcon as EditIcon, 
   TrashIcon as DeleteIcon 
 } from '@heroicons/react/24/outline';
+import { CheckIcon } from '@heroicons/react/24/solid';
 import { IVariableMapping } from '../types/mapping';
 import { getSurveySourceColor, formatMappingDate } from '../utils/mappingCalculations';
+import { formatFieldNameForDisplay } from '../../../shared/utils';
 
 interface MappedVariableItemProps {
   mapping: IVariableMapping;
   onEdit?: () => void;
   onDelete?: () => void;
+  isSelected?: boolean;
+  isBulkMode?: boolean;
+  onSelect?: () => void;
 }
 
 /**
@@ -20,16 +25,58 @@ interface MappedVariableItemProps {
  * @param onEdit - Optional callback when the mapping is edited
  * @param onDelete - Optional callback when the mapping is deleted
  */
-export const MappedVariableItem: React.FC<MappedVariableItemProps> = ({ 
+export const MappedVariableItem: React.FC<MappedVariableItemProps> = memo(({ 
   mapping, 
   onEdit, 
-  onDelete 
+  onDelete,
+  isSelected = false,
+  isBulkMode = false,
+  onSelect
 }) => {
+  // Handle card click for bulk selection
+  const handleCardClick = () => {
+    if (isBulkMode && onSelect) {
+      onSelect();
+    }
+  };
+
+  // Handle delete button click - prevent card selection
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) {
+      onDelete();
+    }
+  };
+
+  // Handle edit button click - prevent card selection
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onEdit) {
+      onEdit();
+    }
+  };
+
+  // Determine card styling based on selection state
+  const cardClassName = isBulkMode && isSelected
+    ? 'p-3 relative bg-indigo-50 border-2 border-indigo-300 ring-2 ring-indigo-100 shadow-md transition-all duration-200 cursor-pointer'
+    : isBulkMode
+    ? 'p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md cursor-pointer'
+    : 'p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md';
+
   return (
-    <Paper className="p-3 relative bg-gray-50 hover:bg-gray-100 transition-colors duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
+    <Paper 
+      className={cardClassName}
+      onClick={isBulkMode ? handleCardClick : undefined}
+    >
       {/* Header with standardized name and actions */}
-      <div className="flex justify-between items-center mb-2">
-        <div>
+      <div className="flex justify-between items-start mb-2">
+        <div className={`flex-1 ${isBulkMode && isSelected ? 'pl-7' : ''}`}>
+          {/* Purple checkmark for selected items in bulk mode */}
+          {isBulkMode && isSelected && (
+            <div className="absolute top-2 left-2 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center shadow-sm z-10">
+              <CheckIcon className="w-3 h-3 text-white" />
+            </div>
+          )}
           <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
             {mapping.standardizedName}
           </Typography>
@@ -37,19 +84,23 @@ export const MappedVariableItem: React.FC<MappedVariableItemProps> = ({
             Last updated: {formatMappingDate(mapping.updatedAt)}
           </Typography>
         </div>
-        <div className="flex space-x-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {onEdit && (
             <Tooltip title="Edit mapping">
-              <IconButton onClick={onEdit} size="small">
+              <IconButton onClick={handleEditClick} size="small" className="p-1">
                 <EditIcon className="h-4 w-4 text-gray-500" />
               </IconButton>
             </Tooltip>
           )}
           {onDelete && (
             <Tooltip title="Delete mapping">
-              <IconButton onClick={onDelete} size="small">
-                <DeleteIcon className="h-4 w-4 text-gray-500" />
-              </IconButton>
+              <button
+                onClick={handleDeleteClick}
+                className="p-1.5 rounded-full border border-gray-200 hover:border-gray-300 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-500"
+                aria-label="Delete mapping"
+              >
+                <DeleteIcon className="h-4 w-4" />
+              </button>
             </Tooltip>
           )}
         </div>
@@ -76,7 +127,7 @@ export const MappedVariableItem: React.FC<MappedVariableItemProps> = ({
               >
                 <div className="flex justify-between items-center gap-2">
                   <Typography className="font-medium text-sm truncate">
-                    {variable.originalVariableName}
+                    {formatFieldNameForDisplay(variable.originalVariableName)}
                   </Typography>
                   <Typography 
                     variant="caption" 
@@ -93,7 +144,9 @@ export const MappedVariableItem: React.FC<MappedVariableItemProps> = ({
       </div>
     </Paper>
   );
-};
+});
+
+MappedVariableItem.displayName = 'MappedVariableItem';
 
 
 

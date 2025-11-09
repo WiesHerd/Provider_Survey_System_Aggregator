@@ -16,6 +16,7 @@ import {
   CheckIcon
 } from '@heroicons/react/24/outline';
 import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
+import { formatFieldNameForDisplay } from '../../../shared/utils';
 
 interface LearnedVariableMappingsProps {
   learnedMappings: Record<string, string>;
@@ -286,7 +287,7 @@ export const LearnedVariableMappings: React.FC<LearnedVariableMappingsProps> = (
                         >
                           <div className="flex justify-between items-center gap-2">
                             <Typography className="font-medium text-sm truncate">
-                              {source.variable}
+                              {formatFieldNameForDisplay(source.variable)}
                             </Typography>
                             <Typography 
                               variant="caption" 

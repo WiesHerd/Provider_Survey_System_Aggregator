@@ -5,7 +5,6 @@ import { cn } from '../utils/cn';
 import {
   ArrowUpTrayIcon,
   TagIcon,
-  TableCellsIcon,
   PresentationChartLineIcon,
   MapIcon,
   ChartBarIcon,
@@ -79,14 +78,6 @@ const Dashboard: React.FC = () => {
           path: '/variable-mapping',
           color: 'bg-yellow-500',
           gradient: 'from-yellow-500 to-yellow-600',
-        },
-        {
-          title: 'Other Column Mappings',
-          description: 'Define column mappings and data transformations',
-          icon: TableCellsIcon,
-          path: '/column-mapping',
-          color: 'bg-indigo-500',
-          gradient: 'from-indigo-500 to-indigo-600',
         },
       ]
     },

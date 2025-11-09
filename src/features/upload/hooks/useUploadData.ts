@@ -38,6 +38,7 @@ import {
   validateSurveyForm,
   calculateUploadSummary
 } from '../utils/uploadCalculations';
+import { readCSVFile } from '../../../shared/utils';
 
 interface UseUploadDataReturn {
   // File state
@@ -458,8 +459,16 @@ export const useUploadData = (
         }));
         
         try {
-          // Parse file content
-          const fileContent = await file.text();
+          // Parse file content with encoding detection and normalization
+          const { text: fileContent, encoding, issues, normalized } = await readCSVFile(file);
+          
+          if (issues.length > 0) {
+            console.warn('📤 useUploadData: Encoding issues detected:', issues);
+          }
+          if (normalized) {
+            console.log('📤 useUploadData: Character normalization applied');
+          }
+          
           const stats = calculateSurveyStats(fileContent);
           
           // Upload to database

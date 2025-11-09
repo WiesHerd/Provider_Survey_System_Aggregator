@@ -439,3 +439,71 @@ export const formatProviderTypeForDisplay = (providerType: string): string => {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   }).join(' ');
 };
+
+/**
+ * Formats field/column names for display with proper capitalization
+ * Handles special characters like slashes, parentheses, hyphens, etc.
+ * 
+ * @param fieldName - Field name to format (e.g., "asa units", "bonus/incentive", "total encounters")
+ * @returns Formatted field name string
+ * 
+ * @example
+ * ```typescript
+ * formatFieldNameForDisplay('asa units'); // Returns "ASA Units"
+ * formatFieldNameForDisplay('bonus/incentive'); // Returns "Bonus/Incentive"
+ * formatFieldNameForDisplay('total encounters'); // Returns "Total Encounters"
+ * formatFieldNameForDisplay('tcc per encounter'); // Returns "TCC Per Encounter"
+ * ```
+ */
+export const formatFieldNameForDisplay = (fieldName: string): string => {
+  if (!fieldName || typeof fieldName !== 'string') {
+    return String(fieldName || '').trim();
+  }
+  
+  // Common acronyms that should remain uppercase
+  const acronyms = new Set(['ASA', 'TCC', 'RVU', 'RVUs', 'wRVU', 'wRVUs', 'CF', 'PTO', 'OB', 'GI', 'ER', 'ED', 'ICU', 'ID']);
+  
+  // Split into words and delimiters, preserving the delimiters
+  const parts: string[] = [];
+  let currentWord = '';
+  
+  for (let i = 0; i < fieldName.length; i++) {
+    const char = fieldName[i];
+    // Check if character is a delimiter (space, slash, hyphen, parentheses, underscore)
+    if (/\s|\/|\-|\(|\)|_/.test(char)) {
+      if (currentWord) {
+        parts.push(currentWord);
+        currentWord = '';
+      }
+      parts.push(char);
+    } else {
+      currentWord += char;
+    }
+  }
+  if (currentWord) {
+    parts.push(currentWord);
+  }
+  
+  // Format each word part
+  return parts.map(part => {
+    // If it's a delimiter (single character that matches delimiter pattern), keep it as is
+    if (part.length === 1 && /\s|\/|\-|\(|\)|_/.test(part)) {
+      return part;
+    }
+    
+    // If it's empty, skip it
+    if (!part.trim()) {
+      return part;
+    }
+    
+    const upperPart = part.toUpperCase();
+    
+    // Check if it's a known acronym
+    if (acronyms.has(upperPart)) {
+      return upperPart;
+    }
+    
+    // Capitalize first letter, lowercase the rest
+    return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+  }).join('');
+};

@@ -42,6 +42,8 @@ export interface SpecialtyDropdownProps {
   disabled?: boolean;
   /** Whether the dropdown is loading */
   loading?: boolean;
+  /** Error message to display (user-friendly, non-technical) */
+  error?: string | null;
   /** Whether to use advanced search (flexible word matching) */
   useAdvancedSearch?: boolean;
   /** Additional CSS classes */
@@ -72,6 +74,7 @@ export const SpecialtyDropdown: React.FC<SpecialtyDropdownProps> = memo(({
   placeholder,
   disabled = false,
   loading = false,
+  error = null,
   useAdvancedSearch = false,
   className = '',
   size = 'small'
@@ -245,7 +248,7 @@ export const SpecialtyDropdown: React.FC<SpecialtyDropdownProps> = memo(({
           renderGroup={renderGroup}
           groupBy={groupBy}
           loading={loading}
-          disabled={disabled}
+          disabled={disabled || loading} // ENTERPRISE: Disable input while loading to prevent empty dropdown
           filterOptions={filterOptions}
           isOptionEqualToValue={(option: SpecialtyOption, value: SpecialtyOption) => {
             return option.name === value.name;
@@ -310,19 +313,21 @@ export const SpecialtyDropdown: React.FC<SpecialtyDropdownProps> = memo(({
               label={label}
               placeholder={placeholder || `Search ${label.toLowerCase()}...`}
               size={size}
+              error={!!error}
+              helperText={error || (allOptions.length === 0 && !loading ? 'No specialties available' : undefined)}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   backgroundColor: 'white',
                   borderRadius: '8px',
                   height: size === 'small' ? '40px' : '56px',
-                  border: '1px solid #d1d5db !important',
+                  border: error ? '1px solid #ef4444 !important' : '1px solid #d1d5db !important',
                   '&:hover': { 
-                    borderColor: '#9ca3af !important',
+                    borderColor: error ? '#dc2626 !important' : '#9ca3af !important',
                     borderWidth: '1px !important'
                   },
                   '&.Mui-focused': { 
                     boxShadow: 'none', 
-                    borderColor: '#3b82f6 !important',
+                    borderColor: error ? '#dc2626 !important' : '#3b82f6 !important',
                     borderWidth: '1px !important'
                   },
                   '& fieldset': {
@@ -331,7 +336,7 @@ export const SpecialtyDropdown: React.FC<SpecialtyDropdownProps> = memo(({
                 },
                 '& .MuiInputLabel-root': {
                   '&.Mui-focused': {
-                    color: '#3b82f6',
+                    color: error ? '#dc2626' : '#3b82f6',
                   },
                   '&.MuiInputLabel-shrink': {
                     transform: 'translate(14px, -9px) scale(0.75)',
@@ -339,13 +344,18 @@ export const SpecialtyDropdown: React.FC<SpecialtyDropdownProps> = memo(({
                     padding: '0 6px',
                     zIndex: 1,
                   }
+                },
+                '& .MuiFormHelperText-root': {
+                  marginTop: '4px',
+                  fontSize: '0.75rem',
+                  color: error ? '#dc2626' : '#6b7280'
                 }
               }}
             />
           )}
           clearOnBlur={false}
           blurOnSelect={true}
-          noOptionsText="No specialties found"
+          noOptionsText={error ? undefined : (allOptions.length === 0 && !loading ? 'No specialties available' : 'No specialties found')}
           loadingText="Loading specialties..."
         />
       </FormControl>

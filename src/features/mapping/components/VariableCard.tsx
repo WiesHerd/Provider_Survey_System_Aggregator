@@ -3,6 +3,7 @@ import { Paper, Typography } from '@mui/material';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import { VariableCardProps } from '../types/mapping';
 import { getSurveySourceColor } from '../utils/mappingCalculations';
+import { formatFieldNameForDisplay } from '../../../shared/utils';
 
 /**
  * VariableCard component for displaying individual unmapped variables
@@ -41,24 +42,10 @@ export const VariableCard: React.FC<VariableCardProps> = ({
         </div>
       )}
       
-      <div className="flex justify-between items-center">
-        <div className="flex-1">
-          <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-            {variable.name}
-          </Typography>
-          <Typography variant="caption" className="text-gray-500 text-xs">
-            Frequency: {variable.frequency}
-          </Typography>
-        </div>
-        <div className="ml-2">
-          <Typography 
-            variant="caption" 
-            style={{ color: getSurveySourceColor(variable.surveySource) }} 
-            className="text-xs font-medium whitespace-nowrap"
-          >
-            {variable.surveySource}
-          </Typography>
-        </div>
+      <div className="flex items-center">
+        <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
+          {formatFieldNameForDisplay(variable.name)}
+        </Typography>
       </div>
     </Paper>
   );
