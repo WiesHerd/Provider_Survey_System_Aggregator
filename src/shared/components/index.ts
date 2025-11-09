@@ -74,3 +74,6 @@ export {
 
 // Clear Filter Button - REUSABLE COMPONENT for all filter sections
 export { ClearFilterButton } from './ClearFilterButton';
+
+// Welcome Banner - First-time user guidance
+export { WelcomeBanner, isWelcomeBannerDismissed, resetWelcomeBanner } from './WelcomeBanner';

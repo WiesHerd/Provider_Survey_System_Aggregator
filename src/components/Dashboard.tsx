@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '../utils/cn';
@@ -15,6 +15,8 @@ import {
   ArrowsPointingOutIcon,
   AcademicCapIcon,
 } from '@heroicons/react/24/outline';
+import { WelcomeBanner, isWelcomeBannerDismissed } from '../shared/components/WelcomeBanner';
+import { useSurveyCount } from '../shared/hooks/useSurveyCount';
 
 interface WelcomeCard {
   title: string;
@@ -33,6 +35,20 @@ interface CardSection {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { hasSurveys, loading: surveysLoading } = useSurveyCount();
+  const [showBanner, setShowBanner] = useState(false);
+
+  // Check if banner should be shown
+  useEffect(() => {
+    if (!surveysLoading) {
+      const dismissed = isWelcomeBannerDismissed();
+      setShowBanner(!hasSurveys && !dismissed);
+    }
+  }, [hasSurveys, surveysLoading]);
+
+  const handleBannerDismiss = () => {
+    setShowBanner(false);
+  };
 
   const cardSections: CardSection[] = [
     {
@@ -215,6 +231,10 @@ const Dashboard: React.FC = () => {
            </div>
          </motion.div>
 
+        {/* Welcome Banner - Show only for first-time users */}
+        {showBanner && (
+          <WelcomeBanner onDismiss={handleBannerDismiss} />
+        )}
 
         {/* Sections */}
         <motion.div
@@ -258,10 +278,22 @@ const Dashboard: React.FC = () => {
                     return <div key="placeholder" className="hidden" />;
                   }
                   
+                  // Check if this is the "New Survey" card and banner is visible
+                  const isNewSurveyCard = card.title === 'New Survey';
+                  const shouldHighlight = isNewSurveyCard && showBanner;
+                  
                   return (
                   <motion.div
                     key={card.title}
                     variants={cardVariants}
+                    animate={shouldHighlight ? {
+                      scale: [1, 1.02, 1],
+                      transition: {
+                        duration: 2.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }
+                    } : {}}
                     whileHover={{ 
                       y: -4,
                       transition: { duration: 0.2 }
@@ -273,7 +305,12 @@ const Dashboard: React.FC = () => {
                       onClick={() => navigate(card.path)}
                       className="w-full h-full"
                     >
-                      <div className="relative h-full min-h-[160px] bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col">
+                      <div className={cn(
+                        "relative h-full min-h-[160px] bg-white rounded-xl border p-5 hover:shadow-md hover:border-gray-300 transition-all duration-200 flex flex-col",
+                        shouldHighlight 
+                          ? "border-indigo-400 shadow-md ring-2 ring-indigo-400/50" 
+                          : "border-gray-200"
+                      )}>
                         {/* Icon */}
                         <div className="mb-4">
                           <div 
