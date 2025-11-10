@@ -314,7 +314,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   </div>
                 </th>
                 <th 
-                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none border-r-2 border-gray-300" 
+                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none border-r border-gray-200" 
                   style={{ width: `${columnWidths.provider}px` }}
                   onClick={() => handleSort('providerType')}
                 >
@@ -359,7 +359,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   </th>
                 )}
                 <th 
-                  className={`px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none ${showAllPercentiles ? '' : 'border-r-2 border-gray-300'}`}
+                  className={`px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none ${showAllPercentiles ? '' : 'border-r border-gray-200'}`}
                   style={{ width: `${columnWidths.tcc_p50}px` }}
                   onClick={() => handleSort('tcc_p50')}
                 >
@@ -403,7 +403,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       </div>
                     </th>
                     <th 
-                      className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none border-r-2 border-gray-300" 
+                      className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none border-r border-gray-200" 
                       style={{ width: `${columnWidths.tcc_p90}px` }}
                       onClick={() => handleSort('tcc_p90')}
                     >
@@ -450,7 +450,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   </th>
                 )}
                 <th 
-                  className={`px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none ${showAllPercentiles ? '' : 'border-r-2 border-gray-300'}`}
+                  className={`px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none ${showAllPercentiles ? '' : 'border-r border-gray-200'}`}
                   style={{ width: `${columnWidths.wrvu_p50}px` }}
                   onClick={() => handleSort('wrvu_p50')}
                 >
@@ -494,7 +494,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       </div>
                     </th>
                     <th 
-                      className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none border-r-2 border-gray-300" 
+                      className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none border-r border-gray-200" 
                       style={{ width: `${columnWidths.wrvu_p90}px` }}
                       onClick={() => handleSort('wrvu_p90')}
                     >
@@ -541,7 +541,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   </th>
                 )}
                 <th 
-                  className={`px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none ${showAllPercentiles ? '' : 'border-r-2 border-gray-300'}`}
+                  className={`px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none ${showAllPercentiles ? '' : 'border-r border-gray-200'}`}
                   style={{ width: `${columnWidths.cf_p50}px` }}
                   onClick={() => handleSort('cf_p50')}
                 >
@@ -651,7 +651,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       {formatRegionForDisplay(row.geographicRegion)}
                     </div>
                   </td>
-                  <td className="px-2 py-3 text-sm text-gray-500 border-r-2 border-gray-300" style={{ width: `${columnWidths.provider}px` }}>
+                  <td className="px-2 py-3 text-sm text-gray-500 border-r border-gray-200" style={{ width: `${columnWidths.provider}px` }}>
                     <div className="truncate" title={row.providerType}>
                       {capitalizeWords(row.providerType || '')}
                     </div>
@@ -662,7 +662,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       {row.tcc_p25 ? parseFloat(row.tcc_p25.toString()).toLocaleString() : '***'}
                     </td>
                   )}
-                  <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r-2 border-gray-300'}`} style={{ width: `${columnWidths.tcc_p50}px` }}>
+                  <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r border-gray-200'}`} style={{ width: `${columnWidths.tcc_p50}px` }}>
                     {row.tcc_p50 ? parseFloat(row.tcc_p50.toString()).toLocaleString() : '***'}
                   </td>
                   {showAllPercentiles && (
@@ -670,7 +670,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.tcc_p75}px` }}>
                         {row.tcc_p75 ? parseFloat(row.tcc_p75.toString()).toLocaleString() : '***'}
                       </td>
-                      <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right border-r-2 border-gray-300" style={{ width: `${columnWidths.tcc_p90}px` }}>
+                      <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right border-r border-gray-200" style={{ width: `${columnWidths.tcc_p90}px` }}>
                         {row.tcc_p90 ? parseFloat(row.tcc_p90.toString()).toLocaleString() : '***'}
                       </td>
                     </>
@@ -681,7 +681,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       {row.wrvu_p25 ? parseFloat(row.wrvu_p25.toString()).toLocaleString() : '***'}
                     </td>
                   )}
-                  <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r-2 border-gray-300'}`} style={{ width: `${columnWidths.wrvu_p50}px` }}>
+                  <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r border-gray-200'}`} style={{ width: `${columnWidths.wrvu_p50}px` }}>
                     {row.wrvu_p50 ? parseFloat(row.wrvu_p50.toString()).toLocaleString() : '***'}
                   </td>
                   {showAllPercentiles && (
@@ -689,7 +689,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.wrvu_p75}px` }}>
                         {row.wrvu_p75 ? parseFloat(row.wrvu_p75.toString()).toLocaleString() : '***'}
                       </td>
-                      <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right border-r-2 border-gray-300" style={{ width: `${columnWidths.wrvu_p90}px` }}>
+                      <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right border-r border-gray-200" style={{ width: `${columnWidths.wrvu_p90}px` }}>
                         {row.wrvu_p90 ? parseFloat(row.wrvu_p90.toString()).toLocaleString() : '***'}
                       </td>
                     </>
@@ -700,7 +700,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       {row.cf_p25 ? parseFloat(row.cf_p25.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '***'}
                     </td>
                   )}
-                  <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r-2 border-gray-300'}`} style={{ width: `${columnWidths.cf_p50}px` }}>
+                  <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r border-gray-200'}`} style={{ width: `${columnWidths.cf_p50}px` }}>
                     {row.cf_p50 ? parseFloat(row.cf_p50.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '***'}
                   </td>
                   {showAllPercentiles && (
