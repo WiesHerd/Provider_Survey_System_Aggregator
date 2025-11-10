@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { useLocation } from 'react-router-dom';
 import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress } from '@mui/material';
 import DataPreview from './DataPreview';
@@ -166,6 +167,8 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 const SurveyUpload: React.FC = () => {
   const dataService = getDataService();
   const { currentYear } = useYear();
+  const location = useLocation();
+  const hasLoadedOnThisMount = useRef(false);
 
   // Use smooth progress for dynamic loading
   const { progress, startProgress, completeProgress } = useSmoothProgress({
@@ -293,18 +296,31 @@ const SurveyUpload: React.FC = () => {
   };
 
   // Load saved surveys on component mount
+  // ENTERPRISE FIX: Force refresh when navigating to upload screen to show latest surveys
   useEffect(() => {
+    // Reset mount flag when location changes (navigation to upload screen)
+    if (location.pathname === '/upload') {
+      hasLoadedOnThisMount.current = false;
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    // ENTERPRISE FIX: Force load on first mount or when navigating to upload screen
+    // This ensures surveys are always fresh when user navigates to the screen
+    const shouldForceLoad = !hasLoadedOnThisMount.current || location.pathname === '/upload';
+    
     // Skip loading if we just uploaded a survey to prevent overriding the state
-    if (justUploaded) {
+    // BUT: Still load if this is the first mount (shouldForceLoad)
+    if (justUploaded && !shouldForceLoad) {
       setJustUploaded(false);
       return;
     }
-
-    // Skip if we're currently uploading
-    if (isUploading) {
+    
+    // Skip if we're currently uploading (but allow first mount load)
+    if (isUploading && !shouldForceLoad) {
       return;
     }
-
+    
     const loadSurveys = async () => {
       try {
         setIsLoading(true);
@@ -411,11 +427,14 @@ const SurveyUpload: React.FC = () => {
         }
       } finally {
         setIsLoading(false);
+        hasLoadedOnThisMount.current = true;
       }
     };
 
+    // ENTERPRISE FIX: Always load surveys (early returns handle skip conditions)
+    // This ensures fresh data is shown immediately when navigating to upload screen
     loadSurveys();
-  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedSurvey]);
+  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedSurvey, location.pathname]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
