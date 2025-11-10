@@ -167,10 +167,10 @@ export const generateTCCChartHTML = (
 ): string => {
   const chartId = `tcc-chart-${Math.random().toString(36).substr(2, 9)}`;
   
-  // Calculate max value for y-axis with 30% padding to prevent label clipping
+  // Calculate max value for y-axis with 40% padding to prevent label clipping
   const values = [data.p25, data.p50, data.p75, data.p90];
   const maxValue = Math.max(...values);
-  const yAxisMax = Math.ceil(maxValue * 1.30);
+  const yAxisMax = Math.ceil(maxValue * 1.40);
   // Round to nearest 50K for cleaner tick marks
   const yAxisMaxRounded = Math.ceil(yAxisMax / 50000) * 50000;
   
@@ -236,12 +236,29 @@ export const generateTCCChartHTML = (
                   meta.data.forEach((bar, index) => {
                     const value = data.datasets[0].data[index];
                     const x = bar.x;
-                    const y = bar.y - 15;
+                    const chartArea = chart.chartArea;
+                    const barTop = bar.y;
+                    const barHeight = chartArea.bottom - barTop;
+                    const labelHeight = 20;
+                    const labelPadding = 8;
+                    
+                    // Position label: if bar is tall enough (>40px), place inside near top; otherwise place above
+                    let labelY;
+                    if (barHeight > 40) {
+                      // Place inside bar, 20px from top
+                      labelY = barTop + 20;
+                    } else {
+                      // Place above bar with padding
+                      labelY = barTop - labelPadding;
+                    }
+                    
+                    // Ensure label doesn't go above chart area
+                    const minY = chartArea.top + labelHeight / 2 + 2;
+                    labelY = Math.max(labelY, minY);
                     
                     // Draw label with background for better visibility
                     const labelText = '$' + (value / 1000).toFixed(0) + 'K';
                     ctx.save();
-                    ctx.fillStyle = '#ffffff';
                     ctx.font = 'bold 12px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -250,12 +267,18 @@ export const generateTCCChartHTML = (
                     const textHeight = 16;
                     const padding = 4;
                     
-                    // Draw background rectangle
-                    ctx.fillRect(x - textWidth / 2 - padding, y - textHeight / 2, textWidth + padding * 2, textHeight);
+                    // Draw background rectangle (white for visibility)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+                    
+                    // Draw border for better visibility
+                    ctx.strokeStyle = '#e5e7eb';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
                     
                     // Draw text
                     ctx.fillStyle = '#1f2937';
-                    ctx.fillText(labelText, x, y);
+                    ctx.fillText(labelText, x, labelY);
                     ctx.restore();
                   });
                 }
@@ -302,7 +325,7 @@ export const generateTCCChartHTML = (
                   },
                   layout: {
                     padding: {
-                      top: 60,
+                      top: 80,
                       bottom: 20,
                       left: 15,
                       right: 15
@@ -415,10 +438,10 @@ export const generateWRVUChartHTML = (
 ): string => {
   const chartId = `wrvu-chart-${Math.random().toString(36).substr(2, 9)}`;
   
-  // Calculate max value for y-axis with 30% padding to prevent label clipping
+  // Calculate max value for y-axis with 40% padding to prevent label clipping
   const values = [data.p25, data.p50, data.p75, data.p90];
   const maxValue = Math.max(...values);
-  const yAxisMax = Math.ceil(maxValue * 1.30);
+  const yAxisMax = Math.ceil(maxValue * 1.40);
   // Round to nearest 1000 for cleaner tick marks
   const yAxisMaxRounded = Math.ceil(yAxisMax / 1000) * 1000;
   
@@ -484,12 +507,29 @@ export const generateWRVUChartHTML = (
                   meta.data.forEach((bar, index) => {
                     const value = data.datasets[0].data[index];
                     const x = bar.x;
-                    const y = bar.y - 15;
+                    const chartArea = chart.chartArea;
+                    const barTop = bar.y;
+                    const barHeight = chartArea.bottom - barTop;
+                    const labelHeight = 20;
+                    const labelPadding = 8;
+                    
+                    // Position label: if bar is tall enough (>40px), place inside near top; otherwise place above
+                    let labelY;
+                    if (barHeight > 40) {
+                      // Place inside bar, 20px from top
+                      labelY = barTop + 20;
+                    } else {
+                      // Place above bar with padding
+                      labelY = barTop - labelPadding;
+                    }
+                    
+                    // Ensure label doesn't go above chart area
+                    const minY = chartArea.top + labelHeight / 2 + 2;
+                    labelY = Math.max(labelY, minY);
                     
                     // Draw label with background for better visibility
                     const labelText = value.toLocaleString(undefined, { maximumFractionDigits: 0 });
                     ctx.save();
-                    ctx.fillStyle = '#ffffff';
                     ctx.font = 'bold 12px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -498,12 +538,18 @@ export const generateWRVUChartHTML = (
                     const textHeight = 16;
                     const padding = 4;
                     
-                    // Draw background rectangle
-                    ctx.fillRect(x - textWidth / 2 - padding, y - textHeight / 2, textWidth + padding * 2, textHeight);
+                    // Draw background rectangle (white for visibility)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+                    
+                    // Draw border for better visibility
+                    ctx.strokeStyle = '#e5e7eb';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
                     
                     // Draw text
                     ctx.fillStyle = '#1f2937';
-                    ctx.fillText(labelText, x, y);
+                    ctx.fillText(labelText, x, labelY);
                     ctx.restore();
                   });
                 }
@@ -550,7 +596,7 @@ export const generateWRVUChartHTML = (
                   },
                   layout: {
                     padding: {
-                      top: 60,
+                      top: 80,
                       bottom: 20,
                       left: 15,
                       right: 15
@@ -663,10 +709,10 @@ export const generateCFChartHTML = (
 ): string => {
   const chartId = `cf-chart-${Math.random().toString(36).substr(2, 9)}`;
   
-  // Calculate max value for y-axis with 30% padding to prevent label clipping
+  // Calculate max value for y-axis with 40% padding to prevent label clipping
   const values = [data.p25, data.p50, data.p75, data.p90];
   const maxValue = Math.max(...values);
-  const yAxisMax = Math.ceil(maxValue * 1.30);
+  const yAxisMax = Math.ceil(maxValue * 1.40);
   // Round to nearest 5 for cleaner tick marks
   const yAxisMaxRounded = Math.ceil(yAxisMax / 5) * 5;
   
@@ -732,12 +778,29 @@ export const generateCFChartHTML = (
                   meta.data.forEach((bar, index) => {
                     const value = data.datasets[0].data[index];
                     const x = bar.x;
-                    const y = bar.y - 15;
+                    const chartArea = chart.chartArea;
+                    const barTop = bar.y;
+                    const barHeight = chartArea.bottom - barTop;
+                    const labelHeight = 20;
+                    const labelPadding = 8;
+                    
+                    // Position label: if bar is tall enough (>40px), place inside near top; otherwise place above
+                    let labelY;
+                    if (barHeight > 40) {
+                      // Place inside bar, 20px from top
+                      labelY = barTop + 20;
+                    } else {
+                      // Place above bar with padding
+                      labelY = barTop - labelPadding;
+                    }
+                    
+                    // Ensure label doesn't go above chart area
+                    const minY = chartArea.top + labelHeight / 2 + 2;
+                    labelY = Math.max(labelY, minY);
                     
                     // Draw label with background for better visibility
                     const labelText = '$' + value.toFixed(2);
                     ctx.save();
-                    ctx.fillStyle = '#ffffff';
                     ctx.font = 'bold 12px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -746,12 +809,18 @@ export const generateCFChartHTML = (
                     const textHeight = 16;
                     const padding = 4;
                     
-                    // Draw background rectangle
-                    ctx.fillRect(x - textWidth / 2 - padding, y - textHeight / 2, textWidth + padding * 2, textHeight);
+                    // Draw background rectangle (white for visibility)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+                    
+                    // Draw border for better visibility
+                    ctx.strokeStyle = '#e5e7eb';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
                     
                     // Draw text
                     ctx.fillStyle = '#1f2937';
-                    ctx.fillText(labelText, x, y);
+                    ctx.fillText(labelText, x, labelY);
                     ctx.restore();
                   });
                 }
@@ -798,7 +867,7 @@ export const generateCFChartHTML = (
                   },
                   layout: {
                     padding: {
-                      top: 60,
+                      top: 80,
                       bottom: 20,
                       left: 15,
                       right: 15
@@ -998,6 +1067,69 @@ export const generateBarChartHTML = (
                 return;
               }
               
+              // Register plugin for data labels
+              const dataLabelsPlugin = {
+                id: 'dataLabels-${chartId}',
+                afterDatasetsDraw: function(chart) {
+                  const ctx = chart.ctx;
+                  const data = chart.data;
+                  const meta = chart.getDatasetMeta(0);
+                  
+                  if (!meta || !meta.data) return;
+                  
+                  meta.data.forEach((bar, index) => {
+                    const value = data.datasets[0].data[index];
+                    const x = bar.x;
+                    const chartArea = chart.chartArea;
+                    const barTop = bar.y;
+                    const barHeight = chartArea.bottom - barTop;
+                    const labelHeight = 20;
+                    const labelPadding = 8;
+                    
+                    // Position label: if bar is tall enough (>40px), place inside near top; otherwise place above
+                    let labelY;
+                    if (barHeight > 40) {
+                      // Place inside bar, 20px from top
+                      labelY = barTop + 20;
+                    } else {
+                      // Place above bar with padding
+                      labelY = barTop - labelPadding;
+                    }
+                    
+                    // Ensure label doesn't go above chart area
+                    const minY = chartArea.top + labelHeight / 2 + 2;
+                    labelY = Math.max(labelY, minY);
+                    
+                    // Draw label with background for better visibility
+                    const labelText = '$' + (value / 1000).toFixed(0) + 'K';
+                    ctx.save();
+                    ctx.font = 'bold 12px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const textMetrics = ctx.measureText(labelText);
+                    const textWidth = textMetrics.width;
+                    const textHeight = 16;
+                    const padding = 4;
+                    
+                    // Draw background rectangle (white for visibility)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+                    
+                    // Draw border for better visibility
+                    ctx.strokeStyle = '#e5e7eb';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+                    
+                    // Draw text
+                    ctx.fillStyle = '#1f2937';
+                    ctx.fillText(labelText, x, labelY);
+                    ctx.restore();
+                  });
+                }
+              };
+              
+              Chart.register(dataLabelsPlugin);
+              
               chartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -1022,29 +1154,14 @@ export const generateBarChartHTML = (
                   },
                   layout: {
                     padding: {
-                      top: 60,
+                      top: 80,
                       bottom: 20,
                       left: 15,
                       right: 15
                     }
                   },
                   animation: {
-                    onComplete: function() {
-                      const ctx = this.ctx;
-                      const data = this.data;
-                      const meta = this.getDatasetMeta(0);
-                      
-                      meta.data.forEach((bar, index) => {
-                        const value = data.datasets[0].data[index];
-                        const x = bar.x;
-                        const y = bar.y - 5;
-                        
-                        ctx.fillStyle = '#1f2937';
-                        ctx.font = 'bold 11px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('$' + (value / 1000).toFixed(0) + 'K', x, y);
-                      });
-                    }
+                    duration: 0 // Disable animation for immediate rendering
                   },
                   scales: {
                     y: {

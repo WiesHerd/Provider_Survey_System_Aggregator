@@ -421,27 +421,42 @@ export const calculateBlendedMetricsNew = (
     blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
   }
 
-  // Helper function to check if a value is valid (not null, undefined, 0, or '***')
-  const isValidValue = (value: any): boolean => {
+  // Helper function to check if a value is valid (not null, undefined, 0, or missing data indicators)
+  // CRITICAL: Asterisks are converted to 0 during data normalization, so we must exclude 0 values
+  // for percentile calculations (0 is likely missing data, not actual zero compensation)
+  const isValidValue = (value: any, excludeZero: boolean = true): boolean => {
     if (value === null || value === undefined) return false;
-    if (value === '***' || value === '') return false;
-    if (typeof value === 'string' && value.trim() === '') return false;
-    if (typeof value === 'number' && (isNaN(value) || !isFinite(value))) return false;
+    if (typeof value === 'string') {
+      const str = String(value).trim().toUpperCase();
+      // Check for all missing data indicators (asterisks, ISD, N/A, etc.)
+      if (str === '*' || str === '**' || str === '***' || 
+          str === 'ISD' || str === 'N/A' || str === 'NA' ||
+          str === 'NULL' || str === 'UNDEFINED' || str === '' ||
+          str === '-' || str === '--' || str === '---') {
+        return false;
+      }
+    }
+    if (typeof value === 'number') {
+      if (isNaN(value) || !isFinite(value)) return false;
+      // Exclude 0 for percentile calculations (0 likely means missing data, not actual zero)
+      if (excludeZero && value === 0) return false;
+    }
     return true;
   };
 
   // Helper function to get CF value, deriving from TCC/wRVU if CF is missing
+  // CF cannot be 0, so always exclude zero values
   const getCFValue = (cf: any, tcc: any, wrvu: any): number | null => {
-    // If CF is valid, use it
-    if (isValidValue(cf)) {
+    // If CF is valid (and not 0), use it
+    if (isValidValue(cf, true)) { // excludeZero = true for CF
       const cfNum = typeof cf === 'string' ? parseFloat(cf) : cf;
       if (!isNaN(cfNum) && isFinite(cfNum) && cfNum > 0) {
         return cfNum;
       }
     }
     
-    // If CF is missing but TCC and wRVU are available, derive CF
-    if (isValidValue(tcc) && isValidValue(wrvu)) {
+    // If CF is missing but TCC and wRVU are available (and not 0), derive CF
+    if (isValidValue(tcc, true) && isValidValue(wrvu, true)) { // excludeZero = true
       const tccNum = typeof tcc === 'string' ? parseFloat(tcc) : tcc;
       const wrvuNum = typeof wrvu === 'string' ? parseFloat(wrvu) : wrvu;
       if (!isNaN(tccNum) && !isNaN(wrvuNum) && isFinite(tccNum) && isFinite(wrvuNum) && wrvuNum > 0) {
@@ -456,8 +471,8 @@ export const calculateBlendedMetricsNew = (
   const percentiles = ['p25', 'p50', 'p75', 'p90'] as const;
   
   percentiles.forEach(percentile => {
-    // TCC percentile - only include rows with valid TCC data
-    const tccRows = selectedData.filter(row => isValidValue(row[`tcc_${percentile}`]));
+    // TCC percentile - only include rows with valid TCC data (exclude 0 as it's likely missing data)
+    const tccRows = selectedData.filter(row => isValidValue(row[`tcc_${percentile}`], true));
     if (tccRows.length > 0) {
       const tccTotalWeight = tccRows.reduce((sum, row, idx) => {
         const originalIndex = selectedData.indexOf(row);
@@ -478,8 +493,8 @@ export const calculateBlendedMetricsNew = (
       }
     }
     
-    // wRVU percentile - only include rows with valid wRVU data
-    const wrvuRows = selectedData.filter(row => isValidValue(row[`wrvu_${percentile}`]));
+    // wRVU percentile - only include rows with valid wRVU data (exclude 0 as it's likely missing data)
+    const wrvuRows = selectedData.filter(row => isValidValue(row[`wrvu_${percentile}`], true));
     if (wrvuRows.length > 0) {
       const wrvuTotalWeight = wrvuRows.reduce((sum, row, idx) => {
         const originalIndex = selectedData.indexOf(row);
@@ -501,10 +516,15 @@ export const calculateBlendedMetricsNew = (
     }
     
     // CF percentile - only include rows with valid CF data (or derive from TCC/wRVU)
+    // CF cannot be 0, so always exclude zero values
     const cfRows = selectedData.filter(row => {
       const cf = row[`cf_${percentile}`];
       const tcc = row[`tcc_${percentile}`];
       const wrvu = row[`wrvu_${percentile}`];
+      // getCFValue already excludes 0, but ensure we're not including rows with missing TCC/wRVU
+      if (!isValidValue(tcc, true) || !isValidValue(wrvu, true)) {
+        return false; // Can't derive CF without both TCC and wRVU
+      }
       return getCFValue(cf, tcc, wrvu) !== null;
     });
     
