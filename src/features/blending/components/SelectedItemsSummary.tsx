@@ -6,43 +6,27 @@
  */
 
 import React from 'react';
-import { XMarkIcon, CheckCircleIcon, TrashIcon, ArrowPathIcon, FunnelIcon, Squares2X2Icon } from '@heroicons/react/24/outline';
+import { XMarkIcon, CheckCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 
 interface SelectedItemsSummaryProps {
   selectedRows: number[];
   filteredSurveyData: any[];
-  onClearAll: () => void;
-  onSelectAll: () => void;
   onRemoveItem: (index: number) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
-  onSelectBySurvey?: (survey: string) => void;
-  onSelectByYear?: (year: string) => void;
-  onSelectByRegion?: (region: string) => void;
-  availableSurveys?: string[];
-  availableYears?: string[];
-  availableRegions?: string[];
 }
 
 export const SelectedItemsSummary: React.FC<SelectedItemsSummaryProps> = ({
   selectedRows,
   filteredSurveyData,
-  onClearAll,
-  onSelectAll,
   onRemoveItem,
   onUndo,
   onRedo,
   canUndo = false,
-  canRedo = false,
-  onSelectBySurvey,
-  onSelectByYear,
-  onSelectByRegion,
-  availableSurveys = [],
-  availableYears = [],
-  availableRegions = []
+  canRedo = false
 }) => {
   if (selectedRows.length === 0) {
     return null;
@@ -116,7 +100,7 @@ export const SelectedItemsSummary: React.FC<SelectedItemsSummaryProps> = ({
           <div className="flex items-center space-x-2">
             {/* Undo/Redo */}
             {(canUndo || canRedo) && (
-              <div className="flex items-center space-x-1 border-r border-gray-200 pr-2 mr-2">
+              <div className="flex items-center space-x-1">
                 {canUndo && onUndo && (
                   <button
                     onClick={onUndo}
@@ -144,72 +128,6 @@ export const SelectedItemsSummary: React.FC<SelectedItemsSummaryProps> = ({
               </div>
             )}
 
-            {/* Bulk Selection Dropdown */}
-            {(availableSurveys.length > 0 || availableYears.length > 0 || availableRegions.length > 0) && (
-              <div className="relative group">
-                <button
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-300 transition-colors"
-                  title="Bulk selection options"
-                >
-                  <FunnelIcon className="w-3.5 h-3.5 mr-1.5" />
-                  Select by...
-                </button>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20">
-                  <div className="py-1">
-                    {availableSurveys.length > 0 && onSelectBySurvey && (
-                      <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase">
-                        Survey
-                      </div>
-                    )}
-                    {availableSurveys.slice(0, 5).map(survey => (
-                      <button
-                        key={survey}
-                        onClick={() => onSelectBySurvey?.(survey)}
-                        className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                      >
-                        {survey}
-                      </button>
-                    ))}
-                    {availableYears.length > 0 && onSelectByYear && (
-                      <>
-                        <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase border-t border-gray-100 mt-1">
-                          Year
-                        </div>
-                        {availableYears.slice(0, 5).map(year => (
-                          <button
-                            key={year}
-                            onClick={() => onSelectByYear?.(year)}
-                            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                          >
-                            {year}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Select All */}
-            <button
-              onClick={onSelectAll}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-300 transition-colors"
-              title="Select all visible items (Ctrl+A)"
-            >
-              <Squares2X2Icon className="w-3.5 h-3.5 mr-1.5" />
-              Select All
-            </button>
-
-            {/* Clear All */}
-            <button
-              onClick={onClearAll}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-xl border border-red-300 transition-colors"
-              title="Clear all selections (Esc)"
-            >
-              <TrashIcon className="w-3.5 h-3.5 mr-1.5" />
-              Clear All
-            </button>
           </div>
         </div>
       </div>

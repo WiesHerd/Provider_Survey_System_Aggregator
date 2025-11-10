@@ -12,6 +12,7 @@ import { useSelectionHistory } from '../hooks/useSelectionHistory';
 import { calculateBlendedMetricsNew } from '../utils/blendingCalculations';
 import { BlendingMethodSelector } from './BlendingMethodSelector';
 import { SelectedItemsSummary } from './SelectedItemsSummary';
+import { TableActionsBar } from './TableActionsBar';
 import { TemplateManager } from './TemplateManager';
 import { SurveyDataFilters } from './SurveyDataFilters';
 import { SurveyDataTable } from './SurveyDataTable';
@@ -543,22 +544,15 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           filteredSurveyData={filteredSurveyData}
         />
 
-        {/* Selected Items Summary - Sticky */}
+        {/* Selected Items Summary - Sticky (shows selection info only) */}
         <SelectedItemsSummary
           selectedRows={selectedDataRows}
           filteredSurveyData={filteredSurveyData}
-          onClearAll={handleClearAll}
-          onSelectAll={handleSelectAll}
           onRemoveItem={handleRemoveItem}
           onUndo={canUndo ? undo : undefined}
           onRedo={canRedo ? redo : undefined}
           canUndo={canUndo}
           canRedo={canRedo}
-          onSelectBySurvey={handleSelectBySurvey}
-          onSelectByYear={handleSelectByYear}
-          availableSurveys={filterOptions.surveys}
-          availableYears={filterOptions.years}
-          availableRegions={filterOptions.regions}
         />
         
         {/* Survey Data Browser */}
@@ -598,6 +592,18 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                 onSpecialtySearchChange={handleSpecialtySearchChange}
                 onClearFilters={resetFilters}
                 filterOptions={filterOptions}
+              />
+
+              {/* Table Actions Bar - Directly above table for immediate feedback */}
+              <TableActionsBar
+                onSelectAll={handleSelectAll}
+                onClearAll={handleClearAll}
+                onSelectBySurvey={handleSelectBySurvey}
+                onSelectByYear={handleSelectByYear}
+                availableSurveys={filterOptions.surveys}
+                availableYears={filterOptions.years}
+                selectedCount={selectedDataRows.length}
+                totalCount={filteredSurveyData.length}
               />
 
               {/* Data Table */}
