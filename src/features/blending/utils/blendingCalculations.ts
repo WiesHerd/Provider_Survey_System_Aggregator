@@ -424,23 +424,46 @@ export const calculateBlendedMetricsNew = (
   // Helper function to check if a value is valid (not null, undefined, 0, or missing data indicators)
   // CRITICAL: Asterisks are converted to 0 during data normalization, so we must exclude 0 values
   // for percentile calculations (0 is likely missing data, not actual zero compensation)
+  // Also check for asterisk strings BEFORE parsing to ensure they're excluded
   const isValidValue = (value: any, excludeZero: boolean = true): boolean => {
     if (value === null || value === undefined) return false;
+    
+    // First check if it's a string with missing data indicators (BEFORE any parsing)
     if (typeof value === 'string') {
-      const str = String(value).trim().toUpperCase();
+      const str = String(value).trim();
       // Check for all missing data indicators (asterisks, ISD, N/A, etc.)
+      // Check both original case and uppercase for robustness
+      const strUpper = str.toUpperCase();
       if (str === '*' || str === '**' || str === '***' || 
           str === 'ISD' || str === 'N/A' || str === 'NA' ||
           str === 'NULL' || str === 'UNDEFINED' || str === '' ||
-          str === '-' || str === '--' || str === '---') {
+          str === '-' || str === '--' || str === '---' ||
+          strUpper === 'ISD' || strUpper === 'N/A' || strUpper === 'NA' ||
+          strUpper === 'NULL' || strUpper === 'UNDEFINED') {
         return false;
       }
+      
+      // Try to parse the string - if it's not a valid number, exclude it
+      const parsed = parseFloat(str.replace(/[,$]/g, ''));
+      if (isNaN(parsed) || !isFinite(parsed)) {
+        return false;
+      }
+      
+      // If excludeZero is true and parsed value is 0, exclude it (likely missing data)
+      if (excludeZero && parsed === 0) {
+        return false;
+      }
+      
+      return true;
     }
+    
+    // For numbers, check if valid and exclude 0 if requested
     if (typeof value === 'number') {
       if (isNaN(value) || !isFinite(value)) return false;
       // Exclude 0 for percentile calculations (0 likely means missing data, not actual zero)
       if (excludeZero && value === 0) return false;
     }
+    
     return true;
   };
 
@@ -483,10 +506,18 @@ export const calculateBlendedMetricsNew = (
         tccRows.forEach(row => {
           const originalIndex = selectedData.indexOf(row);
           const normalizedWeight = (weights[originalIndex] || 0) / tccTotalWeight;
-          const value = typeof row[`tcc_${percentile}`] === 'string' 
-            ? parseFloat(row[`tcc_${percentile}`]) 
-            : row[`tcc_${percentile}`];
-          if (!isNaN(value) && isFinite(value)) {
+          const rawValue = row[`tcc_${percentile}`];
+          
+          // Double-check that value is valid before using (safety check)
+          if (!isValidValue(rawValue, true)) {
+            return; // Skip this row if value is invalid
+          }
+          
+          const value = typeof rawValue === 'string' 
+            ? parseFloat(rawValue.replace(/[,$]/g, '')) 
+            : rawValue;
+          
+          if (!isNaN(value) && isFinite(value) && value > 0) {
             blended[`tcc_${percentile}`] += value * normalizedWeight;
           }
         });
@@ -505,10 +536,18 @@ export const calculateBlendedMetricsNew = (
         wrvuRows.forEach(row => {
           const originalIndex = selectedData.indexOf(row);
           const normalizedWeight = (weights[originalIndex] || 0) / wrvuTotalWeight;
-          const value = typeof row[`wrvu_${percentile}`] === 'string' 
-            ? parseFloat(row[`wrvu_${percentile}`]) 
-            : row[`wrvu_${percentile}`];
-          if (!isNaN(value) && isFinite(value)) {
+          const rawValue = row[`wrvu_${percentile}`];
+          
+          // Double-check that value is valid before using (safety check)
+          if (!isValidValue(rawValue, true)) {
+            return; // Skip this row if value is invalid
+          }
+          
+          const value = typeof rawValue === 'string' 
+            ? parseFloat(rawValue.replace(/[,$]/g, '')) 
+            : rawValue;
+          
+          if (!isNaN(value) && isFinite(value) && value > 0) {
             blended[`wrvu_${percentile}`] += value * normalizedWeight;
           }
         });
