@@ -67,7 +67,7 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
           />
         )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       {/* Specialty Search */}
       <div>
         <TextField
