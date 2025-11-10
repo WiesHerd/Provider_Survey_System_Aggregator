@@ -207,8 +207,7 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
             </h2>
             <p className="text-sm text-gray-600 mt-1">
               {methodLabels[blendingMethod]}
-              {' • '}{metrics.specialties.slice(0, 3).join(', ')}
-              {metrics.specialties.length > 3 && ` +${metrics.specialties.length - 3} more`}
+              {' • '}{metrics.specialties.length} {metrics.specialties.length === 1 ? 'specialty' : 'specialties'}
               {' • '}{metrics.totalRecords.toLocaleString()} records
             </p>
           </div>
