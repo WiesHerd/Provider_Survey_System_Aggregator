@@ -175,8 +175,8 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 rounded-t-xl">
+    <div className="bg-white rounded-b-xl border border-gray-200 border-t-0 shadow-sm">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <h3 className="text-sm font-medium text-gray-900">

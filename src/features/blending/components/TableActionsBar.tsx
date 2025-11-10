@@ -65,7 +65,7 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
   };
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200 rounded-t-lg">
+    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200 rounded-t-xl">
       {/* Left: Selection count */}
       <div className="flex items-center space-x-3">
         <span className="text-sm font-medium text-gray-700">
