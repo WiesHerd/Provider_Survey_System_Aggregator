@@ -604,6 +604,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                 onRedo={canRedo ? redo : undefined}
                 canUndo={canUndo}
                 canRedo={canRedo}
+                selectedRows={selectedDataRows}
+                filteredSurveyData={filteredSurveyData}
               />
 
               {/* Data Table */}

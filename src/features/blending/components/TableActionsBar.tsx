@@ -5,8 +5,8 @@
  * for immediate visual feedback when selections are made
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { FunnelIcon, Squares2X2Icon, TrashIcon } from '@heroicons/react/24/outline';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { FunnelIcon, Squares2X2Icon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 interface TableActionsBarProps {
   onSelectAll: () => void;
@@ -21,6 +21,8 @@ interface TableActionsBarProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  selectedRows?: number[];
+  filteredSurveyData?: any[];
 }
 
 export const TableActionsBar: React.FC<TableActionsBarProps> = ({
@@ -35,10 +37,37 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
   onUndo,
   onRedo,
   canUndo = false,
-  canRedo = false
+  canRedo = false,
+  selectedRows = [],
+  filteredSurveyData = []
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Calculate which surveys and years are already represented in selected rows
+  const selectedSurveys = useMemo(() => {
+    if (!selectedRows.length || !filteredSurveyData.length) return new Set<string>();
+    const surveys = new Set<string>();
+    selectedRows.forEach(index => {
+      const row = filteredSurveyData[index];
+      if (row?.surveySource) {
+        surveys.add(row.surveySource);
+      }
+    });
+    return surveys;
+  }, [selectedRows, filteredSurveyData]);
+
+  const selectedYears = useMemo(() => {
+    if (!selectedRows.length || !filteredSurveyData.length) return new Set<string>();
+    const years = new Set<string>();
+    selectedRows.forEach(index => {
+      const row = filteredSurveyData[index];
+      if (row?.surveyYear) {
+        years.add(String(row.surveyYear));
+      }
+    });
+    return years;
+  }, [selectedRows, filteredSurveyData]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -133,15 +162,25 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
                       <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase border-b border-gray-100">
                         Survey
                       </div>
-                      {availableSurveys.slice(0, 8).map(survey => (
-                        <button
-                          key={survey}
-                          onClick={() => handleSelectBySurvey(survey)}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                        >
-                          {survey}
-                        </button>
-                      ))}
+                      {availableSurveys.slice(0, 8).map(survey => {
+                        const isSelected = selectedSurveys.has(survey);
+                        return (
+                          <button
+                            key={survey}
+                            onClick={() => handleSelectBySurvey(survey)}
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'
+                            }`}
+                          >
+                            <span>{survey}</span>
+                            {isSelected && (
+                              <CheckIcon className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </>
                   )}
                   {availableYears.length > 0 && onSelectByYear && (
@@ -149,15 +188,25 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
                       <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase border-t border-gray-100 border-b border-gray-100 mt-1">
                         Year
                       </div>
-                      {availableYears.slice(0, 8).map(year => (
-                        <button
-                          key={year}
-                          onClick={() => handleSelectByYear(year)}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                        >
-                          {year}
-                        </button>
-                      ))}
+                      {availableYears.slice(0, 8).map(year => {
+                        const isSelected = selectedYears.has(String(year));
+                        return (
+                          <button
+                            key={year}
+                            onClick={() => handleSelectByYear(year)}
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'
+                            }`}
+                          >
+                            <span>{year}</span>
+                            {isSelected && (
+                              <CheckIcon className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </>
                   )}
                 </div>
