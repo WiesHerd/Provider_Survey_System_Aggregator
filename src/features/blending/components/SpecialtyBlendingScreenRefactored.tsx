@@ -17,7 +17,6 @@ import { SurveyDataFilters } from './SurveyDataFilters';
 import { SurveyDataTable } from './SurveyDataTable';
 import { BlendedResultsPreview } from './BlendedResultsPreview';
 import { WorkflowProgress } from './WorkflowProgress';
-import { BlendingResults } from './BlendingResults';
 import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
@@ -48,8 +47,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   // Blend configuration state
   const [blendName, setBlendName] = useState('');
   const [blendDescription, setBlendDescription] = useState('');
-  const [showResults, setShowResults] = useState(false);
-  const [blendedResult, setBlendedResult] = useState<any>(null);
   const [isDataBrowserCollapsed, setIsDataBrowserCollapsed] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [isBlendCreated, setIsBlendCreated] = useState(false);
@@ -300,8 +297,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         createdAt: new Date()
       };
       
-      setBlendedResult(enhancedResult);
-      setShowResults(true);
       setIsBlendCreated(true); // Mark blend as created for workflow progress
       onBlendCreated?.(enhancedResult);
       toast({
@@ -521,15 +516,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
 
   const workflowStep = getCurrentWorkflowStep();
   
-  if (showResults && blendedResult) {
-    return (
-      <BlendingResults
-        result={blendedResult}
-        onBack={() => setShowResults(false)}
-      />
-    );
-  }
-  
   // Show loading state while data is being fetched
   if (isLoading) {
     return (
@@ -720,7 +706,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           metrics={blendedMetrics}
           blendingMethod={blendingMethod}
           selectedCount={selectedDataRows.length}
-          onCreateBlend={handleCreateBlend}
           selectedDataRows={selectedDataRows}
           filteredSurveyData={filteredSurveyData}
           customWeights={customWeights}

@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { formatNumber } from '../../../shared/utils/formatters';
-import { CheckCircleIcon, ExclamationTriangleIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import { useToast } from '../../../components/ui/use-toast';
 
@@ -33,8 +33,6 @@ interface BlendedResultsPreviewProps {
   metrics: BlendedMetrics | null;
   blendingMethod: 'weighted' | 'simple' | 'custom';
   selectedCount: number;
-  onCreateBlend: () => void;
-  isCreating?: boolean;
   selectedDataRows?: number[];
   filteredSurveyData?: any[];
   customWeights?: Record<number, number>;
@@ -44,8 +42,6 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
   metrics,
   blendingMethod,
   selectedCount,
-  onCreateBlend,
-  isCreating = false,
   selectedDataRows = [],
   filteredSurveyData = [],
   customWeights = {}
@@ -234,26 +230,6 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                 <>
                   <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                   Export to Excel
-                </>
-              )}
-            </button>
-            <button
-              onClick={onCreateBlend}
-              disabled={isCreating}
-              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <CheckCircleIcon className="w-4 h-4 mr-2" />
-                  Create Report
                 </>
               )}
             </button>
