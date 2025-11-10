@@ -58,7 +58,7 @@ export const WelcomeBanner: React.FC<WelcomeBannerProps> = ({ onDismiss }) => {
                   Welcome to <span className="text-indigo-600">Bench</span><span className="text-purple-600">Point</span>!
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  To get started, upload your first survey by clicking <strong className="text-gray-900">"New Survey"</strong> above.
+                  To get started, upload your first survey by clicking <strong className="text-gray-900">"New Survey"</strong> below.
                   This is the first step in standardizing your compensation data.
                 </p>
               </div>

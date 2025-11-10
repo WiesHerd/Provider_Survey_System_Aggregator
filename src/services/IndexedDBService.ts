@@ -22,6 +22,7 @@ interface Survey {
   // NEW: Data Category architecture fields
   dataCategory?: DataCategory; // What type of compensation data
   source?: string; // Just company name: 'MGMA', 'SullivanCotter', etc.
+  surveyLabel?: string; // Optional label to differentiate surveys (e.g., "Pediatrics", "Adult Medicine")
 }
 
 interface SurveyData {

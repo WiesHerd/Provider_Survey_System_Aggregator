@@ -14,8 +14,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
-  Alert,
   Button,
   IconButton,
   Tooltip,
@@ -143,166 +141,143 @@ export const ValidationPreviewTable: React.FC<ValidationPreviewTableProps> = mem
   }, [editableRows]);
   
   // Get row count info
-  const totalRows = displayRows.length;
+  const totalRows = rows.length;
   const previewRowCount = Math.min(maxPreviewRows, totalRows);
   const hasMoreRows = totalRows > maxPreviewRows;
 
+  // Don't render anything if there are no visible rows with issues
+  if (visibleRows.length === 0) {
+    return null;
+  }
+
   return (
     <Box sx={{ mt: 3 }}>
-      {/* Demo Mode Toggle - Always show when no file uploaded */}
-      {!validationResult && rows.length === 0 && (
-        <Alert severity="info" sx={{ borderRadius: '8px', mb: 2 }}>
-          <Typography variant="body2">
-            Upload a file to see the validation preview table with inline editing capabilities.
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Validation Summary Header */}
-      {validationResult && (
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        {validationSummary.rowsWithIssues > 0 && (
-          <Chip
-            label={`${validationSummary.rowsWithIssues} row${validationSummary.rowsWithIssues > 1 ? 's' : ''} with issues detected`}
-            color="warning"
-            size="small"
-            sx={{ borderRadius: '4px' }}
-          />
-        )}
-        {validationSummary.errorCount > 0 && (
-          <Chip
-            label={`${validationSummary.errorCount} error${validationSummary.errorCount > 1 ? 's' : ''}`}
-            color="error"
-            size="small"
-            sx={{ borderRadius: '4px' }}
-          />
-        )}
-        {validationSummary.warningCount > 0 && (
-          <Chip
-            label={`${validationSummary.warningCount} warning${validationSummary.warningCount > 1 ? 's' : ''}`}
-            color="warning"
-            size="small"
-            sx={{ borderRadius: '4px' }}
-          />
-        )}
-        {hasUnsavedChanges && (
-          <Chip
-            label={`${totalDeletions} deleted • ${totalEdits} edited`}
-            color="info"
-            size="small"
-            sx={{ borderRadius: '4px' }}
-          />
-        )}
-        {!hasUnsavedChanges && validationSummary.totalIssues === 0 && (
-          <Chip
-            label="No issues detected"
-            color="success"
-            size="small"
-            sx={{ borderRadius: '4px' }}
-          />
-        )}
-      </Box>
-      )}
-
-      {/* Info message */}
+      {/* Minimal Status Bar - Only show when there are issues */}
       {validationResult && validationSummary.rowsWithIssues > 0 && (
-        <Alert severity="info" sx={{ mb: 2, borderRadius: '8px' }}>
-          <Typography variant="body2">
-            <strong>Showing only rows with validation issues.</strong> Hover over red/yellow cells for validation details. Click cells to edit values.
+        <Box
+          sx={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            p: 1.5,
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Typography variant="body2" sx={{ color: '#374151', fontSize: '0.875rem' }}>
+            Showing {validationSummary.rowsWithIssues} row{validationSummary.rowsWithIssues > 1 ? 's' : ''} with validation issues. Hover over cells for details.
           </Typography>
-        </Alert>
-      )}
-      
-      {validationResult && validationSummary.rowsWithIssues === 0 && (
-        <Alert severity="success" sx={{ mb: 2, borderRadius: '8px' }}>
-          <Typography variant="body2">
-            ✅ All rows passed validation! No issues found.
-          </Typography>
-        </Alert>
+        </Box>
       )}
 
-      {/* Unsaved Changes Banner */}
+      {/* Unsaved Changes - Minimal style */}
       {hasUnsavedChanges && (
-        <Alert 
-          severity="warning" 
-          sx={{ mb: 2, borderRadius: '8px' }}
-          action={
-            <Button
-              size="small"
-              onClick={handleReset}
-              sx={{ borderRadius: '8px' }}
-            >
-              Reset
-            </Button>
-          }
+        <Box
+          sx={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            p: 1.5,
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
         >
-          <Typography variant="body2">
-            You have unsaved changes. Click 'Confirm Cleaned Data' to apply.
+          <Typography variant="body2" sx={{ color: '#374151', fontSize: '0.875rem' }}>
+            {totalDeletions} row{totalDeletions > 1 ? 's' : ''} deleted • {totalEdits} cell{totalEdits > 1 ? 's' : ''} edited. Click 'Confirm Cleaned Data' to apply.
           </Typography>
-        </Alert>
+          <Button
+            size="small"
+            onClick={handleReset}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              color: '#6b7280',
+              fontSize: '0.875rem',
+              '&:hover': { backgroundColor: '#f9fafb' }
+            }}
+          >
+            Reset
+          </Button>
+        </Box>
       )}
 
-      {/* Action Buttons */}
-      <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
-        <Button
-          variant="contained"
-          color="success"
-          startIcon={<CheckIcon style={{ width: 20, height: 20 }} />}
-          onClick={handleConfirm}
-          disabled={!hasUnsavedChanges || disabled || isConfirming}
-          sx={{ borderRadius: '8px' }}
-        >
-          {isConfirming ? 'Confirming...' : 'Confirm Cleaned Data'}
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowPathIcon style={{ width: 20, height: 20 }} />}
-          onClick={handleReset}
-          disabled={!hasUnsavedChanges || disabled}
-          sx={{ borderRadius: '8px' }}
-        >
-          Reset Changes
-        </Button>
-        <Button
-          variant="outlined"
-          color="primary"
-          startIcon={<PlusIcon style={{ width: 20, height: 20 }} />}
-          onClick={addRow}
-          disabled={disabled}
-          sx={{ borderRadius: '8px' }}
-        >
-          Add Row
-        </Button>
-        {hasMoreRows && (
-          <Typography variant="body2" color="text.secondary">
-            Showing first {previewRowCount} of {totalRows} rows
-          </Typography>
-        )}
-      </Box>
-
-      {/* Deleted Rows Section */}
-      {deletedRows.size > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <Alert 
-            severity="info" 
+      {/* Action Buttons - Only show when there are visible rows with issues */}
+      {visibleRows.length > 0 && (
+        <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<CheckIcon style={{ width: 20, height: 20 }} />}
+            onClick={handleConfirm}
+            disabled={!hasUnsavedChanges || disabled || isConfirming}
             sx={{ borderRadius: '8px' }}
-            action={
-              <Button
-                size="small"
-                onClick={() => {
-                  // Restore all deleted rows
-                  deletedRows.forEach(rowIndex => restoreRow(rowIndex));
-                }}
-                sx={{ borderRadius: '8px' }}
-              >
-                Restore All
-              </Button>
-            }
           >
-            <Typography variant="body2">
-              {deletedRows.size} row{deletedRows.size > 1 ? 's' : ''} deleted. Click restore to undo.
+            {isConfirming ? 'Confirming...' : 'Confirm Cleaned Data'}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowPathIcon style={{ width: 20, height: 20 }} />}
+            onClick={handleReset}
+            disabled={!hasUnsavedChanges || disabled}
+            sx={{ borderRadius: '8px' }}
+          >
+            Reset Changes
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<PlusIcon style={{ width: 20, height: 20 }} />}
+            onClick={addRow}
+            disabled={disabled}
+            sx={{ borderRadius: '8px' }}
+          >
+            Add Row
+          </Button>
+          {hasMoreRows && (
+            <Typography variant="body2" sx={{ color: '#6b7280' }}>
+              Showing first {previewRowCount} of {totalRows} rows
             </Typography>
-          </Alert>
+          )}
+        </Box>
+      )}
+
+      {/* Deleted Rows Section - Minimal style */}
+      {deletedRows.size > 0 && (
+        <Box
+          sx={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            p: 1.5,
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Typography variant="body2" sx={{ color: '#374151', fontSize: '0.875rem' }}>
+            {deletedRows.size} row{deletedRows.size > 1 ? 's' : ''} deleted. Click "Restore All" to undo.
+          </Typography>
+          <Button
+            size="small"
+            onClick={() => {
+              // Restore all deleted rows
+              deletedRows.forEach(rowIndex => restoreRow(rowIndex));
+            }}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              color: '#6b7280',
+              fontSize: '0.875rem',
+              '&:hover': { backgroundColor: '#f9fafb' }
+            }}
+          >
+            Restore All
+          </Button>
         </Box>
       )}
 
@@ -319,7 +294,7 @@ export const ValidationPreviewTable: React.FC<ValidationPreviewTableProps> = mem
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              {displayHeaders.map((header, index) => (
+              {headers.map((header: string, index: number) => (
                 <TableCell
                   key={index}
                   sx={{
@@ -362,7 +337,7 @@ export const ValidationPreviewTable: React.FC<ValidationPreviewTableProps> = mem
                   textDecoration: row.isDeleted ? 'line-through' : 'none'
                 }}
               >
-                {displayHeaders.map((header, colIndex) => {
+                {headers.map((header: string, colIndex: number) => {
                   const cellValue = row.data[colIndex];
                   const cellValidation = getCellValidation(row.index, colIndex);
                   
@@ -432,17 +407,6 @@ export const ValidationPreviewTable: React.FC<ValidationPreviewTableProps> = mem
                 </TableCell>
               </TableRow>
             ))}
-            {visibleRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={displayHeaders.length + 1} align="center" sx={{ py: 4 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {validationSummary.rowsWithIssues === 0
-                      ? '✅ No validation issues found - all rows passed validation!'
-                      : 'No rows with validation issues to display'}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </TableContainer>

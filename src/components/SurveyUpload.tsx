@@ -11,7 +11,6 @@ import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
-import { ColumnValidationDisplay } from '../features/upload';
 import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
 import { readCSVFile } from '../shared/utils';
@@ -187,6 +186,7 @@ const SurveyUpload: React.FC = () => {
   const [customSurveySource, setCustomSurveySource] = useState('');
   const [customSurveyName, setCustomSurveyName] = useState('');
   const [surveyYear, setSurveyYear] = useState(currentYear);
+  const [surveyLabel, setSurveyLabel] = useState(''); // Optional label to differentiate surveys (e.g., "Pediatrics", "Adult Medicine")
   
   // Update survey year when currentYear changes
   useEffect(() => {
@@ -460,6 +460,12 @@ const SurveyUpload: React.FC = () => {
         : undefined;
       const parseResult = await parseFile(file, selectedSheetName);
       
+      // Store parsed data so ValidationBanner can display errors
+      setParsedData({
+        headers: parseResult.headers,
+        rows: parseResult.rows
+      });
+      
       // Step 3: Run new three-tier validation
       const newValidationResult = validateAll(parseResult.headers, parseResult.rows);
       setValidationResult(newValidationResult);
@@ -529,6 +535,13 @@ const SurveyUpload: React.FC = () => {
         try {
           setIsValidating(true);
           const parseResult = await parseFile(file, selectedSheet);
+          
+          // Store parsed data
+          setParsedData({
+            headers: parseResult.headers,
+            rows: parseResult.rows
+          });
+          
           const newValidationResult = validateAll(parseResult.headers, parseResult.rows);
           setValidationResult(newValidationResult);
         } catch (error) {
@@ -561,6 +574,12 @@ const SurveyUpload: React.FC = () => {
       return [];  // Clear all files since we only handle one at a time
     });
     setSelectedSurvey(null);
+    setParsedData(null);
+    setCleanedData(null);
+    setValidationResult(null);
+    setColumnValidation(null);
+    setPreUploadValidation(null);
+    setDataValidation(null);
   };
 
   // NEW: Handle data category change
@@ -892,8 +911,9 @@ const SurveyUpload: React.FC = () => {
       : finalDataCategory;
     const surveyTypeName = `${finalSource} ${categoryDisplay}`;
     
-    // Generate survey name for display
-    const surveyName = `${finalSource} ${categoryDisplay} ${surveyYear}`;
+    // Generate survey name for display (include label if provided)
+    const labelSuffix = surveyLabel.trim() ? ` - ${surveyLabel.trim()}` : '';
+    const surveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
     
     const survey = {
       id: surveyId,
@@ -910,13 +930,16 @@ const SurveyUpload: React.FC = () => {
       specialtyCount: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
       dataPoints: parsedRows.length,
       colorAccent: '#6366F1',
+      // Store survey label in metadata for display
+      surveyLabel: surveyLabel.trim() || undefined,
       metadata: {
         totalRows: parsedRows.length,
         uniqueSpecialties: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
         uniqueProviderTypes: new Set(parsedRows.map(row => row.providerType || row['Provider Type']).filter(Boolean)).size,
         uniqueRegions: new Set(parsedRows.map(row => row.region || row.Region || row.geographicRegion).filter(Boolean)).size,
         detectedProviderTypes: detectedProviderTypes,
-        columnMappings: {}
+        columnMappings: {},
+        surveyLabel: surveyLabel.trim() || undefined
       }
     };
 
@@ -1145,6 +1168,7 @@ const SurveyUpload: React.FC = () => {
       setSurveySource('');
       setSurveyYear('');
       setCustomSurveySource('');
+      setSurveyLabel(''); // Clear survey label
       setIsCustom(false);
 
       // Show success message
@@ -1427,146 +1451,9 @@ const SurveyUpload: React.FC = () => {
             
             {!isUploadSectionCollapsed && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-4 items-end">
-                {/* NEW: Data Category Selection (first dropdown) */}
-                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Data Category
-                  </label>
-                  <FormControl fullWidth>
-                    <Select
-                      value={dataCategory}
-                      onChange={handleDataCategoryChange}
-                      sx={{
-                        backgroundColor: 'white',
-                        height: '40px',
-                        '& .MuiOutlinedInput-root': {
-                          fontSize: '0.875rem',
-                          height: '40px',
-                          borderRadius: '8px',
-                        },
-                        '& .MuiSelect-select': {
-                          paddingTop: '8px',
-                          paddingBottom: '8px',
-                          textAlign: 'left',
-                        }
-                      }}
-                    >
-                      <MenuItem value="COMPENSATION">Compensation</MenuItem>
-                      <MenuItem value="CALL_PAY">Call Pay</MenuItem>
-                      <MenuItem value="MOONLIGHTING">Moonlighting</MenuItem>
-                      <MenuItem value="CUSTOM">Custom</MenuItem>
-                    </Select>
-                  </FormControl>
-                  {dataCategory === 'CUSTOM' && (
-                    <input
-                      type="text"
-                      value={customDataCategory}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDataCategory(e.target.value)}
-                      placeholder="Enter custom data category"
-                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        placeholder-gray-400 text-sm transition-colors duration-200"
-                      style={{ borderRadius: '8px' }}
-                    />
-                  )}
-                </div>
-
-                {/* Provider Type Selection */}
-                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Provider Type
-                  </label>
-                  <FormControl fullWidth>
-                    <Select
-                      value={providerType}
-                      onChange={handleProviderTypeChange}
-                      sx={{
-                        backgroundColor: 'white',
-                        height: '40px',
-                        '& .MuiOutlinedInput-root': {
-                          fontSize: '0.875rem',
-                          height: '40px',
-                          borderRadius: '8px',
-                        },
-                        '& .MuiSelect-select': {
-                          paddingTop: '8px',
-                          paddingBottom: '8px',
-                          textAlign: 'left',
-                        }
-                      }}
-                    >
-                      <MenuItem value="PHYSICIAN">Physician</MenuItem>
-                      <MenuItem value="APP">Advanced Practice Provider</MenuItem>
-                      <MenuItem value="CUSTOM">Custom</MenuItem>
-                    </Select>
-                  </FormControl>
-                  {providerType === 'CUSTOM' && (
-                    <input
-                      type="text"
-                      value={customProviderType}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProviderType(e.target.value)}
-                      placeholder="Enter custom provider type"
-                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        placeholder-gray-400 text-sm transition-colors duration-200"
-                      style={{ borderRadius: '8px' }}
-                    />
-                  )}
-                </div>
-
-                {/* CHANGED: Survey Source Selection (simplified - just company names) */}
-                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Survey Source
-                  </label>
-                  <FormControl fullWidth>
-                    <Select
-                      value={surveySource}
-                      onChange={handleSurveySourceChange}
-                      displayEmpty
-                      disabled={false}
-                      sx={{
-                        backgroundColor: 'white',
-                        height: '40px',
-                        '& .MuiOutlinedInput-root': {
-                          fontSize: '0.875rem',
-                          height: '40px',
-                          borderRadius: '8px',
-                        },
-                        '& .MuiSelect-select': {
-                          paddingTop: '8px',
-                          paddingBottom: '8px',
-                          textAlign: 'left',
-                        }
-                      }}
-                    >
-                      <MenuItem value="" disabled>
-                        Select a survey source
-                      </MenuItem>
-                      {availableSurveySources.map((source: string) => (
-                        <MenuItem key={source} value={source}>
-                          {source}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  {surveySource === 'Custom' && (
-                    <input
-                      type="text"
-                      value={customSurveySource}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveySource(e.target.value)}
-                      placeholder="Enter custom survey source"
-                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-lg
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                        placeholder-gray-400 text-sm transition-colors duration-200"
-                      style={{ borderRadius: '8px' }}
-                    />
-                  )}
-                </div>
-
+                <div className="flex flex-wrap gap-4 items-end">
                 {/* Survey Year Selection */}
-                <div className="col-span-1 sm:col-span-1 md:col-span-1 lg:col-span-2">
+                <div className="flex-1 min-w-[200px]">
                   <label htmlFor="surveyYear" className="block text-sm font-medium text-gray-700 mb-2">
                     Survey Year
                   </label>
@@ -1598,20 +1485,190 @@ const SurveyUpload: React.FC = () => {
                       />
                     )}
                     sx={{
+                      backgroundColor: 'white',
+                      '& .MuiAutocomplete-inputRoot': {
+                        height: '40px',
+                        fontSize: '0.875rem',
+                        borderRadius: '4px',
+                      },
                       '& .MuiAutocomplete-input': {
-                        fontSize: '14px'
+                        fontSize: '0.875rem',
+                        paddingTop: '8px',
+                        paddingBottom: '8px',
                       }
                     }}
                   />
                 </div>
 
-                {/* Action Buttons - Browse and Upload */}
-                <div className="col-span-2 md:col-span-4 flex items-center justify-end space-x-3">
+                {/* NEW: Data Category Selection (first dropdown) */}
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Data Category
+                  </label>
+                  <FormControl fullWidth>
+                    <Select
+                      value={dataCategory}
+                      onChange={handleDataCategoryChange}
+                      sx={{
+                        backgroundColor: 'white',
+                        height: '40px',
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px',
+                          borderRadius: '4px',
+                        },
+                        '& .MuiSelect-select': {
+                          paddingTop: '8px',
+                          paddingBottom: '8px',
+                          textAlign: 'left',
+                        }
+                      }}
+                    >
+                      <MenuItem value="COMPENSATION">Compensation</MenuItem>
+                      <MenuItem value="CALL_PAY">Call Pay</MenuItem>
+                      <MenuItem value="MOONLIGHTING">Moonlighting</MenuItem>
+                      <MenuItem value="CUSTOM">Custom</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {dataCategory === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={customDataCategory}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDataCategory(e.target.value)}
+                      placeholder="Enter custom data category"
+                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        placeholder-gray-400 text-sm transition-colors duration-200"
+                      style={{ borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+
+                {/* Provider Type Selection */}
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Provider Type
+                  </label>
+                  <FormControl fullWidth>
+                    <Select
+                      value={providerType}
+                      onChange={handleProviderTypeChange}
+                      sx={{
+                        backgroundColor: 'white',
+                        height: '40px',
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px',
+                          borderRadius: '4px',
+                        },
+                        '& .MuiSelect-select': {
+                          paddingTop: '8px',
+                          paddingBottom: '8px',
+                          textAlign: 'left',
+                        }
+                      }}
+                    >
+                      <MenuItem value="PHYSICIAN">Physician</MenuItem>
+                      <MenuItem value="APP">Advanced Practice Provider</MenuItem>
+                      <MenuItem value="CUSTOM">Custom</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {providerType === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      value={customProviderType}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProviderType(e.target.value)}
+                      placeholder="Enter custom provider type"
+                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        placeholder-gray-400 text-sm transition-colors duration-200"
+                      style={{ borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+
+                {/* CHANGED: Survey Source Selection (simplified - just company names) */}
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Survey Source
+                  </label>
+                  <FormControl fullWidth>
+                    <Select
+                      value={surveySource}
+                      onChange={handleSurveySourceChange}
+                      displayEmpty
+                      disabled={false}
+                      sx={{
+                        backgroundColor: 'white',
+                        height: '40px',
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.875rem',
+                          height: '40px',
+                          borderRadius: '4px',
+                        },
+                        '& .MuiSelect-select': {
+                          paddingTop: '8px',
+                          paddingBottom: '8px',
+                          textAlign: 'left',
+                        }
+                      }}
+                    >
+                      <MenuItem value="" disabled>
+                        Select a survey source
+                      </MenuItem>
+                      {availableSurveySources.map((source: string) => (
+                        <MenuItem key={source} value={source}>
+                          {source}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  {surveySource === 'Custom' && (
+                    <input
+                      type="text"
+                      value={customSurveySource}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSurveySource(e.target.value)}
+                      placeholder="Enter custom survey source"
+                      className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        placeholder-gray-400 text-sm transition-colors duration-200"
+                      style={{ borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+
+                {/* Optional Survey Label - to differentiate surveys with same source/category/provider/year */}
+                <div className="flex-1 min-w-[200px]">
+                  <label htmlFor="surveyLabel" className="block text-sm font-medium text-gray-700 mb-2">
+                    Survey Label
+                  </label>
+                  <TextField
+                    id="surveyLabel"
+                    size="small"
+                    fullWidth
+                    value={surveyLabel}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSurveyLabel(e.target.value)}
+                    placeholder="e.g., Pediatrics, Adult Medicine"
+                    sx={{
+                      backgroundColor: 'white',
+                      '& .MuiOutlinedInput-root': {
+                        fontSize: '0.875rem',
+                        height: '40px',
+                        borderRadius: '4px',
+                      }
+                    }}
+                  />
+                </div>
+                </div>
+
+                {/* Action Buttons - Browse and Upload (on new row below Survey Label) */}
+                <div className="flex items-center justify-end space-x-3 mt-4">
                   <div {...getRootProps()} className="flex-shrink-0">
                     <input {...getInputProps()} />
                     <button
                       type="button"
-                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center h-10"
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center h-10 min-w-[100px]"
+                      title="Browse for file"
                     >
                       <CloudArrowUpIcon className="h-5 w-5 mr-2" />
                       Browse
@@ -1646,17 +1703,37 @@ const SurveyUpload: React.FC = () => {
                       !surveySource ? 'Please select a survey source' :
                       (surveySource === 'Custom' && !customSurveySource.trim()) ? 'Please enter a custom survey source' :
                       (providerType === 'CUSTOM' && !customProviderType.trim()) ? 'Please enter a custom provider type' :
+                      isValidating ? 'Validating file...' :
+                      (validationResult && !validationResult.canProceed) ? 'Fix validation errors below to upload' :
+                      (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical')) ? 'Fix file structure errors to upload' :
+                      (columnValidation && !columnValidation.isValid) ? 'Fix column validation errors to upload' :
                       'Ready to upload'
                     }
-                    className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10 w-[140px]"
+                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10 min-w-[100px]"
                   >
                     <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
                     {isUploading ? 'Uploading...' : 'Upload'}
                   </button>
                 </div>
 
+                {/* Validation blocking message */}
+                {files.length > 0 && 
+                 surveyYear && 
+                 dataCategory && 
+                 surveySource && 
+                 !isUploading && 
+                 !isValidating &&
+                 (validationResult && !validationResult.canProceed || 
+                  (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical')) ||
+                  (columnValidation && !columnValidation.isValid)) && (
+                  <div className="text-xs text-red-600 text-center mt-2">
+                    Fix validation errors below to upload
+                  </div>
+                )}
+
                 {/* Upload progress is displayed in a modal overlay below */}
-              </div>
+              </>
+            )}
 
               {/* Selected File Preview - Modern Design */}
               {files.length > 0 && (
@@ -1725,77 +1802,59 @@ const SurveyUpload: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Validation Banner */}
-                  {validationResult && (
-                    <div className="mt-3">
+                  {/* Data Validation Section */}
+                  {validationResult && validationResult.totalIssues > 0 && (
+                    <div className="mt-6">
+                      <div className="mb-3">
+                        <h3 className="text-lg font-semibold text-gray-900">Data Validation</h3>
+                        <p className="text-sm text-gray-600 mt-0.5">
+                          Review and resolve the following issues before uploading
+                        </p>
+                      </div>
                       <ValidationBanner
                         validationResult={validationResult}
+                        headers={parsedData?.headers || []}
+                        rows={parsedData?.rows || []}
                         collapsible={true}
                       />
                     </div>
                   )}
 
-                  {/* Validation Preview Table */}
-                  <div className="mt-4">
-                    <ValidationPreviewTable
-                      headers={parsedData?.headers || []}
-                      rows={parsedData?.rows || []}
-                      validationResult={validationResult || null}
-                      onDataChange={(cleaned) => {
-                        setCleanedData(cleaned);
-                        // Re-validate cleaned data
-                        const newValidation = validateAll(cleaned.headers, cleaned.rows);
-                        setValidationResult(newValidation);
-                        // Update parsed data to cleaned data
-                        setParsedData(cleaned);
-                      }}
-                      onValidationChange={(newValidation) => {
-                        setValidationResult(newValidation);
-                      }}
-                      maxPreviewRows={20}
-                      disabled={isValidating || isUploading}
-                    />
-                  </div>
+                  {/* Validation Preview Table - Only show when there's data AND validation issues */}
+                  {parsedData && parsedData.rows.length > 0 && validationResult && validationResult.totalIssues > 0 && (
+                    <div className="mt-4">
+                      <ValidationPreviewTable
+                        headers={parsedData.headers}
+                        rows={parsedData.rows}
+                        validationResult={validationResult}
+                        onDataChange={(cleaned) => {
+                          setCleanedData(cleaned);
+                          // Re-validate cleaned data
+                          const newValidation = validateAll(cleaned.headers, cleaned.rows);
+                          setValidationResult(newValidation);
+                          // Update parsed data to cleaned data
+                          setParsedData(cleaned);
+                        }}
+                        onValidationChange={(newValidation) => {
+                          setValidationResult(newValidation);
+                        }}
+                        maxPreviewRows={20}
+                        disabled={isValidating || isUploading}
+                      />
+                    </div>
+                  )}
+
+                  {/* Validation Progress */}
+                  {isValidating && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Validating file...
+                      </Typography>
+                      <LinearProgress />
+                    </Box>
+                  )}
                 </div>
               )}
-
-
-              {/* Column Validation Display */}
-              {(columnValidation || preUploadValidation) && (
-                <ColumnValidationDisplay 
-                  validation={columnValidation || { isValid: false, detectedColumns: [], missingColumns: [], suggestions: [], errors: [] }} 
-                  fileName={files[0]?.name || ''}
-                  formatDetection={preUploadValidation?.formatDetection}
-                  expectedFormat={surveySource ? getExpectedFormat(surveySource === 'Custom' ? customSurveySource : surveySource) : undefined}
-                  surveySource={surveySource === 'Custom' ? customSurveySource : surveySource}
-                  preUploadErrors={preUploadValidation?.structure?.errors || []}
-                  preUploadWarnings={preUploadValidation?.structure?.warnings || []}
-                  preUploadInfo={preUploadValidation?.structure?.info || []}
-                  dataValidationErrors={dataValidation?.dataTypes?.errors || []}
-                  dataValidationWarnings={[
-                    ...(dataValidation?.dataTypes?.warnings || []),
-                    ...(dataValidation?.businessRules || [])
-                  ]}
-                  onDownloadSample={(format) => {
-                    const sampleFile = format === 'normalized' ? 'sample-normalized-format.csv' :
-                                      format === 'wide' ? 'sample-wide-format.csv' :
-                                      'sample-wide-variable-format.csv';
-                    window.open(`/${sampleFile}`, '_blank');
-                  }}
-                />
-              )}
-              
-              {/* Validation Progress */}
-              {isValidating && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Validating file...
-                  </Typography>
-                  <LinearProgress />
-                </Box>
-              )}
-            </>
-            )}
           </div>
 
           {/* Column Mapping Dialog */}

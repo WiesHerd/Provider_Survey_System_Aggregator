@@ -518,9 +518,97 @@ export const filterAnalyticsData = (data: AggregatedData[] | DynamicAggregatedDa
   }
 
   // Provider type filter
+  // ENTERPRISE FIX: Handle Call Pay surveys (CALL provider type) specially
+  // Call Pay surveys may have providerType='CALL' but should match 'Staff Physician'
+  // because Call Pay is physician compensation data
   if (filters.providerType && filters.providerType !== '' && filters.providerType !== 'All Types') {
+    const selectedProviderType = filters.providerType.toLowerCase();
+    const isStaffPhysicianFilter = selectedProviderType === 'staff physician' || 
+                                   selectedProviderType === 'physician';
+    
+    // Get normal provider type matches
     const providerMatches = providerTypeIndex.get(filters.providerType) || [];
-    filteredData = filteredData.filter(row => providerMatches.includes(row));
+    
+    // ENTERPRISE FIX: If filtering for "Staff Physician" or "Physician", also include Call Pay data
+    // BUT: Only include Call Pay rows that are actually for Staff Physicians, not APPs
+    // Call Pay surveys can contain both APP and Staff Physician data
+    if (isStaffPhysicianFilter) {
+      // CRITICAL FIX: Build matches from filteredData (not from index) to ensure reference equality
+      // Find normal provider type matches from filteredData (not from index)
+      const normalProviderMatches = filteredData.filter((row: any) => {
+        const rowProviderType = String((row as any).providerType || '').trim();
+        // Normalize for comparison
+        const normalizeForComparison = (str: string): string => {
+          if (!str) return '';
+          return str
+            .split(/\s+/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+        };
+        const normalizedRow = normalizeForComparison(rowProviderType);
+        const normalizedFilter = normalizeForComparison(filters.providerType);
+        return normalizedRow === normalizedFilter;
+      });
+      
+      // Find Call Pay rows that are for Staff Physicians (not APPs)
+      // Include rows where providerType is 'CALL', 'Staff Physician', 'Physician', etc.
+      // Exclude rows where providerType is "Advanced Practice Provider", "APP", etc.
+      const callPayRows = filteredData.filter((row: any) => {
+        const rowDataCategory = (row as any).dataCategory;
+        const surveySource = (row as any).surveySource || '';
+        const rowProviderType = String((row as any).providerType || '').toLowerCase();
+        
+        // Check if this is Call Pay data
+        const isCallPayData = rowDataCategory === 'CALL_PAY' || 
+                             (!rowDataCategory && surveySource.toLowerCase().includes('call pay'));
+        
+        if (!isCallPayData) return false;
+        
+        // CRITICAL: Exclude APP Call Pay rows when filtering for Staff Physician
+        // Only include Call Pay rows that are for Staff Physicians
+        // APP providers include: Advanced Practice Provider, APP, NP, PA, CRNA, etc.
+        const isAPPProvider = rowProviderType.includes('advanced practice provider') ||
+                             rowProviderType.includes('app') ||
+                             rowProviderType.includes('nurse practitioner') ||
+                             rowProviderType.includes('np') ||
+                             rowProviderType.includes('physician assistant') ||
+                             rowProviderType.includes('pa') ||
+                             rowProviderType.includes('crna');
+        
+        // Include if it's Call Pay data AND NOT an APP provider
+        // This will include Call Pay rows with providerType='CALL', 'Staff Physician', 'Physician', etc.
+        return !isAPPProvider;
+      });
+      
+      // Combine normal provider matches with Staff Physician Call Pay rows
+      // Use Set to deduplicate by reference
+      const allMatches = [...new Set([...normalProviderMatches, ...callPayRows])];
+      
+      console.log('🔍 filterAnalyticsData: Provider type filtering with Call Pay handling:', {
+        selectedProviderType: filters.providerType,
+        isStaffPhysicianFilter,
+        normalProviderMatches: normalProviderMatches.length,
+        callPayRowsForStaffPhysician: callPayRows.length,
+        totalMatches: allMatches.length,
+        callPaySampleRows: callPayRows.slice(0, 3).map((row: any) => ({
+          surveySource: (row as any).surveySource,
+          standardizedName: (row as any).standardizedName,
+          providerType: (row as any).providerType,
+          dataCategory: (row as any).dataCategory
+        }))
+      });
+      
+      filteredData = filteredData.filter(row => allMatches.includes(row));
+    } else {
+      // Normal provider type filtering (no special Call Pay handling)
+      filteredData = filteredData.filter(row => providerMatches.includes(row));
+      
+      console.log('🔍 filterAnalyticsData: Provider type filtering (normal):', {
+        selectedProviderType: filters.providerType,
+        providerMatches: providerMatches.length,
+        remainingRows: filteredData.length
+      });
+    }
   } else if (filters.providerType === '' || !filters.providerType) {
     // If provider type is empty or undefined, show all types (no filtering)
   }

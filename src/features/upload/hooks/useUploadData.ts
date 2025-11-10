@@ -393,7 +393,8 @@ export const useUploadData = (
         source: (survey as any).source,
         dataCategory: (survey as any).dataCategory,
         customDataCategory: (survey as any).customDataCategory,
-        customProviderType: (survey as any).customProviderType
+        customProviderType: (survey as any).customProviderType,
+        surveyLabel: (survey as any).surveyLabel || (survey as any).metadata?.surveyLabel
       }));
 
       console.log('✅ useUploadData: Processed surveys:', {

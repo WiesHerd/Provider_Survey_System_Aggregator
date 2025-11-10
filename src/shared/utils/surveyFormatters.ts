@@ -27,11 +27,16 @@ export const getSurveyDisplayName = (survey: any): string => {
       : providerType === 'CUSTOM' ? (survey.customProviderType || 'Custom')
       : '';
     
-    // Construct display name: "Source DataCategory - ProviderType"
+    // Include survey label if provided (e.g., "Pediatrics", "Adult Medicine")
+    const labelSuffix = (survey.surveyLabel || survey.metadata?.surveyLabel) 
+      ? ` - ${survey.surveyLabel || survey.metadata?.surveyLabel}` 
+      : '';
+    
+    // Construct display name: "Source DataCategory - ProviderType - Label"
     if (providerDisplay && categoryDisplay !== providerDisplay) {
-      return `${source} ${categoryDisplay} - ${providerDisplay}`;
+      return `${source} ${categoryDisplay} - ${providerDisplay}${labelSuffix}`;
     } else {
-      return `${source} ${categoryDisplay}`;
+      return `${source} ${categoryDisplay}${labelSuffix}`;
     }
   }
   
