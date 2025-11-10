@@ -296,18 +296,19 @@ const renderProfessionalTable = (
 };
 
 /**
- * Creates a Chart.js configuration for a bar chart
+ * Creates a Chart.js configuration for a bar chart with data labels above bars
  */
 const createBarChartConfig = (
   data: { p25: number; p50: number; p75: number; p90: number },
   title: string,
   color: string,
   yAxisLabel: string,
-  formatValue: (value: number) => string
+  formatValue: (value: number) => string,
+  formatLabel: (value: number) => string
 ): ChartConfiguration => {
   const values = [data.p25, data.p50, data.p75, data.p90];
   const maxValue = Math.max(...values);
-  const yAxisMax = Math.ceil(maxValue * 1.30);
+  const yAxisMax = Math.ceil(maxValue * 1.50); // Increased padding for labels
   
   // Round based on value magnitude
   let yAxisMaxRounded: number;
@@ -333,7 +334,9 @@ const createBarChartConfig = (
         barThickness: 35, // Thinner bars for compact layout
         maxBarThickness: 45,
         categoryPercentage: 0.7,
-        barPercentage: 0.85
+        barPercentage: 0.85,
+        // Store formatter in dataset for plugin access
+        _labelFormatter: formatLabel
       }]
     },
     options: {
@@ -350,7 +353,7 @@ const createBarChartConfig = (
       },
       layout: {
         padding: {
-          top: 30,
+          top: 50, // Increased for labels above bars
           bottom: 15,
           left: 10,
           right: 10
@@ -778,13 +781,14 @@ const addChartsToPage = async (
   pdf.text('wRVU', chart2Center, chartStartY - 0.02, { align: 'center' });
   pdf.text('CF', chart3Center, chartStartY - 0.02, { align: 'center' });
   
-  // Generate chart images - compact titles
+  // Generate chart images - compact titles with formatted labels
   const tccChartConfig = createBarChartConfig(
     data.metrics.tcc,
     'TCC',
     '#1E3A8A',
     'TCC ($)',
-    (v) => '$' + formatCurrency(v / 1000) + 'K'
+    (v) => '$' + formatCurrency(v / 1000) + 'K', // Y-axis format
+    (v) => '$' + Math.round(v / 1000) + 'K' // Label format (above bar)
   );
   
   const wrvuChartConfig = createBarChartConfig(
@@ -792,7 +796,8 @@ const addChartsToPage = async (
     'wRVU',
     '#0D9488',
     'wRVU',
-    (v) => formatNumber(v)
+    (v) => formatNumber(v), // Y-axis format
+    (v) => v >= 1000 ? (v / 1000).toFixed(1) + 'K' : v.toFixed(0) // Label format (above bar)
   );
   
   const cfChartConfig = createBarChartConfig(
@@ -800,7 +805,8 @@ const addChartsToPage = async (
     'CF',
     '#C2410C',
     'CF ($)',
-    (v) => '$' + formatCurrency(v, 2)
+    (v) => '$' + formatCurrency(v, 2), // Y-axis format
+    (v) => '$' + v.toFixed(2) // Label format (above bar)
   );
   
   // Render charts to images

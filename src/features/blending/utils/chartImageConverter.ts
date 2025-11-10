@@ -18,6 +18,60 @@ import {
 // Register Chart.js components (required for Chart.js to work)
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title);
 
+// Register data labels plugin for PDF charts
+ChartJS.register({
+  id: 'pdfDataLabels',
+  afterDatasetsDraw: function(chart: any) {
+    const ctx = chart.ctx;
+    const meta = chart.getDatasetMeta(0);
+    
+    if (!meta || !meta.data) return;
+    
+    // Get formatter from dataset (stored in _labelFormatter)
+    const dataset = chart.data.datasets[0];
+    const formatter = (dataset as any)?._labelFormatter;
+    if (!formatter || typeof formatter !== 'function') return;
+    
+    meta.data.forEach((bar: any, index: number) => {
+      const value = chart.data.datasets[0].data[index];
+      if (typeof value !== 'number') return;
+      
+      const x = bar.x;
+      const barTop = bar.y;
+      
+      // ALWAYS place label ABOVE the bar
+      const labelPadding = 10;
+      const labelY = barTop - labelPadding;
+      
+      // Format label using the formatter
+      const labelText = formatter(value);
+      
+      ctx.save();
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const textMetrics = ctx.measureText(labelText);
+      const textWidth = textMetrics.width;
+      const textHeight = 14;
+      const padding = 4;
+      
+      // Draw white background rectangle
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+      
+      // Draw border
+      ctx.strokeStyle = '#374151';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - textWidth / 2 - padding, labelY - textHeight / 2, textWidth + padding * 2, textHeight);
+      
+      // Draw text
+      ctx.fillStyle = '#111827';
+      ctx.fillText(labelText, x, labelY);
+      ctx.restore();
+    });
+  }
+});
+
 /**
  * Waits for a chart to fully render by checking if the canvas has non-white pixels
  * 
