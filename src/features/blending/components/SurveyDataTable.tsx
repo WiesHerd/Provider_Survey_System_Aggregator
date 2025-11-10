@@ -215,9 +215,28 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
       </div>
       
       <div className="bg-white rounded-b-xl">
+        <style>{`
+          .survey-data-table th,
+          .survey-data-table td {
+            border-right: 1px solid #e5e7eb !important;
+            border-bottom: 1px solid #e5e7eb !important;
+          }
+          .survey-data-table th:last-child,
+          .survey-data-table td:last-child {
+            border-right: none !important;
+          }
+          .survey-data-table tbody tr:last-child td {
+            border-bottom: none !important;
+          }
+        `}</style>
         <div className="overflow-x-auto max-w-full overflow-y-visible">
-          <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-            <thead className="bg-gray-50 border-b border-gray-200">
+          <table className="w-full border-collapse survey-data-table" style={{ tableLayout: 'fixed', borderSpacing: 0 }}>
+            <colgroup>
+              {Object.entries(columnWidths).map(([key]) => (
+                <col key={key} style={{ width: `${columnWidths[key as keyof typeof columnWidths]}px` }} />
+              ))}
+            </colgroup>
+            <thead className="bg-gray-50">
               <tr>
                 <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative" style={{ width: `${columnWidths.checkbox}px` }}>
                   <input
@@ -609,13 +628,13 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                 )}
               </tr>
             </thead>
-            <tbody className="border-t border-gray-200">
+            <tbody>
               {paginatedData.map((row, index) => {
                 const actualIndex = (currentPage - 1) * itemsPerPage + index;
                 return (
                 <tr 
                   key={index}
-                  className={`border-t border-gray-200 hover:bg-gray-50 cursor-pointer ${
+                  className={`hover:bg-gray-50 cursor-pointer ${
                     selectedRows.includes(actualIndex) ? 'bg-blue-50' : ''
                   }`}
                   onClick={() => handleRowClick(actualIndex)}
