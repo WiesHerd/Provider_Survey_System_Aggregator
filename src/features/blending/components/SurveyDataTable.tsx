@@ -71,6 +71,15 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
 
   const totalPages = Math.ceil(data.length / itemsPerPage);
 
+  // Calculate visible columns based on showAllPercentiles
+  const visibleColumns = useMemo(() => {
+    const baseColumns = ['checkbox', 'specialty', 'survey', 'year', 'region', 'provider'];
+    const percentileColumns = showAllPercentiles
+      ? ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90']
+      : ['tcc_p50', 'wrvu_p50', 'cf_p50'];
+    return [...baseColumns, ...percentileColumns];
+  }, [showAllPercentiles]);
+
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
@@ -224,11 +233,20 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
           }
         `}</style>
         <div className="overflow-x-auto max-w-full overflow-y-visible">
-          <table className="w-full border-collapse survey-data-table" style={{ tableLayout: 'fixed', borderSpacing: 0 }}>
+          <table className="w-full border-collapse survey-data-table" style={{ tableLayout: showAllPercentiles ? 'fixed' : 'auto', width: '100%', borderSpacing: 0 }}>
             <colgroup>
-              {Object.entries(columnWidths).map(([key]) => (
-                <col key={key} style={{ width: `${columnWidths[key as keyof typeof columnWidths]}px` }} />
-              ))}
+              {visibleColumns.map((key) => {
+                const colWidth = columnWidths[key as keyof typeof columnWidths] || 100;
+                return (
+                  <col 
+                    key={key} 
+                    style={{ 
+                      width: showAllPercentiles ? `${colWidth}px` : undefined,
+                      minWidth: `${colWidth}px`
+                    }} 
+                  />
+                );
+              })}
             </colgroup>
             <thead className="bg-gray-50 border-b-2 border-gray-200">
               <tr>
