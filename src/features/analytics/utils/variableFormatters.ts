@@ -506,10 +506,8 @@ export const validateVariableSelection = (selectedVariables: string[]): {
   isValid: boolean;
   error?: string;
 } => {
-  if (selectedVariables.length === 0) {
-    return { isValid: false, error: 'Please select at least one variable' };
-  }
-  
+  // ENTERPRISE FIX: Allow 0 variables - user can clear all selections to see base table
+  // The table can handle empty variable selection (shows base columns only)
   if (selectedVariables.length > 5) {
     return { isValid: false, error: 'Maximum 5 variables can be selected' };
   }

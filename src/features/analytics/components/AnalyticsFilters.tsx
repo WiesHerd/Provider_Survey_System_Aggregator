@@ -257,7 +257,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
             renderInput={(params: any) => (
               <TextField
                 {...params}
-                label="Display Variables (Select 1-5)"
+                label="Display Variables (Select 0-5)"
                 placeholder="Choose variables to display..."
                 size="small"
                 helperText={`${selectedVariables.length}/${MAX_SELECTED_VARIABLES} selected`}

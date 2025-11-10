@@ -305,23 +305,42 @@ export const calculateBlendedMetrics = (
     );
     
     if (dataRow) {
-      // TCC metrics
-      blended.tcc_p25 += (dataRow.tcc_p25 || 0) * weight;
-      blended.tcc_p50 += (dataRow.tcc_p50 || 0) * weight;
-      blended.tcc_p75 += (dataRow.tcc_p75 || 0) * weight;
-      blended.tcc_p90 += (dataRow.tcc_p90 || 0) * weight;
+      // ENTERPRISE FIX: Only include valid (non-zero, non-null) values in weighted average
+      // This prevents missing P90 data from dragging down the blended P90 value
       
-      // wRVU metrics
-      blended.wrvu_p25 += (dataRow.wrvu_p25 || 0) * weight;
-      blended.wrvu_p50 += (dataRow.wrvu_p50 || 0) * weight;
-      blended.wrvu_p75 += (dataRow.wrvu_p75 || 0) * weight;
-      blended.wrvu_p90 += (dataRow.wrvu_p90 || 0) * weight;
+      // Helper to check if value is valid
+      const isValidValue = (value: any, excludeZero: boolean = false): boolean => {
+        if (value === null || value === undefined || isNaN(value) || typeof value !== 'number') {
+          return false;
+        }
+        if (excludeZero && value === 0) {
+          return false;
+        }
+        return true;
+      };
       
-      // CF metrics
-      blended.cf_p25 += (dataRow.cf_p25 || 0) * weight;
-      blended.cf_p50 += (dataRow.cf_p50 || 0) * weight;
-      blended.cf_p75 += (dataRow.cf_p75 || 0) * weight;
-      blended.cf_p90 += (dataRow.cf_p90 || 0) * weight;
+      // Track valid values and weights for each percentile to recalculate weights
+      const percentiles = ['p25', 'p50', 'p75', 'p90'] as const;
+      
+      percentiles.forEach(percentile => {
+        // TCC metrics - allow 0 as valid
+        const tccKey = `tcc_${percentile}` as keyof typeof blended;
+        if (isValidValue(dataRow[`tcc_${percentile}` as keyof typeof dataRow])) {
+          (blended[tccKey] as number) += (dataRow[`tcc_${percentile}` as keyof typeof dataRow] as number) * weight;
+        }
+        
+        // wRVU metrics - allow 0 as valid
+        const wrvuKey = `wrvu_${percentile}` as keyof typeof blended;
+        if (isValidValue(dataRow[`wrvu_${percentile}` as keyof typeof dataRow])) {
+          (blended[wrvuKey] as number) += (dataRow[`wrvu_${percentile}` as keyof typeof dataRow] as number) * weight;
+        }
+        
+        // CF metrics - exclude 0 (CF cannot be 0)
+        const cfKey = `cf_${percentile}` as keyof typeof blended;
+        if (isValidValue(dataRow[`cf_${percentile}` as keyof typeof dataRow], true)) {
+          (blended[cfKey] as number) += (dataRow[`cf_${percentile}` as keyof typeof dataRow] as number) * weight;
+        }
+      });
       
       blended.totalRecords += dataRow.tcc_n_orgs || 0;
     }

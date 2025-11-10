@@ -285,13 +285,8 @@ export const CalculationDetails: React.FC<CalculationDetailsProps> = ({
                         <td className="px-3 py-2 text-right text-gray-900">
                           ${formatNumber(row.cf_p75, 2)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${row.cf_p90 < row.cf_p75 ? 'text-red-600 font-semibold' : 'text-gray-900'}`}>
+                        <td className="px-3 py-2 text-right text-gray-900">
                           ${formatNumber(row.cf_p90, 2)}
-                          {row.cf_p90 < row.cf_p75 && (
-                            <span className="ml-1 text-xs" title="P90 is lower than P75 - this is unusual">
-                              ⚠
-                            </span>
-                          )}
                         </td>
                       </tr>
                     );
@@ -300,10 +295,25 @@ export const CalculationDetails: React.FC<CalculationDetailsProps> = ({
               </table>
             </div>
             {sourceData.some(row => row.cf_p90 < row.cf_p75) && (
-              <p className="text-xs text-amber-700 mt-2 flex items-center">
-                <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
-                Some source rows have P90 &lt; P75. This may indicate data quality issues in the source survey.
-              </p>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900 font-medium mb-1">
+                  Percentile Ordering Notice
+                </p>
+                <p className="text-xs text-blue-800">
+                  Some source rows have P90 values smaller than P75 values. This typically occurs when 
+                  higher percentile data (P75, P90) is missing in the source survey. The blending calculation 
+                  excludes missing values, which can result in these ordering differences.
+                </p>
+                <ul className="text-xs text-blue-800 mt-2 ml-4 list-disc">
+                  {sourceData
+                    .filter(row => row.cf_p90 < row.cf_p75)
+                    .map((row, idx) => (
+                      <li key={idx}>
+                        {row.specialty}: P90 (${formatNumber(row.cf_p90, 2)}) &lt; P75 (${formatNumber(row.cf_p75, 2)})
+                      </li>
+                    ))}
+                </ul>
+              </div>
             )}
           </div>
 

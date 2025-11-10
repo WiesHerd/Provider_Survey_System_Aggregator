@@ -228,15 +228,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   }, [selectedDataRows, filteredSurveyData, blendingMethod, customWeights]);
 
   const handleCreateBlend = async () => {
-    if (!blendName.trim()) {
-      toast({
-        title: 'Blend Name Required',
-        description: 'Please enter a blend name to continue.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
     if (!blendedMetrics) {
       toast({
         title: 'No Data Selected',
@@ -244,6 +235,21 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         variant: 'destructive'
       });
       return;
+    }
+    
+    // ENTERPRISE FIX: Auto-generate blend name if not provided
+    // This ensures Create Report button always works
+    let finalBlendName = blendName.trim();
+    if (!finalBlendName) {
+      // Generate name from selected specialties
+      const specialtyNames = selectedDataRows
+        .map(index => filteredSurveyData[index]?.surveySpecialty)
+        .filter(Boolean)
+        .slice(0, 3);
+      finalBlendName = specialtyNames.length > 0
+        ? `${specialtyNames.join(' + ')}${selectedDataRows.length > 3 ? ` + ${selectedDataRows.length - 3} more` : ''} Blend`
+        : `Blended Report ${new Date().toLocaleDateString()}`;
+      setBlendName(finalBlendName); // Update state so it shows in the input
     }
     
     try {
@@ -268,7 +274,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       
       const enhancedResult = {
         id: `blend-${Date.now()}`,
-        blendName: blendName,
+        blendName: finalBlendName,
         specialties: selectedSpecialties,
         blendedData: {
           tcc_p25: blendedMetrics.tcc_p25,
@@ -300,7 +306,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       onBlendCreated?.(enhancedResult);
       toast({
         title: 'Blend Created Successfully',
-        description: `"${blendName}" has been created and is ready for analysis.`
+        description: `"${finalBlendName}" has been created and is ready for analysis.`
       });
     } catch (err) {
       console.error('Failed to create blend:', err);

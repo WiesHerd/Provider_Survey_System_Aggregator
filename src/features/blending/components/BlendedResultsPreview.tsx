@@ -54,15 +54,31 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
     custom: 'Custom weights applied'
   };
 
-  // Validate percentile ordering (must be before early return)
-  const hasPercentileIssues = useMemo(() => {
-    if (!metrics) return false;
-    return (
-      metrics.cf_p90 < metrics.cf_p75 ||
-      metrics.cf_p75 < metrics.cf_p50 ||
-      metrics.tcc_p90 < metrics.tcc_p75 ||
-      metrics.wrvu_p90 < metrics.wrvu_p75
-    );
+  // Validate percentile ordering and generate specific issue messages
+  const percentileIssues = useMemo(() => {
+    if (!metrics) return [];
+    
+    const issues: string[] = [];
+    
+    // Check CF percentile ordering
+    if (metrics.cf_p90 < metrics.cf_p75) {
+      issues.push(`Conversion Factor: P90 (${formatNumber(metrics.cf_p90, 2)}) is smaller than P75 (${formatNumber(metrics.cf_p75, 2)})`);
+    }
+    if (metrics.cf_p75 < metrics.cf_p50) {
+      issues.push(`Conversion Factor: P75 (${formatNumber(metrics.cf_p75, 2)}) is smaller than P50 (${formatNumber(metrics.cf_p50, 2)})`);
+    }
+    
+    // Check TCC percentile ordering
+    if (metrics.tcc_p90 < metrics.tcc_p75) {
+      issues.push(`Total Cash Compensation: P90 (${formatNumber(metrics.tcc_p90, 0)}) is smaller than P75 (${formatNumber(metrics.tcc_p75, 0)})`);
+    }
+    
+    // Check wRVU percentile ordering
+    if (metrics.wrvu_p90 < metrics.wrvu_p75) {
+      issues.push(`Work RVUs: P90 (${formatNumber(metrics.wrvu_p90, 0)}) is smaller than P75 (${formatNumber(metrics.wrvu_p75, 0)})`);
+    }
+    
+    return issues;
   }, [metrics]);
 
   // Early return after hooks
@@ -173,14 +189,11 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                   {formatNumber(metrics.wrvu_p90, 0)}
                 </td>
               </tr>
-              <tr className={`hover:bg-gray-50 border-t-2 border-gray-200 ${hasPercentileIssues ? 'bg-amber-50' : ''}`}>
+              <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
                     <div className="text-sm font-medium text-gray-900">Conversion Factor</div>
-                    {hasPercentileIssues && (
-                      <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 ml-2" title="Percentile ordering issue detected" />
-                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
@@ -189,21 +202,45 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
                   ${formatNumber(metrics.cf_p50, 2)}
                 </td>
-                <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${metrics.cf_p90 < metrics.cf_p75 ? 'text-red-600 font-semibold' : 'text-gray-900'}`}>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                   ${formatNumber(metrics.cf_p75, 2)}
                 </td>
-                <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${metrics.cf_p90 < metrics.cf_p75 ? 'text-red-600 font-semibold' : 'text-gray-900'}`}>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                   ${formatNumber(metrics.cf_p90, 2)}
-                  {metrics.cf_p90 < metrics.cf_p75 && (
-                    <span className="ml-1 text-xs" title="P90 is lower than P75 - this is unusual">
-                      ⚠
-                    </span>
-                  )}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        {/* Percentile Ordering Issues Notification */}
+        {percentileIssues.length > 0 && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <ExclamationTriangleIcon className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-blue-900 mb-2">
+                  Percentile Ordering Notice
+                </h3>
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p className="font-medium">The following percentile ordering issues were detected:</p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    {percentileIssues.map((issue, index) => (
+                      <li key={index}>{issue}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-blue-700">
+                    This typically occurs when some source data rows have missing values for higher percentiles (P75, P90). 
+                    The blending calculation excludes missing values, which can result in these ordering differences. 
+                    Please review the source data to verify the results.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

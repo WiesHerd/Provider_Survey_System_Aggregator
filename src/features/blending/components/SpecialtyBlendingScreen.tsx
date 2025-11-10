@@ -350,26 +350,80 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
       blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
     }
 
-    selectedData.forEach((row, index) => {
-      const weight = weights[index] || 0;
-      
+    // ENTERPRISE FIX: Handle missing/null/zero values properly
+    // Only include rows with valid data for each percentile to prevent ordering violations
+    // Missing values should be excluded from the weighted average, not treated as 0
+    
+    // Helper function to check if a value is valid (not null, undefined, or NaN)
+    // For CF, also exclude 0 as it's not a valid conversion factor
+    const isValidValue = (value: any, excludeZero: boolean = false): boolean => {
+      if (value === null || value === undefined || isNaN(value) || typeof value !== 'number') {
+        return false;
+      }
+      if (excludeZero && value === 0) {
+        return false;
+      }
+      return true;
+    };
+    
+    // Calculate each percentile separately, only including rows with valid data
+    const percentiles = ['p25', 'p50', 'p75', 'p90'] as const;
+    
+    percentiles.forEach(percentile => {
       // TCC metrics
-      blended.tcc_p25 += (row.tcc_p25 || 0) * weight;
-      blended.tcc_p50 += (row.tcc_p50 || 0) * weight;
-      blended.tcc_p75 += (row.tcc_p75 || 0) * weight;
-      blended.tcc_p90 += (row.tcc_p90 || 0) * weight;
+      const tccKey = `tcc_${percentile}` as keyof typeof blended;
+      const validTccRows = selectedData.filter((row, idx) => isValidValue(row[`tcc_${percentile}` as keyof typeof row]));
+      if (validTccRows.length > 0) {
+        const validTccWeights = validTccRows.map((row, idx) => {
+          const originalIndex = selectedData.indexOf(row);
+          return weights[originalIndex] || 0;
+        });
+        const totalTccWeight = validTccWeights.reduce((sum, w) => sum + w, 0);
+        if (totalTccWeight > 0) {
+          validTccRows.forEach((row, idx) => {
+            const originalIndex = selectedData.indexOf(row);
+            const normalizedWeight = (weights[originalIndex] || 0) / totalTccWeight;
+            (blended[tccKey] as number) += (row[`tcc_${percentile}` as keyof typeof row] as number) * normalizedWeight;
+          });
+        }
+      }
       
       // wRVU metrics
-      blended.wrvu_p25 += (row.wrvu_p25 || 0) * weight;
-      blended.wrvu_p50 += (row.wrvu_p50 || 0) * weight;
-      blended.wrvu_p75 += (row.wrvu_p75 || 0) * weight;
-      blended.wrvu_p90 += (row.wrvu_p90 || 0) * weight;
+      const wrvuKey = `wrvu_${percentile}` as keyof typeof blended;
+      const validWrvuRows = selectedData.filter((row, idx) => isValidValue(row[`wrvu_${percentile}` as keyof typeof row]));
+      if (validWrvuRows.length > 0) {
+        const validWrvuWeights = validWrvuRows.map((row, idx) => {
+          const originalIndex = selectedData.indexOf(row);
+          return weights[originalIndex] || 0;
+        });
+        const totalWrvuWeight = validWrvuWeights.reduce((sum, w) => sum + w, 0);
+        if (totalWrvuWeight > 0) {
+          validWrvuRows.forEach((row, idx) => {
+            const originalIndex = selectedData.indexOf(row);
+            const normalizedWeight = (weights[originalIndex] || 0) / totalWrvuWeight;
+            (blended[wrvuKey] as number) += (row[`wrvu_${percentile}` as keyof typeof row] as number) * normalizedWeight;
+          });
+        }
+      }
       
-      // CF metrics
-      blended.cf_p25 += (row.cf_p25 || 0) * weight;
-      blended.cf_p50 += (row.cf_p50 || 0) * weight;
-      blended.cf_p75 += (row.cf_p75 || 0) * weight;
-      blended.cf_p90 += (row.cf_p90 || 0) * weight;
+      // CF metrics - CRITICAL: Exclude missing values and 0 to prevent P90 < P75 violations
+      // CF cannot be 0, so exclude both missing values and zero values
+      const cfKey = `cf_${percentile}` as keyof typeof blended;
+      const validCfRows = selectedData.filter((row, idx) => isValidValue(row[`cf_${percentile}` as keyof typeof row], true));
+      if (validCfRows.length > 0) {
+        const validCfWeights = validCfRows.map((row, idx) => {
+          const originalIndex = selectedData.indexOf(row);
+          return weights[originalIndex] || 0;
+        });
+        const totalCfWeight = validCfWeights.reduce((sum, w) => sum + w, 0);
+        if (totalCfWeight > 0) {
+          validCfRows.forEach((row, idx) => {
+            const originalIndex = selectedData.indexOf(row);
+            const normalizedWeight = (weights[originalIndex] || 0) / totalCfWeight;
+            (blended[cfKey] as number) += (row[`cf_${percentile}` as keyof typeof row] as number) * normalizedWeight;
+          });
+        }
+      }
     });
 
     return blended;
