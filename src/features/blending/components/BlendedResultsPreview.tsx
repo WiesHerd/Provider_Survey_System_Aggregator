@@ -276,7 +276,7 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                   {formatNumber(metrics.tcc_p75, 0)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 border-r-2 border-gray-300">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                   {formatNumber(metrics.tcc_p90, 0)}
                 </td>
               </tr>
@@ -296,7 +296,7 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                   {formatNumber(metrics.wrvu_p75, 0)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 border-r-2 border-gray-300">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                   {formatNumber(metrics.wrvu_p90, 0)}
                 </td>
               </tr>
