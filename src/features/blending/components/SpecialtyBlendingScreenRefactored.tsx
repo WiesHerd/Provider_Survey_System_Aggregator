@@ -549,10 +549,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           selectedRows={selectedDataRows}
           filteredSurveyData={filteredSurveyData}
           onRemoveItem={handleRemoveItem}
-          onUndo={canUndo ? undo : undefined}
-          onRedo={canRedo ? redo : undefined}
-          canUndo={canUndo}
-          canRedo={canRedo}
         />
         
         {/* Survey Data Browser */}
@@ -604,6 +600,10 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                 availableYears={filterOptions.years}
                 selectedCount={selectedDataRows.length}
                 totalCount={filteredSurveyData.length}
+                onUndo={canUndo ? undo : undefined}
+                onRedo={canRedo ? redo : undefined}
+                canUndo={canUndo}
+                canRedo={canRedo}
               />
 
               {/* Data Table */}

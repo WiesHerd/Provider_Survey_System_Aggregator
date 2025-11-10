@@ -17,6 +17,10 @@ interface TableActionsBarProps {
   availableYears?: string[];
   selectedCount: number;
   totalCount: number;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export const TableActionsBar: React.FC<TableActionsBarProps> = ({
@@ -27,7 +31,11 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
   availableSurveys = [],
   availableYears = [],
   selectedCount,
-  totalCount
+  totalCount,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -76,12 +84,42 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
 
       {/* Right: Bulk Actions */}
       <div className="flex items-center space-x-2">
+        {/* Undo/Redo */}
+        {(canUndo || canRedo) && (
+          <div className="flex items-center space-x-1 border-r border-gray-300 pr-2 mr-2">
+            {canUndo && onUndo && (
+              <button
+                onClick={onUndo}
+                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </button>
+            )}
+            {canRedo && onRedo && (
+              <button
+                onClick={onRedo}
+                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Redo (Ctrl+Y)"
+                aria-label="Redo"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Bulk Selection Dropdown */}
         {(availableSurveys.length > 0 || availableYears.length > 0) && (
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-300 transition-colors shadow-sm"
+              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-xl border border-gray-300 transition-colors shadow-sm"
               title="Bulk selection options"
             >
               <FunnelIcon className="w-3.5 h-3.5 mr-1.5" />
@@ -131,7 +169,7 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
         {/* Select All */}
         <button
           onClick={onSelectAll}
-          className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-300 transition-colors shadow-sm"
+          className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-xl border border-gray-300 transition-colors shadow-sm"
           title="Select all visible items (Ctrl+A)"
         >
           <Squares2X2Icon className="w-3.5 h-3.5 mr-1.5" />
@@ -142,7 +180,7 @@ export const TableActionsBar: React.FC<TableActionsBarProps> = ({
         {selectedCount > 0 && (
           <button
             onClick={onClearAll}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-white hover:bg-red-50 rounded-lg border border-red-300 transition-colors shadow-sm"
+            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-white hover:bg-red-50 rounded-xl border border-red-300 transition-colors shadow-sm"
             title="Clear all selections (Esc)"
           >
             <TrashIcon className="w-3.5 h-3.5 mr-1.5" />
