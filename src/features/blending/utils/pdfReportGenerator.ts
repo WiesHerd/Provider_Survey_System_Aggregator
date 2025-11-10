@@ -335,9 +335,9 @@ const createBarChartConfig = (
         maxBarThickness: 45,
         categoryPercentage: 0.7,
         barPercentage: 0.85,
-        // Store formatter in dataset for plugin access
+        // Store formatter in dataset for plugin access (using type assertion for custom property)
         _labelFormatter: formatLabel
-      }]
+      } as any]
     },
     options: {
       responsive: true,
