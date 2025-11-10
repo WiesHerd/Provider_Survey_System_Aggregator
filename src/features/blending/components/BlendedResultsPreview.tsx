@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { formatNumber } from '../../../shared/utils/formatters';
+import { formatNumber, formatCurrency } from '../../../shared/utils/formatters';
 import { ExclamationTriangleIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import { useToast } from '../../../components/ui/use-toast';
@@ -268,16 +268,16 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                  {formatNumber(metrics.tcc_p25, 0)}
+                  {formatCurrency(metrics.tcc_p25, 0)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
-                  {formatNumber(metrics.tcc_p50, 0)}
+                  {formatCurrency(metrics.tcc_p50, 0)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                  {formatNumber(metrics.tcc_p75, 0)}
+                  {formatCurrency(metrics.tcc_p75, 0)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                  {formatNumber(metrics.tcc_p90, 0)}
+                  {formatCurrency(metrics.tcc_p90, 0)}
                 </td>
               </tr>
               <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
