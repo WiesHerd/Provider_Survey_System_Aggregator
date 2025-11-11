@@ -91,6 +91,7 @@ const SurveyAnalytics = lazy(() => import('./features/analytics/components/Surve
 const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
 const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
 const CustomReports = lazy(() => import('./components/CustomReports'));
+const CannedReports = lazy(() => import('./features/reports/components/CannedReports').then(module => ({ default: module.default })));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
@@ -407,6 +408,25 @@ const PageContent = () => {
           title: 'Custom Reports',
           description: 'Generate custom reports and exports'
         };
+      case '/canned-reports':
+        // Check for report name in URL search params
+        const searchParams = new URLSearchParams(location.search);
+        const reportName = searchParams.get('report');
+        if (reportName) {
+          // Format report name (e.g., "total-cash-compensation" -> "Total Cash Compensation")
+          const formattedName = reportName
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          return {
+            title: `${formattedName} Report`,
+            description: 'View and export your report data'
+          };
+        }
+        return {
+          title: 'Report Library',
+          description: 'Select a pre-formatted report template and generate professional reports'
+        };
       case '/fair-market-value':
         return {
           title: 'Fair Market Value',
@@ -460,6 +480,7 @@ const PageContent = () => {
               <Route path="/regional-analytics" element={<RegionalAnalytics />} />
               <Route path="/fair-market-value" element={<FairMarketValue />} />
               <Route path="/custom-reports" element={<CustomReports />} />
+              <Route path="/canned-reports" element={<CannedReports />} />
               <Route path="/system-settings" element={<SystemSettings />} />
               <Route path="/specialty-blending" element={<SpecialtyBlending />} />
               

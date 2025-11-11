@@ -1044,6 +1044,7 @@ export class AnalyticsDataService {
 
   /**
    * Normalize provider type using learned mappings
+   * ENTERPRISE FIX: Preserve leadership roles (Chief, Chair, Director) - don't normalize them to "Staff Physician"
    */
   private normalizeProviderType(providerType: string, learnedMappings?: Record<string, string>): string {
     if (!providerType) return 'Staff Physician';
@@ -1060,11 +1061,34 @@ export class AnalyticsDataService {
       return learnedMappings[lower];
     }
     
+    // ENTERPRISE FIX: Preserve leadership/administrative roles - don't normalize them
+    // These are distinct provider types and should not be converted to "Staff Physician"
+    const leadershipKeywords = [
+      'chief', 'chair', 'director', 'head', 'leader', 'medical director', 
+      'program director', 'department chair', 'division chief', 'section chief',
+      'vice chair', 'associate director', 'assistant director'
+    ];
+    
+    const isLeadershipRole = leadershipKeywords.some(keyword => 
+      lower.includes(keyword)
+    );
+    
+    // If it's a leadership role, preserve it as-is (don't normalize to "Staff Physician")
+    if (isLeadershipRole) {
+      return providerType; // Preserve original value
+    }
+    
     // Handle PhD roles
     if (lower.includes('phd') || lower.includes('doctor of philosophy')) {
       return 'PhD';
     } else if (lower.includes('physician') || lower.includes('md') || lower.includes('do')) {
-      return 'Staff Physician';
+      // Only normalize to "Staff Physician" if it's NOT a leadership role
+      // Check again to be safe (in case the keyword check missed something)
+      if (!isLeadershipRole) {
+        return 'Staff Physician';
+      }
+      // If it contains "physician" but is a leadership role, preserve it
+      return providerType;
     } else if (lower.includes('nurse practitioner') || lower.includes('np')) {
       return 'Nurse Practitioner';
     } else if (lower.includes('physician assistant') || lower.includes('pa')) {
@@ -1080,6 +1104,7 @@ export class AnalyticsDataService {
 
   /**
    * Normalize region using learned mappings
+   * ENTERPRISE FIX: Preserve subregions (like "Great Lakes") - don't collapse them into parent regions
    */
   private normalizeRegion(region: string, learnedMappings?: Record<string, string>): string {
     if (!region || region === 'National') return 'National';
@@ -1091,11 +1116,32 @@ export class AnalyticsDataService {
     
     const lower = region.toLowerCase();
     
-    if (lower.includes('northeast') || lower.includes('northeastern') || lower.includes('ne')) {
+    // ENTERPRISE FIX: Preserve legitimate subregions - don't collapse them into parent regions
+    // Subregions like "Great Lakes", "Plains", "Central" should be preserved as-is
+    const subregions = [
+      'great lakes', 'plains', 'central', 'mountain', 'pacific', 'atlantic',
+      'new england', 'mid-atlantic', 'south atlantic', 'east north central',
+      'west north central', 'east south central', 'west south central'
+    ];
+    
+    const isSubregion = subregions.some(sub => lower.includes(sub));
+    if (isSubregion) {
+      // Preserve subregion with proper capitalization
+      return region.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    }
+    
+    // Handle "Eastern" - typically maps to "Northeast"
+    if (lower === 'eastern' || (lower.includes('eastern') && !lower.includes('great lakes'))) {
       return 'Northeast';
-    } else if (lower.includes('southeast') || lower.includes('southern') || lower.includes('se')) {
+    } else if (lower.includes('northeast') || lower.includes('northeastern') || lower === 'ne') {
+      return 'Northeast';
+    } else if (lower.includes('southeast') || lower.includes('southern') || (lower.includes('south') && !lower.includes('west'))) {
       return 'South';
-    } else if (lower.includes('midwest') || lower.includes('midwestern') || lower.includes('north central') || lower.includes('nc')) {
+    } else if (lower.includes('midwest') || lower.includes('midwestern') || lower === 'nc') {
+      // ENTERPRISE FIX: Only normalize to "Midwest" if it's explicitly "midwest" or "north central"
+      // Don't collapse "Great Lakes" or other subregions
       return 'Midwest';
     } else if (lower.includes('west') || lower.includes('western')) {
       return 'West';
@@ -1103,6 +1149,7 @@ export class AnalyticsDataService {
       return 'National';
     }
     
+    // Preserve original region if it doesn't match known patterns
     return region;
   }
 

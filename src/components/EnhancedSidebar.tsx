@@ -13,6 +13,7 @@ import {
 	MapIcon,
 	CalculatorIcon,
 	DocumentChartBarIcon,
+	DocumentTextIcon,
 	UserIcon,
 	CurrencyDollarIcon,
 	CircleStackIcon,
@@ -65,16 +66,17 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				{ name: 'Comp Metrics', icon: CurrencyDollarIcon, path: '/variable-mapping' },
 			]
 		},
-		{
-			name: 'Analysis Tools',
-			items: [
-				{ name: 'Benchmarking', icon: PresentationChartLineIcon, path: '/benchmarking' },
-				{ name: 'Regional Data', icon: MapIcon, path: '/regional-analytics' },
-				{ name: 'Custom Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
-				{ name: 'Report Builder', icon: DocumentChartBarIcon, path: '/custom-reports' },
-				{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
-			]
-		}
+			{
+				name: 'Analysis Tools',
+				items: [
+					{ name: 'Benchmarking', icon: PresentationChartLineIcon, path: '/benchmarking' },
+					{ name: 'Regional Data', icon: MapIcon, path: '/regional-analytics' },
+					{ name: 'Custom Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
+					{ name: 'Report Builder', icon: DocumentChartBarIcon, path: '/custom-reports' },
+					{ name: 'Report Library', icon: DocumentTextIcon, path: '/canned-reports' },
+					{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
+				]
+			}
 	];
 
 
@@ -91,6 +93,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 			'/regional-analytics',
 			'/specialty-blending',
 			'/custom-reports',
+			'/canned-reports',
 			'/fair-market-value'
 		];
 		return analyticsRoutes.includes(path);

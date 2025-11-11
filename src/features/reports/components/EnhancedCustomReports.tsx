@@ -35,7 +35,8 @@ import {
   Cog6ToothIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
-import { ReportBuilder, ReportTemplates, VisualFilterBuilder } from '../index';
+// Legacy components - not used in new implementation
+// import { ReportBuilder, ReportTemplates, VisualFilterBuilder } from '../index';
 import { getDataService } from '../../../services/DataService';
 import { useYear } from '../../../contexts/YearContext';
 import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
@@ -212,36 +213,17 @@ export const EnhancedCustomReports: React.FC<EnhancedCustomReportsProps> = ({
 
   // Render current mode content
   const renderModeContent = () => {
-    switch (currentMode) {
-      case 'builder':
-        return (
-          <ReportBuilder
-            onSave={handleSaveReport}
-            onExport={handleExportReport}
-          />
-        );
-      
-      case 'templates':
-        return (
-          <ReportTemplates
-            onSelectTemplate={handleSelectTemplate}
-            onCreateCustom={handleCreateCustom}
-          />
-        );
-      
-      case 'filters':
-        return (
-          <div className="p-6">
-            <VisualFilterBuilder
-              availableFields={availableFields}
-              onFiltersChange={handleFiltersChange}
-            />
-          </div>
-        );
-      
-      default:
-        return null;
-    }
+    // Legacy component - placeholder for now
+    return (
+      <div className="p-6">
+        <Typography variant="h6" className="mb-4">
+          Legacy Report Builder
+        </Typography>
+        <Typography variant="body2" className="text-gray-600">
+          This is the legacy report builder. Please use the new Report Builder (New) from the sidebar.
+        </Typography>
+      </div>
+    );
   };
 
   // Show loading state

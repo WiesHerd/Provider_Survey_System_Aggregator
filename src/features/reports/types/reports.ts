@@ -1,131 +1,92 @@
 /**
- * Reports Feature - Type Definitions
+ * Report Types and Interfaces
  * 
- * This file contains all TypeScript interfaces and types for the reports feature.
- * Following enterprise patterns for type safety and maintainability.
+ * Type definitions for the three core reports system
  */
+
+import { DynamicAggregatedData } from '../../analytics/types/variables';
+import { ISpecialtyMapping } from '../../../types/specialty';
+
+/**
+ * Report metric types
+ */
+export type ReportMetric = 'tcc' | 'wrvu' | 'cf';
+
+/**
+ * Blending method types
+ */
+export type BlendingMethod = 'weighted' | 'simple' | 'none';
+
+/**
+ * Percentile selection
+ */
+export type Percentile = 'p25' | 'p50' | 'p75' | 'p90';
 
 /**
  * Report configuration interface
  */
 export interface ReportConfig {
-  id: string;
-  name: string;
-  dimension: string;
-  metric: string;
-  chartType: 'bar' | 'line' | 'pie';
-  filters: {
-    specialties: string[];
-    regions: string[];
-    surveySources: string[];
+  metric: ReportMetric;
+  selectedProviderType: string[]; // Multi-select
+  selectedSurveySource: string[]; // Multi-select
+  selectedRegion: string[]; // Multi-select
+  selectedYear: string[]; // Multi-select
+  enableBlending: boolean;
+  blendingMethod: BlendingMethod;
+  selectedPercentiles: Percentile[];
+}
+
+/**
+ * Report data row structure
+ */
+export interface ReportDataRow {
+  specialty: string;
+  region?: string;
+  providerType?: string;
+  surveySource?: string;
+  surveyYear?: string; // Year of the survey data
+  p25?: number;
+  p50?: number;
+  p75?: number;
+  p90?: number;
+  n_orgs: number;
+  n_incumbents: number;
+  isBlended: boolean; // Indicates if this row is a blended result
+}
+
+/**
+ * Report data structure
+ */
+export interface ReportData {
+  config: ReportConfig;
+  rows: ReportDataRow[];
+  metadata: {
+    generatedAt: Date;
+    totalRows: number;
+    blendedRows: number;
+    unmappedRows: number;
   };
-  created: Date;
 }
 
 /**
- * Chart data item interface
+ * Report generation options
  */
-export interface ChartDataItem {
-  name: string;
-  value: number;
-  count: number;
-  originalName: string;
+export interface ReportGenerationOptions {
+  data: DynamicAggregatedData[];
+  mappings: ISpecialtyMapping[];
+  config: ReportConfig;
 }
 
 /**
- * Report filters interface
+ * Blending result for a specialty
  */
-export interface ReportFilters {
-  specialties: string[];
-  regions: string[];
-  surveySources: string[];
-}
-
-/**
- * Available options for report configuration
- */
-export interface AvailableOptions {
-  specialties: string[];
-  regions: string[];
-  surveySources: string[];
-  dimensions: string[];
-  metrics: string[];
-}
-
-/**
- * Report configuration form state
- */
-export interface ReportConfigForm {
-  name: string;
-  dimension: string;
-  metric: string;
-  chartType: 'bar' | 'line' | 'pie';
-  filters: ReportFilters;
-}
-
-/**
- * Custom reports component props
- */
-export interface CustomReportsProps {
-  data?: any[];
-  title?: string;
-}
-
-/**
- * Report builder component props
- */
-export interface ReportBuilderProps {
-  config: ReportConfigForm;
-  onConfigChange: (config: ReportConfigForm) => void;
-  availableOptions: AvailableOptions;
-  onSaveReport: (config: ReportConfigForm) => void;
-  onLoadReport: (reportId: string) => void;
-  savedReports: ReportConfig[];
-}
-
-/**
- * Chart component props
- */
-export interface ChartComponentProps {
-  data: ChartDataItem[];
-  chartType: 'bar' | 'line' | 'pie';
-  dimension: string;
-  metric: string;
-  height?: number;
-}
-
-/**
- * Report filters component props
- */
-export interface ReportFiltersProps {
-  filters: ReportFilters;
-  onFiltersChange: (filters: ReportFilters) => void;
-  availableOptions: AvailableOptions;
-}
-
-/**
- * Saved reports component props
- */
-export interface SavedReportsProps {
-  reports: ReportConfig[];
-  onLoadReport: (reportId: string) => void;
-  onDeleteReport: (reportId: string) => void;
-}
-
-/**
- * Reports hook return type
- */
-export interface UseReportsReturn {
-  loading: boolean;
-  error: string | null;
-  surveyData: any[];
-  savedReports: ReportConfig[];
-  availableOptions: AvailableOptions;
-  config: ReportConfigForm;
-  setConfig: (config: ReportConfigForm) => void;
-  saveReport: (config: ReportConfigForm) => void;
-  loadReport: (reportId: string) => void;
-  deleteReport: (reportId: string) => void;
-  generateChartData: (config: ReportConfigForm) => ChartDataItem[];
-  exportReport: (config: ReportConfigForm, data: ChartDataItem[]) => void;
+export interface BlendedSpecialtyResult {
+  specialty: string;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  n_orgs: number;
+  n_incumbents: number;
+  sourceRows: number; // Number of rows that were blended
 }
