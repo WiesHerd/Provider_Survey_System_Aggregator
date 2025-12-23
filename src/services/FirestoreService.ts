@@ -963,8 +963,197 @@ export class FirestoreService {
     }));
   }
 
+  /**
+   * Detect variable type from variable name
+   */
+  private detectVariableType(variableName: string): {
+    type: 'compensation' | 'categorical';
+    subType: string;
+    confidence: number;
+    suggestions: string[];
+  } {
+    const name = variableName.toLowerCase();
+    
+    // Compensation variables
+    if (name.includes('tcc') || name.includes('total cash') || name.includes('compensation')) {
+      return {
+        type: 'compensation',
+        subType: 'tcc',
+        confidence: 0.9,
+        suggestions: ['tcc', 'total_cash_compensation']
+      };
+    }
+    
+    if (name.includes('wrvu') || name.includes('work rvu') || name.includes('rvu')) {
+      return {
+        type: 'compensation',
+        subType: 'wrvu',
+        confidence: 0.9,
+        suggestions: ['wrvu', 'work_rvu']
+      };
+    }
+    
+    if (name.includes('cf') || name.includes('conversion') || name.includes('factor')) {
+      return {
+        type: 'compensation',
+        subType: 'cf',
+        confidence: 0.9,
+        suggestions: ['cf', 'conversion_factor']
+      };
+    }
+    
+    if (name.includes('base') || name.includes('salary')) {
+      return {
+        type: 'compensation',
+        subType: 'base_pay',
+        confidence: 0.8,
+        suggestions: ['base_pay', 'salary']
+      };
+    }
+    
+    // Categorical variables
+    if (name.includes('region') || name.includes('geographic')) {
+      return {
+        type: 'categorical',
+        subType: 'region',
+        confidence: 0.8,
+        suggestions: ['region', 'geographic_region']
+      };
+    }
+    
+    if (name.includes('provider') || name.includes('type')) {
+      return {
+        type: 'categorical',
+        subType: 'provider_type',
+        confidence: 0.7,
+        suggestions: ['provider_type', 'type']
+      };
+    }
+    
+    // Default to compensation if we can't determine
+    return {
+      type: 'compensation',
+      subType: 'unknown',
+      confidence: 0.5,
+      suggestions: [variableName.toLowerCase().replace(/\s+/g, '_')]
+    };
+  }
+
   async getUnmappedVariables(providerType?: string): Promise<any[]> {
-    return [];
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    console.log('🔍 FirestoreService.getUnmappedVariables: Called with providerType:', providerType);
+    
+    try {
+      const surveys = await this.getAllSurveys();
+      console.log('🔍 FirestoreService.getUnmappedVariables: Total surveys found:', surveys.length);
+      
+      if (surveys.length === 0) {
+        return [];
+      }
+      
+      const mappings = await this.getVariableMappings(providerType);
+      
+      const mappedNames = new Set<string>();
+      mappings.forEach(mapping => {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mapping.sourceVariables?.forEach((source: any) => {
+          mappedNames.add(source.originalVariableName?.toLowerCase() || '');
+        });
+      });
+
+      const unmapped: any[] = [];
+      const variableCounts = new Map<string, { count: number; sources: Set<string> }>();
+
+      for (const survey of surveys) {
+        // Filter surveys by data category (Provider Type) if specified
+        if (providerType !== undefined) {
+          let surveyMatchesProviderType = false;
+          
+          const isCallPay = this.isCallPaySurvey(survey);
+          const isMoonlighting = this.isMoonlightingSurvey(survey);
+          const effectiveProviderType = this.getEffectiveProviderType(survey);
+          
+          if (providerType === 'CALL') {
+            surveyMatchesProviderType = isCallPay;
+          } else if (providerType === 'PHYSICIAN') {
+            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                         !isCallPay && 
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
+            surveyMatchesProviderType = isPhysicianCompensation;
+          } else if (providerType === 'APP') {
+            surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                     !isCallPay && 
+                                     !isMoonlighting;
+          } else {
+            surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                     survey.providerType === providerType;
+          }
+          
+          if (!surveyMatchesProviderType) {
+            continue;
+          }
+        }
+        
+        const { rows } = await this.getSurveyData(survey.id);
+        
+        // Get survey source with proper fallbacks
+        let surveySource: string;
+        if ((survey as any).source && (survey as any).dataCategory) {
+          const source = (survey as any).source;
+          const dataCategory = (survey as any).dataCategory;
+          const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+            : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+            : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+            : dataCategory;
+          surveySource = `${source} ${categoryDisplay}`;
+        } else {
+          surveySource = survey.type || survey.name || 'Unknown';
+        }
+        
+        rows.forEach(row => {
+          const variable = row.variable || row.Variable || row['Variable Name'];
+          if (variable && typeof variable === 'string' && !mappedNames.has(variable.toLowerCase())) {
+            const key = variable.toLowerCase();
+            const current = variableCounts.get(key) || { count: 0, sources: new Set() };
+            current.count++;
+            current.sources.add(surveySource);
+            variableCounts.set(key, current);
+          }
+        });
+      }
+
+      // Create separate entries for each survey source
+      variableCounts.forEach((value, key) => {
+        Array.from(value.sources).forEach(surveySource => {
+          const variableType = this.detectVariableType(key);
+          unmapped.push({
+            id: crypto.randomUUID(),
+            name: key,
+            frequency: value.count,
+            surveySource: surveySource as any,
+            variableType: variableType.type,
+            variableSubType: variableType.subType,
+            confidence: variableType.confidence,
+            suggestions: variableType.suggestions
+          });
+        });
+      });
+
+      console.log('🔍 FirestoreService.getUnmappedVariables: Processing complete:', {
+        providerType,
+        totalSurveys: surveys.length,
+        totalUnmappedVariables: unmapped.length
+      });
+
+      return unmapped;
+    } catch (error) {
+      console.error('❌ FirestoreService.getUnmappedVariables: Error:', error);
+      throw error;
+    }
   }
 
   async createVariableMapping(mapping: any): Promise<any> {
@@ -1039,7 +1228,121 @@ export class FirestoreService {
   }
 
   async getUnmappedProviderTypes(providerType?: string): Promise<any[]> {
-    return [];
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    console.log('🔍 FirestoreService.getUnmappedProviderTypes: Called with providerType:', providerType);
+    
+    try {
+      const surveys = await this.getAllSurveys();
+      console.log('🔍 FirestoreService.getUnmappedProviderTypes: Total surveys found:', surveys.length);
+      
+      if (surveys.length === 0) {
+        return [];
+      }
+      
+      const mappings = await this.getProviderTypeMappings(providerType);
+      
+      const mappedNames = new Set<string>();
+      mappings.forEach(mapping => {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mapping.sourceProviderTypes?.forEach((source: any) => {
+          // Handle both old and new structure
+          const providerTypeName = source.providerType || source.name || '';
+          if (providerTypeName) {
+            mappedNames.add(providerTypeName.toLowerCase());
+          }
+        });
+      });
+
+      const unmapped: any[] = [];
+      const providerTypeCounts = new Map<string, { count: number; sources: Set<string> }>();
+
+      for (const survey of surveys) {
+        // Filter surveys by provider type if specified
+        // Use the same logic as getUnmappedSpecialties to properly exclude Call Pay surveys
+        if (providerType !== undefined) {
+          let surveyMatchesProviderType = false;
+          
+          const isCallPay = this.isCallPaySurvey(survey);
+          const isMoonlighting = this.isMoonlightingSurvey(survey);
+          const effectiveProviderType = this.getEffectiveProviderType(survey);
+          
+          if (providerType === 'CALL') {
+            surveyMatchesProviderType = isCallPay;
+          } else if (providerType === 'PHYSICIAN') {
+            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                         !isCallPay && 
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
+            surveyMatchesProviderType = isPhysicianCompensation;
+          } else if (providerType === 'APP') {
+            surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                     !isCallPay && 
+                                     !isMoonlighting;
+          } else {
+            surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                     survey.providerType === providerType;
+          }
+          
+          if (!surveyMatchesProviderType) {
+            continue;
+          }
+        }
+        
+        const { rows } = await this.getSurveyData(survey.id);
+        
+        // Get survey source with proper fallbacks
+        let surveySource: string;
+        if ((survey as any).source && (survey as any).dataCategory) {
+          const source = (survey as any).source;
+          const dataCategory = (survey as any).dataCategory;
+          const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+            : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+            : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+            : dataCategory;
+          surveySource = `${source} ${categoryDisplay}`;
+        } else {
+          surveySource = survey.type || survey.name || 'Unknown';
+        }
+        
+        rows.forEach(row => {
+          // Look for provider type in different possible column names
+          const rowProviderType = row.providerType || row['Provider Type'] || row.provider_type || row['provider_type'];
+          if (rowProviderType && typeof rowProviderType === 'string' && !mappedNames.has(rowProviderType.toLowerCase())) {
+            const key = rowProviderType.toLowerCase();
+            const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
+            current.count++;
+            current.sources.add(surveySource);
+            providerTypeCounts.set(key, current);
+          }
+        });
+      }
+
+      // Create separate entries for each survey source
+      providerTypeCounts.forEach((value, key) => {
+        Array.from(value.sources).forEach(surveySource => {
+          unmapped.push({
+            id: crypto.randomUUID(),
+            name: key,
+            frequency: value.count,
+            surveySource: surveySource as any
+          });
+        });
+      });
+
+      console.log('🔍 FirestoreService.getUnmappedProviderTypes: Processing complete:', {
+        providerType,
+        totalSurveys: surveys.length,
+        totalUnmappedProviderTypes: unmapped.length
+      });
+
+      return unmapped;
+    } catch (error) {
+      console.error('❌ FirestoreService.getUnmappedProviderTypes: Error:', error);
+      throw error;
+    }
   }
 
   async createProviderTypeMapping(mapping: any): Promise<any> {
@@ -1114,7 +1417,130 @@ export class FirestoreService {
   }
 
   async getUnmappedRegions(providerType?: string): Promise<any[]> {
-    return [];
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    console.log('🔍 FirestoreService.getUnmappedRegions: Called with providerType:', providerType);
+    
+    try {
+      const surveys = await this.getAllSurveys();
+      console.log('🔍 FirestoreService.getUnmappedRegions: Total surveys found:', surveys.length);
+      
+      if (surveys.length === 0) {
+        return [];
+      }
+      
+      const mappings = await this.getRegionMappings(providerType);
+      
+      const mappedNames = new Set<string>();
+      mappings.forEach(mapping => {
+        mappedNames.add(mapping.standardizedName.toLowerCase());
+        mapping.sourceRegions?.forEach((source: any) => {
+          mappedNames.add(source.region?.toLowerCase() || '');
+        });
+      });
+
+      const unmapped: any[] = [];
+      const regionCounts = new Map<string, { count: number; sources: Set<string> }>();
+
+      for (const survey of surveys) {
+        // Filter surveys by provider type if specified
+        if (providerType !== undefined) {
+          let surveyMatchesProviderType = false;
+          
+          const isCallPay = this.isCallPaySurvey(survey);
+          const isMoonlighting = this.isMoonlightingSurvey(survey);
+          const effectiveProviderType = this.getEffectiveProviderType(survey);
+          
+          if (providerType === 'CALL') {
+            surveyMatchesProviderType = isCallPay;
+          } else if (providerType === 'PHYSICIAN') {
+            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
+                                         !isCallPay && 
+                                         !isMoonlighting &&
+                                         this.isCompensationSurvey(survey);
+            surveyMatchesProviderType = isPhysicianCompensation;
+          } else if (providerType === 'APP') {
+            surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
+                                     !isCallPay && 
+                                     !isMoonlighting;
+          } else {
+            surveyMatchesProviderType = effectiveProviderType === providerType || 
+                                     survey.providerType === providerType;
+          }
+          
+          if (!surveyMatchesProviderType) {
+            continue;
+          }
+        }
+        
+        const { rows } = await this.getSurveyData(survey.id);
+        
+        // Get survey source with proper fallbacks
+        let surveySource: string;
+        if ((survey as any).source && (survey as any).dataCategory) {
+          const source = (survey as any).source;
+          const dataCategory = (survey as any).dataCategory;
+          const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+            : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+            : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+            : dataCategory;
+          surveySource = `${source} ${categoryDisplay}`;
+        } else {
+          surveySource = survey.type || survey.name || 'Unknown';
+        }
+        
+        rows.forEach(row => {
+          // ENTERPRISE FIX: Handle both WIDE format (direct properties) and LONG format (nested in data)
+          let rowData: any = row;
+          if (row && typeof row === 'object' && 'data' in row && row.data && typeof row.data === 'object') {
+            rowData = row.data;
+          }
+          
+          // Look for region in different possible column names (check both row and rowData)
+          const region = (rowData && typeof rowData === 'object' 
+            ? (rowData.geographicRegion || rowData['Geographic Region'] || 
+               rowData.geographic_region || rowData.region || rowData.Region)
+            : null) ||
+            (row && typeof row === 'object'
+              ? (row.geographicRegion || (row as any)['Geographic Region'] || 
+                 (row as any).geographic_region || (row as any).region || (row as any).Region)
+              : null);
+          
+          if (region && typeof region === 'string' && !mappedNames.has(region.toLowerCase())) {
+            const key = region.toLowerCase();
+            const current = regionCounts.get(key) || { count: 0, sources: new Set() };
+            current.count++;
+            current.sources.add(surveySource);
+            regionCounts.set(key, current);
+          }
+        });
+      }
+
+      // Create separate entries for each survey source
+      regionCounts.forEach((value, key) => {
+        Array.from(value.sources).forEach(surveySource => {
+          unmapped.push({
+            id: crypto.randomUUID(),
+            name: key,
+            frequency: value.count,
+            surveySource: surveySource as any
+          });
+        });
+      });
+
+      console.log('🔍 FirestoreService.getUnmappedRegions: Processing complete:', {
+        providerType,
+        totalSurveys: surveys.length,
+        totalUnmappedRegions: unmapped.length
+      });
+
+      return unmapped;
+    } catch (error) {
+      console.error('❌ FirestoreService.getUnmappedRegions: Error:', error);
+      throw error;
+    }
   }
 
   async createRegionMapping(mapping: any): Promise<any> {
@@ -1355,8 +1781,11 @@ export class FirestoreService {
     }
 
     console.log('🔍 FirestoreService.getUnmappedSpecialties: Called with providerType:', providerType);
-    const surveys = await this.getAllSurveys();
-    console.log('🔍 FirestoreService.getUnmappedSpecialties: Total surveys found:', surveys.length);
+    console.log('🔍 FirestoreService.getUnmappedSpecialties: User ID:', this.userId);
+    
+    try {
+      const surveys = await this.getAllSurveys();
+      console.log('🔍 FirestoreService.getUnmappedSpecialties: Total surveys found:', surveys.length);
     
     // ENTERPRISE FIX: Handle case when no surveys exist
     if (surveys.length === 0) {
@@ -1437,7 +1866,14 @@ export class FirestoreService {
         console.log(`🔍 FirestoreService.getUnmappedSpecialties: Including Call Pay survey: ${survey.type || survey.name}, providerType: ${survey.providerType}`);
       }
       
+      console.log(`🔍 FirestoreService.getUnmappedSpecialties: Processing survey ${survey.id} (${survey.name || survey.type}), providerType: ${survey.providerType}`);
       const { rows } = await this.getSurveyData(survey.id);
+      console.log(`🔍 FirestoreService.getUnmappedSpecialties: Retrieved ${rows.length} rows from survey ${survey.id}`);
+      
+      if (rows.length === 0) {
+        console.warn(`⚠️ FirestoreService.getUnmappedSpecialties: Survey ${survey.id} has no data rows!`);
+        continue;
+      }
       
       // Get survey source with proper fallbacks - use new structure if available
       // NEW: Use survey.source and survey.dataCategory if available (new architecture)
@@ -1521,6 +1957,10 @@ export class FirestoreService {
     });
 
     return unmapped;
+    } catch (error) {
+      console.error('❌ FirestoreService.getUnmappedSpecialties: Error:', error);
+      throw error;
+    }
   }
 
   // ==================== Cache Methods ====================
