@@ -10,6 +10,7 @@ import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoading
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
+import { useSurveyListQuery } from '../features/upload/hooks/useSurveyListQuery';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { clearStorage } from '../utils/clearStorage';
@@ -295,146 +296,90 @@ const SurveyUpload: React.FC = () => {
     }));
   };
 
-  // Load saved surveys on component mount
-  // ENTERPRISE FIX: Force refresh when navigating to upload screen to show latest surveys
-  useEffect(() => {
-    // Reset mount flag when location changes (navigation to upload screen)
-    if (location.pathname === '/upload') {
-      hasLoadedOnThisMount.current = false;
-    }
-  }, [location.pathname]);
+  // ENTERPRISE FIX: Use React Query for intelligent caching
+  // This provides instant navigation (cached data) and background refresh, just like Google apps
+  // No forced reload on navigation - React Query handles caching intelligently
+  const { 
+    data: rawSurveys, 
+    loading: queryLoading, 
+    error: queryError,
+    refetch: refetchSurveys 
+  } = useSurveyListQuery(
+    currentYear, 
+    selectedProviderType === 'BOTH' ? undefined : selectedProviderType,
+    !isUploading // Only fetch if not currently uploading
+  );
 
+  // Process React Query data into component format
   useEffect(() => {
-    // ENTERPRISE FIX: Force load on first mount or when navigating to upload screen
-    // This ensures surveys are always fresh when user navigates to the screen
-    const shouldForceLoad = !hasLoadedOnThisMount.current || location.pathname === '/upload';
-    
-    // Skip loading if we just uploaded a survey to prevent overriding the state
-    // BUT: Still load if this is the first mount (shouldForceLoad)
-    if (justUploaded && !shouldForceLoad) {
+    // Skip processing if we just uploaded (let cache invalidation handle it)
+    if (justUploaded) {
       setJustUploaded(false);
       return;
     }
-    
-    // Skip if we're currently uploading (but allow first mount load)
-    if (isUploading && !shouldForceLoad) {
+
+    if (!rawSurveys || rawSurveys.length === 0) {
+      setUploadedSurveys([]);
+      if (!selectedSurvey) {
+        setSelectedSurvey('');
+      }
       return;
     }
+
+    // Build lightweight survey list; fetch detailed rows only when a survey is selected
+    // Remove duplicates by using a Map with a unique key
+    const surveyMap = new Map();
     
-    const loadSurveys = async () => {
-      try {
-        setIsLoading(true);
-        
-        
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Loading timeout')), 10000)
-        );
-        
-        // Load surveys from DataService (which handles year filtering internally)
-        const surveys = await Promise.race([
-          dataService.getAllSurveys(),
-          timeoutPromise
-        ]) as any[];
-        
-        // Filter surveys by current year and provider type
-        const surveysAny = surveys as any[];
-        const yearFilteredSurveys = surveysAny.filter((survey: any) => {
-          const surveyYear = survey.year || survey.surveyYear || '';
-          return surveyYear === currentYear;
+    rawSurveys.forEach((survey: any) => {
+      // Create a unique key based on name, type, and year to identify duplicates
+      const uniqueKey = `${survey.name || ''}-${survey.type || ''}-${survey.year || ''}`;
+      
+      if (!surveyMap.has(uniqueKey)) {
+        surveyMap.set(uniqueKey, {
+          id: survey.id,
+          fileName: survey.name || '',
+          surveyType: survey.type || '',
+          surveyYear: survey.year?.toString() || currentYear,
+          uploadDate: new Date(survey.uploadDate || new Date()),
+          fileContent: '',
+          rows: [],
+          stats: {
+            totalRows: survey.rowCount ?? survey.row_count ?? 0,
+            uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
+            totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
+          },
+          columnMappings: {}
         });
-        
-        
-        // Filter by provider type based on Data View selection
-        // CRITICAL FIX: Also check dataCategory for Call Pay surveys
-        let providerFilteredSurveys = yearFilteredSurveys;
-        if (selectedProviderType !== 'BOTH') {
-          providerFilteredSurveys = yearFilteredSurveys.filter((survey: any) => {
-            const surveyProviderType = survey.providerType || 'PHYSICIAN'; // Default to PHYSICIAN for legacy surveys
-            const surveyDataCategory = survey.dataCategory;
-            
-            // Check if this is a Call Pay survey (by dataCategory or name)
-            const isCallPay = surveyDataCategory === 'CALL_PAY' || 
-                             surveyProviderType === 'CALL' ||
-                             (survey.name && survey.name.toLowerCase().includes('call pay')) ||
-                             (survey.type && survey.type.toLowerCase().includes('call pay'));
-            
-            // If filtering for CALL type, show only Call Pay surveys
-            if (selectedProviderType === 'CALL') {
-              return isCallPay;
-            }
-            
-            // For PHYSICIAN and APP views, exclude Call Pay surveys
-            // Only show surveys that match the provider type AND are not Call Pay
-            if (selectedProviderType === 'PHYSICIAN' || selectedProviderType === 'APP') {
-              return surveyProviderType === selectedProviderType && !isCallPay;
-            }
-            
-            // For other provider types (CUSTOM, etc.), use standard filtering
-            return surveyProviderType === selectedProviderType;
-          });
-        }
-        
-        
-        const allSurveys = providerFilteredSurveys;
-        
-        // Build lightweight survey list; fetch detailed rows only when a survey is selected
-        // Remove duplicates by using a Map with a unique key
-        const surveyMap = new Map();
-        
-        allSurveys.forEach((survey: any) => {
-          // Create a unique key based on name, type, and year to identify duplicates
-          const uniqueKey = `${survey.name || ''}-${survey.type || ''}-${survey.year || ''}`;
-          
-          if (!surveyMap.has(uniqueKey)) {
-            surveyMap.set(uniqueKey, {
-              id: survey.id,
-              fileName: survey.name || '',
-              surveyType: survey.type || '',
-              surveyYear: survey.year?.toString() || currentYear,
-              uploadDate: new Date(survey.uploadDate || new Date()),
-              fileContent: '',
-              rows: [],
-              stats: {
-                totalRows: survey.rowCount ?? survey.row_count ?? 0,
-                uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
-                totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
-              },
-              columnMappings: {}
-            });
-          }
-        });
-        
-        const processedSurveys = Array.from(surveyMap.values());
-
-        setUploadedSurveys(processedSurveys);
-        // Auto-select first survey if none selected, or if current selection is no longer available
-        if (processedSurveys.length > 0) {
-          const currentSelectionExists = processedSurveys.some(s => s.id === selectedSurvey);
-          if (!selectedSurvey || !currentSelectionExists) {
-            setSelectedSurvey(processedSurveys[0].id);
-          }
-        } else {
-          // No surveys available, clear selection
-          setSelectedSurvey('');
-        }
-      } catch (error) {
-        if (error instanceof Error && error.message === 'Loading timeout') {
-          setUploadedSurveys([]);
-          setSelectedSurvey(null);
-        } else {
-          handleError('Error loading saved surveys');
-        }
-      } finally {
-        setIsLoading(false);
-        hasLoadedOnThisMount.current = true;
       }
-    };
+    });
+    
+    const processedSurveys = Array.from(surveyMap.values());
 
-    // ENTERPRISE FIX: Always load surveys (early returns handle skip conditions)
-    // This ensures fresh data is shown immediately when navigating to upload screen
-    loadSurveys();
-  }, [dataService, currentYear, justUploaded, isUploading, selectedProviderType, selectedSurvey, location.pathname]);
+    setUploadedSurveys(processedSurveys);
+    // Auto-select first survey if none selected, or if current selection is no longer available
+    if (processedSurveys.length > 0) {
+      const currentSelectionExists = processedSurveys.some(s => s.id === selectedSurvey);
+      if (!selectedSurvey || !currentSelectionExists) {
+        setSelectedSurvey(processedSurveys[0].id);
+      }
+    } else {
+      // No surveys available, clear selection
+      setSelectedSurvey('');
+    }
+  }, [rawSurveys, currentYear, selectedSurvey, justUploaded]);
+
+  // Update loading state from React Query
+  useEffect(() => {
+    // Only show loading if query is actually fetching AND we don't have cached data
+    setIsLoading(queryLoading && !rawSurveys?.length);
+  }, [queryLoading, rawSurveys]);
+
+  // Handle query errors
+  useEffect(() => {
+    if (queryError) {
+      handleError(`Error loading surveys: ${queryError}`);
+    }
+  }, [queryError]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -766,12 +711,35 @@ const SurveyUpload: React.FC = () => {
     setIsUploading(true);
     startProgress();
     
-    const uploadTimeout = setTimeout(() => {
+    // Calculate adaptive timeout based on file size
+    const fileSizeMB = file.size / (1024 * 1024);
+    const estimatedRows = Math.max(1000, fileSizeMB * 500);
+    const baseTimeout = Math.max(5 * 60 * 1000, estimatedRows * 10);
+    const adaptiveTimeout = Math.min(baseTimeout, 30 * 60 * 1000);
+    
+    console.log(`⏱️ Upload timeout set to ${Math.round(adaptiveTimeout / 1000)}s (${Math.round(estimatedRows)} estimated rows)`);
+    
+    let uploadTimeout: NodeJS.Timeout | null = setTimeout(() => {
       console.error('⏰ Upload timeout - forcing completion');
       setIsUploading(false);
       completeProgress();
-      handleError('Upload timed out. Please try again.');
-    }, 60000);
+      handleError('Upload timed out. Please try again. For large files, this may take several minutes. Please try again or contact support.');
+      uploadTimeout = null;
+    }, adaptiveTimeout);
+    
+    // Helper to reset timeout on progress
+    const resetTimeout = () => {
+      if (uploadTimeout) {
+        clearTimeout(uploadTimeout);
+        uploadTimeout = setTimeout(() => {
+          console.error('⏰ Upload timeout - forcing completion');
+          setIsUploading(false);
+          completeProgress();
+          handleError('Upload timed out. Please try again. For large files, this may take several minutes. Please try again or contact support.');
+          uploadTimeout = null;
+        }, adaptiveTimeout);
+      }
+    };
 
     try {
       // Read the CSV file again
@@ -846,7 +814,7 @@ const SurveyUpload: React.FC = () => {
       }
 
       // Continue with normal upload flow...
-      await processUploadedData(parsedRows, file, mappedHeaders);
+      await processUploadedData(parsedRows, file, mappedHeaders, resetTimeout);
       
       clearTimeout(uploadTimeout);
       setIsUploading(false);
@@ -871,7 +839,8 @@ const SurveyUpload: React.FC = () => {
   const processUploadedData = async (
     parsedRows: any[],
     file: File,
-    headers: string[]
+    headers: string[],
+    resetTimeout?: () => void
   ) => {
     // Extract provider types from data for validation
     const uniqueProviderTypes = new Set(
@@ -931,10 +900,13 @@ const SurveyUpload: React.FC = () => {
     const surveyTypeName = `${finalSource} ${categoryDisplay}`;
     
     // Generate survey name for display (include label if provided)
-    const labelSuffix = surveyLabel.trim() ? ` - ${surveyLabel.trim()}` : '';
+    // CRITICAL: Safely handle surveyLabel - ensure it's never undefined
+    const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
+    const labelSuffix = safeSurveyLabel ? ` - ${safeSurveyLabel}` : '';
     const surveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
     
-    const survey = {
+    // Build survey object - CRITICAL: Never include undefined values
+    const survey: any = {
       id: surveyId,
       name: surveyName,
       year: surveyYear,
@@ -949,8 +921,6 @@ const SurveyUpload: React.FC = () => {
       specialtyCount: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
       dataPoints: parsedRows.length,
       colorAccent: '#6366F1',
-      // Store survey label in metadata for display
-      surveyLabel: surveyLabel.trim() || undefined,
       metadata: {
         totalRows: parsedRows.length,
         uniqueSpecialties: new Set(parsedRows.map(row => row.specialty || row.Specialty || row['Provider Type']).filter(Boolean)).size,
@@ -958,9 +928,16 @@ const SurveyUpload: React.FC = () => {
         uniqueRegions: new Set(parsedRows.map(row => row.region || row.Region || row.geographicRegion).filter(Boolean)).size,
         detectedProviderTypes: detectedProviderTypes,
         columnMappings: {},
-        surveyLabel: surveyLabel.trim() || undefined
+        // ENTERPRISE FIX: Store original column order from Excel/CSV file
+        originalHeaders: headers.filter(h => h && h.trim())
       }
     };
+    
+    // Only add surveyLabel if it has a value (never add undefined)
+    if (safeSurveyLabel) {
+      survey.surveyLabel = safeSurveyLabel;
+      survey.metadata.surveyLabel = safeSurveyLabel;
+    }
 
     // Add survey to state immediately for visual feedback
     const immediateSurvey = {
@@ -984,14 +961,26 @@ const SurveyUpload: React.FC = () => {
     setSelectedSurvey(surveyId);
     setRefreshTrigger(prev => prev + 1);
 
-    // Save survey and data to IndexedDB
-    console.log('💾 Saving survey to IndexedDB...');
+    // Save survey and data to storage (IndexedDB or Firebase)
+    const storageMode = dataService.getMode();
+    const storageName = storageMode === 'firebase' ? 'Firebase (Cloud)' : 'IndexedDB (Local)';
+    
+    console.log(`💾 Saving survey to ${storageName}...`);
     await dataService.createSurvey(survey);
     console.log('✅ Survey created successfully');
     
-    console.log('💾 Saving survey data to IndexedDB...');
-    await dataService.saveSurveyData(surveyId, parsedRows);
-    console.log('✅ Survey data saved successfully');
+    console.log(`💾 Saving ${parsedRows.length} rows to ${storageName}...`);
+    await dataService.saveSurveyData(surveyId, parsedRows, (progress) => {
+      // Update progress for user feedback and reset timeout
+      if (progress < 100) {
+        console.log(`📊 Upload progress: ${progress}%`);
+        // Reset timeout on progress to prevent premature timeout during active uploads
+        if (resetTimeout) {
+          resetTimeout();
+        }
+      }
+    });
+    console.log(`✅ All ${parsedRows.length} rows saved successfully to ${storageName}`);
 
     // Trigger storage event to notify other components (non-blocking)
     window.dispatchEvent(new StorageEvent('storage', {
@@ -1022,13 +1011,37 @@ const SurveyUpload: React.FC = () => {
     setIsUploading(true);
     startProgress(); // Start progress animation
 
+    // Calculate adaptive timeout based on file size
+    // Estimate: ~1 second per 100 rows, minimum 5 minutes, maximum 30 minutes
+    const fileSizeMB = file.size / (1024 * 1024);
+    const estimatedRows = Math.max(1000, fileSizeMB * 500); // Rough estimate: 500 rows per MB
+    const baseTimeout = Math.max(5 * 60 * 1000, estimatedRows * 10); // 10ms per row, min 5 min
+    const adaptiveTimeout = Math.min(baseTimeout, 30 * 60 * 1000); // Max 30 minutes
+    
+    console.log(`⏱️ Upload timeout set to ${Math.round(adaptiveTimeout / 1000)}s (${Math.round(estimatedRows)} estimated rows)`);
+
     // Add timeout wrapper to prevent infinite hanging
-    const uploadTimeout = setTimeout(() => {
+    let uploadTimeout: NodeJS.Timeout | null = setTimeout(() => {
       console.error('⏰ Upload timeout - forcing completion');
       setIsUploading(false);
       completeProgress();
-      handleError('Upload timed out. Please try again.');
-    }, 60000); // 60 second timeout (increased from 30)
+      handleError('Upload timed out. Please try again. For large files, this may take several minutes. Please try again or contact support.');
+      uploadTimeout = null;
+    }, adaptiveTimeout);
+    
+    // Helper to reset timeout on progress (keeps timeout from triggering during active uploads)
+    const resetTimeout = () => {
+      if (uploadTimeout) {
+        clearTimeout(uploadTimeout);
+        uploadTimeout = setTimeout(() => {
+          console.error('⏰ Upload timeout - forcing completion');
+          setIsUploading(false);
+          completeProgress();
+          handleError('Upload timed out. Please try again. For large files, this may take several minutes. Please try again or contact support.');
+          uploadTimeout = null;
+        }, adaptiveTimeout);
+      }
+    };
 
     try {
       // Use cleaned data if available, otherwise parse file
@@ -1157,8 +1170,8 @@ const SurveyUpload: React.FC = () => {
         });
       }
 
-      // Process the uploaded data
-      await processUploadedData(parsedRows, file, headers);
+      // Process the uploaded data (pass resetTimeout to prevent premature timeout)
+      await processUploadedData(parsedRows, file, headers, resetTimeout);
       
       // Clear provider type detection cache and refresh in background (non-blocking)
       setTimeout(async () => {
@@ -1174,10 +1187,21 @@ const SurveyUpload: React.FC = () => {
       // State already updated above, just set the flag to prevent useEffect override
       setJustUploaded(true);
       
-      // Additional force refresh after a short delay
-      setTimeout(() => {
-        setRefreshTrigger(prev => prev + 1);
-      }, 50);
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger automatic refetch
+      // This ensures the survey list is updated immediately with the new survey
+      try {
+        const { queryClient } = require('../shared/services/queryClient');
+        // Invalidate all survey list queries (for all year/providerType combinations)
+        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
+        console.log('✅ Invalidated survey list cache after upload - React Query will refetch automatically');
+        
+        // ENTERPRISE FIX: Explicitly refetch to ensure immediate update
+        // This ensures survey pills appear immediately without page refresh
+        await refetchSurveys();
+        console.log('✅ Refetched survey list after upload');
+      } catch (error) {
+        console.warn('Failed to invalidate/refetch query cache:', error);
+      }
 
       // Clear form and validation state
       setFiles([]);

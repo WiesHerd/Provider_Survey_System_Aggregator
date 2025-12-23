@@ -43,6 +43,9 @@ import { parseFile } from '../utils/fileParser';
 import { validateAll, CompleteValidationResult } from '../utils/validationEngine';
 import { getExcelSheetNames } from '../utils/excelParser';
 import { isExcelFile } from '../utils/fileParser';
+import { useSurveyListQuery } from './useSurveyListQuery';
+import { useYear } from '../../../contexts/YearContext';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 interface UseUploadDataReturn {
   // File state
@@ -113,6 +116,10 @@ interface UseUploadDataOptions {
   onUploadComplete?: (surveys: UploadedSurvey[]) => void;
   onSurveySelect?: (surveyId: string | null) => void;
   onSurveyDelete?: (surveyId: string) => void;
+  // Optional: Override year and providerType for filtering
+  // If not provided, will use context values
+  year?: string;
+  providerType?: string;
 }
 
 /**
@@ -129,8 +136,16 @@ export const useUploadData = (
     autoLoad = true,
     onUploadComplete,
     onSurveySelect,
-    onSurveyDelete
+    onSurveyDelete,
+    year: overrideYear,
+    providerType: overrideProviderType
   } = options;
+
+  // Get year and providerType from context (or use overrides)
+  const { currentYear: contextYear } = useYear();
+  const { selectedProviderType: contextProviderType } = useProviderContext();
+  const currentYear = overrideYear ?? contextYear;
+  const selectedProviderType = overrideProviderType ?? contextProviderType;
 
   // State declarations
   const [files, setFiles] = useState<FileWithPreview[]>([]);
@@ -169,7 +184,8 @@ export const useUploadData = (
   });
   
   // Loading and error state
-  const [isLoading, setIsLoading] = useState(true);
+  // ENTERPRISE FIX: Use query loading state (handles caching intelligently)
+  const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +215,19 @@ export const useUploadData = (
   // Data service and database context
   const dataService = useMemo(() => getDataService(), []);
   const { isReady: isDatabaseReady, getService: getDatabaseService } = useDatabase();
+
+  // ENTERPRISE FIX: Use React Query for intelligent caching
+  // This provides instant navigation (cached data) and background refresh
+  const { 
+    data: rawSurveys, 
+    loading: queryLoading, 
+    error: queryError,
+    refetch: refetchSurveys 
+  } = useSurveyListQuery(
+    currentYear, 
+    selectedProviderType === 'BOTH' ? undefined : selectedProviderType,
+    autoLoad && isDatabaseReady
+  );
 
   // Memoized computed values
   const uniqueValues = useMemo(() => {
@@ -354,74 +383,62 @@ export const useUploadData = (
     setSectionState(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
 
-  // Data loading
-  const loadSurveys = useCallback(async () => {
-    try {
-      console.log('📥 useUploadData: Loading surveys from IndexedDB...');
-      setIsLoading(true);
-      setError(null);
-      
-      const surveys = await dataService.getAllSurveys();
-      console.log('📊 useUploadData: Loaded surveys from IndexedDB:', {
-        surveyCount: surveys.length,
-        surveys: surveys.map(s => ({
-          id: s.id,
-          name: s.name,
-          type: s.type,
-          year: s.year,
-          rowCount: s.rowCount,
-          specialtyCount: s.specialtyCount
-        }))
-      });
-      
-      const processedSurveys = surveys.map((survey: any) => ({
-        id: survey.id,
-        fileName: survey.name || '',
-        surveyType: survey.type || '',
-        surveyYear: survey.year?.toString() || '',
-        uploadDate: new Date(survey.uploadDate || new Date()),
-        fileContent: '',
-        rows: [],
-        stats: {
-          totalRows: survey.rowCount ?? survey.row_count ?? 0,
-          uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
-          totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
-        },
-        columnMappings: {},
-        // NEW: Include full survey object for new display formatting
-        providerType: survey.providerType,
-        source: (survey as any).source,
-        dataCategory: (survey as any).dataCategory,
-        customDataCategory: (survey as any).customDataCategory,
-        customProviderType: (survey as any).customProviderType,
-        surveyLabel: (survey as any).surveyLabel || (survey as any).metadata?.surveyLabel
-      }));
-
-      console.log('✅ useUploadData: Processed surveys:', {
-        processedCount: processedSurveys.length,
-        processedSurveys: processedSurveys.map(s => ({
-          id: s.id,
-          fileName: s.fileName,
-          surveyType: s.surveyType,
-          surveyYear: s.surveyYear,
-          stats: s.stats
-        }))
-      });
-
-      setUploadedSurveys(processedSurveys);
-      
-      // Auto-select first survey if none selected
-      if (!selectedSurvey && processedSurveys.length > 0) {
-        setSelectedSurvey(processedSurveys[0].id);
-        onSurveySelect?.(processedSurveys[0].id);
+  // ENTERPRISE FIX: Process React Query data into component format
+  // This runs whenever the query data changes, but React Query handles caching
+  useEffect(() => {
+    if (!rawSurveys || rawSurveys.length === 0) {
+      setUploadedSurveys([]);
+      if (!selectedSurvey) {
+        setSelectedSurvey(null);
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load surveys';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
+      return;
     }
-  }, [dataService, selectedSurvey, onSurveySelect]);
+
+    // Process surveys from query result
+    const processedSurveys = rawSurveys.map((survey: any) => ({
+      id: survey.id,
+      fileName: survey.name || '',
+      surveyType: survey.type || '',
+      surveyYear: survey.year?.toString() || '',
+      uploadDate: new Date(survey.uploadDate || new Date()),
+      fileContent: '',
+      rows: [],
+      stats: {
+        totalRows: survey.rowCount ?? survey.row_count ?? 0,
+        uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
+        totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
+      },
+      columnMappings: {},
+      // Include full survey object for display formatting
+      providerType: survey.providerType,
+      source: (survey as any).source,
+      dataCategory: (survey as any).dataCategory,
+      customDataCategory: (survey as any).customDataCategory,
+      customProviderType: (survey as any).customProviderType,
+      surveyLabel: (survey as any).surveyLabel || (survey as any).metadata?.surveyLabel
+    }));
+
+    setUploadedSurveys(processedSurveys);
+    
+    // Auto-select first survey if none selected
+    if (!selectedSurvey && processedSurveys.length > 0) {
+      setSelectedSurvey(processedSurveys[0].id);
+      onSurveySelect?.(processedSurveys[0].id);
+    }
+  }, [rawSurveys, selectedSurvey, onSurveySelect]);
+
+  // Handle query errors
+  useEffect(() => {
+    if (queryError) {
+      setError(queryError);
+    }
+  }, [queryError]);
+
+  // ENTERPRISE FIX: Manual refresh function (for explicit refresh button)
+  // React Query handles automatic caching, but we expose this for manual refresh
+  const loadSurveys = useCallback(async () => {
+    await refetchSurveys();
+  }, [refetchSurveys]);
 
   // Enhanced file upload with transaction support
   const uploadFiles = useCallback(async () => {
@@ -631,8 +648,8 @@ export const useUploadData = (
         }
       }
 
-      // Update state
-      setUploadedSurveys(prev => [...prev, ...uploadedSurveys]);
+      // ENTERPRISE FIX: Don't manually update state - let React Query handle it
+      // Cache invalidation will trigger a refetch and update the state automatically
       clearFiles();
       
       // Update upload state
@@ -653,6 +670,22 @@ export const useUploadData = (
       // Invalidate analytics cache
       const { cacheInvalidation } = await import('../../analytics/utils/cacheInvalidation');
       cacheInvalidation.onNewSurvey();
+      
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger automatic refetch
+      // This ensures the survey list is updated immediately with the new survey
+      try {
+        const { queryClient } = require('../../../shared/services/queryClient');
+        // Invalidate all survey list queries (for all year/providerType combinations)
+        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
+        console.log('✅ Invalidated survey list cache after upload - React Query will refetch automatically');
+        
+        // ENTERPRISE FIX: Explicitly refetch to ensure immediate update
+        // This ensures survey pills appear immediately without page refresh
+        await refetchSurveys();
+        console.log('✅ Refetched survey list after upload');
+      } catch (error) {
+        console.warn('Failed to invalidate/refetch query cache:', error);
+      }
       
       // Call callback
       onUploadComplete?.(uploadedSurveys);
@@ -797,12 +830,12 @@ export const useUploadData = (
     setError(null);
   }, []);
 
-  // Effects
-  useEffect(() => {
-    if (autoLoad) {
-      loadSurveys();
-    }
-  }, [autoLoad, loadSurveys]);
+  // ENTERPRISE FIX: No manual loading effect needed
+  // React Query handles loading automatically based on:
+  // - staleTime (2 minutes) - data is fresh for 2 minutes
+  // - refetchOnMount: false - uses cache if data is fresh
+  // - refetchOnWindowFocus: true - refreshes in background on focus
+  // This provides instant navigation with cached data, just like Google apps
 
   // Validate files when they change or sheet selection changes
   useEffect(() => {
@@ -926,10 +959,12 @@ export const useUploadData = (
     refreshData,
     
     // Loading states
-    isLoading,
+    // ENTERPRISE FIX: Show spinner for initial load (isLoading) or when no cached data
+    // This provides consistent UX - always show spinner on first load
+    isLoading: queryLoading,
     isUploading,
     isDeleting,
-    error,
+    error: error || queryError,
     clearError,
     
     // Database state
