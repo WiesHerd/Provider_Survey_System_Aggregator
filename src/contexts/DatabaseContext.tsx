@@ -25,6 +25,7 @@ interface DatabaseContextType {
   initialize: () => Promise<void>;
   checkHealth: () => Promise<void>;
   repair: () => Promise<void>;
+  reset: () => Promise<void>;
   clearError: () => void;
   
   // Service access
@@ -167,6 +168,46 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
     }
   }, [service]);
 
+  // Reset database (complete wipe and recreate)
+  const reset = useCallback(async () => {
+    if (!window.confirm('⚠️ WARNING: This will delete ALL survey data, mappings, and settings. This action cannot be undone. Are you sure you want to continue?')) {
+      return;
+    }
+
+    setState(prev => ({ ...prev, isInitializing: true, error: null }));
+
+    try {
+      console.log('🔧 DatabaseContext: Starting database reset...');
+      
+      // Force clear the database (this will close connections, delete the DB, and reinitialize)
+      await service.forceClearDatabase();
+      
+      // Update state to reflect successful reset
+      setState(prev => ({
+        ...prev,
+        isReady: true,
+        isInitializing: false,
+        healthStatus: 'healthy',
+        error: null,
+        lastChecked: Date.now()
+      }));
+      
+      console.log('✅ DatabaseContext: Database reset completed successfully');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to reset database';
+      console.error('❌ DatabaseContext: Database reset failed:', error);
+      
+      setState(prev => ({
+        ...prev,
+        isReady: false,
+        isInitializing: false,
+        healthStatus: 'unhealthy',
+        error: errorMessage,
+        lastChecked: Date.now()
+      }));
+    }
+  }, [service]);
+
   // Clear error
   const clearError = useCallback(() => {
     setState(prev => ({ ...prev, error: null }));
@@ -202,6 +243,7 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
     initialize,
     checkHealth,
     repair,
+    reset,
     clearError,
     
     // Service access

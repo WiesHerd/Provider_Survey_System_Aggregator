@@ -12,6 +12,8 @@ import { YearProvider } from './contexts/YearContext';
 import { ProviderContextProvider } from './contexts/ProviderContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DatabaseProvider, useDatabase } from './contexts/DatabaseContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { AuthGuard } from './components/auth/AuthGuard';
 import { queryClient } from './shared/services/queryClient';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { SuspenseSpinner } from './shared/components';
@@ -19,6 +21,8 @@ import { SurveyMigrationService } from './services/SurveyMigrationService';
 import { Box, Typography, Button, Alert, CircularProgress } from '@mui/material';
 import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { DatabaseDiagnostics } from './components/DatabaseDiagnostics';
+import { validateAndLog } from './shared/utils/envValidation';
+import { ErrorBoundary } from './shared/components/ErrorBoundary';
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -102,7 +106,7 @@ const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen')
  * Shows while database is initializing or if there are errors
  */
 const DatabaseInitializationScreen: React.FC = () => {
-  const { isReady, isInitializing, healthStatus, error, initialize, repair, clearError } = useDatabase();
+  const { isReady, isInitializing, healthStatus, error, initialize, repair, reset, clearError } = useDatabase();
   const [showAdvancedOptions, setShowAdvancedOptions] = React.useState(false);
 
   if (isReady && healthStatus === 'healthy') {
@@ -117,6 +121,11 @@ const DatabaseInitializationScreen: React.FC = () => {
   const handleRepair = async () => {
     clearError();
     await repair();
+  };
+
+  const handleReset = async () => {
+    clearError();
+    await reset();
   };
 
   const handleSkipInitialization = () => {
@@ -162,60 +171,68 @@ const DatabaseInitializationScreen: React.FC = () => {
                 style={{ 
                   width: 48, 
                   height: 48, 
-                  color: '#f59e0b',
+                  color: '#6366f1',
                   margin: '0 auto'
                 }} 
               />
             </Box>
-            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600, color: 'error.main' }}>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 600, color: 'text.primary' }}>
               Database Error
             </Typography>
-            <Alert severity="error" sx={{ mb: 3, textAlign: 'left' }}>
-              <Typography variant="body2">
+            <Alert severity="warning" sx={{ mb: 3, textAlign: 'left', borderRadius: '8px' }}>
+              <Typography variant="body2" sx={{ color: 'text.primary' }}>
                 {error}
               </Typography>
             </Alert>
             
             {/* Troubleshooting tips */}
-            <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            <Box sx={{ mb: 3, p: 2.5, bgcolor: 'grey.50', borderRadius: '8px', border: '1px solid', borderColor: 'grey.200' }}>
+              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: 'text.primary' }}>
                 Troubleshooting Tips:
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                • Try refreshing the page
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                • Check if your browser supports IndexedDB
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                • Clear browser cache and cookies
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                • Try a different browser (Chrome, Firefox, Edge)
-              </Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Try refreshing the page
+                </Typography>
+                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Check if your browser supports IndexedDB
+                </Typography>
+                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Clear browser cache and cookies
+                </Typography>
+                <Typography component="li" variant="body2" color="text.secondary">
+                  Try a different browser (Chrome, Firefox, Edge)
+                </Typography>
+              </Box>
             </Box>
             
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 2 }}>
               <Button
                 variant="contained"
+                color="primary"
                 onClick={handleRetry}
-                sx={{ borderRadius: '8px', px: 3 }}
+                sx={{ borderRadius: '8px', px: 3, textTransform: 'none', fontWeight: 500 }}
               >
                 Try Again
               </Button>
               <Button
                 variant="outlined"
+                color="primary"
                 onClick={handleRepair}
-                sx={{ borderRadius: '8px', px: 3 }}
+                sx={{ borderRadius: '8px', px: 3, textTransform: 'none', fontWeight: 500 }}
               >
                 Repair Database
               </Button>
+            </Box>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
               <Button
                 variant="text"
+                color="primary"
                 onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                sx={{ borderRadius: '8px', px: 3 }}
+                sx={{ borderRadius: '8px', px: 2, textTransform: 'none', fontSize: '0.875rem' }}
               >
-                Advanced Options
+                {showAdvancedOptions ? 'Hide' : 'Show'} Advanced Options
               </Button>
             </Box>
             
@@ -223,21 +240,38 @@ const DatabaseInitializationScreen: React.FC = () => {
               <Box sx={{ mt: 3 }}>
                 <DatabaseDiagnostics />
                 
-                <Box sx={{ p: 2, bgcolor: 'warning.50', borderRadius: 1, border: '1px solid', borderColor: 'warning.200' }}>
-                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: 'warning.dark' }}>
+                <Box sx={{ mt: 3, p: 2.5, bgcolor: 'grey.50', borderRadius: '8px', border: '1px solid', borderColor: 'grey.200' }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: 'text.primary' }}>
                     Advanced Options (Use with caution):
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    onClick={handleSkipInitialization}
-                    sx={{ borderRadius: '8px', px: 3 }}
-                  >
-                    Skip Database Initialization
-                  </Button>
-                  <Typography variant="caption" display="block" sx={{ mt: 1, color: 'warning.dark' }}>
-                    This will bypass database initialization but may cause the app to malfunction.
-                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={handleReset}
+                        sx={{ borderRadius: '8px', px: 3, textTransform: 'none', fontWeight: 500 }}
+                      >
+                        Reset Database (Delete All Data)
+                      </Button>
+                      <Typography variant="caption" display="block" sx={{ color: 'text.secondary', mt: 0.5 }}>
+                        Completely wipe and recreate the database. This will delete all surveys, mappings, and settings.
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={handleSkipInitialization}
+                        sx={{ borderRadius: '8px', px: 3, textTransform: 'none', fontWeight: 500 }}
+                      >
+                        Skip Database Initialization
+                      </Button>
+                      <Typography variant="caption" display="block" sx={{ color: 'text.secondary', mt: 0.5 }}>
+                        This will bypass database initialization but may cause the app to malfunction.
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Box>
               </Box>
             )}
@@ -403,11 +437,11 @@ const PageContent = () => {
           title: 'Survey Regional Analytics',
           description: 'Regional analysis by survey source'
         };
-      case '/custom-reports':
-        return {
-          title: 'Custom Reports',
-          description: 'Generate custom reports and exports'
-        };
+       case '/custom-reports':
+         return {
+           title: 'Chart & Report Builder',
+           description: 'Create custom reports and visualizations from your survey data'
+         };
       case '/canned-reports':
         // Check for report name in URL search params
         const searchParams = new URLSearchParams(location.search);
@@ -468,7 +502,11 @@ const PageContent = () => {
           <Suspense fallback={<SuspenseSpinner message="Loading page..." />}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={
+                <ErrorBoundary componentName="Dashboard">
+                  <Dashboard />
+                </ErrorBoundary>
+              } />
               <Route path="/upload" element={<SurveyUpload />} />
               
               {/* Legacy routes (for backward compatibility) */}
@@ -477,11 +515,23 @@ const PageContent = () => {
               <Route path="/region-mapping" element={<RegionMapping />} />
               <Route path="/variable-mapping" element={<VariableMapping />} />
               <Route path="/benchmarking" element={<SurveyAnalytics />} />
-              <Route path="/regional-analytics" element={<RegionalAnalytics />} />
-              <Route path="/fair-market-value" element={<FairMarketValue />} />
+              <Route path="/regional-analytics" element={
+                <ErrorBoundary componentName="Regional Analytics">
+                  <RegionalAnalytics />
+                </ErrorBoundary>
+              } />
+              <Route path="/fair-market-value" element={
+                <ErrorBoundary componentName="Fair Market Value">
+                  <FairMarketValue />
+                </ErrorBoundary>
+              } />
               <Route path="/custom-reports" element={<CustomReports />} />
               <Route path="/canned-reports" element={<CannedReports />} />
-              <Route path="/system-settings" element={<SystemSettings />} />
+              <Route path="/system-settings" element={
+                <ErrorBoundary componentName="System Settings">
+                  <SystemSettings />
+                </ErrorBoundary>
+              } />
               <Route path="/specialty-blending" element={<SpecialtyBlending />} />
               
               {/* Provider-specific routes */}
@@ -522,6 +572,11 @@ const PageContent = () => {
 };
 
 function App() {
+  // Validate environment variables on app startup
+  useEffect(() => {
+    validateAndLog(process.env.NODE_ENV === 'development');
+  }, []);
+
   // Run migration on app startup
   useEffect(() => {
     const runMigration = async () => {
@@ -561,17 +616,21 @@ function App() {
         <DatabaseProvider>
           <DatabaseInitializationScreen />
           <AuthProvider>
-            <StorageProvider>
-              <MappingProvider>
-                <YearProvider>
-                  <ProviderContextProvider>
-                    <Router basename={basename}>
-                      <PageContent />
-                    </Router>
-                  </ProviderContextProvider>
-                </YearProvider>
-              </MappingProvider>
-            </StorageProvider>
+            <AuthGuard requireAuth={true}>
+              <ToastProvider>
+                <StorageProvider>
+                  <MappingProvider>
+                    <YearProvider>
+                      <ProviderContextProvider>
+                        <Router basename={basename}>
+                          <PageContent />
+                        </Router>
+                      </ProviderContextProvider>
+                    </YearProvider>
+                  </MappingProvider>
+                </StorageProvider>
+              </ToastProvider>
+            </AuthGuard>
           </AuthProvider>
         </DatabaseProvider>
         {process.env.NODE_ENV === 'development' && (
