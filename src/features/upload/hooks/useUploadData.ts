@@ -594,7 +594,14 @@ export const useUploadData = (
           const verification = await validateUploadTransaction(
             uploadedSurvey.surveyId,
             stats.totalRows,
-            (id) => getDatabaseService().getSurveyById(id),
+            (id) => {
+              const dbService = getDatabaseService();
+              if (!dbService) {
+                // If using Firebase, use dataService instead
+                return dataService.getSurveyById?.(id) || Promise.resolve(null);
+              }
+              return dbService.getSurveyById(id);
+            },
             (id) => dataService.getSurveyData(id)
           );
           

@@ -28,8 +28,8 @@ interface DatabaseContextType {
   reset: () => Promise<void>;
   clearError: () => void;
   
-  // Service access
-  getService: () => IndexedDBService;
+  // Service access (can be null if Firebase is the storage mode)
+  getService: () => IndexedDBService | null;
 }
 
 const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined);
@@ -431,9 +431,9 @@ export const useDatabaseReady = (): boolean => {
 
 /**
  * Hook to get database service
- * Returns the IndexedDBService instance
+ * Returns the IndexedDBService instance (or null if Firebase is the storage mode)
  */
-export const useDatabaseService = (): IndexedDBService => {
+export const useDatabaseService = (): IndexedDBService | null => {
   const { getService } = useDatabase();
   return getService();
 };
