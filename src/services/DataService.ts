@@ -27,13 +27,27 @@ export class DataService {
     }
 
     this.mode = mode;
-    this.indexedDB = new IndexedDBService();
+
+    // CRITICAL FIX: Only initialize IndexedDB if it's the selected mode
+    // This prevents IndexedDB from being initialized when Firebase is the primary storage
+    // This fixes the version mismatch error when Firebase is being used
+    if (mode === StorageMode.INDEXED_DB) {
+      this.indexedDB = new IndexedDBService();
+    } else {
+      // Create IndexedDB instance but don't initialize it yet (lazy initialization)
+      // This allows fallback if Firebase fails
+      this.indexedDB = new IndexedDBService();
+    }
 
     // Initialize Firestore if Firebase mode is selected
     if (mode === StorageMode.FIREBASE) {
       if (!isFirebaseAvailable()) {
         console.warn('⚠️ Firebase mode requested but Firebase not available. Falling back to IndexedDB.');
         this.mode = StorageMode.INDEXED_DB;
+        // Ensure IndexedDB is initialized when falling back
+        if (!this.indexedDB) {
+          this.indexedDB = new IndexedDBService();
+        }
       } else {
         try {
           this.firestore = new FirestoreService();
@@ -41,6 +55,10 @@ export class DataService {
           console.error('❌ Failed to initialize Firestore:', error);
           console.warn('⚠️ Falling back to IndexedDB.');
           this.mode = StorageMode.INDEXED_DB;
+          // Ensure IndexedDB is initialized when falling back
+          if (!this.indexedDB) {
+            this.indexedDB = new IndexedDBService();
+          }
         }
       }
     }
@@ -48,7 +66,8 @@ export class DataService {
 
   /**
    * Auto-detect storage mode based on environment and Firebase availability
-   * Prefers Firebase when available for better performance and cloud storage
+   * ENTERPRISE: Prefers IndexedDB as primary storage to minimize Firebase costs
+   * Firebase is only used when explicitly requested via environment variable
    */
   private detectStorageMode(): StorageMode {
     // Check environment variable first (allows explicit override)
@@ -58,14 +77,11 @@ export class DataService {
       return envMode;
     }
 
-    // Prefer Firebase when available for cloud storage and better performance
-    if (isFirebaseAvailable()) {
-      console.log('☁️ Firebase available - using cloud storage for better performance');
-      return StorageMode.FIREBASE;
-    }
-
-    // Fallback to IndexedDB if Firebase not available
-    console.log('💾 Firebase not available - using IndexedDB (local storage)');
+    // ENTERPRISE: Default to IndexedDB for cost optimization
+    // IndexedDB handles 100% of local operations (free)
+    // Firebase only used when explicitly needed for multi-device sync
+    console.log('💾 Using IndexedDB as primary storage (cost-optimized, offline-first)');
+    console.log('💡 To enable Firebase for cloud sync, set REACT_APP_STORAGE_MODE=firebase');
     return StorageMode.INDEXED_DB;
   }
 
@@ -165,6 +181,63 @@ export class DataService {
 
   async forceClearDatabase() {
     return await this.getStorageService().forceClearDatabase();
+  }
+
+  /**
+   * Batch query method for executing multiple data service queries in parallel
+   * This optimizes performance by batching related queries together
+   * 
+   * @param queries - Array of query functions to execute in parallel
+   * @returns Promise that resolves with an array of results in the same order as queries
+   * 
+   * @example
+   * ```typescript
+   * const [surveys, mappings, columnMappings] = await dataService.batchQuery([
+   *   () => dataService.getAllSurveys(),
+   *   () => dataService.getAllSpecialtyMappings(),
+   *   () => dataService.getAllColumnMappings()
+   * ]);
+   * ```
+   */
+  async batchQuery<T extends any[]>(
+    queries: Array<() => Promise<any>>
+  ): Promise<T> {
+    const service = this.getStorageService();
+    
+    // If using IndexedDB, use its optimized batch method
+    if (this.mode === StorageMode.INDEXED_DB && 'batchQuery' in service) {
+      return await (service as any).batchQuery(queries);
+    }
+    
+    // Otherwise, use Promise.all for parallel execution
+    console.log(`🚀 DataService: Executing ${queries.length} queries in parallel`);
+    const startTime = performance.now();
+    
+    try {
+      const results = await Promise.all(
+        queries.map(async (queryFn, index) => {
+          const queryStartTime = performance.now();
+          try {
+            const result = await queryFn();
+            const queryDuration = performance.now() - queryStartTime;
+            console.log(`✅ Query ${index + 1}/${queries.length} completed in ${queryDuration.toFixed(2)}ms`);
+            return result;
+          } catch (error) {
+            console.error(`❌ Query ${index + 1}/${queries.length} failed:`, error);
+            throw error;
+          }
+        })
+      );
+      
+      const totalDuration = performance.now() - startTime;
+      console.log(`✅ DataService: All ${queries.length} queries completed in ${totalDuration.toFixed(2)}ms`);
+      
+      return results as T;
+    } catch (error) {
+      const totalDuration = performance.now() - startTime;
+      console.error(`❌ DataService: Batch query failed after ${totalDuration.toFixed(2)}ms:`, error);
+      throw error;
+    }
   }
 
   async uploadSurvey(
@@ -538,6 +611,31 @@ export class DataService {
     }
     // For IndexedDB, return empty array (audit logs are Firebase-only feature)
     return [];
+  }
+
+  // FMV Calculation Methods
+  async getAllFMVCalculations(): Promise<any[]> {
+    const service = this.getStorageService();
+    if (this.mode === StorageMode.FIREBASE && this.firestore) {
+      return await (this.firestore as any).getAllFMVCalculations();
+    }
+    return await (this.indexedDB as any).getAllFMVCalculations();
+  }
+
+  async saveFMVCalculation(calculation: any): Promise<void> {
+    const service = this.getStorageService();
+    if (this.mode === StorageMode.FIREBASE && this.firestore) {
+      return await (this.firestore as any).saveFMVCalculation(calculation);
+    }
+    return await (this.indexedDB as any).saveFMVCalculation(calculation);
+  }
+
+  async deleteFMVCalculation(id: string): Promise<void> {
+    const service = this.getStorageService();
+    if (this.mode === StorageMode.FIREBASE && this.firestore) {
+      return await (this.firestore as any).deleteFMVCalculation(id);
+    }
+    return await (this.indexedDB as any).deleteFMVCalculation(id);
   }
 }
 

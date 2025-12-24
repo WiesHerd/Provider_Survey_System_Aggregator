@@ -59,10 +59,29 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
       return;
     }
 
+    // CRITICAL FIX: Only initialize IndexedDB if it's the active storage mode
+    // This prevents IndexedDB version errors when Firebase is the primary storage
+    const { getDataService } = require('../services/DataService');
+    const dataService = getDataService();
+    const storageMode = dataService.getMode();
+    
+    if (storageMode !== 'indexeddb') {
+      console.log(`📦 DatabaseContext: Skipping IndexedDB initialization - using ${storageMode} storage`);
+      setState(prev => ({
+        ...prev,
+        isReady: true, // Mark as ready since we're using Firebase
+        isInitializing: false,
+        healthStatus: 'healthy',
+        error: null,
+        lastChecked: Date.now()
+      }));
+      return;
+    }
+
     setState(prev => ({ ...prev, isInitializing: true, error: null }));
 
     try {
-      console.log('🔧 DatabaseContext: Starting database initialization...');
+      console.log('🔧 DatabaseContext: Starting IndexedDB initialization...');
       
       // Add timeout to prevent infinite hanging
       const initPromise = service.initialize();
@@ -98,6 +117,40 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
           lastChecked: Date.now()
         }));
         return;
+      }
+      
+      // ENTERPRISE: Auto-detect version mismatch errors and trigger repair
+      const isVersionMismatch = errorMessage.includes('version') && 
+                                 (errorMessage.includes('less than') || 
+                                  errorMessage.includes('greater than') ||
+                                  errorMessage.includes('requested version'));
+      
+      if (isVersionMismatch) {
+        console.warn('🔄 DatabaseContext: Version mismatch detected, attempting automatic repair...');
+        // Auto-trigger repair for version mismatch (call service directly to avoid circular dependency)
+        try {
+          await service.repairDatabase();
+          // Re-initialize after repair
+          const retryInitPromise = service.initialize();
+          const retryTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database initialization timed out after 10 seconds')), 10000)
+          );
+          await Promise.race([retryInitPromise, retryTimeoutPromise]);
+          
+          setState(prev => ({
+            ...prev,
+            isReady: true,
+            isInitializing: false,
+            healthStatus: 'healthy',
+            error: null,
+            lastChecked: Date.now()
+          }));
+          console.log('✅ DatabaseContext: Automatic repair and re-initialization completed successfully');
+          return; // Repair succeeded, state already updated
+        } catch (repairError) {
+          console.error('❌ DatabaseContext: Automatic repair failed:', repairError);
+          // Fall through to set error state
+        }
       }
       
       setState(prev => ({
@@ -136,26 +189,67 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
   }, [service]);
 
   // Repair database
+  // ENTERPRISE: Enhanced repair function that handles version mismatches automatically
   const repair = useCallback(async () => {
     setState(prev => ({ ...prev, isInitializing: true, error: null }));
 
     try {
       console.log('🔧 DatabaseContext: Starting database repair...');
+      
+      // First, try to repair the database
       await service.repairDatabase();
       
-      setState(prev => ({
-        ...prev,
-        isReady: true,
-        isInitializing: false,
-        healthStatus: 'healthy',
-        error: null,
-        lastChecked: Date.now()
-      }));
+      // After repair, re-initialize to ensure database is ready
+      // This handles version mismatch issues by re-detecting the version
+      console.log('🔄 DatabaseContext: Re-initializing database after repair...');
+      await service.initialize();
       
-      console.log('✅ DatabaseContext: Database repair completed successfully');
+      // Verify database is healthy after repair
+      const health = await service.getHealthStatus();
+      
+      if (health.status === 'healthy') {
+        setState(prev => ({
+          ...prev,
+          isReady: true,
+          isInitializing: false,
+          healthStatus: 'healthy',
+          error: null,
+          lastChecked: Date.now()
+        }));
+        
+        console.log('✅ DatabaseContext: Database repair and re-initialization completed successfully');
+      } else {
+        throw new Error(health.details || 'Database health check failed after repair');
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to repair database';
       console.error('❌ DatabaseContext: Database repair failed:', error);
+      
+      // ENTERPRISE: If repair fails due to version mismatch, try one more time with force clear
+      if (errorMessage.includes('version') && (errorMessage.includes('less than') || errorMessage.includes('greater than'))) {
+        console.warn('🔄 DatabaseContext: Version mismatch detected, attempting force clear and reinitialize...');
+        try {
+          // Force clear and reinitialize
+          await service.forceClearDatabase();
+          await service.initialize();
+          
+          const health = await service.getHealthStatus();
+          if (health.status === 'healthy') {
+            setState(prev => ({
+              ...prev,
+              isReady: true,
+              isInitializing: false,
+              healthStatus: 'healthy',
+              error: null,
+              lastChecked: Date.now()
+            }));
+            console.log('✅ DatabaseContext: Force clear and reinitialize completed successfully');
+            return;
+          }
+        } catch (forceClearError) {
+          console.error('❌ DatabaseContext: Force clear also failed:', forceClearError);
+        }
+      }
       
       setState(prev => ({
         ...prev,
