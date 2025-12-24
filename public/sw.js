@@ -3,7 +3,7 @@
  * Provides offline capability and static asset caching
  */
 
-const CACHE_NAME = 'survey-aggregator-v4'; // Updated to force cache refresh for IndexedDB version fix (v8->v9)
+const CACHE_NAME = 'survey-aggregator-v5'; // Updated to force cache refresh - fix stale HTML/JS references
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -24,6 +24,13 @@ self.addEventListener('install', (event) => {
     })
   );
   self.skipWaiting(); // Activate immediately
+});
+
+// Listen for skip waiting message from main thread
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate event - clean up old caches
@@ -61,12 +68,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first strategy for JavaScript files to ensure latest code loads
-  // CRITICAL: Never cache JS files to prevent old IndexedDB version code from being served
-  if (url.pathname.endsWith('.js') || url.pathname.includes('/static/js/')) {
+  // Network-first strategy for ALL static assets to ensure latest code loads
+  // CRITICAL: Never cache JS/CSS/HTML files to prevent stale code from being served
+  if (url.pathname.endsWith('.js') || 
+      url.pathname.endsWith('.css') || 
+      url.pathname === '/' || 
+      url.pathname === '/index.html' ||
+      url.pathname.includes('/static/')) {
     event.respondWith(
-      fetch(request, { cache: 'no-cache' })
+      fetch(request, { cache: 'no-store' })
         .then((response) => {
+          // Don't cache these files at all
           return response;
         })
         .catch(() => {
