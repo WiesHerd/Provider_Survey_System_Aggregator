@@ -729,7 +729,12 @@ export class IndexedDBService {
               // Open using the robust version handling logic
               await this._openWithVersionAsync(detectedVersion);
               this.isReady = true;
-              console.log(`✅ Successfully opened database with version ${this.db?.version}`);
+              const db = this.db as IDBDatabase | null;
+              if (db) {
+                console.log(`✅ Successfully opened database with version ${db.version}`);
+              } else {
+                console.log(`✅ Successfully opened database`);
+              }
             } else {
               // No existing database detected, open as new
               await this._openWithVersionAsync(null);
