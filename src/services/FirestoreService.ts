@@ -428,12 +428,32 @@ export class FirestoreService {
       // First verify survey exists
       const survey = await this.getSurveyById(surveyId);
       if (!survey) {
+        // ENTERPRISE FIX: If survey not found, it may have already been deleted
+        // or may exist in IndexedDB instead. Try to delete from IndexedDB as fallback
+        console.warn(`⚠️ FirestoreService: Survey ${surveyId} not found in Firebase. It may have already been deleted or exists in IndexedDB.`);
+        
+        // Check if survey exists in IndexedDB (might be a migration issue)
+        try {
+          const { IndexedDBService } = require('./IndexedDBService');
+          const indexedDB = new IndexedDBService();
+          const indexedDBSurvey = await indexedDB.getSurveyById(surveyId);
+          if (indexedDBSurvey) {
+            console.log(`📦 Found survey in IndexedDB, deleting from there instead`);
+            const result = await indexedDB.deleteWithVerification(surveyId);
+            return result;
+          }
+        } catch (indexedDBError) {
+          // IndexedDB check failed, continue with Firebase deletion attempt
+          console.debug('IndexedDB check failed (expected if using Firebase only)');
+        }
+        
+        // Survey doesn't exist - treat as successful deletion (idempotent)
+        console.log(`✅ Survey ${surveyId} not found - treating as already deleted`);
         return {
-          success: false,
-          deletedSurvey: false,
+          success: true,
+          deletedSurvey: false, // Wasn't found, so wasn't deleted
           deletedDataRows: 0,
           deletedMappings: 0,
-          error: `Survey ${surveyId} not found`
         };
       }
 
@@ -1605,17 +1625,18 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const mappingsRef = collection(this.db, this.getUserPath(`learnedMappings/${type}`));
-    const constraints: QueryConstraint[] = [];
+    // ENTERPRISE FIX: Use single 'learnedMappings' collection with mappingType field
+    // Firestore paths must have odd number of segments (collection/document/collection...)
+    const mappingsRef = collection(this.db, this.getUserPath('learnedMappings'));
+    const constraints: QueryConstraint[] = [
+      where('mappingType', '==', type)
+    ];
     
     if (providerType) {
       constraints.push(where('providerType', '==', providerType));
     }
 
-    const q = constraints.length > 0 
-      ? query(mappingsRef, ...constraints)
-      : query(mappingsRef);
-    
+    const q = query(mappingsRef, ...constraints);
     const snapshot = await getDocs(q);
     const result: Record<string, string> = {};
     
@@ -1638,10 +1659,12 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
+    // ENTERPRISE FIX: Use single 'learnedMappings' collection with mappingType field
     const mappingId = `${type}_${original}_${corrected}`.replace(/[^a-zA-Z0-9_]/g, '_');
-    const mappingRef = doc(this.db, this.getUserPath(`learnedMappings/${type}`), mappingId);
+    const mappingRef = doc(this.db, this.getUserPath('learnedMappings'), mappingId);
     
     const mappingData = this.removeUndefinedValues({
+      mappingType: type, // Store type as a field for filtering
       original,
       corrected,
       providerType: providerType || null,
@@ -1660,9 +1683,13 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    // Find and delete the mapping
-    const mappingsRef = collection(this.db, this.getUserPath(`learnedMappings/${type}`));
-    const q = query(mappingsRef, where('original', '==', original));
+    // ENTERPRISE FIX: Use single 'learnedMappings' collection with mappingType field
+    const mappingsRef = collection(this.db, this.getUserPath('learnedMappings'));
+    const q = query(
+      mappingsRef, 
+      where('mappingType', '==', type),
+      where('original', '==', original)
+    );
     const snapshot = await getDocs(q);
     
     const batch = writeBatch(this.db);
@@ -1677,8 +1704,10 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const mappingsRef = collection(this.db, this.getUserPath(`learnedMappings/${type}`));
-    const snapshot = await getDocs(mappingsRef);
+    // ENTERPRISE FIX: Use single 'learnedMappings' collection with mappingType field
+    const mappingsRef = collection(this.db, this.getUserPath('learnedMappings'));
+    const q = query(mappingsRef, where('mappingType', '==', type));
+    const snapshot = await getDocs(q);
     const batch = writeBatch(this.db);
     
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
@@ -1693,17 +1722,17 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const mappingsRef = collection(this.db, this.getUserPath(`learnedMappings/${type}`));
-    const constraints: QueryConstraint[] = [];
+    // ENTERPRISE FIX: Use single 'learnedMappings' collection with mappingType field
+    const mappingsRef = collection(this.db, this.getUserPath('learnedMappings'));
+    const constraints: QueryConstraint[] = [
+      where('mappingType', '==', type)
+    ];
     
     if (providerType) {
       constraints.push(where('providerType', '==', providerType));
     }
 
-    const q = constraints.length > 0 
-      ? query(mappingsRef, ...constraints)
-      : query(mappingsRef);
-    
+    const q = query(mappingsRef, ...constraints);
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => {
       const data = doc.data();
@@ -2171,6 +2200,56 @@ export class FirestoreService {
     const reportRef = doc(this.db, this.getUserPath('customReports'), id);
     await deleteDoc(reportRef);
     console.log('✅ FirestoreService: Deleted custom report:', id);
+  }
+
+  // ==================== FMV Calculation Methods ====================
+
+  async getAllFMVCalculations(): Promise<any[]> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    const calculationsRef = collection(this.db, this.getUserPath('fmvCalculations'));
+    const q = query(calculationsRef, orderBy('created', 'desc'));
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        created: data.created ? this.toDate(data.created) : new Date(),
+        lastModified: data.lastModified ? this.toDate(data.lastModified) : new Date(),
+      };
+    });
+  }
+
+  async saveFMVCalculation(calculation: any): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    const calculationId = calculation.id || `fmv_${Date.now()}`;
+    const calculationRef = doc(this.db, this.getUserPath('fmvCalculations'), calculationId);
+    const calculationData = this.removeUndefinedValues({
+      ...calculation,
+      id: calculationId,
+      created: calculation.created ? this.toTimestamp(calculation.created) : Timestamp.now(),
+      lastModified: Timestamp.now(),
+    });
+
+    await setDoc(calculationRef, calculationData);
+    console.log('✅ FirestoreService: Saved FMV calculation:', calculationId);
+  }
+
+  async deleteFMVCalculation(id: string): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    const calculationRef = doc(this.db, this.getUserPath('fmvCalculations'), id);
+    await deleteDoc(calculationRef);
+    console.log('✅ FirestoreService: Deleted FMV calculation:', id);
   }
 
   // ==================== User Preferences Methods ====================
