@@ -673,6 +673,7 @@ export const useUploadData = (
       
       // ENTERPRISE FIX: Invalidate React Query cache to trigger automatic refetch
       // This ensures the survey list is updated immediately with the new survey
+      // Using ['surveys', 'list'] invalidates all survey list queries (all year/providerType combinations)
       try {
         const { queryClient } = require('../../../shared/services/queryClient');
         // Invalidate all survey list queries (for all year/providerType combinations)
@@ -719,7 +720,8 @@ export const useUploadData = (
         const { invalidateBenchmarkingQueries } = require('../../../features/analytics/hooks/useBenchmarkingQuery');
         invalidateBenchmarkingQueries(queryClient.queryClient);
         // Also invalidate survey list queries (for SurveyUpload/DataPreview screens)
-        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys'] });
+        // Using ['surveys', 'list'] invalidates all survey list queries (all year/providerType combinations)
+        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
         console.log('✅ Invalidated benchmarking queries and survey list queries after survey upload');
       } catch (error) {
         console.warn('Failed to invalidate query cache:', error);
@@ -731,6 +733,7 @@ export const useUploadData = (
   }, [files, formState, dataService, onUploadComplete, clearFiles, isDatabaseReady, getDatabaseService, uploadState.maxRetries]);
 
   // Enhanced survey deletion with verification
+  // ENTERPRISE: Uses unified delete helpers for consistent cache invalidation
   const deleteSurvey = useCallback(async (surveyId: string) => {
     try {
       setIsDeleting(true);
@@ -753,12 +756,29 @@ export const useUploadData = (
 
       setDeleteProgress({
         isDeleting: true,
+        progress: 50,
+        totalFiles: 1,
+        currentFileIndex: 0
+      });
+
+      // ENTERPRISE: Verify deletion before proceeding with cache invalidation
+      const { verifySurveyDeletion } = require('../../../shared/utils/deleteHelpers');
+      const isDeleted = await verifySurveyDeletion(dataService, surveyId);
+      
+      if (!isDeleted) {
+        console.warn('⚠️ Survey deletion verification failed - survey may still exist');
+        // Continue anyway, but log the warning
+      }
+
+      setDeleteProgress({
+        isDeleting: true,
         progress: 75,
         totalFiles: 1,
         currentFileIndex: 0
       });
 
-      // Update local state
+      // CRITICAL: Update local state FIRST to immediately update UI
+      // This ensures surveys disappear from UI even if refetch brings them back
       setUploadedSurveys(prev => prev.filter(survey => survey.id !== surveyId));
       
       // Clear selection if deleted survey was selected
@@ -767,6 +787,18 @@ export const useUploadData = (
         onSurveySelect?.(null);
       }
 
+      // ENTERPRISE: Use unified cache invalidation helpers
+      const { invalidateAllCachesAfterDelete, notifySurveyDeletion } = require('../../../shared/utils/deleteHelpers');
+      
+      // CRITICAL: Clear performance cache BEFORE invalidating queries
+      // This prevents fetchSurveyList from returning cached data
+      const { getPerformanceOptimizedDataService } = require('../../../services/PerformanceOptimizedDataService');
+      const performanceService = getPerformanceOptimizedDataService();
+      performanceService.clearCache('all_surveys'); // Clear all survey list cache entries
+      
+      // Invalidate React Query cache
+      await invalidateAllCachesAfterDelete(surveyId);
+
       setDeleteProgress({
         isDeleting: true,
         progress: 100,
@@ -774,31 +806,23 @@ export const useUploadData = (
         currentFileIndex: 0
       });
 
-      // Verify deletion was successful
-      const verification = await dataService.getSurveyById?.(surveyId);
-      if (verification) {
-        console.warn('⚠️ Survey still exists after deletion - this may indicate a problem');
-      }
-
-      // Invalidate analytics cache since data was removed
-      const analyticsService = new AnalyticsDataService();
-      analyticsService.invalidateCache();
+      // Notify other components of deletion
+      notifySurveyDeletion(surveyId);
       
-      // Invalidate TanStack Query cache for benchmarking queries
+      // CRITICAL: Force refetch with cache bypass to ensure we get fresh data from IndexedDB
+      // Add small delay to ensure cache clearing completes
       try {
+        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
         const { queryClient } = require('../../../shared/services/queryClient');
-        const { invalidateBenchmarkingQueries } = require('../../../features/analytics/hooks/useBenchmarkingQuery');
-        invalidateBenchmarkingQueries(queryClient.queryClient);
-        // Also invalidate survey list queries (for SurveyUpload/DataPreview screens)
-        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys'] });
-        // Invalidate all survey data queries for this survey
-        queryClient.queryClient.invalidateQueries({ queryKey: ['surveyData', surveyId] });
-        console.log('✅ Invalidated benchmarking queries and survey list queries after survey deletion');
+        queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
+        await refetchSurveys();
+        console.log('✅ Refetched survey list after deletion');
       } catch (error) {
-        console.warn('Failed to invalidate query cache:', error);
+        console.warn('⚠️ Failed to refetch survey list after deletion:', error);
+        // Don't throw - local state is already updated, so UI should be correct
       }
       
-      console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows removed`);
+      console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
       
       onSurveyDelete?.(surveyId);
       
