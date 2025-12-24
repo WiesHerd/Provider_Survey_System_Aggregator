@@ -66,7 +66,11 @@ interface SurveyData {
 export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
-  private readonly DB_VERSION = 9; // Incremented to add variable index for fast queries
+  private _dbVersion = 9; // Incremented to add variable index for fast queries
+  // Getter to allow external access while allowing internal mutation
+  private get DB_VERSION(): number {
+    return this._dbVersion;
+  }
   private isInitializing = false;
   private isReady = false;
   private initializationPromise: Promise<void> | null = null;
@@ -129,316 +133,319 @@ export class IndexedDBService {
   }
 
   private async _openDatabase(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // ENTERPRISE: Handle version mismatch - detect existing version first
-      // Always open without version first to detect existing version
-      const checkRequest = indexedDB.open(this.DB_NAME);
+    // ENTERPRISE FIX: Always detect existing version first, NEVER open with version number
+    // This completely prevents "version less than existing" errors
+    // Strategy: Open without version to detect, then use that version or upgrade if needed
+    
+    // Wrap detection in timeout to prevent hangs
+    const DETECTION_TIMEOUT = 5000; // 5 seconds
+    
+    try {
+      const detectedVersion = await Promise.race<number | null>([
+        this._detectDatabaseVersion(),
+        new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error('Database version detection timed out')), DETECTION_TIMEOUT)
+        )
+      ]);
       
-      checkRequest.onsuccess = () => {
-        const existingDb = checkRequest.result;
-        const existingVersion = existingDb.version;
+      console.log(`📊 Detected existing database version: ${detectedVersion ?? 'none (new database)'}, code expects: ${this.DB_VERSION}`);
+      
+      // CRITICAL: Always update DB_VERSION to match detected version if it's higher
+      // This ensures we never try to open with a lower version
+      if (detectedVersion !== null && detectedVersion > this.DB_VERSION) {
+        console.warn(`⚠️ Browser has IndexedDB version ${detectedVersion}, code expects ${this.DB_VERSION}. Updating code version to match.`);
+        this._dbVersion = detectedVersion;
+      }
+      
+      // Now open with the correct version (or without version if we're using existing)
+      await this._openWithVersionAsync(detectedVersion);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ Database version detection failed: ${errorMessage}. Using safe fallback (open without version)...`);
+      
+      // SAFE FALLBACK: If detection fails for any reason, open without version number
+      // This is the safest option - it will use whatever version exists or create new
+      await this._openWithVersionAsync(null, true); // true = force open without version
+    }
+  }
+
+  /**
+   * Detect existing database version by opening without version number
+   * Returns the version number if database exists, null if new database
+   */
+  private _detectDatabaseVersion(): Promise<number | null> {
+    return new Promise((resolve, reject) => {
+      const detectRequest = indexedDB.open(this.DB_NAME);
+      let resolved = false;
+      
+      detectRequest.onsuccess = () => {
+        if (resolved) return;
+        resolved = true;
+        const existingDb = detectRequest.result;
+        const detectedVersion = existingDb.version;
         existingDb.close();
-        
-        console.log(`📊 Detected existing database version: ${existingVersion}, code expects: ${this.DB_VERSION}`);
-        
-        // CRITICAL: If existing version is higher than code version, use existing version directly
-        // Never try to open with a lower version number - IndexedDB will reject it
-        if (existingVersion > this.DB_VERSION) {
-          console.warn(`⚠️ Browser has IndexedDB version ${existingVersion}, code expects ${this.DB_VERSION}. Using existing version ${existingVersion} directly.`);
-          // Update DB_VERSION to match existing version to prevent future mismatches
-          (this as any).DB_VERSION = existingVersion;
-          
-          // Open with existing version (no upgrade needed)
-          const openRequest = indexedDB.open(this.DB_NAME, existingVersion);
-          openRequest.onsuccess = () => {
-            this.db = openRequest.result;
-            console.log(`✅ IndexedDB opened successfully with existing version ${this.db.version}`);
-            resolve();
-          };
-          openRequest.onerror = () => {
-            console.error('❌ Failed to open IndexedDB with existing version:', openRequest.error);
-            reject(openRequest.error || new Error('Failed to open database'));
-          };
-          // No onupgradeneeded needed since we're using existing version
-          return;
-        }
-        
-        // If existing version <= code version, we can upgrade if needed
-        const targetVersion = Math.max(existingVersion, this.DB_VERSION);
-        const request = indexedDB.open(this.DB_NAME, targetVersion);
-        
-        request.onerror = () => {
-          const error = request.error || new Error('Failed to open IndexedDB');
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          
-          // ENTERPRISE: Handle version mismatch error specifically
-          if (errorMessage.includes('version') && errorMessage.includes('less than')) {
-            console.warn('🔄 Version mismatch detected, attempting to open with existing version...');
-            // Try opening without specifying version to use existing version
-            const fallbackRequest = indexedDB.open(this.DB_NAME);
-            fallbackRequest.onsuccess = () => {
-              this.db = fallbackRequest.result;
-              const actualVersion = this.db.version;
-              console.log(`✅ IndexedDB opened successfully with existing version ${actualVersion}`);
-              // Update DB_VERSION to match
-              (this as any).DB_VERSION = actualVersion;
-              resolve();
-            };
-            fallbackRequest.onerror = () => {
-              console.error('❌ Failed to open IndexedDB with fallback:', fallbackRequest.error);
-              reject(fallbackRequest.error || error);
-            };
-            return;
-          }
-          
-          console.error('❌ Failed to open IndexedDB:', error);
-          reject(error);
-        };
-
-        request.onsuccess = () => {
-          this.db = request.result;
-          console.log(`✅ IndexedDB opened successfully (version ${this.db.version})`);
-          resolve();
-        };
-
-        request.onupgradeneeded = (event) => {
-          console.log('🔧 Database upgrade needed, creating object stores...');
-          const db = (event.target as IDBOpenDBRequest).result;
-          const oldVersion = event.oldVersion || 0;
-
-          // Create surveys store
-          if (!db.objectStoreNames.contains('surveys')) {
-            console.log('📊 Creating surveys object store...');
-            const surveyStore = db.createObjectStore('surveys', { keyPath: 'id' });
-            surveyStore.createIndex('name', 'name', { unique: false });
-            surveyStore.createIndex('type', 'type', { unique: false });
-            surveyStore.createIndex('year', 'year', { unique: false });
-          }
-
-          // Create survey data store
-          if (!db.objectStoreNames.contains('surveyData')) {
-            console.log('📊 Creating surveyData object store...');
-            const dataStore = db.createObjectStore('surveyData', { keyPath: 'id' });
-            dataStore.createIndex('surveyId', 'surveyId', { unique: false });
-            dataStore.createIndex('specialty', 'specialty', { unique: false });
-            dataStore.createIndex('variable', 'variable', { unique: false }); // ENTERPRISE: Index for fast variable queries
-          } else if (oldVersion < 9) {
-            // Migration: Add variable index if it doesn't exist
-            const dataStore = (event.target as IDBOpenDBRequest).transaction!.objectStore('surveyData');
-            if (!dataStore.indexNames.contains('variable')) {
-              dataStore.createIndex('variable', 'variable', { unique: false });
-              console.log('✅ Added variable index to surveyData store');
-            }
-          }
-
-          // Create specialty mappings store
-          if (!db.objectStoreNames.contains('specialtyMappings')) {
-            console.log('📊 Creating specialtyMappings object store...');
-            const mappingStore = db.createObjectStore('specialtyMappings', { keyPath: 'id' });
-            mappingStore.createIndex('standardizedName', 'standardizedName', { unique: false });
-          }
-
-          // Create specialty mapping sources store
-          if (!db.objectStoreNames.contains('specialtyMappingSources')) {
-            const sourceStore = db.createObjectStore('specialtyMappingSources', { keyPath: 'id' });
-            sourceStore.createIndex('mappingId', 'mappingId', { unique: false });
-            sourceStore.createIndex('specialty', 'specialty', { unique: false });
-          }
-
-          // Create column mappings store
-          if (!db.objectStoreNames.contains('columnMappings')) {
-            const columnStore = db.createObjectStore('columnMappings', { keyPath: 'id' });
-            columnStore.createIndex('surveyId', 'surveyId', { unique: false });
-            columnStore.createIndex('originalName', 'originalName', { unique: false });
-          }
-
-          // Create variable mappings store
-          if (!db.objectStoreNames.contains('variableMappings')) {
-            const variableStore = db.createObjectStore('variableMappings', { keyPath: 'id' });
-            variableStore.createIndex('standardizedName', 'standardizedName', { unique: false });
-            variableStore.createIndex('variableType', 'variableType', { unique: false });
-          }
-
-          // Create region mappings store
-          if (!db.objectStoreNames.contains('regionMappings')) {
-            const regionStore = db.createObjectStore('regionMappings', { keyPath: 'id' });
-            regionStore.createIndex('standardizedName', 'standardizedName', { unique: false });
-          }
-
-          // Create provider type mappings store
-          if (!db.objectStoreNames.contains('providerTypeMappings')) {
-            const providerTypeStore = db.createObjectStore('providerTypeMappings', { keyPath: 'id' });
-            providerTypeStore.createIndex('standardizedName', 'standardizedName', { unique: false });
-          }
-
-          // Create learned mappings stores
-          if (!db.objectStoreNames.contains('learnedSpecialtyMappings')) {
-            const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
-            learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
-            learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
-          } else if (oldVersion < 5) {
-            // Migration: Recreate learned mappings store with new structure
-            db.deleteObjectStore('learnedSpecialtyMappings');
-            const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
-            learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
-            learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
-          }
-
-          if (!db.objectStoreNames.contains('learnedColumnMappings')) {
-            const learnedColumnStore = db.createObjectStore('learnedColumnMappings', { keyPath: 'original' });
-            learnedColumnStore.createIndex('corrected', 'corrected', { unique: false });
-          }
-
-          if (!db.objectStoreNames.contains('learnedVariableMappings')) {
-            const learnedVariableStore = db.createObjectStore('learnedVariableMappings', { keyPath: 'original' });
-            learnedVariableStore.createIndex('corrected', 'corrected', { unique: false });
-          }
-
-          if (!db.objectStoreNames.contains('learnedRegionMappings')) {
-            const learnedRegionStore = db.createObjectStore('learnedRegionMappings', { keyPath: 'original' });
-            learnedRegionStore.createIndex('corrected', 'corrected', { unique: false });
-          }
-
-          if (!db.objectStoreNames.contains('learnedProviderTypeMappings')) {
-            const learnedProviderTypeStore = db.createObjectStore('learnedProviderTypeMappings', { keyPath: 'original' });
-            learnedProviderTypeStore.createIndex('corrected', 'corrected', { unique: false });
-          }
-
-          // Create blend templates store
-          if (!db.objectStoreNames.contains('blendTemplates')) {
-            const blendTemplatesStore = db.createObjectStore('blendTemplates', { keyPath: 'id' });
-            blendTemplatesStore.createIndex('name', 'name', { unique: false });
-            blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
-            blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
-          }
-
-          // Create FMV calculations store
-          if (!db.objectStoreNames.contains('fmvCalculations')) {
-            const fmvCalculationsStore = db.createObjectStore('fmvCalculations', { keyPath: 'id' });
-            fmvCalculationsStore.createIndex('providerName', 'providerName', { unique: false });
-            fmvCalculationsStore.createIndex('created', 'created', { unique: false });
-            fmvCalculationsStore.createIndex('lastModified', 'lastModified', { unique: false });
-          }
-
-          // Create cache store for analytics
-          if (!db.objectStoreNames.contains('cache')) {
-            console.log('📊 Creating cache object store...');
-            const cacheStore = db.createObjectStore('cache', { keyPath: 'key' });
-            cacheStore.createIndex('timestamp', 'timestamp', { unique: false });
-          }
-          
-          console.log('✅ Database upgrade completed, all object stores created');
-        };
+        resolve(detectedVersion);
       };
       
-      checkRequest.onerror = () => {
-        // Check request failed - try to open without version to detect existing database
-        console.warn('⚠️ Initial database check failed, attempting fallback...');
-        const fallbackCheck = indexedDB.open(this.DB_NAME);
-        
-        fallbackCheck.onsuccess = () => {
-          // Database exists - use its version
-          const existingDb = fallbackCheck.result;
-          const existingVersion = existingDb.version;
-          existingDb.close();
-          
-          console.log(`📊 Detected existing database version: ${existingVersion}`);
-          const targetVersion = Math.max(existingVersion, this.DB_VERSION);
-          
-          if (existingVersion > this.DB_VERSION) {
-            console.warn(`⚠️ Browser has IndexedDB version ${existingVersion}, code expects ${this.DB_VERSION}. Using browser version ${targetVersion}.`);
-            (this as any).DB_VERSION = existingVersion;
-          }
-          
-          // Open with detected version
-          const request = indexedDB.open(this.DB_NAME, targetVersion);
-          
-          request.onerror = () => {
-            // If opening with target version fails, try without version
-            const finalRequest = indexedDB.open(this.DB_NAME);
-            finalRequest.onsuccess = () => {
-              this.db = finalRequest.result;
-              (this as any).DB_VERSION = this.db.version;
-              console.log(`✅ IndexedDB opened successfully with existing version ${this.db.version}`);
-              resolve();
-            };
-            finalRequest.onerror = () => {
-              console.error('❌ Failed to open IndexedDB:', finalRequest.error);
-              reject(finalRequest.error || request.error);
-            };
-          };
-          
-          request.onsuccess = () => {
-            this.db = request.result;
-            console.log(`✅ IndexedDB opened successfully (version ${this.db.version})`);
-            resolve();
-          };
-          
-          request.onupgradeneeded = (event) => {
-            console.log('🔧 Database upgrade needed, creating object stores...');
-            const db = (event.target as IDBOpenDBRequest).result;
-            const oldVersion = event.oldVersion || 0;
-            
-            // Create all stores (same logic as above)
-            if (!db.objectStoreNames.contains('surveys')) {
-              const surveyStore = db.createObjectStore('surveys', { keyPath: 'id' });
-              surveyStore.createIndex('name', 'name', { unique: false });
-              surveyStore.createIndex('type', 'type', { unique: false });
-              surveyStore.createIndex('year', 'year', { unique: false });
-            }
-            
-            if (!db.objectStoreNames.contains('surveyData')) {
-              const dataStore = db.createObjectStore('surveyData', { keyPath: 'id' });
-              dataStore.createIndex('surveyId', 'surveyId', { unique: false });
-              dataStore.createIndex('specialty', 'specialty', { unique: false });
-              dataStore.createIndex('variable', 'variable', { unique: false });
-            }
-            
-            console.log('✅ Database upgrade completed, all object stores created');
-          };
-        };
-        
-        fallbackCheck.onerror = () => {
-          // No existing database, create new one
-          console.log('📊 No existing database found, creating new one...');
-          const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
-          
-          request.onerror = () => {
-            console.error('❌ Failed to create IndexedDB:', request.error);
-            reject(request.error);
-          };
-          
-          request.onsuccess = () => {
-            this.db = request.result;
-            console.log(`✅ IndexedDB created successfully (version ${this.db.version})`);
-            resolve();
-          };
-          
-          request.onupgradeneeded = (event) => {
-            console.log('🔧 Database upgrade needed, creating object stores...');
-            const db = (event.target as IDBOpenDBRequest).result;
-            const oldVersion = event.oldVersion || 0;
-            
-            // Same upgrade logic as above - create all stores
-            if (!db.objectStoreNames.contains('surveys')) {
-              const surveyStore = db.createObjectStore('surveys', { keyPath: 'id' });
-              surveyStore.createIndex('name', 'name', { unique: false });
-              surveyStore.createIndex('type', 'type', { unique: false });
-              surveyStore.createIndex('year', 'year', { unique: false });
-            }
-            
-            if (!db.objectStoreNames.contains('surveyData')) {
-              const dataStore = db.createObjectStore('surveyData', { keyPath: 'id' });
-              dataStore.createIndex('surveyId', 'surveyId', { unique: false });
-              dataStore.createIndex('specialty', 'specialty', { unique: false });
-              dataStore.createIndex('variable', 'variable', { unique: false });
-            }
-            
-            console.log('✅ Database upgrade completed, all object stores created');
-          };
-        };
+      detectRequest.onerror = () => {
+        if (resolved) return;
+        resolved = true;
+        // Detection failed - database might not exist
+        // This is not necessarily an error - it could be a new database
+        resolve(null);
+      };
+      
+      // Also handle upgrade needed during detection (shouldn't happen, but handle it)
+      detectRequest.onupgradeneeded = () => {
+        // This shouldn't happen when opening without version, but handle it
+        console.warn('⚠️ Upgrade needed during version detection - this is unexpected');
+        if (!resolved) {
+          resolved = true;
+          // If upgrade is needed, database exists but version detection is complex
+          // Resolve with null to trigger safe fallback
+          resolve(null);
+        }
       };
     });
+  }
+
+  /**
+   * Async wrapper for opening database with proper version handling
+   * @param detectedVersion - Version detected from existing database (null if new)
+   * @param forceOpenWithoutVersion - If true, always open without version number (safest fallback)
+   */
+  private async _openWithVersionAsync(
+    detectedVersion: number | null,
+    forceOpenWithoutVersion: boolean = false
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._openWithVersion(detectedVersion, forceOpenWithoutVersion, resolve, reject);
+    });
+  }
+
+  /**
+   * Open database with proper version handling
+   * @param detectedVersion - Version detected from existing database (null if new)
+   * @param forceOpenWithoutVersion - If true, always open without version number (safest fallback)
+   * @param resolve - Promise resolve function
+   * @param reject - Promise reject function
+   */
+  private _openWithVersion(
+    detectedVersion: number | null,
+    forceOpenWithoutVersion: boolean,
+    resolve: () => void,
+    reject: (error: any) => void
+  ): void {
+    // Determine target version
+    let targetVersion: number | undefined;
+    
+    // SAFE FALLBACK: If forced to open without version, always do so
+    if (forceOpenWithoutVersion) {
+      targetVersion = undefined;
+      console.log(`📊 Opening database without version number (safe fallback mode)`);
+    } else if (detectedVersion === null) {
+      // New database - use code version
+      targetVersion = this.DB_VERSION;
+      console.log(`📊 Creating new database with version ${targetVersion}`);
+    } else if (detectedVersion >= this.DB_VERSION) {
+      // Existing version is same or higher - open without version number to use existing
+      // NEVER specify version when existing is >= code version
+      targetVersion = undefined;
+      console.log(`📊 Opening existing database (version ${detectedVersion}) without specifying version`);
+    } else {
+      // Existing version is lower - upgrade to code version
+      targetVersion = this.DB_VERSION;
+      console.log(`📊 Upgrading database from version ${detectedVersion} to ${targetVersion}`);
+    }
+    
+    // Open database (with or without version number based on strategy above)
+    const openRequest = targetVersion !== undefined
+      ? indexedDB.open(this.DB_NAME, targetVersion)
+      : indexedDB.open(this.DB_NAME);
+    
+    openRequest.onsuccess = () => {
+      this.db = openRequest.result;
+      const actualVersion = this.db.version;
+      console.log(`✅ IndexedDB opened successfully (version ${actualVersion})`);
+      
+      // Update DB_VERSION to match actual version (in case it changed)
+      if (actualVersion !== this.DB_VERSION) {
+        console.log(`📊 Updating DB_VERSION from ${this.DB_VERSION} to ${actualVersion}`);
+        this._dbVersion = actualVersion;
+      }
+      
+      resolve();
+    };
+    
+    openRequest.onerror = () => {
+      const error = openRequest.error || new Error('Failed to open IndexedDB');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      console.error(`❌ Failed to open IndexedDB:`, errorMessage);
+      
+      // ENTERPRISE: If we tried with a version and got a version mismatch error,
+      // try opening without version as last resort
+      if (targetVersion !== undefined && 
+          errorMessage.includes('version') && 
+          (errorMessage.includes('less than') || errorMessage.includes('greater than'))) {
+        console.warn('🔄 Version mismatch error detected, attempting to open without version number...');
+        
+        // Last resort: open without version number
+        const fallbackRequest = indexedDB.open(this.DB_NAME);
+        fallbackRequest.onsuccess = () => {
+          this.db = fallbackRequest.result;
+          const actualVersion = this.db.version;
+          console.log(`✅ IndexedDB opened successfully with fallback (version ${actualVersion})`);
+          this._dbVersion = actualVersion;
+          resolve();
+        };
+        fallbackRequest.onerror = () => {
+          console.error('❌ Fallback open also failed:', fallbackRequest.error);
+          reject(fallbackRequest.error || error);
+        };
+        return;
+      }
+      
+      reject(error);
+    };
+    
+    openRequest.onupgradeneeded = (event) => {
+      console.log(`🔧 Database upgrade needed: ${event.oldVersion} -> ${event.newVersion}`);
+      this._handleUpgrade(event);
+    };
+  }
+
+  /**
+   * Handle database upgrade/migration
+   * Extracted to avoid code duplication and ensure consistent upgrade logic
+   */
+  private _handleUpgrade(event: IDBVersionChangeEvent): void {
+    console.log('🔧 Database upgrade needed, creating object stores...');
+    const db = (event.target as IDBOpenDBRequest).result;
+    const oldVersion = event.oldVersion || 0;
+
+    // Create surveys store
+    if (!db.objectStoreNames.contains('surveys')) {
+      console.log('📊 Creating surveys object store...');
+      const surveyStore = db.createObjectStore('surveys', { keyPath: 'id' });
+      surveyStore.createIndex('name', 'name', { unique: false });
+      surveyStore.createIndex('type', 'type', { unique: false });
+      surveyStore.createIndex('year', 'year', { unique: false });
+    }
+
+    // Create survey data store
+    if (!db.objectStoreNames.contains('surveyData')) {
+      console.log('📊 Creating surveyData object store...');
+      const dataStore = db.createObjectStore('surveyData', { keyPath: 'id' });
+      dataStore.createIndex('surveyId', 'surveyId', { unique: false });
+      dataStore.createIndex('specialty', 'specialty', { unique: false });
+      dataStore.createIndex('variable', 'variable', { unique: false }); // ENTERPRISE: Index for fast variable queries
+    } else if (oldVersion < 9) {
+      // Migration: Add variable index if it doesn't exist
+      const dataStore = (event.target as IDBOpenDBRequest).transaction!.objectStore('surveyData');
+      if (!dataStore.indexNames.contains('variable')) {
+        dataStore.createIndex('variable', 'variable', { unique: false });
+        console.log('✅ Added variable index to surveyData store');
+      }
+    }
+
+    // Create specialty mappings store
+    if (!db.objectStoreNames.contains('specialtyMappings')) {
+      console.log('📊 Creating specialtyMappings object store...');
+      const mappingStore = db.createObjectStore('specialtyMappings', { keyPath: 'id' });
+      mappingStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+    }
+
+    // Create specialty mapping sources store
+    if (!db.objectStoreNames.contains('specialtyMappingSources')) {
+      const sourceStore = db.createObjectStore('specialtyMappingSources', { keyPath: 'id' });
+      sourceStore.createIndex('mappingId', 'mappingId', { unique: false });
+      sourceStore.createIndex('specialty', 'specialty', { unique: false });
+    }
+
+    // Create column mappings store
+    if (!db.objectStoreNames.contains('columnMappings')) {
+      const columnStore = db.createObjectStore('columnMappings', { keyPath: 'id' });
+      columnStore.createIndex('surveyId', 'surveyId', { unique: false });
+      columnStore.createIndex('originalName', 'originalName', { unique: false });
+    }
+
+    // Create variable mappings store
+    if (!db.objectStoreNames.contains('variableMappings')) {
+      const variableStore = db.createObjectStore('variableMappings', { keyPath: 'id' });
+      variableStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+      variableStore.createIndex('variableType', 'variableType', { unique: false });
+    }
+
+    // Create region mappings store
+    if (!db.objectStoreNames.contains('regionMappings')) {
+      const regionStore = db.createObjectStore('regionMappings', { keyPath: 'id' });
+      regionStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+    }
+
+    // Create provider type mappings store
+    if (!db.objectStoreNames.contains('providerTypeMappings')) {
+      const providerTypeStore = db.createObjectStore('providerTypeMappings', { keyPath: 'id' });
+      providerTypeStore.createIndex('standardizedName', 'standardizedName', { unique: false });
+    }
+
+    // Create learned mappings stores
+    if (!db.objectStoreNames.contains('learnedSpecialtyMappings')) {
+      const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
+      learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
+      learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
+    } else if (oldVersion < 5) {
+      // Migration: Recreate learned mappings store with new structure
+      db.deleteObjectStore('learnedSpecialtyMappings');
+      const learnedSpecialtyStore = db.createObjectStore('learnedSpecialtyMappings', { keyPath: 'id', autoIncrement: true });
+      learnedSpecialtyStore.createIndex('original', 'original', { unique: false });
+      learnedSpecialtyStore.createIndex('corrected', 'corrected', { unique: false });
+    }
+
+    if (!db.objectStoreNames.contains('learnedColumnMappings')) {
+      const learnedColumnStore = db.createObjectStore('learnedColumnMappings', { keyPath: 'original' });
+      learnedColumnStore.createIndex('corrected', 'corrected', { unique: false });
+    }
+
+    if (!db.objectStoreNames.contains('learnedVariableMappings')) {
+      const learnedVariableStore = db.createObjectStore('learnedVariableMappings', { keyPath: 'original' });
+      learnedVariableStore.createIndex('corrected', 'corrected', { unique: false });
+    }
+
+    if (!db.objectStoreNames.contains('learnedRegionMappings')) {
+      const learnedRegionStore = db.createObjectStore('learnedRegionMappings', { keyPath: 'original' });
+      learnedRegionStore.createIndex('corrected', 'corrected', { unique: false });
+    }
+
+    if (!db.objectStoreNames.contains('learnedProviderTypeMappings')) {
+      const learnedProviderTypeStore = db.createObjectStore('learnedProviderTypeMappings', { keyPath: 'original' });
+      learnedProviderTypeStore.createIndex('corrected', 'corrected', { unique: false });
+    }
+
+    // Create blend templates store
+    if (!db.objectStoreNames.contains('blendTemplates')) {
+      const blendTemplatesStore = db.createObjectStore('blendTemplates', { keyPath: 'id' });
+      blendTemplatesStore.createIndex('name', 'name', { unique: false });
+      blendTemplatesStore.createIndex('createdBy', 'createdBy', { unique: false });
+      blendTemplatesStore.createIndex('isPublic', 'isPublic', { unique: false });
+    }
+
+    // Create FMV calculations store
+    if (!db.objectStoreNames.contains('fmvCalculations')) {
+      const fmvCalculationsStore = db.createObjectStore('fmvCalculations', { keyPath: 'id' });
+      fmvCalculationsStore.createIndex('providerName', 'providerName', { unique: false });
+      fmvCalculationsStore.createIndex('created', 'created', { unique: false });
+      fmvCalculationsStore.createIndex('lastModified', 'lastModified', { unique: false });
+    }
+
+    // Create cache store for analytics
+    if (!db.objectStoreNames.contains('cache')) {
+      console.log('📊 Creating cache object store...');
+      const cacheStore = db.createObjectStore('cache', { keyPath: 'key' });
+      cacheStore.createIndex('timestamp', 'timestamp', { unique: false });
+    }
+    
+    console.log('✅ Database upgrade completed, all object stores created');
   }
 
   private async _verifyObjectStores(): Promise<void> {
@@ -706,55 +713,37 @@ export class IndexedDBService {
         if (errorMessage.includes('version') && (errorMessage.includes('less than') || errorMessage.includes('greater than'))) {
           console.warn('🔄 Version mismatch detected during repair, attempting to resolve...');
           
-          // Try to detect and use existing version
-          await new Promise<void>((resolve, reject) => {
-            const checkRequest = indexedDB.open(this.DB_NAME);
+          // Use the same robust detection and opening logic as initialization
+          try {
+            const detectedVersion = await this._detectDatabaseVersion();
             
-            checkRequest.onsuccess = () => {
-              const existingDb = checkRequest.result;
-              const existingVersion = existingDb.version;
-              existingDb.close();
-              console.log(`📊 Detected existing database version: ${existingVersion}, code expects: ${this.DB_VERSION}`);
+            if (detectedVersion !== null) {
+              console.log(`📊 Detected existing database version: ${detectedVersion}, code expects: ${this.DB_VERSION}`);
               
-              // Update internal version to match
-              (this as any).DB_VERSION = existingVersion;
-              
-              // CRITICAL: If existing version is higher, open without version number to use existing version
-              // This prevents IndexedDB from rejecting the request
-              if (existingVersion > this.DB_VERSION) {
-                console.log(`🔄 Opening database without version number to use existing version ${existingVersion}...`);
-                const openRequest = indexedDB.open(this.DB_NAME);
-                openRequest.onsuccess = () => {
-                  this.db = openRequest.result;
-                  this.isReady = true;
-                  console.log(`✅ Successfully opened database with existing version ${this.db.version}`);
-                  resolve();
-                };
-                openRequest.onerror = () => {
-                  console.error('❌ Failed to open database:', openRequest.error);
-                  reject(openRequest.error || initError);
-                };
-              } else {
-                // If versions match or code version is higher, open with version number
-                const openRequest = indexedDB.open(this.DB_NAME, existingVersion);
-                openRequest.onsuccess = () => {
-                  this.db = openRequest.result;
-                  this.isReady = true;
-                  console.log(`✅ Successfully opened database with version ${this.db.version}`);
-                  resolve();
-                };
-                openRequest.onerror = () => {
-                  console.error('❌ Failed to open database with version:', openRequest.error);
-                  reject(openRequest.error || initError);
-                };
+              // Update internal version to match if higher
+              if (detectedVersion > this.DB_VERSION) {
+                console.warn(`⚠️ Browser has IndexedDB version ${detectedVersion}, code expects ${this.DB_VERSION}. Updating code version to match.`);
+                this._dbVersion = detectedVersion;
               }
-            };
-            
-            checkRequest.onerror = () => {
-              console.error('❌ Failed to check database version:', checkRequest.error);
-              reject(checkRequest.error || initError);
-            };
-          });
+              
+              // Open using the robust version handling logic
+              await this._openWithVersionAsync(detectedVersion);
+              this.isReady = true;
+              console.log(`✅ Successfully opened database with version ${this.db?.version}`);
+            } else {
+              // No existing database detected, open as new
+              await this._openWithVersionAsync(null);
+              this.isReady = true;
+              console.log(`✅ Successfully opened new database`);
+            }
+          } catch (repairError) {
+            console.error('❌ Failed to repair database with version detection:', repairError);
+            // Last resort: try opening without version number
+            console.warn('🔄 Attempting last resort: opening without version number...');
+            await this._openWithVersionAsync(null, true); // Force open without version
+            this.isReady = true;
+            console.log(`✅ Successfully opened database with last resort method`);
+          }
         } else {
           throw initError; // Re-throw if not a version mismatch
         }
@@ -1237,6 +1226,7 @@ export class IndexedDBService {
 
   /**
    * Delete survey with verification and cascading cleanup
+   * ENTERPRISE FIX: Properly waits for all cursor operations to complete
    */
   async deleteWithVerification(surveyId: string): Promise<{
     success: boolean;
@@ -1262,84 +1252,186 @@ export class IndexedDBService {
 
       const db = await this.ensureDB();
       
-      // Start transaction for atomic deletion
-      const transaction = db.transaction([
-        'surveys', 
-        'surveyData', 
-        'specialtyMappings', 
-        'columnMappings',
-        'variableMappings',
-        'regionMappings',
-        'providerTypeMappings'
-      ], 'readwrite');
-
-      let deletedDataRows = 0;
-      let deletedMappings = 0;
-      let hasError = false;
-      let errorMessage = '';
-
-      // Delete survey data first
-      const dataStore = transaction.objectStore('surveyData');
-      const dataIndex = dataStore.index('surveyId');
-      const dataRequest = dataIndex.openCursor(IDBKeyRange.only(surveyId));
-
-      dataRequest.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
-        if (cursor) {
-          dataStore.delete(cursor.primaryKey);
-          deletedDataRows++;
-          cursor.continue();
-        }
-      };
-
-      dataRequest.onerror = () => {
-        hasError = true;
-        errorMessage = 'Failed to delete survey data';
-      };
-
-      // Delete survey
-      const surveyStore = transaction.objectStore('surveys');
-      const surveyDeleteRequest = surveyStore.delete(surveyId);
-      
-      surveyDeleteRequest.onerror = () => {
-        hasError = true;
-        errorMessage = 'Failed to delete survey';
-      };
-
-      // Delete related mappings (this is more complex and would need specific logic)
-      // For now, we'll just count them for reporting
-      
+      // ENTERPRISE FIX: Use Promise-based pattern to ensure all cursor operations complete
+      // This ensures the transaction doesn't complete until all deletions are done
       return new Promise((resolve) => {
-        transaction.oncomplete = () => {
-          if (hasError) {
-            console.error(`❌ Cascading delete failed: ${errorMessage}`);
-            resolve({
-              success: false,
-              deletedSurvey: false,
-              deletedDataRows,
-              deletedMappings,
-              error: errorMessage
-            });
-          } else {
-            console.log(`✅ Cascading delete completed: ${deletedDataRows} data rows deleted`);
-            resolve({
-              success: true,
-              deletedSurvey: true,
-              deletedDataRows,
-              deletedMappings,
-            });
+        // Start transaction for atomic deletion
+        const transaction = db.transaction([
+          'surveys', 
+          'surveyData', 
+          'specialtyMappings', 
+          'columnMappings',
+          'variableMappings',
+          'regionMappings',
+          'providerTypeMappings'
+        ], 'readwrite');
+
+        let deletedDataRows = 0;
+        let deletedMappings = 0;
+        let hasError = false;
+        let errorMessage = '';
+        let cursorComplete = false;
+        let surveyDeleteComplete = false;
+        let mappingsDeleteComplete = false;
+
+        // Helper to check if all operations are complete
+        const checkCompletion = () => {
+          if (cursorComplete && surveyDeleteComplete && mappingsDeleteComplete) {
+            if (hasError) {
+              console.error(`❌ Cascading delete failed: ${errorMessage}`);
+              resolve({
+                success: false,
+                deletedSurvey: false,
+                deletedDataRows,
+                deletedMappings,
+                error: errorMessage
+              });
+            } else {
+              console.log(`✅ Cascading delete completed: ${deletedDataRows} data rows, ${deletedMappings} mappings deleted`);
+              resolve({
+                success: true,
+                deletedSurvey: true,
+                deletedDataRows,
+                deletedMappings,
+              });
+            }
           }
         };
 
+        // Delete survey data using cursor - ENTERPRISE: Wait for all cursor operations
+        const dataStore = transaction.objectStore('surveyData');
+        const dataIndex = dataStore.index('surveyId');
+        const dataRequest = dataIndex.openCursor(IDBKeyRange.only(surveyId));
+
+        dataRequest.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest).result;
+          if (cursor) {
+            const deleteRequest = dataStore.delete(cursor.primaryKey);
+            deleteRequest.onsuccess = () => {
+              deletedDataRows++;
+            };
+            deleteRequest.onerror = () => {
+              hasError = true;
+              errorMessage = 'Failed to delete survey data row';
+            };
+            cursor.continue();
+          } else {
+            // Cursor iteration complete
+            cursorComplete = true;
+            checkCompletion();
+          }
+        };
+
+        dataRequest.onerror = () => {
+          hasError = true;
+          errorMessage = 'Failed to open cursor for survey data deletion';
+          cursorComplete = true;
+          checkCompletion();
+        };
+
+        // Delete survey metadata
+        const surveyStore = transaction.objectStore('surveys');
+        const surveyDeleteRequest = surveyStore.delete(surveyId);
+        
+        surveyDeleteRequest.onsuccess = () => {
+          surveyDeleteComplete = true;
+          checkCompletion();
+        };
+        
+        surveyDeleteRequest.onerror = () => {
+          hasError = true;
+          errorMessage = 'Failed to delete survey';
+          surveyDeleteComplete = true;
+          checkCompletion();
+        };
+
+        // Delete related mappings - ENTERPRISE: Delete from all mapping stores
+        const mappingStores = [
+          { name: 'specialtyMappings', index: 'surveyId' },
+          { name: 'columnMappings', index: 'surveyId' },
+          { name: 'variableMappings', index: 'surveyId' },
+          { name: 'regionMappings', index: 'surveyId' },
+          { name: 'providerTypeMappings', index: 'surveyId' }
+        ];
+
+        let mappingsProcessed = 0;
+        const totalMappingStores = mappingStores.length;
+
+        mappingStores.forEach(({ name, index }) => {
+          if (!transaction.objectStoreNames.contains(name)) {
+            mappingsProcessed++;
+            if (mappingsProcessed === totalMappingStores) {
+              mappingsDeleteComplete = true;
+              checkCompletion();
+            }
+            return;
+          }
+
+          const mappingStore = transaction.objectStore(name);
+          if (!mappingStore.indexNames.contains(index)) {
+            mappingsProcessed++;
+            if (mappingsProcessed === totalMappingStores) {
+              mappingsDeleteComplete = true;
+              checkCompletion();
+            }
+            return;
+          }
+
+          const mappingIndex = mappingStore.index(index);
+          const mappingRequest = mappingIndex.openCursor(IDBKeyRange.only(surveyId));
+
+          mappingRequest.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest).result;
+            if (cursor) {
+              const deleteRequest = mappingStore.delete(cursor.primaryKey);
+              deleteRequest.onsuccess = () => {
+                deletedMappings++;
+              };
+              deleteRequest.onerror = () => {
+                console.warn(`⚠️ Failed to delete mapping from ${name}`);
+              };
+              cursor.continue();
+            } else {
+              // This mapping store cursor complete
+              mappingsProcessed++;
+              if (mappingsProcessed === totalMappingStores) {
+                mappingsDeleteComplete = true;
+                checkCompletion();
+              }
+            }
+          };
+
+          mappingRequest.onerror = () => {
+            console.warn(`⚠️ Failed to open cursor for ${name} deletion`);
+            mappingsProcessed++;
+            if (mappingsProcessed === totalMappingStores) {
+              mappingsDeleteComplete = true;
+              checkCompletion();
+            }
+          };
+        });
+
+        // Handle transaction errors
         transaction.onerror = () => {
           console.error(`❌ Transaction failed:`, transaction.error);
-          resolve({
-            success: false,
-            deletedSurvey: false,
-            deletedDataRows,
-            deletedMappings,
-            error: transaction.error?.message || 'Transaction failed'
-          });
+          hasError = true;
+          errorMessage = transaction.error?.message || 'Transaction failed';
+          // Mark all as complete to resolve
+          cursorComplete = true;
+          surveyDeleteComplete = true;
+          mappingsDeleteComplete = true;
+          checkCompletion();
+        };
+
+        // ENTERPRISE: Also handle transaction abort (timeout or other issues)
+        transaction.onabort = () => {
+          console.error(`❌ Transaction aborted`);
+          hasError = true;
+          errorMessage = 'Transaction was aborted';
+          cursorComplete = true;
+          surveyDeleteComplete = true;
+          mappingsDeleteComplete = true;
+          checkCompletion();
         };
       });
 
