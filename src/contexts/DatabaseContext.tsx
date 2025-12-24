@@ -43,6 +43,31 @@ interface DatabaseProviderProps {
  * Manages IndexedDB initialization and provides global database state
  */
 export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) => {
+  // CRITICAL FIX: Check storage mode BEFORE creating IndexedDB service
+  // This prevents IndexedDB from being initialized when Firebase is the primary storage
+  const [storageMode] = useState(() => {
+    // Check environment variable first (most reliable)
+    const envMode = process.env.REACT_APP_STORAGE_MODE;
+    if (envMode === 'firebase' || envMode === 'indexeddb') {
+      console.log(`📦 DatabaseContext: Storage mode from environment: ${envMode}`);
+      return envMode;
+    }
+    
+    // Fallback: Check if Firebase is available
+    try {
+      const { isFirebaseAvailable } = require('../config/firebase');
+      if (isFirebaseAvailable()) {
+        console.log('📦 DatabaseContext: Firebase available, using Firebase storage');
+        return 'firebase';
+      }
+    } catch (error) {
+      // Firebase check failed, continue to default
+    }
+    
+    console.log('📦 DatabaseContext: Defaulting to IndexedDB storage');
+    return 'indexeddb';
+  });
+
   const [state, setState] = useState<DatabaseState>({
     isReady: false,
     isInitializing: false,
@@ -51,7 +76,14 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
     lastChecked: 0
   });
 
-  const [service] = useState(() => new IndexedDBService());
+  // Only create IndexedDB service if IndexedDB is the active storage mode
+  const [service] = useState(() => {
+    if (storageMode !== 'indexeddb') {
+      console.log(`📦 DatabaseContext: Skipping IndexedDB service creation - using ${storageMode} storage`);
+      return null;
+    }
+    return new IndexedDBService();
+  });
 
   // Initialize database on mount
   const initialize = useCallback(async () => {
@@ -59,13 +91,8 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
       return;
     }
 
-    // CRITICAL FIX: Only initialize IndexedDB if it's the active storage mode
-    // This prevents IndexedDB version errors when Firebase is the primary storage
-    const { getDataService } = require('../services/DataService');
-    const dataService = getDataService();
-    const storageMode = dataService.getMode();
-    
-    if (storageMode !== 'indexeddb') {
+    // If not using IndexedDB, mark as ready immediately
+    if (storageMode !== 'indexeddb' || !service) {
       console.log(`📦 DatabaseContext: Skipping IndexedDB initialization - using ${storageMode} storage`);
       setState(prev => ({
         ...prev,
@@ -166,6 +193,16 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
 
   // Check database health
   const checkHealth = useCallback(async () => {
+    if (!service) {
+      // If using Firebase, health is always good (IndexedDB not needed)
+      setState(prev => ({
+        ...prev,
+        healthStatus: 'healthy',
+        error: null,
+        lastChecked: Date.now()
+      }));
+      return;
+    }
     try {
       const health = await service.getHealthStatus();
       
@@ -191,6 +228,19 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
   // Repair database
   // ENTERPRISE: Enhanced repair function that handles version mismatches automatically
   const repair = useCallback(async () => {
+    if (!service) {
+      console.log('📦 DatabaseContext: No IndexedDB to repair - using Firebase storage');
+      setState(prev => ({
+        ...prev,
+        isReady: true,
+        isInitializing: false,
+        healthStatus: 'healthy',
+        error: null,
+        lastChecked: Date.now()
+      }));
+      return;
+    }
+    
     setState(prev => ({ ...prev, isInitializing: true, error: null }));
 
     try {
@@ -264,6 +314,11 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
 
   // Reset database (complete wipe and recreate)
   const reset = useCallback(async () => {
+    if (!service) {
+      console.log('📦 DatabaseContext: No IndexedDB to reset - using Firebase storage');
+      return;
+    }
+    
     if (!window.confirm('⚠️ WARNING: This will delete ALL survey data, mappings, and settings. This action cannot be undone. Are you sure you want to continue?')) {
       return;
     }
