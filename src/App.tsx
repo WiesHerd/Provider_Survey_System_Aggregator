@@ -616,7 +616,7 @@ function App() {
         <DatabaseProvider>
           <DatabaseInitializationScreen />
           <AuthProvider>
-            <AuthGuard requireAuth={true}>
+            <AuthGuard requireAuth={false}>
               <ToastProvider>
                 <StorageProvider>
                   <MappingProvider>

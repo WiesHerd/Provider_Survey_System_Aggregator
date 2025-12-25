@@ -50,19 +50,22 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
     );
   }
 
-  // In production, require authentication - no IndexedDB-only fallback
+  // Check if authentication is required via environment variable
+  // Default: Allow IndexedDB-only mode if Firebase not available
+  const envRequireAuth = process.env.REACT_APP_REQUIRE_AUTH === 'true';
   const isProduction = process.env.NODE_ENV === 'production';
+  const shouldRequireAuth = requireAuth || envRequireAuth;
   
   // If Firebase is not available
   if (!isAvailable) {
-    // In production, always require authentication - show error
-    if (isProduction && requireAuth) {
+    // If authentication is explicitly required (via prop or env var), show error
+    if (shouldRequireAuth) {
       return (
         <Box 
           display="flex" 
           flexDirection="column"
           alignItems="center" 
-          justifyContent="center" 
+          justifyContent="center"
           minHeight="100vh"
           gap={2}
           bgcolor="grey.50"
@@ -72,24 +75,19 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
             Authentication Required
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
-            Firebase authentication is required for production use. Please configure Firebase or contact your administrator.
+            Firebase authentication is required. Please configure Firebase environment variables in Vercel or set REACT_APP_REQUIRE_AUTH=false to allow IndexedDB-only mode.
           </Typography>
           <SimpleAuthScreen />
         </Box>
       );
     }
     
-    // In development, allow IndexedDB-only mode if explicitly permitted
-    if (requireAuth === false) {
-      return <>{children}</>;
-    }
-    
-    // Otherwise, show login screen
-    return <SimpleAuthScreen />;
+    // Allow IndexedDB-only mode (no authentication required)
+    return <>{children}</>;
   }
 
   // If authentication is required but user is not authenticated
-  if (requireAuth && !isAuthenticated) {
+  if (shouldRequireAuth && !isAuthenticated) {
     return <SimpleAuthScreen />;
   }
 
