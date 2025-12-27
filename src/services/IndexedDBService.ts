@@ -138,7 +138,7 @@ export class IndexedDBService {
     // Strategy: Open without version to detect, then use that version or upgrade if needed
     
     // Wrap detection in timeout to prevent hangs
-    const DETECTION_TIMEOUT = 5000; // 5 seconds
+    const DETECTION_TIMEOUT = 10000; // 10 seconds (increased for slow connections)
     
     try {
       const detectedVersion = await Promise.race<number | null>([

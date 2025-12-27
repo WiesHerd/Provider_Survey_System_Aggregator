@@ -110,10 +110,10 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
     try {
       console.log('🔧 DatabaseContext: Starting IndexedDB initialization...');
       
-      // Add timeout to prevent infinite hanging (reduced to 5 seconds for faster feedback)
+      // Add timeout to prevent infinite hanging (increased to 15 seconds for slow connections)
       const initPromise = service.initialize();
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Database initialization timed out after 5 seconds')), 5000)
+        setTimeout(() => reject(new Error('Database initialization timed out after 15 seconds')), 15000)
       );
       
       await Promise.race([initPromise, timeoutPromise]);
