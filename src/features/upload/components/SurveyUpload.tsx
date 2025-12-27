@@ -45,6 +45,18 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
   onSurveyDelete,
   initialFilters
 }) => {
+  // Defensive check - ensure hooks are available
+  if (!useUploadData) {
+    console.error('useUploadData hook is not available');
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          Upload feature is not properly initialized. Please refresh the page.
+        </Alert>
+      </Box>
+    );
+  }
+
   // Use custom hook for state management
   const {
     // File state
