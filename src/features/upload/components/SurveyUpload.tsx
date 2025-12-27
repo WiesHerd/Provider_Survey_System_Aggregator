@@ -318,6 +318,9 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   textTransform: 'none',
                   fontWeight: 500,
                   fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
                   '&:hover': {
                     bgcolor: 'grey.50',
                     borderColor: 'grey.400'
@@ -327,6 +330,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   }
                 }}
               >
+                <CloudArrowUpIcon style={{ width: 16, height: 16 }} />
                 Select File
               </Button>
               
@@ -345,6 +349,9 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                     bgcolor: 'white',
                     borderColor: 'grey.200',
                     color: 'grey.400',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     '&:hover': {
                       bgcolor: 'indigo.50',
                       borderColor: 'indigo.300',
@@ -356,7 +363,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   }}
                   aria-label="Download sample CSV template"
                 >
-                  ↓
+                  <ArrowDownTrayIcon style={{ width: 16, height: 16 }} />
                 </Button>
               </Box>
             </Box>
