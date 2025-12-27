@@ -88,14 +88,16 @@ const SurveyUpload = lazy(() =>
     .catch(error => {
       console.error('Failed to load SurveyUpload component:', error);
       // Return a fallback component that shows an error
-      return { 
-        default: () => (
-          <div style={{ padding: '2rem', textAlign: 'center' }}>
-            <h2>Failed to load upload component</h2>
-            <p>Please refresh the page or contact support if the issue persists.</p>
-          </div>
-        )
-      };
+      const FallbackComponent = () => (
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2>Failed to load upload component</h2>
+          <p>Please refresh the page or contact support if the issue persists.</p>
+          <p style={{ color: '#666', fontSize: '0.875rem', marginTop: '1rem' }}>
+            Error: {error instanceof Error ? error.message : String(error)}
+          </p>
+        </div>
+      );
+      return { default: FallbackComponent };
     })
 );
 
@@ -111,10 +113,34 @@ const SpecialtyMapping = lazy(() => import('./features/mapping/components/Specia
 const ProviderTypeMapping = lazy(() => import('./features/mapping/components/ProviderTypeMapping').then(module => ({ default: module.ProviderTypeMapping })));
 const RegionMapping = lazy(() => import('./features/mapping/components/RegionMapping').then(module => ({ default: module.RegionMapping })));
 const VariableMapping = lazy(() => import('./features/mapping/components/VariableMapping').then(module => ({ default: module.VariableMapping })));
-const SurveyAnalytics = lazy(() => import('./features/analytics/components/SurveyAnalytics'));
-const RegionalAnalytics = lazy(() => import('./components/RegionalAnalytics'));
-const FairMarketValue = lazy(() => import('./components/FairMarketValue'));
-const CustomReports = lazy(() => import('./components/CustomReports'));
+const SurveyAnalytics = lazy(() => 
+  import('./features/analytics/components/SurveyAnalytics')
+    .catch(error => {
+      console.error('Failed to load SurveyAnalytics:', error);
+      return { default: () => <div>Failed to load analytics component</div> };
+    })
+);
+const RegionalAnalytics = lazy(() => 
+  import('./components/RegionalAnalytics')
+    .catch(error => {
+      console.error('Failed to load RegionalAnalytics:', error);
+      return { default: () => <div>Failed to load regional analytics component</div> };
+    })
+);
+const FairMarketValue = lazy(() => 
+  import('./components/FairMarketValue')
+    .catch(error => {
+      console.error('Failed to load FairMarketValue:', error);
+      return { default: () => <div>Failed to load fair market value component</div> };
+    })
+);
+const CustomReports = lazy(() => 
+  import('./components/CustomReports')
+    .catch(error => {
+      console.error('Failed to load CustomReports:', error);
+      return { default: () => <div>Failed to load custom reports component</div> };
+    })
+);
 const CannedReports = lazy(() => import('./features/reports/components/CannedReports').then(module => ({ default: module.default })));
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
