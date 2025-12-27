@@ -3,7 +3,7 @@
  * Provides global database state and error recovery capabilities
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { IndexedDBService } from '../services/IndexedDBService';
 
 interface DatabaseState {
@@ -76,6 +76,9 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
     lastChecked: 0
   });
 
+  // Use ref to track initialization to prevent race conditions
+  const initializationStartedRef = React.useRef(false);
+
   // Only create IndexedDB service if IndexedDB is the active storage mode
   const [service] = useState(() => {
     if (storageMode !== 'indexeddb') {
@@ -87,33 +90,39 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
 
   // Initialize database on mount
   const initialize = useCallback(async () => {
-    if (state.isInitializing || state.isReady) {
-      return;
-    }
-
     // If not using IndexedDB, mark as ready immediately
     if (storageMode !== 'indexeddb' || !service) {
       console.log(`📦 DatabaseContext: Skipping IndexedDB initialization - using ${storageMode} storage`);
-      setState(prev => ({
-        ...prev,
-        isReady: true, // Mark as ready since we're using Firebase
-        isInitializing: false,
-        healthStatus: 'healthy',
-        error: null,
-        lastChecked: Date.now()
-      }));
+      setState(prev => {
+        if (prev.isReady) return prev; // Already ready, don't update
+        return {
+          ...prev,
+          isReady: true, // Mark as ready since we're using Firebase
+          isInitializing: false,
+          healthStatus: 'healthy',
+          error: null,
+          lastChecked: Date.now()
+        };
+      });
       return;
     }
 
+    // Prevent multiple simultaneous initializations
+    if (initializationStartedRef.current) {
+      console.log('📦 DatabaseContext: Initialization already in progress, skipping...');
+      return;
+    }
+
+    initializationStartedRef.current = true;
     setState(prev => ({ ...prev, isInitializing: true, error: null }));
 
     try {
       console.log('🔧 DatabaseContext: Starting IndexedDB initialization...');
       
-      // Add timeout to prevent infinite hanging
+      // Add timeout to prevent infinite hanging (reduced to 5 seconds for faster feedback)
       const initPromise = service.initialize();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database initialization timed out after 10 seconds')), 10000)
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Database initialization timed out after 5 seconds')), 5000)
       );
       
       await Promise.race([initPromise, timeoutPromise]);
@@ -127,6 +136,7 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
         lastChecked: Date.now()
       }));
       
+      initializationStartedRef.current = false;
       console.log('✅ DatabaseContext: Database initialization completed successfully');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize database';
@@ -188,8 +198,10 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
         error: errorMessage,
         lastChecked: Date.now()
       }));
+      
+      initializationStartedRef.current = false;
     }
-  }, [service, state.isInitializing, state.isReady]);
+  }, [service, storageMode]);
 
   // Check database health
   const checkHealth = useCallback(async () => {
