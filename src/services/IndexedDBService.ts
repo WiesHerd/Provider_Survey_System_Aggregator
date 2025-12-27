@@ -280,23 +280,30 @@ export class IndexedDBService {
     openRequest.onerror = () => {
       const error = openRequest.error || new Error('Failed to open IndexedDB');
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : String(error);
       
-      console.error(`❌ Failed to open IndexedDB:`, errorMessage);
+      console.error(`❌ Failed to open IndexedDB:`, errorMessage, `(Error name: ${errorName})`);
       
-      // ENTERPRISE: If we tried with a version and got a version mismatch error,
-      // try opening without version as last resort
-      if (targetVersion !== undefined && 
-          errorMessage.includes('version') && 
-          (errorMessage.includes('less than') || errorMessage.includes('greater than'))) {
-        console.warn('🔄 Version mismatch error detected, attempting to open without version number...');
+      // ENTERPRISE: Handle VersionError specifically - this happens when cached old code tries to open with lower version
+      // Also handle any version-related error messages
+      const isVersionError = errorName === 'VersionError' || 
+                            errorMessage.includes('VersionError') ||
+                            (errorMessage.includes('version') && 
+                             (errorMessage.includes('less than') || 
+                              errorMessage.includes('greater than') ||
+                              errorMessage.includes('requested version')));
+      
+      if (isVersionError || (targetVersion !== undefined && errorMessage.toLowerCase().includes('version'))) {
+        console.warn('🔄 Version mismatch error detected (likely cached old code), attempting to open without version number...');
         
-        // Last resort: open without version number
+        // Last resort: open without version number to use existing database version
         const fallbackRequest = indexedDB.open(this.DB_NAME);
         fallbackRequest.onsuccess = () => {
           this.db = fallbackRequest.result;
           const actualVersion = this.db.version;
           console.log(`✅ IndexedDB opened successfully with fallback (version ${actualVersion})`);
           this._dbVersion = actualVersion;
+          console.warn('⚠️ Please refresh the page to load the latest code version');
           resolve();
         };
         fallbackRequest.onerror = () => {
@@ -1735,11 +1742,20 @@ export class IndexedDBService {
         }
       };
 
-      console.log('💾 IndexedDBService: Creating survey record:', survey);
+      console.log('💾 IndexedDBService: Creating survey record:', {
+        ...survey,
+        year: survey.year,
+        yearType: typeof survey.year,
+        providerType: survey.providerType
+      });
 
       // Save survey
       await this.createSurvey(survey);
-      console.log('✅ IndexedDBService: Survey record created successfully');
+      console.log('✅ IndexedDBService: Survey record created successfully:', {
+        surveyId: survey.id,
+        year: survey.year,
+        providerType: survey.providerType
+      });
       
       // Save survey data
       console.log('💾 IndexedDBService: Saving survey data...');
