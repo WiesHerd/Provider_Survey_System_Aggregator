@@ -353,22 +353,26 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
             <StorageStatusIndicator />
 
             {/* Upload Form */}
-            <UploadForm
-              formState={formState}
-              onFormChange={updateFormState}
-              onCustomToggle={toggleCustom}
-              disabled={isUploading}
-            />
+            {UploadForm && (
+              <UploadForm
+                formState={formState}
+                onFormChange={updateFormState}
+                onCustomToggle={toggleCustom}
+                disabled={isUploading}
+              />
+            )}
 
             {/* File Upload */}
-            <FileUpload
-              files={files}
-              onDrop={addFiles}
-              onRemove={removeFile}
-              onClear={clearFiles}
-              uploadProgress={uploadProgress}
-              disabled={isUploading}
-            />
+            {FileUpload && (
+              <FileUpload
+                files={files}
+                onDrop={addFiles}
+                onRemove={removeFile}
+                onClear={clearFiles}
+                uploadProgress={uploadProgress}
+                disabled={isUploading}
+              />
+            )}
 
             {/* Upload Buttons */}
             {files.length > 0 && (

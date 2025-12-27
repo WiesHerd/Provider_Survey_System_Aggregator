@@ -80,15 +80,22 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const SurveyUpload = lazy(() => 
   import('./features/upload')
     .then(module => {
-      if (!module.SurveyUpload) {
+      console.log('SurveyUpload module loaded:', module);
+      if (!module || !module.SurveyUpload) {
+        console.error('SurveyUpload not found in module:', Object.keys(module || {}));
         throw new Error('SurveyUpload component not found in upload feature module');
       }
-      return { default: module.SurveyUpload };
+      const component = module.SurveyUpload;
+      if (typeof component !== 'function' && typeof component !== 'object') {
+        console.error('SurveyUpload is not a valid component:', typeof component, component);
+        throw new Error('SurveyUpload is not a valid React component');
+      }
+      return { default: component };
     })
     .catch(error => {
       console.error('Failed to load SurveyUpload component:', error);
       // Return a fallback component that shows an error
-      const FallbackComponent = () => (
+      const FallbackComponent: React.FC = () => (
         <div style={{ padding: '2rem', textAlign: 'center' }}>
           <h2>Failed to load upload component</h2>
           <p>Please refresh the page or contact support if the issue persists.</p>
@@ -97,6 +104,7 @@ const SurveyUpload = lazy(() =>
           </p>
         </div>
       );
+      FallbackComponent.displayName = 'SurveyUploadFallback';
       return { default: FallbackComponent };
     })
 );
