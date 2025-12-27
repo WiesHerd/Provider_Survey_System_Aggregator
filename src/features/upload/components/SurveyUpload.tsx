@@ -189,6 +189,18 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     }
   };
 
+  // Defensive check - ensure hook returned valid values
+  if (!formState || !sectionState || !formValidation || !fileValidation) {
+    console.error('SurveyUpload: Invalid state from useUploadData hook');
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          Upload feature initialization error. Please refresh the page.
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: 3, position: 'relative' }}>
       {/* ENTERPRISE FIX: Show overlay spinner when loading (matches AnalyticsTable pattern) */}
@@ -353,26 +365,22 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
             <StorageStatusIndicator />
 
             {/* Upload Form */}
-            {UploadForm && (
-              <UploadForm
-                formState={formState}
-                onFormChange={updateFormState}
-                onCustomToggle={toggleCustom}
-                disabled={isUploading}
-              />
-            )}
+            <UploadForm
+              formState={formState}
+              onFormChange={updateFormState}
+              onCustomToggle={toggleCustom}
+              disabled={isUploading}
+            />
 
             {/* File Upload */}
-            {FileUpload && (
-              <FileUpload
-                files={files}
-                onDrop={addFiles}
-                onRemove={removeFile}
-                onClear={clearFiles}
-                uploadProgress={uploadProgress}
-                disabled={isUploading}
-              />
-            )}
+            <FileUpload
+              files={files}
+              onDrop={addFiles}
+              onRemove={removeFile}
+              onClear={clearFiles}
+              uploadProgress={uploadProgress}
+              disabled={isUploading}
+            />
 
             {/* Upload Buttons */}
             {files.length > 0 && (
