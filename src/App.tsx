@@ -77,7 +77,27 @@ const theme = createTheme({
 
 // Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SurveyUpload = lazy(() => import('./features/upload').then(module => ({ default: module.SurveyUpload })));
+const SurveyUpload = lazy(() => 
+  import('./features/upload')
+    .then(module => {
+      if (!module.SurveyUpload) {
+        throw new Error('SurveyUpload component not found in upload feature module');
+      }
+      return { default: module.SurveyUpload };
+    })
+    .catch(error => {
+      console.error('Failed to load SurveyUpload component:', error);
+      // Return a fallback component that shows an error
+      return { 
+        default: () => (
+          <div style={{ padding: '2rem', textAlign: 'center' }}>
+            <h2>Failed to load upload component</h2>
+            <p>Please refresh the page or contact support if the issue persists.</p>
+          </div>
+        )
+      };
+    })
+);
 
 // DevTools component - only loads in development
 // Using string-based import to avoid TypeScript compile-time resolution
