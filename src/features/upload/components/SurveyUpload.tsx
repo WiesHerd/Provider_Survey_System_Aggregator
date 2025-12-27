@@ -45,18 +45,6 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
   onSurveyDelete,
   initialFilters
 }) => {
-  // Defensive check - ensure hooks are available
-  if (!useUploadData) {
-    console.error('useUploadData hook is not available');
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Upload feature is not properly initialized. Please refresh the page.
-        </Alert>
-      </Box>
-    );
-  }
-
   // Use custom hook for state management
   const {
     // File state
@@ -538,20 +526,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
         estimatedTime={`${Math.ceil(files.length * 0.5)} min`}
       />
 
-      {/* Upload Error Boundary */}
-      <UploadErrorBoundary
-        onRetry={() => {
-          clearError();
-          handleUpload();
-        }}
-        onClear={() => {
-          clearError();
-          clearFiles();
-        }}
-        onDismiss={clearError}
-      >
-        {/* This would wrap the upload components if needed */}
-      </UploadErrorBoundary>
+      {/* Upload Error Boundary - Removed empty wrapper that might cause issues */}
     </Box>
   );
 });
