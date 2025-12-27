@@ -308,7 +308,6 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                 variant="outlined"
                 onClick={handleBrowseClick}
                 disabled={isUploading}
-                startIcon={React.createElement(CloudArrowUpIcon, { style: { width: 16, height: 16 } })}
                 sx={{
                   borderRadius: '12px',
                   px: 4,
@@ -357,7 +356,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   }}
                   aria-label="Download sample CSV template"
                 >
-                  {React.createElement(ArrowDownTrayIcon, { style: { width: 16, height: 16 } })}
+                  ↓
                 </Button>
               </Box>
             </Box>
