@@ -3,7 +3,7 @@ const { execSync } = require('child_process');
 // Set environment variables to disable ESLint
 process.env.CI = 'false';
 process.env.DISABLE_ESLINT_PLUGIN = 'true';
-process.env.GENERATE_SOURCEMAP = 'false';
+process.env.GENERATE_SOURCEMAP = 'true'; // Temporarily enable for debugging
 
 console.log('Building for Vercel with ESLint disabled...');
 console.log('Environment variables:');

@@ -77,37 +77,8 @@ const theme = createTheme({
 
 // Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SurveyUpload = lazy(() => 
-  import('./features/upload')
-    .then(module => {
-      console.log('SurveyUpload module loaded:', module);
-      if (!module || !module.SurveyUpload) {
-        console.error('SurveyUpload not found in module:', Object.keys(module || {}));
-        throw new Error('SurveyUpload component not found in upload feature module');
-      }
-      const component = module.SurveyUpload;
-      if (typeof component !== 'function' && typeof component !== 'object') {
-        console.error('SurveyUpload is not a valid component:', typeof component, component);
-        throw new Error('SurveyUpload is not a valid React component');
-      }
-      return { default: component };
-    })
-    .catch(error => {
-      console.error('Failed to load SurveyUpload component:', error);
-      // Return a fallback component that shows an error
-      const FallbackComponent: React.FC = () => (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <h2>Failed to load upload component</h2>
-          <p>Please refresh the page or contact support if the issue persists.</p>
-          <p style={{ color: '#666', fontSize: '0.875rem', marginTop: '1rem' }}>
-            Error: {error instanceof Error ? error.message : String(error)}
-          </p>
-        </div>
-      );
-      FallbackComponent.displayName = 'SurveyUploadFallback';
-      return { default: FallbackComponent };
-    })
-);
+// Temporarily use old component to test if new component is the issue
+const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
 
 // DevTools component - only loads in development
 // Using string-based import to avoid TypeScript compile-time resolution
