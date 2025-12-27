@@ -77,7 +77,7 @@ const theme = createTheme({
 
 // Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
+const SurveyUpload = lazy(() => import('./features/upload').then(module => ({ default: module.SurveyUpload })));
 
 // DevTools component - only loads in development
 // Using string-based import to avoid TypeScript compile-time resolution

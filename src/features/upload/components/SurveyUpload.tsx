@@ -3,7 +3,7 @@
  * This is the main component that orchestrates the upload feature
  */
 
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -13,7 +13,10 @@ import {
 } from '@mui/material';
 import {
   ChevronDownIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  CloudArrowUpIcon,
+  ArrowUpTrayIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { UploadProps } from '../types/upload';
 import { useUploadData } from '../hooks/useUploadData';
@@ -23,7 +26,10 @@ import { UploadedSurveys } from './UploadedSurveys';
 import { UploadProgressDialog } from './UploadProgressDialog';
 import { UploadErrorBoundary } from './UploadErrorBoundary';
 import { UploadValidationSummary } from './UploadValidationSummary';
+import { StorageStatusIndicator } from './StorageStatusIndicator';
 import { CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
+import { downloadGeneratedSample } from '../../../utils/generateSampleFile';
 
 /**
  * Main Survey Upload component
@@ -104,6 +110,9 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
   const [showProgressDialog, setShowProgressDialog] = React.useState(false);
   const [showValidationSummary, setShowValidationSummary] = React.useState(false);
   const [validationResults, setValidationResults] = React.useState<any[]>([]);
+  
+  // File input ref for Browse button
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Event handlers
   const handleUpload = async () => {
@@ -151,8 +160,48 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     toggleSection(section);
   };
 
+  const handleBrowseClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const fileArray = Array.from(e.target.files);
+      addFiles(fileArray);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      // Get provider type from form state
+      const providerType = formState.providerType && formState.providerType !== 'CUSTOM'
+        ? (formState.providerType as 'PHYSICIAN' | 'APP' | 'CALL' | undefined)
+        : undefined;
+      
+      // Get survey source name
+      const surveySourceName = formState.surveyType === 'Custom' && formState.customSurveyType
+        ? formState.customSurveyType
+        : formState.surveyType || 'Sample';
+      
+      downloadGeneratedSample(providerType, surveySourceName);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, position: 'relative' }}>
+      {/* ENTERPRISE FIX: Show overlay spinner when loading (matches AnalyticsTable pattern) */}
+      {/* This provides stale-while-revalidate: shows cached data if available, spinner overlays during refresh */}
+      {isLoading && (
+        <EnterpriseLoadingSpinner
+          message="Loading surveys..."
+          recordCount={uploadedSurveys.length}
+          data={uploadedSurveys}
+          variant="overlay"
+          loading={isLoading}
+        />
+      )}
       {/* Page Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h4" component="h1">
@@ -192,6 +241,16 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
 
       {/* Upload Section */}
       <Box sx={{ mb: 3 }}>
+        {/* Hidden file input for Browse button */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".csv,.xlsx,.xls"
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
+        />
+
         {/* Section Header */}
         <Box
           sx={{
@@ -201,33 +260,98 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
             p: 2,
             bgcolor: 'background.paper',
             borderRadius: 2,
-            boxShadow: 1,
-            cursor: 'pointer',
-            '&:hover': { bgcolor: 'action.hover' }
+            boxShadow: 1
           }}
-          onClick={handleSectionToggle('isUploadSectionCollapsed')}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1,
+              cursor: 'pointer',
+              '&:hover': { opacity: 0.7 }
+            }}
+            onClick={handleSectionToggle('isUploadSectionCollapsed')}
+          >
             {sectionState.isUploadSectionCollapsed ? (
               <ChevronRightIcon style={{ width: 20, height: 20 }} />
             ) : (
               <ChevronDownIcon style={{ width: 20, height: 20 }} />
             )}
             <Typography variant="h6">
-              Upload New Surveys
+              Upload New Survey
             </Typography>
           </Box>
           
-          {files.length > 0 && (
-            <Typography variant="body2" color="text.secondary">
-              {files.length} file{files.length !== 1 ? 's' : ''} selected
-            </Typography>
+          {!sectionState.isUploadSectionCollapsed && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {/* Select File Button - White with gray border (matches Firebase) */}
+              <Button
+                variant="outlined"
+                onClick={handleBrowseClick}
+                disabled={isUploading}
+                startIcon={<CloudArrowUpIcon style={{ width: 16, height: 16 }} />}
+                sx={{
+                  borderRadius: '12px',
+                  px: 4,
+                  py: 1.5,
+                  bgcolor: 'white',
+                  color: 'text.primary',
+                  borderColor: 'grey.300',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  fontSize: '0.875rem',
+                  '&:hover': {
+                    bgcolor: 'grey.50',
+                    borderColor: 'grey.400'
+                  },
+                  '&:disabled': {
+                    opacity: 0.5
+                  }
+                }}
+              >
+                Select File
+              </Button>
+              
+              {/* Download Template Button - Circular icon button (matches Firebase) */}
+              <Box sx={{ position: 'relative' }}>
+                <Button
+                  variant="outlined"
+                  onClick={handleDownloadTemplate}
+                  disabled={isUploading}
+                  sx={{
+                    minWidth: 'auto',
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    p: 0,
+                    bgcolor: 'white',
+                    borderColor: 'grey.200',
+                    color: 'grey.400',
+                    '&:hover': {
+                      bgcolor: 'indigo.50',
+                      borderColor: 'indigo.300',
+                      color: 'indigo.600'
+                    },
+                    '&:disabled': {
+                      opacity: 0.5
+                    }
+                  }}
+                  aria-label="Download sample CSV template"
+                >
+                  <ArrowDownTrayIcon style={{ width: 16, height: 16 }} />
+                </Button>
+              </Box>
+            </Box>
           )}
         </Box>
 
         {/* Collapsible Upload Content */}
         <Collapse in={!sectionState.isUploadSectionCollapsed}>
           <Box sx={{ mt: 2 }}>
+            {/* Storage Status Indicator */}
+            <StorageStatusIndicator />
+
             {/* Upload Form */}
             <UploadForm
               formState={formState}
