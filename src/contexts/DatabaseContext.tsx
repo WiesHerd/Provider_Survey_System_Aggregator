@@ -45,6 +45,7 @@ interface DatabaseProviderProps {
 export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) => {
   // CRITICAL FIX: Check storage mode BEFORE creating IndexedDB service
   // This prevents IndexedDB from being initialized when Firebase is the primary storage
+  // ENTERPRISE: Removed Firebase require() check that was causing hangs - only check env var
   const [storageMode] = useState(() => {
     // Check environment variable first (most reliable)
     const envMode = process.env.REACT_APP_STORAGE_MODE;
@@ -53,18 +54,8 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
       return envMode;
     }
     
-    // Fallback: Check if Firebase is available
-    try {
-      const { isFirebaseAvailable } = require('../config/firebase');
-      if (isFirebaseAvailable()) {
-        console.log('📦 DatabaseContext: Firebase available, using Firebase storage');
-        return 'firebase';
-      }
-    } catch (error) {
-      // Firebase check failed, continue to default
-    }
-    
-    console.log('📦 DatabaseContext: Defaulting to IndexedDB storage');
+    // Default to IndexedDB (no Firebase check to prevent hangs)
+    console.log('📦 DatabaseContext: Defaulting to IndexedDB storage (no Firebase check)');
     return 'indexeddb';
   });
 
