@@ -173,6 +173,12 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
 
   const handleDownloadTemplate = () => {
     try {
+      // Defensive check - ensure formState exists
+      if (!formState) {
+        console.error('handleDownloadTemplate: formState is undefined');
+        return;
+      }
+      
       // Get provider type from form state
       const providerType = formState.providerType && formState.providerType !== 'CUSTOM'
         ? (formState.providerType as 'PHYSICIAN' | 'APP' | 'CALL' | undefined)
@@ -302,7 +308,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                 variant="outlined"
                 onClick={handleBrowseClick}
                 disabled={isUploading}
-                startIcon={<CloudArrowUpIcon style={{ width: 16, height: 16 }} />}
+                startIcon={React.createElement(CloudArrowUpIcon, { style: { width: 16, height: 16 } })}
                 sx={{
                   borderRadius: '12px',
                   px: 4,
@@ -351,7 +357,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   }}
                   aria-label="Download sample CSV template"
                 >
-                  <ArrowDownTrayIcon style={{ width: 16, height: 16 }} />
+                  {React.createElement(ArrowDownTrayIcon, { style: { width: 16, height: 16 } })}
                 </Button>
               </Box>
             </Box>
