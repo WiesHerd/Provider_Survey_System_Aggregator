@@ -157,8 +157,16 @@ export class IndexedDBService {
         this._dbVersion = detectedVersion;
       }
       
-      // Now open with the correct version (or without version if we're using existing)
-      await this._openWithVersionAsync(detectedVersion);
+      // CRITICAL FIX: If database exists (detectedVersion !== null), ALWAYS open without version
+      // This prevents any version mismatch errors from cached old code
+      // Only specify version if it's a new database (detectedVersion === null)
+      if (detectedVersion !== null) {
+        console.log(`📊 Database exists (version ${detectedVersion}), opening without version number to use existing version`);
+        await this._openWithVersionAsync(null, true); // Force open without version
+      } else {
+        // New database - safe to open with code version
+        await this._openWithVersionAsync(null);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.warn(`⚠️ Database version detection failed: ${errorMessage}. Using safe fallback (open without version)...`);
