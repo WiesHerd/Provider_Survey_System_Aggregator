@@ -8,6 +8,8 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   User,
@@ -15,6 +17,7 @@ import {
   AuthError,
 } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseAvailable } from '../config/firebase';
+import { logger } from '../shared/utils/logger';
 
 /**
  * Auth service interface for dependency injection and testing
@@ -22,6 +25,7 @@ import { getFirebaseAuth, isFirebaseAvailable } from '../config/firebase';
 export interface IAuthService {
   signUp(email: string, password: string): Promise<UserCredential>;
   signIn(email: string, password: string): Promise<UserCredential>;
+  signInWithGoogle(): Promise<UserCredential>;
   signOut(): Promise<void>;
   getCurrentUser(): User | null;
   onAuthStateChanged(callback: (user: User | null) => void): () => void;
@@ -38,7 +42,7 @@ export class AuthService implements IAuthService {
 
   private constructor() {
     if (!isFirebaseAvailable()) {
-      console.warn('⚠️ AuthService: Firebase not available. Authentication disabled.');
+      logger.warn('⚠️ AuthService: Firebase not available. Authentication disabled.');
     }
   }
 
@@ -75,7 +79,7 @@ export class AuthService implements IAuthService {
     try {
       const auth = getFirebaseAuth();
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      console.log('✅ User signed up successfully:', userCredential.user.email);
+      logger.log('✅ User signed up successfully:', userCredential.user.email);
       return userCredential;
     } catch (error) {
       throw this.handleAuthError(error as AuthError);
@@ -98,10 +102,66 @@ export class AuthService implements IAuthService {
     try {
       const auth = getFirebaseAuth();
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ User signed in successfully:', userCredential.user.email);
+      logger.log('✅ User signed in successfully:', userCredential.user.email);
       return userCredential;
     } catch (error) {
       throw this.handleAuthError(error as AuthError);
+    }
+  }
+
+  /**
+   * Sign in with Google
+   * 
+   * @returns UserCredential with user information
+   * @throws Error with user-friendly message
+   */
+  public async signInWithGoogle(): Promise<UserCredential> {
+    if (!this.isAvailable()) {
+      throw new Error('Firebase is not configured. Please restart your dev server after setting up .env.local file.');
+    }
+
+    try {
+      const auth = getFirebaseAuth();
+      const provider = new GoogleAuthProvider();
+      // Request additional scopes if needed
+      provider.addScope('email');
+      provider.addScope('profile');
+      
+      // Set custom parameters for better UX
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const userCredential = await signInWithPopup(auth, provider);
+      logger.log('✅ User signed in with Google successfully:', userCredential.user.email);
+      return userCredential;
+    } catch (error) {
+      const authError = error as AuthError;
+      
+      // Handle specific Google sign-in errors first
+      if (authError.code === 'auth/popup-closed-by-user') {
+        throw new Error('Sign-in was cancelled. Please try again.');
+      }
+      
+      if (authError.code === 'auth/popup-blocked') {
+        throw new Error('Popup was blocked by your browser. Please allow popups for this site and try again.');
+      }
+      
+      if (authError.code === 'auth/account-exists-with-different-credential') {
+        throw new Error('An account already exists with this email. Please sign in with your email and password.');
+      }
+      
+      if (authError.code === 'auth/operation-not-allowed') {
+        throw new Error('Google sign-in is not enabled in Firebase. Please enable it in Firebase Console > Authentication > Sign-in method.');
+      }
+      
+      // Handle API key errors specifically
+      if (authError.code === 'auth/api-key-not-valid' || authError.code === 'auth/invalid-api-key') {
+        throw new Error('Firebase API key is invalid. Please check your .env.local file and restart the dev server.');
+      }
+      
+      // Use the general error handler for other errors
+      throw this.handleAuthError(authError);
     }
   }
 
@@ -118,9 +178,9 @@ export class AuthService implements IAuthService {
     try {
       const auth = getFirebaseAuth();
       await signOut(auth);
-      console.log('✅ User signed out successfully');
+      logger.log('✅ User signed out successfully');
     } catch (error) {
-      console.error('❌ Sign out failed:', error);
+      logger.error('❌ Sign out failed:', error);
       throw new Error('Failed to sign out. Please try again.');
     }
   }
@@ -139,7 +199,7 @@ export class AuthService implements IAuthService {
       const auth = getFirebaseAuth();
       return auth.currentUser;
     } catch (error) {
-      console.error('❌ Failed to get current user:', error);
+      logger.error('❌ Failed to get current user:', error);
       return null;
     }
   }
@@ -160,7 +220,7 @@ export class AuthService implements IAuthService {
       const auth = getFirebaseAuth();
       return onAuthStateChanged(auth, callback);
     } catch (error) {
-      console.error('❌ Failed to subscribe to auth state changes:', error);
+      logger.error('❌ Failed to subscribe to auth state changes:', error);
       return () => {};
     }
   }
@@ -172,7 +232,7 @@ export class AuthService implements IAuthService {
    * @returns Error with user-friendly message
    */
   private handleAuthError(error: AuthError): Error {
-    console.error('❌ Auth error:', error.code, error.message);
+    logger.error('❌ Auth error:', error.code, error.message);
 
     switch (error.code) {
       case 'auth/email-already-in-use':
@@ -182,7 +242,7 @@ export class AuthService implements IAuthService {
         return new Error('Invalid email address. Please check and try again.');
       
       case 'auth/operation-not-allowed':
-        return new Error('Email/password authentication is not enabled. Contact support.');
+        return new Error('Authentication method is not enabled. Please contact support.');
       
       case 'auth/weak-password':
         return new Error('Password is too weak. Use at least 6 characters.');
@@ -202,8 +262,24 @@ export class AuthService implements IAuthService {
       case 'auth/network-request-failed':
         return new Error('Network error. Check your internet connection.');
       
+      case 'auth/api-key-not-valid':
+      case 'auth/invalid-api-key':
+        return new Error('Firebase API key is invalid. Please check your .env.local file and restart the dev server.');
+      
+      case 'auth/popup-blocked':
+        return new Error('Popup was blocked by your browser. Please allow popups for this site and try again.');
+      
+      case 'auth/popup-closed-by-user':
+        return new Error('Sign-in was cancelled. Please try again.');
+      
+      case 'auth/account-exists-with-different-credential':
+        return new Error('An account already exists with this email. Please sign in with your email and password.');
+      
       default:
-        return new Error(`Authentication failed: ${error.message}`);
+        // For unknown errors, provide a user-friendly message
+        const errorCode = error.code || 'unknown';
+        const errorMessage = error.message || 'An unexpected error occurred';
+        return new Error(`Authentication failed: ${errorCode.includes('api-key') ? 'Please check your Firebase configuration and restart the dev server.' : errorMessage}`);
     }
   }
 }

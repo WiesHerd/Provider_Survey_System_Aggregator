@@ -1,8 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { UIProviderType } from '../types/provider';
 import { ProviderTypeSelector } from '../shared/components/ProviderTypeSelector';
+import { UserMenu } from './UserMenu';
+import { queryKeys } from '../shared/services/queryClient';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -16,11 +19,8 @@ import {
 	DocumentTextIcon,
 	UserIcon,
 	CurrencyDollarIcon,
-	CircleStackIcon,
 	ArrowsPointingOutIcon,
-	TagIcon,
 	PlusIcon,
-	Cog6ToothIcon,
 	AcademicCapIcon,
 } from '@heroicons/react/24/outline';
 
@@ -48,6 +48,9 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const currentPath = location.pathname;
 	const listRef = useRef<HTMLDivElement>(null);
 	const { selectedProviderType, setProviderType } = useProviderContext();
+	const queryClient = useQueryClient();
+	const [logoError, setLogoError] = useState(false);
+	const [collapsedLogoError, setCollapsedLogoError] = useState(false);
 	
 	// Define all menu groups with ChatGPT-style organization
 	const allMenuGroups: MenuGroup[] = [
@@ -72,7 +75,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					{ name: 'Benchmarking', icon: PresentationChartLineIcon, path: '/benchmarking' },
 					{ name: 'Regional Data', icon: MapIcon, path: '/regional-analytics' },
 					{ name: 'Custom Blending', icon: ArrowsPointingOutIcon, path: '/specialty-blending' },
-					{ name: 'Report Builder', icon: DocumentChartBarIcon, path: '/custom-reports' },
+					{ name: 'Chart & Report Builder', icon: DocumentChartBarIcon, path: '/custom-reports' },
 					{ name: 'Report Library', icon: DocumentTextIcon, path: '/canned-reports' },
 					{ name: 'Fair Market Value', icon: CalculatorIcon, path: '/fair-market-value' },
 				]
@@ -85,6 +88,146 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
 
 	const handleNavigation = (path: string) => navigate(path);
+
+	// ENTERPRISE: Aggressive prefetching on hover for instant navigation
+	const handleMouseEnter = useCallback((path: string) => {
+		const providerType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+		const providerTypeKey = providerType || 'all';
+		
+		// Prefetch mapping data with 24h cache
+		if (path === '/specialty-mapping') {
+			queryClient.prefetchQuery({
+				queryKey: [...queryKeys.mappings.specialty(), providerTypeKey],
+				queryFn: async () => {
+					const { DataService } = await import('../services/DataService');
+					const dataService = new DataService();
+					const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
+						dataService.getAllSpecialtyMappings(providerType),
+						dataService.getUnmappedSpecialties(providerType),
+						dataService.getLearnedMappings('specialty', providerType),
+						dataService.getLearnedMappingsWithSource('specialty', providerType)
+					]);
+					return { mappings, unmapped, learned, learnedWithSource };
+				},
+				staleTime: 1000 * 60 * 60 * 24, // 24 hours
+			}).catch(() => {});
+		} else if (path === '/variable-mapping') {
+			queryClient.prefetchQuery({
+				queryKey: [...queryKeys.mappings.variable(), providerTypeKey],
+				queryFn: async () => {
+					const { DataService } = await import('../services/DataService');
+					const dataService = new DataService();
+					const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
+						dataService.getVariableMappings(providerType),
+						dataService.getUnmappedVariables(providerType),
+						dataService.getLearnedMappings('variable', providerType),
+						dataService.getLearnedMappingsWithSource('variable', providerType)
+					]);
+					return { mappings, unmapped, learned, learnedWithSource };
+				},
+				staleTime: 1000 * 60 * 60 * 24, // 24 hours
+			}).catch(() => {});
+		} else if (path === '/region-mapping') {
+			queryClient.prefetchQuery({
+				queryKey: [...queryKeys.mappings.region(), providerTypeKey],
+				queryFn: async () => {
+					const { DataService } = await import('../services/DataService');
+					const dataService = new DataService();
+					const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
+						dataService.getRegionMappings(providerType),
+						dataService.getUnmappedRegions(providerType),
+						dataService.getLearnedMappings('region', providerType),
+						dataService.getLearnedMappingsWithSource('region', providerType)
+					]);
+					return { mappings, unmapped, learned, learnedWithSource };
+				},
+				staleTime: 1000 * 60 * 60 * 24, // 24 hours
+			}).catch(() => {});
+		} else if (path === '/provider-type-mapping') {
+			queryClient.prefetchQuery({
+				queryKey: [...queryKeys.mappings.providerType(), providerTypeKey],
+				queryFn: async () => {
+					const { DataService } = await import('../services/DataService');
+					const dataService = new DataService();
+					const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
+						dataService.getProviderTypeMappings(providerType),
+						dataService.getUnmappedProviderTypes(providerType),
+						dataService.getLearnedMappings('providerType', providerType),
+						dataService.getLearnedMappingsWithSource('providerType', providerType)
+					]);
+					return { mappings, unmapped, learned, learnedWithSource };
+				},
+				staleTime: 1000 * 60 * 60 * 24, // 24 hours
+			}).catch(() => {});
+		} else if (path === '/benchmarking' || path === '/regional-analytics') {
+			// Prefetch benchmarking data (shared by both routes)
+			queryClient.prefetchQuery({
+				queryKey: queryKeys.benchmarking({
+					specialty: '',
+					surveySource: '',
+					region: '',
+					providerType: '',
+					year: ''
+				}),
+				queryFn: async () => {
+					const { fetchBenchmarkingData } = await import('../features/analytics/hooks/useBenchmarkingQuery');
+					return fetchBenchmarkingData({
+						specialty: '',
+						surveySource: '',
+						geographicRegion: '', // fetchBenchmarkingData uses geographicRegion
+						providerType: '',
+						year: ''
+					});
+				},
+				staleTime: 1000 * 60 * 60, // 1 hour
+			}).catch(() => {});
+		} else if (path === '/custom-reports' || path === '/canned-reports') {
+			// Prefetch reports data
+			queryClient.prefetchQuery({
+				queryKey: queryKeys.reports('default'),
+				queryFn: async () => {
+					const { getDataService } = await import('../services/DataService');
+					const dataService = getDataService();
+					return dataService.getAllSurveys();
+				},
+				staleTime: 1000 * 60 * 60, // 1 hour
+			}).catch(() => {});
+		} else if (path === '/fair-market-value') {
+			// Prefetch FMV data
+			queryClient.prefetchQuery({
+				queryKey: queryKeys.fmv({
+					specialty: '',
+					providerType: '',
+					region: '',
+					year: '',
+					aggregationMethod: ''
+				}),
+				queryFn: async () => {
+					const { AnalyticsDataService } = await import('../features/analytics/services/analyticsDataService');
+					const service = new AnalyticsDataService();
+					return service.getAnalyticsData({
+						specialty: '',
+						surveySource: '',
+						geographicRegion: '',
+						providerType: '',
+						year: ''
+					});
+				},
+				staleTime: 1000 * 60 * 60, // 1 hour
+			}).catch(() => {});
+		} else if (path === '/specialty-blending') {
+			// Prefetch blending data
+			queryClient.prefetchQuery({
+				queryKey: queryKeys.blending('default', '1.0', 'default'),
+				queryFn: async () => {
+					const { getDataService } = await import('../services/DataService');
+					const dataService = getDataService();
+					return dataService.getAllSurveys();
+				},
+				staleTime: 1000 * 60 * 60, // 1 hour
+			}).catch(() => {});
+		}
+	}, [queryClient, selectedProviderType]);
 
 	// Check if current path is in Analytics & Reports section
 	const isAnalyticsRoute = (path: string) => {
@@ -131,6 +274,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				key={item.name}
 				to={item.path}
 				aria-current={isActive ? 'page' : undefined}
+				onMouseEnter={() => handleMouseEnter(item.path)}
 				className={({ isActive }) => `
 					w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 group
 					${!isOpen ? 'justify-center' : ''}
@@ -187,44 +331,38 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 						aria-label="Go to Dashboard"
 					>
 						<div className="w-12 h-12 flex items-center justify-center">
-							<img 
-								src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
-								alt="BenchPoint - Survey Aggregator" 
-								className="w-12 h-12 object-contain" 
-								onError={(e) => {
-									const target = e.target as HTMLImageElement;
-									// Show fallback icon if image fails
-									target.style.display = 'none';
-									const parent = target.parentElement;
-									if (parent) {
-										parent.innerHTML = `
-											<svg class="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
-												<defs>
-													<linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-														<stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-														<stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
-													</linearGradient>
-												</defs>
-												<circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
-												<circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
-												<circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
-												<circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
-												<circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
-												<circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
-												<circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
-												<line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
-												<line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
-												<line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
-												<line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-												<line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-												<line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-												<circle cx="32" cy="32" r="4" fill="white"/>
-												<circle cx="32" cy="32" r="2" fill="#4F46E5"/>
-											</svg>
-										`;
-									}
-								}} 
-							/>
+							{!logoError ? (
+								<img 
+									src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
+									alt="BenchPoint - Survey Aggregator" 
+									className="w-12 h-12 object-contain" 
+									onError={() => setLogoError(true)}
+								/>
+							) : (
+								<svg className="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
+									<defs>
+										<linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+											<stop offset="0%" style={{ stopColor: '#4F46E5', stopOpacity: 1 }} />
+											<stop offset="100%" style={{ stopColor: '#7C3AED', stopOpacity: 1 }} />
+										</linearGradient>
+									</defs>
+									<circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" strokeWidth="2"/>
+									<circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+									<circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+									<circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+									<circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+									<circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+									<circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+									<line x1="20" y1="24" x2="32" y2="18" stroke="white" strokeWidth="2" opacity="0.7"/>
+									<line x1="32" y1="18" x2="44" y2="24" stroke="white" strokeWidth="2" opacity="0.7"/>
+									<line x1="20" y1="40" x2="32" y2="46" stroke="white" strokeWidth="2" opacity="0.7"/>
+									<line x1="32" y1="46" x2="44" y2="40" stroke="white" strokeWidth="2" opacity="0.7"/>
+									<line x1="20" y1="24" x2="20" y2="40" stroke="white" strokeWidth="2" opacity="0.7"/>
+									<line x1="44" y1="24" x2="44" y2="40" stroke="white" strokeWidth="2" opacity="0.7"/>
+									<circle cx="32" cy="32" r="4" fill="white"/>
+									<circle cx="32" cy="32" r="2" fill="#4F46E5"/>
+								</svg>
+							)}
 						</div>
 						<span className="ml-3 text-lg font-semibold flex items-center">
 							<span className="text-indigo-600">Bench</span>
@@ -238,44 +376,38 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 						className="w-12 h-12 flex items-center justify-center mx-auto hover:bg-gray-50 rounded-lg transition-colors duration-200"
 						aria-label="Go to Dashboard"
 					>
-						<img 
-							src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
-							alt="BenchPoint - Survey Aggregator" 
-							className="w-12 h-12 object-contain" 
-							onError={(e) => {
-								const target = e.target as HTMLImageElement;
-								// Show fallback icon if image fails
-								target.style.display = 'none';
-								const parent = target.parentElement;
-								if (parent) {
-									parent.innerHTML = `
-										<svg class="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
-											<defs>
-												<linearGradient id="benchpointGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-													<stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-													<stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
-												</linearGradient>
-											</defs>
-											<circle cx="32" cy="32" r="28" fill="url(#benchpointGradient)" stroke="#E5E7EB" stroke-width="2"/>
-											<circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
-											<circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
-											<circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
-											<circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
-											<circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
-											<circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
-											<line x1="20" y1="24" x2="32" y2="18" stroke="white" stroke-width="2" opacity="0.7"/>
-											<line x1="32" y1="18" x2="44" y2="24" stroke="white" stroke-width="2" opacity="0.7"/>
-											<line x1="20" y1="40" x2="32" y2="46" stroke="white" stroke-width="2" opacity="0.7"/>
-											<line x1="32" y1="46" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-											<line x1="20" y1="24" x2="20" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-											<line x1="44" y1="24" x2="44" y2="40" stroke="white" stroke-width="2" opacity="0.7"/>
-											<circle cx="32" cy="32" r="4" fill="white"/>
-											<circle cx="32" cy="32" r="2" fill="#4F46E5"/>
-										</svg>
-									`;
-								}
-							}} 
-						/>
+						{!collapsedLogoError ? (
+							<img 
+								src={process.env.PUBLIC_URL + '/benchpoint-icon.svg?v=7'} 
+								alt="BenchPoint - Survey Aggregator" 
+								className="w-12 h-12 object-contain" 
+								onError={() => setCollapsedLogoError(true)}
+							/>
+						) : (
+							<svg className="w-12 h-12" fill="currentColor" viewBox="0 0 64 64">
+								<defs>
+									<linearGradient id="benchpointGradientCollapsed" x1="0%" y1="0%" x2="100%" y2="100%">
+										<stop offset="0%" style={{ stopColor: '#4F46E5', stopOpacity: 1 }} />
+										<stop offset="100%" style={{ stopColor: '#7C3AED', stopOpacity: 1 }} />
+									</linearGradient>
+								</defs>
+								<circle cx="32" cy="32" r="28" fill="url(#benchpointGradientCollapsed)" stroke="#E5E7EB" strokeWidth="2"/>
+								<circle cx="20" cy="24" r="3" fill="white" opacity="0.9"/>
+								<circle cx="32" cy="18" r="3" fill="white" opacity="0.9"/>
+								<circle cx="44" cy="24" r="3" fill="white" opacity="0.9"/>
+								<circle cx="20" cy="40" r="3" fill="white" opacity="0.9"/>
+								<circle cx="32" cy="46" r="3" fill="white" opacity="0.9"/>
+								<circle cx="44" cy="40" r="3" fill="white" opacity="0.9"/>
+								<line x1="20" y1="24" x2="32" y2="18" stroke="white" strokeWidth="2" opacity="0.7"/>
+								<line x1="32" y1="18" x2="44" y2="24" stroke="white" strokeWidth="2" opacity="0.7"/>
+								<line x1="20" y1="40" x2="32" y2="46" stroke="white" strokeWidth="2" opacity="0.7"/>
+								<line x1="32" y1="46" x2="44" y2="40" stroke="white" strokeWidth="2" opacity="0.7"/>
+								<line x1="20" y1="24" x2="20" y2="40" stroke="white" strokeWidth="2" opacity="0.7"/>
+								<line x1="44" y1="24" x2="44" y2="40" stroke="white" strokeWidth="2" opacity="0.7"/>
+								<circle cx="32" cy="32" r="4" fill="white"/>
+								<circle cx="32" cy="32" r="2" fill="#4F46E5"/>
+							</svg>
+						)}
 					</button>
 				)}
 				<button
@@ -318,27 +450,8 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				</div>
 			</nav>
 
-			{/* User Profile Section */}
-			{isOpen && (
-				<div className="px-3 py-4 border-t border-gray-100">
-					<div className="flex items-center space-x-3">
-						<div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-							<UserIcon className="w-5 h-5 text-indigo-600" />
-						</div>
-						<div className="flex-1 min-w-0">
-							<p className="text-sm font-medium text-gray-900 truncate">Survey Admin</p>
-							<p className="text-xs text-gray-500 truncate">Professional Plan</p>
-						</div>
-						<button 
-							className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-200"
-							aria-label="Settings"
-							title="Settings"
-						>
-							<Cog6ToothIcon className="w-4 h-4" />
-						</button>
-					</div>
-				</div>
-			)}
+			{/* User Profile Section - Professional User Menu */}
+			<UserMenu isSidebarOpen={isOpen} />
 
 		</div>
 	);

@@ -54,6 +54,13 @@ const envVarConfigs: EnvVarConfig[] = [
     validator: (value) => ['indexeddb', 'firebase'].includes(value.toLowerCase()),
     errorMessage: 'Must be either "indexeddb" or "firebase"',
   },
+  {
+    name: 'REACT_APP_REQUIRE_AUTH',
+    required: false,
+    description: 'Require authentication (true/false). Defaults to true in production.',
+    validator: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either "true" or "false"',
+  },
 ];
 
 interface ValidationResult {
@@ -168,6 +175,9 @@ export const requireEnvVar = (name: string): string => {
   }
   return value;
 };
+
+
+
 
 
 

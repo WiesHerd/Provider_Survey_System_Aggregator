@@ -3,7 +3,9 @@ import { FirestoreService } from './FirestoreService';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
 import { IColumnMapping } from '../types/column';
 import { isFirebaseAvailable } from '../config/firebase';
+import { getCurrentStorageMode } from '../config/storage';
 import { AtomicOperations } from '../shared/services/AtomicOperations';
+import { logger } from '../shared/utils/logger';
 
 export enum StorageMode {
   INDEXED_DB = 'indexeddb',
@@ -20,69 +22,166 @@ export class DataService {
   private mode: StorageMode;
   private atomicOps: AtomicOperations = AtomicOperations.getInstance();
 
-  constructor(mode?: StorageMode) {
-    // Auto-detect mode if not specified
-    if (!mode) {
-      mode = this.detectStorageMode();
+  /**
+   * Detects Firebase errors that should trigger a safe fallback to IndexedDB.
+   * We prefer a fast, working local app over long retry loops when Firebase is unavailable.
+   */
+  private isFirestoreUnavailableError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = (error as any)?.code || '';
+    const lower = message.toLowerCase();
+    
+    // Authentication errors
+    if (
+      lower.includes('firestore not initialized') ||
+      lower.includes('firestore database not initialized') ||
+      lower.includes('user not authenticated') ||
+      lower.includes('not authenticated') ||
+      code === 'unauthenticated' ||
+      code === 'permission-denied'
+    ) {
+      return true;
     }
-
-    this.mode = mode;
-
-    // CRITICAL FIX: Only initialize IndexedDB if it's the selected mode
-    // This prevents IndexedDB from being initialized when Firebase is the primary storage
-    // This fixes the version mismatch error when Firebase is being used
-    if (mode === StorageMode.INDEXED_DB) {
-      this.indexedDB = new IndexedDBService();
-    } else {
-      // Create IndexedDB instance but don't initialize it yet (lazy initialization)
-      // This allows fallback if Firebase fails
-      this.indexedDB = new IndexedDBService();
+    
+    // Network/connectivity errors
+    if (
+      lower.includes('network') ||
+      lower.includes('failed to fetch') ||
+      lower.includes('network request failed') ||
+      code === 'unavailable' ||
+      code === 'deadline-exceeded'
+    ) {
+      return true;
     }
+    
+    // Quota/rate limit errors (fallback to IndexedDB to avoid blocking)
+    if (
+      lower.includes('quota') ||
+      lower.includes('rate limit') ||
+      code === 'resource-exhausted'
+    ) {
+      return true;
+    }
+    
+    return false;
+  }
 
-    // Initialize Firestore if Firebase mode is selected
-    if (mode === StorageMode.FIREBASE) {
-      if (!isFirebaseAvailable()) {
-        console.warn('⚠️ Firebase mode requested but Firebase not available. Falling back to IndexedDB.');
-        this.mode = StorageMode.INDEXED_DB;
-        // Ensure IndexedDB is initialized when falling back
-        if (!this.indexedDB) {
-          this.indexedDB = new IndexedDBService();
-        }
-      } else {
-        try {
-          this.firestore = new FirestoreService();
-        } catch (error) {
-          console.error('❌ Failed to initialize Firestore:', error);
-          console.warn('⚠️ Falling back to IndexedDB.');
-          this.mode = StorageMode.INDEXED_DB;
-          // Ensure IndexedDB is initialized when falling back
-          if (!this.indexedDB) {
-            this.indexedDB = new IndexedDBService();
-          }
-        }
+  private switchToIndexedDbForSession(reason: string, error?: unknown) {
+    if (this.mode !== StorageMode.INDEXED_DB) {
+      logger.warn(`⚠️ DataService: Falling back to IndexedDB for this session`);
+      logger.warn(`   Reason: ${reason}`);
+      if (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.warn(`   Error: ${errorMsg}`);
       }
+      this.mode = StorageMode.INDEXED_DB;
     }
   }
 
   /**
-   * Auto-detect storage mode based on environment and Firebase availability
-   * ENTERPRISE: Prefers IndexedDB as primary storage to minimize Firebase costs
-   * Firebase is only used when explicitly requested via environment variable
+   * Execute an operation in the active storage mode, with automatic fallback to IndexedDB.
+   * 
+   * Hybrid Storage Behavior:
+   * - If mode is INDEXED_DB, use IndexedDB directly
+   * - If mode is FIREBASE, try Firebase first
+   * - On Firebase errors (auth, network, quota), automatically fallback to IndexedDB
+   * - This ensures the app always works, even if Firebase is unavailable
+   * 
+   * @param operation - Name of the operation (for logging)
+   * @param firestoreFn - Function to execute if using Firebase
+   * @param indexedDbFn - Function to execute if using IndexedDB or as fallback
+   * @returns Result from the successful operation
    */
-  private detectStorageMode(): StorageMode {
-    // Check environment variable first (allows explicit override)
-    const envMode = process.env.REACT_APP_STORAGE_MODE as StorageMode;
-    if (envMode === StorageMode.FIREBASE || envMode === StorageMode.INDEXED_DB) {
-      console.log(`📦 Storage mode set via environment: ${envMode}`);
-      return envMode;
+  private async runWithFirestoreFallback<T>(
+    operation: string,
+    firestoreFn: () => Promise<T>,
+    indexedDbFn: () => Promise<T>
+  ): Promise<T> {
+    // If not using Firebase, use IndexedDB directly
+    if (this.mode !== StorageMode.FIREBASE) {
+      logger.log(`💾 DataService: ${operation} → IndexedDB (primary mode)`);
+      return await indexedDbFn();
     }
 
-    // ENTERPRISE: Default to IndexedDB for cost optimization
-    // IndexedDB handles 100% of local operations (free)
-    // Firebase only used when explicitly needed for multi-device sync
-    console.log('💾 Using IndexedDB as primary storage (cost-optimized, offline-first)');
-    console.log('💡 To enable Firebase for cloud sync, set REACT_APP_STORAGE_MODE=firebase');
-    return StorageMode.INDEXED_DB;
+    // Firebase mode: Check if Firestore is available
+    if (!this.firestore) {
+      logger.warn(`⚠️ DataService: ${operation} → Firestore not initialized, using IndexedDB`);
+      this.switchToIndexedDbForSession(`${operation}: Firestore service not initialized`);
+      return await indexedDbFn();
+    }
+
+    // Try Firebase first
+    try {
+      logger.log(`☁️ DataService: ${operation} → Firebase Firestore`);
+      const result = await firestoreFn();
+      logger.log(`✅ DataService: ${operation} → Firebase Firestore (success)`);
+      return result;
+    } catch (error) {
+      // Check if this is a recoverable error that should trigger fallback
+      if (this.isFirestoreUnavailableError(error)) {
+        logger.warn(`⚠️ DataService: ${operation} → Firebase error detected, falling back to IndexedDB`);
+        this.switchToIndexedDbForSession(`${operation}: Firebase unavailable`, error);
+        
+        // Fallback to IndexedDB
+        try {
+          logger.log(`💾 DataService: ${operation} → IndexedDB (fallback)`);
+          const result = await indexedDbFn();
+          logger.log(`✅ DataService: ${operation} → IndexedDB (fallback success)`);
+          return result;
+        } catch (fallbackError) {
+          logger.error(`❌ DataService: ${operation} → Both Firebase and IndexedDB failed`);
+          throw fallbackError;
+        }
+      }
+      
+      // Non-recoverable error or unexpected error - rethrow
+      logger.error(`❌ DataService: ${operation} → Firebase error (not recoverable):`, error);
+      throw error;
+    }
+  }
+
+  constructor(mode?: StorageMode) {
+    // Auto-detect mode if not specified using hybrid detection
+    if (!mode) {
+      mode = getCurrentStorageMode();
+    }
+
+    this.mode = mode;
+
+    // HYBRID MODE: Always initialize IndexedDB for fallback support
+    // This ensures seamless fallback if Firebase fails or is unavailable
+    logger.log('🔧 DataService: Initializing IndexedDB (always available for fallback)');
+    this.indexedDB = new IndexedDBService();
+
+    // Initialize Firestore if Firebase mode is selected
+    if (mode === StorageMode.FIREBASE) {
+      if (!isFirebaseAvailable()) {
+        logger.warn('⚠️ Firebase mode requested but Firebase not available. Using IndexedDB.');
+        this.mode = StorageMode.INDEXED_DB;
+      } else {
+        try {
+          logger.log('🔧 DataService: Initializing Firebase Firestore (primary storage)');
+          this.firestore = new FirestoreService();
+          logger.log('✅ DataService: Firebase Firestore initialized successfully');
+        } catch (error) {
+          logger.error('❌ Failed to initialize Firestore:', error);
+          logger.warn('⚠️ Falling back to IndexedDB for this session.');
+          this.mode = StorageMode.INDEXED_DB;
+        }
+      }
+    } else {
+      logger.log('✅ DataService: Using IndexedDB as primary storage');
+    }
+  }
+
+  /**
+   * Get storage mode using hybrid detection
+   * 
+   * This method is deprecated - use getCurrentStorageMode() from config/storage.ts instead.
+   * Kept for backward compatibility but delegates to the centralized detection logic.
+   */
+  private detectStorageMode(): StorageMode {
+    return getCurrentStorageMode();
   }
 
   /**
@@ -97,7 +196,7 @@ export class DataService {
 
   setMode(mode: StorageMode) {
     if (mode === StorageMode.FIREBASE && !isFirebaseAvailable()) {
-      console.warn('⚠️ Cannot switch to Firebase mode - Firebase not available');
+      logger.warn('⚠️ Cannot switch to Firebase mode - Firebase not available');
       return;
     }
 
@@ -108,7 +207,7 @@ export class DataService {
       try {
         this.firestore = new FirestoreService();
       } catch (error) {
-        console.error('❌ Failed to initialize Firestore:', error);
+        logger.error('❌ Failed to initialize Firestore:', error);
         this.mode = StorageMode.INDEXED_DB;
       }
     }
@@ -120,42 +219,75 @@ export class DataService {
 
   // Survey Methods
   async getAllSurveys() {
-    const service = this.getStorageService();
-    const storageType = this.mode === StorageMode.FIREBASE ? 'Firestore' : 'IndexedDB';
-    const storageLocation = this.mode === StorageMode.FIREBASE 
-      ? '📍 Firebase Firestore (Cloud)' 
+    const storageLocation = this.mode === StorageMode.FIREBASE
+      ? '📍 Firebase Firestore (Cloud)'
       : '📍 IndexedDB (Browser)';
-    console.log(`📥 DataService: Getting all surveys from ${storageType}...`);
-    console.log(`💾 Storage Location: ${storageLocation}`);
-    const surveys = await service.getAllSurveys();
-    console.log(`📊 DataService: Retrieved surveys from ${storageType}:`, {
-      surveyCount: surveys.length,
-      surveys: surveys.map(s => ({
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        year: s.year,
-        rowCount: s.rowCount,
-        specialtyCount: s.specialtyCount
-      }))
-    });
+    logger.log(`📥 DataService: Getting all surveys...`);
+    logger.log(`💾 Storage Location: ${storageLocation}`);
+
+    const surveys = await this.runWithFirestoreFallback(
+      'getAllSurveys',
+      async () => {
+        logger.log('📥 DataService: Getting all surveys from Firestore...');
+        return await this.firestore!.getAllSurveys();
+      },
+      async () => {
+        logger.log('📥 DataService: Getting all surveys from IndexedDB...');
+        return await this.indexedDB.getAllSurveys();
+      }
+    );
+
+    logger.log(`📊 DataService: Retrieved surveys:`, { surveyCount: surveys.length });
     return surveys;
   }
 
   async createSurvey(survey: any) {
-    return await this.getStorageService().createSurvey(survey);
+    try {
+      const storageType = this.mode === StorageMode.FIREBASE ? 'Firebase Firestore (Cloud)' : 'IndexedDB (Local Browser)';
+      logger.log('💾 DataService: Creating survey:', {
+        id: survey.id,
+        name: survey.name,
+        year: survey.year,
+        storageMode: this.mode,
+        storageType: storageType
+      });
+
+      const result = await this.runWithFirestoreFallback(
+        'createSurvey',
+        async () => await this.firestore!.createSurvey(survey),
+        async () => await this.indexedDB.createSurvey(survey)
+      );
+
+      logger.log(`✅ DataService: Survey created successfully in ${this.mode === StorageMode.FIREBASE ? 'Firebase' : 'IndexedDB'}`);
+      return result;
+    } catch (error) {
+      logger.error('❌ DataService: Failed to create survey:', error);
+      throw error;
+    }
   }
 
   async getSurveyById(surveyId: string) {
-    return await this.getStorageService().getSurveyById(surveyId);
+    return await this.runWithFirestoreFallback(
+      'getSurveyById',
+      async () => await this.firestore!.getSurveyById(surveyId),
+      async () => await this.indexedDB.getSurveyById(surveyId)
+    );
   }
 
   async deleteSurvey(id: string) {
-    return await this.getStorageService().deleteSurvey(id);
+    return await this.runWithFirestoreFallback(
+      'deleteSurvey',
+      async () => await this.firestore!.deleteSurvey(id),
+      async () => await this.indexedDB.deleteSurvey(id)
+    );
   }
 
   async deleteWithVerification(surveyId: string) {
-    return await this.getStorageService().deleteWithVerification(surveyId);
+    return await this.runWithFirestoreFallback(
+      'deleteWithVerification',
+      async () => await this.firestore!.deleteWithVerification(surveyId),
+      async () => await this.indexedDB.deleteWithVerification(surveyId)
+    );
   }
 
   // Cache Methods for Analytics
@@ -210,7 +342,7 @@ export class DataService {
     }
     
     // Otherwise, use Promise.all for parallel execution
-    console.log(`🚀 DataService: Executing ${queries.length} queries in parallel`);
+    logger.log(`🚀 DataService: Executing ${queries.length} queries in parallel`);
     const startTime = performance.now();
     
     try {
@@ -220,22 +352,22 @@ export class DataService {
           try {
             const result = await queryFn();
             const queryDuration = performance.now() - queryStartTime;
-            console.log(`✅ Query ${index + 1}/${queries.length} completed in ${queryDuration.toFixed(2)}ms`);
+            logger.log(`✅ Query ${index + 1}/${queries.length} completed in ${queryDuration.toFixed(2)}ms`);
             return result;
           } catch (error) {
-            console.error(`❌ Query ${index + 1}/${queries.length} failed:`, error);
+            logger.error(`❌ Query ${index + 1}/${queries.length} failed:`, error);
             throw error;
           }
         })
       );
       
       const totalDuration = performance.now() - startTime;
-      console.log(`✅ DataService: All ${queries.length} queries completed in ${totalDuration.toFixed(2)}ms`);
+      logger.log(`✅ DataService: All ${queries.length} queries completed in ${totalDuration.toFixed(2)}ms`);
       
       return results as T;
     } catch (error) {
       const totalDuration = performance.now() - startTime;
-      console.error(`❌ DataService: Batch query failed after ${totalDuration.toFixed(2)}ms:`, error);
+      logger.error(`❌ DataService: Batch query failed after ${totalDuration.toFixed(2)}ms:`, error);
       throw error;
     }
   }
@@ -248,16 +380,35 @@ export class DataService {
     providerType: string,
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
-    return await this.getStorageService().uploadSurvey(file, surveyName, surveyYear, surveyType, providerType, onProgress);
+    return await this.runWithFirestoreFallback(
+      'uploadSurvey',
+      async () => await this.firestore!.uploadSurvey(file, surveyName, surveyYear, surveyType, providerType, onProgress),
+      async () => await this.indexedDB.uploadSurvey(file, surveyName, surveyYear, surveyType, providerType, onProgress)
+    );
   }
 
   // Survey Data Methods
   async getSurveyData(surveyId: string, filters: any = {}, pagination: any = {}) {
-    return await this.getStorageService().getSurveyData(surveyId, filters, pagination);
+    return await this.runWithFirestoreFallback(
+      'getSurveyData',
+      async () => await this.firestore!.getSurveyData(surveyId, filters, pagination),
+      async () => await this.indexedDB.getSurveyData(surveyId, filters, pagination)
+    );
   }
 
   async saveSurveyData(surveyId: string, rows: any[], onProgress?: (percent: number) => void) {
-    return await this.getStorageService().saveSurveyData(surveyId, rows, onProgress);
+    logger.log(`💾 DataService: Saving ${rows.length} rows...`);
+    try {
+      await this.runWithFirestoreFallback(
+        'saveSurveyData',
+        async () => await this.firestore!.saveSurveyData(surveyId, rows, onProgress),
+        async () => await this.indexedDB.saveSurveyData(surveyId, rows, onProgress)
+      );
+      logger.log(`✅ DataService: All ${rows.length} rows saved successfully`);
+    } catch (error) {
+      logger.error(`❌ DataService: Failed to save survey data:`, error);
+      throw error;
+    }
   }
 
 
@@ -369,23 +520,31 @@ export class DataService {
   async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
     const service = this.getStorageService();
     const storageType = this.mode === StorageMode.FIREBASE ? 'Firestore' : 'IndexedDB';
-    console.log(`🔍 DataService.getUnmappedSpecialties: Called with providerType=${providerType}, using ${storageType}`);
+    logger.log(`🔍 DataService.getUnmappedSpecialties: Called with providerType=${providerType}, using ${storageType}`);
     try {
       const result = await service.getUnmappedSpecialties(providerType);
-      console.log(`✅ DataService.getUnmappedSpecialties: Returned ${result.length} unmapped specialties`);
+      logger.log(`✅ DataService.getUnmappedSpecialties: Returned ${result.length} unmapped specialties`);
       return result;
     } catch (error) {
-      console.error(`❌ DataService.getUnmappedSpecialties: Error:`, error);
+      logger.error(`❌ DataService.getUnmappedSpecialties: Error:`, error);
       throw error;
     }
   }
 
   async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Record<string, string>> {
-    return await this.getStorageService().getLearnedMappings(type, providerType);
+    return await this.runWithFirestoreFallback(
+      'getLearnedMappings',
+      async () => await this.firestore!.getLearnedMappings(type, providerType),
+      async () => await this.indexedDB.getLearnedMappings(type, providerType)
+    );
   }
 
   async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string, surveySource?: string): Promise<void> {
-    return await this.getStorageService().saveLearnedMapping(type, original, corrected, providerType, surveySource);
+    return await this.runWithFirestoreFallback(
+      'saveLearnedMapping',
+      async () => await this.firestore!.saveLearnedMapping(type, original, corrected, providerType, surveySource),
+      async () => await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType, surveySource)
+    );
   }
 
   async removeLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string): Promise<void> {
@@ -397,7 +556,11 @@ export class DataService {
   }
 
   async getLearnedMappingsWithSource(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Array<{original: string, corrected: string, surveySource: string}>> {
-    return await this.getStorageService().getLearnedMappingsWithSource(type, providerType);
+    return await this.runWithFirestoreFallback(
+      'getLearnedMappingsWithSource',
+      async () => await this.firestore!.getLearnedMappingsWithSource(type, providerType),
+      async () => await this.indexedDB.getLearnedMappingsWithSource(type, providerType)
+    );
   }
 
   async healthCheck() {
@@ -531,15 +694,33 @@ export class DataService {
   // User Preferences Methods
   async getUserPreferences(): Promise<Record<string, any>> {
     if (this.mode === StorageMode.FIREBASE && this.firestore) {
-      return await (this.firestore as any).getUserPreferences();
+      try {
+        return await (this.firestore as any).getUserPreferences();
+      } catch (error) {
+        if (this.isFirestoreUnavailableError(error)) {
+          this.switchToIndexedDbForSession('getUserPreferences: Firebase unavailable', error);
+          // Preferences are stored in localStorage for local mode
+          return {};
+        }
+        throw error;
+      }
     }
-    // For IndexedDB, return empty object (preferences stored in localStorage currently)
+    // Local mode: preferences stored in localStorage currently
     return {};
   }
 
   async getUserPreference(key: string): Promise<any> {
     if (this.mode === StorageMode.FIREBASE && this.firestore) {
-      return await (this.firestore as any).getUserPreference(key);
+      try {
+        return await (this.firestore as any).getUserPreference(key);
+      } catch (error) {
+        if (this.isFirestoreUnavailableError(error)) {
+          this.switchToIndexedDbForSession(`getUserPreference(${key}): Firebase unavailable`, error);
+          // Fall through to localStorage
+        } else {
+          throw error;
+        }
+      }
     }
     // For IndexedDB, try localStorage as fallback
     try {
@@ -552,7 +733,16 @@ export class DataService {
 
   async saveUserPreferences(preferences: Record<string, any>): Promise<void> {
     if (this.mode === StorageMode.FIREBASE && this.firestore) {
-      return await (this.firestore as any).saveUserPreferences(preferences);
+      try {
+        return await (this.firestore as any).saveUserPreferences(preferences);
+      } catch (error) {
+        if (this.isFirestoreUnavailableError(error)) {
+          this.switchToIndexedDbForSession('saveUserPreferences: Firebase unavailable', error);
+          // Fall through to localStorage
+        } else {
+          throw error;
+        }
+      }
     }
     // For IndexedDB, save to localStorage as fallback
     Object.entries(preferences).forEach(([key, value]) => {
@@ -562,7 +752,16 @@ export class DataService {
 
   async saveUserPreference(key: string, value: any): Promise<void> {
     if (this.mode === StorageMode.FIREBASE && this.firestore) {
-      return await (this.firestore as any).saveUserPreference(key, value);
+      try {
+        return await (this.firestore as any).saveUserPreference(key, value);
+      } catch (error) {
+        if (this.isFirestoreUnavailableError(error)) {
+          this.switchToIndexedDbForSession(`saveUserPreference(${key}): Firebase unavailable`, error);
+          // Fall through to localStorage
+        } else {
+          throw error;
+        }
+      }
     }
     // For IndexedDB, save to localStorage as fallback
     localStorage.setItem(`preference_${key}`, JSON.stringify(value));
@@ -574,7 +773,16 @@ export class DataService {
 
   async deleteUserPreference(key: string): Promise<void> {
     if (this.mode === StorageMode.FIREBASE && this.firestore) {
-      return await (this.firestore as any).deleteUserPreference(key);
+      try {
+        return await (this.firestore as any).deleteUserPreference(key);
+      } catch (error) {
+        if (this.isFirestoreUnavailableError(error)) {
+          this.switchToIndexedDbForSession(`deleteUserPreference(${key}): Firebase unavailable`, error);
+          // Fall through to localStorage
+        } else {
+          throw error;
+        }
+      }
     }
     // For IndexedDB, remove from localStorage
     localStorage.removeItem(`preference_${key}`);
@@ -586,7 +794,7 @@ export class DataService {
       return await (this.firestore as any).logAuditEvent(action, resourceType, resourceId, details);
     }
     // For IndexedDB, just log to console (audit logs are Firebase-only feature)
-    console.log('📝 Audit Event:', { action, resourceType, resourceId, details });
+    logger.log('📝 Audit Event:', { action, resourceType, resourceId, details });
   }
 
   async getAuditLogs(limit: number = 100): Promise<any[]> {

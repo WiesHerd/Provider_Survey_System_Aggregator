@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy, useEffect } from 'react';
+import React, { useState, Suspense, lazy, useEffect, memo } from 'react';
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -77,20 +77,11 @@ const theme = createTheme({
 
 // Lazy load components
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const SurveyUpload = lazy(() => 
-  import('./features/upload')
-    .then(module => {
-      if (!module || !module.SurveyUpload) {
-        console.error('SurveyUpload not found in module:', Object.keys(module || {}));
-        throw new Error('SurveyUpload component not found');
-      }
-      return { default: module.SurveyUpload };
-    })
-    .catch(error => {
-      console.error('Failed to load SurveyUpload:', error);
-      // Fallback to old component if new one fails
-      return import('./components/SurveyUpload');
-    })
+// IMPORTANT: Keep the legacy Upload screen as the default on /upload.
+// The refactored Upload feature is available via /upload-beta for opt-in testing.
+const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
+const SurveyUploadBeta = lazy(() =>
+  import('./features/upload').then((module) => ({ default: module.SurveyUpload }))
 );
 
 // DevTools component - only loads in development
@@ -109,28 +100,28 @@ const SurveyAnalytics = lazy(() =>
   import('./features/analytics/components/SurveyAnalytics')
     .catch(error => {
       console.error('Failed to load SurveyAnalytics:', error);
-      return { default: () => <div>Failed to load analytics component</div> };
+      return { default: memo(() => <div>Failed to load analytics component</div>) };
     })
 );
 const RegionalAnalytics = lazy(() => 
   import('./components/RegionalAnalytics')
     .catch(error => {
       console.error('Failed to load RegionalAnalytics:', error);
-      return { default: () => <div>Failed to load regional analytics component</div> };
+      return { default: memo(() => <div>Failed to load regional analytics component</div>) };
     })
 );
 const FairMarketValue = lazy(() => 
   import('./components/FairMarketValue')
     .catch(error => {
       console.error('Failed to load FairMarketValue:', error);
-      return { default: () => <div>Failed to load fair market value component</div> };
+      return { default: memo(() => <div>Failed to load fair market value component</div>) };
     })
 );
 const CustomReports = lazy(() => 
   import('./components/CustomReports')
     .catch(error => {
       console.error('Failed to load CustomReports:', error);
-      return { default: () => <div>Failed to load custom reports component</div> };
+      return { default: memo(() => <div>Failed to load custom reports component</div>) };
     })
 );
 const CannedReports = lazy(() => import('./features/reports/components/CannedReports').then(module => ({ default: module.default })));
@@ -546,6 +537,7 @@ const PageContent = () => {
                 </ErrorBoundary>
               } />
               <Route path="/upload" element={<SurveyUpload />} />
+              <Route path="/upload-beta" element={<SurveyUploadBeta />} />
               
               {/* Legacy routes (for backward compatibility) */}
               <Route path="/specialty-mapping" element={<SpecialtyMapping />} />
@@ -654,7 +646,7 @@ function App() {
         <DatabaseProvider>
           <DatabaseInitializationScreen />
           <AuthProvider>
-            <AuthGuard requireAuth={false}>
+            <AuthGuard requireAuth={process.env.REACT_APP_REQUIRE_AUTH === 'true' || process.env.NODE_ENV === 'production'}>
               <ToastProvider>
                 <StorageProvider>
                   <MappingProvider>

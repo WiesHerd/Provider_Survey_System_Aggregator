@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { authService, IAuthService } from '../services/AuthService';
+import { logger } from '../shared/utils/logger';
 
 /**
  * Authentication state interface
@@ -25,6 +26,7 @@ interface AuthState {
 interface AuthActions {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -65,13 +67,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     if (!available) {
       setLoading(false);
-      console.log('🔍 AuthProvider: Firebase not available, auth disabled');
+      logger.log('🔍 AuthProvider: Firebase not available, auth disabled');
       return;
     }
 
     // Subscribe to authentication state changes
     const unsubscribe = authService.onAuthStateChanged((user) => {
-      console.log('🔍 AuthProvider: Auth state changed:', user?.email || 'signed out');
+      logger.log('🔍 AuthProvider: Auth state changed:', user?.email || 'signed out');
       setUser(user);
       setLoading(false);
       setError(null); // Clear any previous errors on successful auth
@@ -126,6 +128,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
+   * Sign in with Google
+   */
+  const signInWithGoogle = async (): Promise<void> => {
+    if (!isAvailable) {
+      throw new Error('Authentication service is not available');
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.signInWithGoogle();
+      // Auth state change will be handled by onAuthStateChanged
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Google sign in failed';
+      setError(errorMessage);
+      setLoading(false);
+      throw err;
+    }
+  };
+
+  /**
    * Sign out current user
    */
   const signOut = async (): Promise<void> => {
@@ -163,6 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Actions
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     clearError,
   };
