@@ -170,11 +170,8 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 					year: ''
 				}),
 				queryFn: async () => {
-					const module = await import('../features/analytics/hooks/useBenchmarkingQuery');
-					if (!module.fetchBenchmarkingData) {
-						throw new Error('fetchBenchmarkingData not found in useBenchmarkingQuery module');
-					}
-					return module.fetchBenchmarkingData({
+					const { fetchBenchmarkingData } = await import('../features/analytics/hooks/useBenchmarkingQuery') as { fetchBenchmarkingData: (filters: { specialty: string; surveySource: string; geographicRegion: string; providerType: string; year: string }) => Promise<any> };
+					return fetchBenchmarkingData({
 						specialty: '',
 						surveySource: '',
 						geographicRegion: '',
