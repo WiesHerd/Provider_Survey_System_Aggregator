@@ -171,9 +171,10 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				}),
 				queryFn: async () => {
 					const module = await import('../features/analytics/hooks/useBenchmarkingQuery');
-					// Type assertion to ensure TypeScript recognizes the export
-					const fetchBenchmarkingData = (module as { fetchBenchmarkingData: typeof import('../features/analytics/hooks/useBenchmarkingQuery').fetchBenchmarkingData }).fetchBenchmarkingData;
-					return fetchBenchmarkingData({
+					if (!module.fetchBenchmarkingData) {
+						throw new Error('fetchBenchmarkingData not found in useBenchmarkingQuery module');
+					}
+					return module.fetchBenchmarkingData({
 						specialty: '',
 						surveySource: '',
 						geographicRegion: '',
