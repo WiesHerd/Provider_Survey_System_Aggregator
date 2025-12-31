@@ -8,7 +8,7 @@ import React, { memo, useEffect, useState } from 'react';
 import { Alert, Box, Typography, Chip } from '@mui/material';
 import { CloudIcon, ComputerDesktopIcon } from '@heroicons/react/24/outline';
 import { getStorageDiagnostics, getStorageStatusMessage, StorageDiagnostics } from '../../../shared/utils/storageDiagnostics';
-import { StorageMode } from '../../../services/DataService';
+import { StorageMode } from '../../../config/storage';
 
 /**
  * Storage Status Indicator

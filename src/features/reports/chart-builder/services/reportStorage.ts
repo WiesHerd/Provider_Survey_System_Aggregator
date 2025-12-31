@@ -5,7 +5,8 @@
  */
 
 import { ReportConfig } from '../types/reportBuilder';
-import { getDataService, StorageMode } from '../../../../services/DataService';
+import { getDataService } from '../../../../services/DataService';
+import { StorageMode } from '../../../../config/storage';
 import { isFirebaseAvailable } from '../../../../config/firebase';
 
 const STORAGE_KEY = 'customReports';

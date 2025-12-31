@@ -6,7 +6,7 @@
  */
 
 import { isFirebaseAvailable } from '../../config/firebase';
-import { StorageMode } from '../../services/DataService';
+import { StorageMode } from '../../config/storage';
 import { getFirebaseAuth } from '../../config/firebase';
 
 export interface StorageDiagnostics {
@@ -138,6 +138,8 @@ export function getStorageStatusMessage(diagnostics: StorageDiagnostics): string
   
   return 'IndexedDB (Local Browser Storage)';
 }
+
+
 
 
 

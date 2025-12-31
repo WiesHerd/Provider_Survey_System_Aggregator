@@ -36,6 +36,8 @@ import { queryKeys, queryClient } from '../../../shared/services/queryClient';
 import { DynamicAggregatedData } from '../../analytics/types/variables';
 import { formatProviderTypeForDisplay } from '../../../shared/utils/formatters';
 import { getDataService } from '../../../services/DataService';
+import { StorageMode } from '../../../config/storage';
+import { isFirebaseAvailable } from '../../../config/firebase';
 import { EnterpriseLoadingSpinner, ButtonSpinner } from '../../../shared/components';
 
 interface ReportConfigDialogProps {
@@ -88,12 +90,27 @@ function ReportConfigDialogComponent({
     regions: string[];
   } | null>(null);
 
-  // Load saved preferences from localStorage
-  const loadSavedPreferences = (): Partial<ReportConfig> => {
+  // Load saved preferences from Firebase or localStorage
+  const loadSavedPreferences = async (): Promise<Partial<ReportConfig>> => {
     try {
-      const saved = localStorage.getItem(`reportConfig_${metric}`);
+      // Try Firebase first if available
+      if (isFirebaseAvailable()) {
+        try {
+          const dataService = getDataService(StorageMode.FIREBASE);
+          const preference = await dataService.getUserPreference(`reportConfig_${metric}`);
+          if (preference) {
+            return preference;
+          }
+        } catch (error) {
+          console.warn('Failed to load preferences from Firebase, falling back to localStorage:', error);
+        }
+      }
+
+      // Fallback to DataService (handles both Firebase and IndexedDB)
+      const dataService = getDataService();
+      const saved = await dataService.getUserPreference(`reportConfig_${metric}`);
       if (saved) {
-        return JSON.parse(saved);
+        return saved;
       }
     } catch (error) {
       console.warn('Failed to load saved preferences:', error);
@@ -101,10 +118,10 @@ function ReportConfigDialogComponent({
     return {};
   };
 
-  // Save preferences to localStorage
-  const savePreferences = (config: ReportConfig) => {
+  // Save preferences to Firebase or localStorage
+  const savePreferences = async (config: ReportConfig) => {
     try {
-      localStorage.setItem(`reportConfig_${metric}`, JSON.stringify({
+      const preferenceData = {
         selectedProviderType: config.selectedProviderType,
         selectedSurveySource: config.selectedSurveySource,
         selectedRegion: config.selectedRegion,
@@ -112,31 +129,50 @@ function ReportConfigDialogComponent({
         enableBlending: config.enableBlending,
         blendingMethod: config.blendingMethod,
         selectedPercentiles: config.selectedPercentiles
-      }));
+      };
+
+      // Save to DataService (handles both Firebase and IndexedDB automatically)
+      const dataService = getDataService();
+      await dataService.saveUserPreference(`reportConfig_${metric}`, preferenceData);
     } catch (error) {
       console.warn('Failed to save preferences:', error);
     }
   };
 
-  const [config, setConfig] = useState<ReportConfig>(() => {
-    const saved = loadSavedPreferences();
-    // Convert saved preferences to arrays (handle backward compatibility)
-    const normalizeArray = (value: any): string[] => {
-      if (Array.isArray(value)) return value;
-      if (value === null || value === undefined) return [];
-      return [value];
-    };
-    return {
-      metric,
-      selectedProviderType: normalizeArray(saved.selectedProviderType),
-      selectedSurveySource: normalizeArray(saved.selectedSurveySource),
-      selectedRegion: normalizeArray(saved.selectedRegion),
-      selectedYear: normalizeArray(saved.selectedYear),
-      enableBlending: saved.enableBlending ?? false,
-      blendingMethod: saved.blendingMethod ?? 'weighted',
-      selectedPercentiles: saved.selectedPercentiles ?? ['p25', 'p50', 'p75', 'p90']
-    };
+  const [config, setConfig] = useState<ReportConfig>({
+    metric,
+    selectedProviderType: [],
+    selectedSurveySource: [],
+    selectedRegion: [],
+    selectedYear: [],
+    enableBlending: false,
+    blendingMethod: 'weighted',
+    selectedPercentiles: ['p25', 'p50', 'p75', 'p90']
   });
+
+  // Load saved preferences on mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      const saved = await loadSavedPreferences();
+      // Convert saved preferences to arrays (handle backward compatibility)
+      const normalizeArray = (value: any): string[] => {
+        if (Array.isArray(value)) return value;
+        if (value === null || value === undefined) return [];
+        return [value];
+      };
+      setConfig({
+        metric,
+        selectedProviderType: normalizeArray(saved.selectedProviderType),
+        selectedSurveySource: normalizeArray(saved.selectedSurveySource),
+        selectedRegion: normalizeArray(saved.selectedRegion),
+        selectedYear: normalizeArray(saved.selectedYear),
+        enableBlending: saved.enableBlending ?? false,
+        blendingMethod: saved.blendingMethod ?? 'weighted',
+        selectedPercentiles: saved.selectedPercentiles ?? ['p25', 'p50', 'p75', 'p90']
+      });
+    };
+    loadPreferences();
+  }, [metric]);
 
   // Helper function to normalize region names
   // ENTERPRISE FIX: Preserve subregions (like "Great Lakes") and handle variations correctly

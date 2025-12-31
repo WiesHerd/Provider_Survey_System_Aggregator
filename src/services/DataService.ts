@@ -3,14 +3,12 @@ import { FirestoreService } from './FirestoreService';
 import { ISpecialtyMapping, IUnmappedSpecialty } from '../types/specialty';
 import { IColumnMapping } from '../types/column';
 import { isFirebaseAvailable } from '../config/firebase';
-import { getCurrentStorageMode } from '../config/storage';
+import { StorageMode, getCurrentStorageMode } from '../config/storage';
 import { AtomicOperations } from '../shared/services/AtomicOperations';
 import { logger } from '../shared/utils/logger';
 
-export enum StorageMode {
-  INDEXED_DB = 'indexeddb',
-  FIREBASE = 'firebase'
-}
+// Re-export StorageMode for backward compatibility
+export { StorageMode } from '../config/storage';
 
 /**
  * Data Service that supports both IndexedDB and Firebase Firestore
