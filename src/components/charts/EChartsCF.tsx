@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { loadECharts } from '../../config/bundleConfig';
 
 interface EChartsCFProps {
   data: Array<{
@@ -26,6 +26,19 @@ export const EChartsCF: React.FC<EChartsCFProps> = ({
   metrics,
   chartHeight = 300 
 }) => {
+  const [ReactECharts, setReactECharts] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadECharts().then((EChartsComponent) => {
+      setReactECharts(() => EChartsComponent);
+      setLoading(false);
+    }).catch((error) => {
+      console.error('Failed to load ECharts:', error);
+      setLoading(false);
+    });
+  }, []);
+
   const option = useMemo(() => {
     const categories = data.map(item => item.name);
     
@@ -169,6 +182,22 @@ export const EChartsCF: React.FC<EChartsCFProps> = ({
       series: series
     };
   }, [data, metrics]);
+
+  if (loading) {
+    return (
+      <div style={{ height: `${chartHeight}px`, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="text-gray-500">Loading chart...</div>
+      </div>
+    );
+  }
+
+  if (!ReactECharts) {
+    return (
+      <div style={{ height: `${chartHeight}px`, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="text-red-500">Failed to load chart library</div>
+      </div>
+    );
+  }
 
   return (
     <ReactECharts 

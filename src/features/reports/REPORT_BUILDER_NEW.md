@@ -8,13 +8,10 @@ This is a **completely separate, parallel implementation** of the report builder
 
 ### Existing Report Screens (Untouched)
 - `/custom-reports` - Uses `CustomReports` component
-- `/custom-reports-v2` - Uses `QuickReportBuilder` component (if exists)
+- `/canned-reports` - Uses `CannedReports` component
 - All existing components remain unchanged:
-  - `EnhancedCustomReports.tsx`
-  - `QuickReportBuilder.tsx` (if exists)
-  - `ReportWizard.tsx` (if exists)
-  - `ReportTemplates.tsx`
-  - `VisualFilterBuilder.tsx`
+  - `CustomReports.tsx` (in `src/components/`)
+  - `CannedReports.tsx` (in `src/features/reports/components/`)
 
 ### New Report Builder (Separate)
 - **Route**: `/report-builder-new`
@@ -39,12 +36,10 @@ src/features/reports/
 │   │   ├── KPICardComponent.tsx
 │   │   ├── FilterComponent.tsx
 │   │   └── TextComponent.tsx
-│   ├── EnhancedCustomReports.tsx  ← EXISTING: Untouched
-│   ├── ReportBuilder.tsx          ← EXISTING: Untouched (different file)
-│   ├── ReportTemplates.tsx        ← EXISTING: Untouched
-│   ├── VisualFilterBuilder.tsx    ← EXISTING: Untouched
-│   ├── ReportChart.tsx            ← NEW: Shared chart component
-│   └── ReportTable.tsx            ← NEW: Shared table component
+│   ├── CannedReports.tsx         ← EXISTING: Active component
+│   ├── ReportConfigDialog.tsx    ← EXISTING: Active component
+│   ├── ReportTable.tsx           ← EXISTING: Active component
+│   ├── ReportChart.tsx           ← NEW: Shared chart component
 ├── hooks/
 │   ├── useReportBuilder.ts        ← NEW
 │   └── useReportData.ts           ← NEW

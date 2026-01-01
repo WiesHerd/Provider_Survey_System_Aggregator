@@ -112,12 +112,25 @@ export class IndexedDBService {
     this.isInitializing = true;
     console.log('🔧 Initializing IndexedDB...');
 
+    // ENTERPRISE FIX: Add timeout to prevent indefinite hangs
+    const INIT_TIMEOUT = 15000; // 15 seconds max for initialization
+    
     try {
-      await this._openDatabase();
-      await this._verifyObjectStores();
-      this.isReady = true;
-      this.healthCheckCache = { status: 'healthy', timestamp: Date.now() };
-      console.log('✅ IndexedDB fully initialized and ready');
+      const initPromise = (async () => {
+        await this._openDatabase();
+        await this._verifyObjectStores();
+        this.isReady = true;
+        this.healthCheckCache = { status: 'healthy', timestamp: Date.now() };
+        console.log('✅ IndexedDB fully initialized and ready');
+      })();
+
+      // Race initialization against timeout
+      await Promise.race([
+        initPromise,
+        new Promise<void>((_, reject) => 
+          setTimeout(() => reject(new Error('IndexedDB initialization timed out after 15 seconds. Please refresh the page.')), INIT_TIMEOUT)
+        )
+      ]);
       
       // Resolve all waiting promises
       this.readyResolvers.forEach(resolve => resolve());
@@ -125,7 +138,17 @@ export class IndexedDBService {
     } catch (error) {
       console.error('❌ IndexedDB initialization failed:', error);
       this.isReady = false;
+      this.isInitializing = false;
       this.healthCheckCache = { status: 'unhealthy', timestamp: Date.now() };
+      
+      // Reject all waiting promises
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.readyResolvers.forEach(resolve => {
+        // Resolve anyway so components don't hang, but they'll see the error
+        resolve();
+      });
+      this.readyResolvers = [];
+      
       throw error;
     } finally {
       this.isInitializing = false;
@@ -133,47 +156,24 @@ export class IndexedDBService {
   }
 
   private async _openDatabase(): Promise<void> {
-    // ENTERPRISE FIX: Always detect existing version first, NEVER open with version number
-    // This completely prevents "version less than existing" errors
-    // Strategy: Open without version to detect, then use that version or upgrade if needed
+    // ENTERPRISE FIX: Skip version detection to prevent hangs - always open without version
+    // This is the safest approach and prevents all version mismatch errors
+    // Opening without version will use existing version or create new database
     
-    // Wrap detection in timeout to prevent hangs
-    const DETECTION_TIMEOUT = 10000; // 10 seconds (increased for slow connections)
+    console.log('📊 Opening database without version (safest approach - prevents version errors)');
     
-    try {
-      const detectedVersion = await Promise.race<number | null>([
-        this._detectDatabaseVersion(),
-        new Promise<null>((_, reject) => 
-          setTimeout(() => reject(new Error('Database version detection timed out')), DETECTION_TIMEOUT)
-        )
-      ]);
-      
-      console.log(`📊 Detected existing database version: ${detectedVersion ?? 'none (new database)'}, code expects: ${this.DB_VERSION}`);
-      
-      // CRITICAL: Always update DB_VERSION to match detected version if it's higher
-      // This ensures we never try to open with a lower version
-      if (detectedVersion !== null && detectedVersion > this.DB_VERSION) {
-        console.warn(`⚠️ Browser has IndexedDB version ${detectedVersion}, code expects ${this.DB_VERSION}. Updating code version to match.`);
-        this._dbVersion = detectedVersion;
+    // CRITICAL: Always open without version number - this is the safest option
+    // It will use whatever version exists or create a new database if none exists
+    // This completely eliminates version mismatch errors
+    await this._openWithVersionAsync(null, true); // true = force open without version
+    
+    // After opening, update our internal version tracking to match actual version
+    if (this.db) {
+      const actualVersion = this.db.version;
+      if (actualVersion !== this.DB_VERSION) {
+        console.log(`📊 Database opened with version ${actualVersion}, updating internal version from ${this.DB_VERSION}`);
+        this._dbVersion = actualVersion;
       }
-      
-      // CRITICAL FIX: If database exists (detectedVersion !== null), ALWAYS open without version
-      // This prevents any version mismatch errors from cached old code
-      // Only specify version if it's a new database (detectedVersion === null)
-      if (detectedVersion !== null) {
-        console.log(`📊 Database exists (version ${detectedVersion}), opening without version number to use existing version`);
-        await this._openWithVersionAsync(null, true); // Force open without version
-      } else {
-        // New database - safe to open with code version
-        await this._openWithVersionAsync(null);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn(`⚠️ Database version detection failed: ${errorMessage}. Using safe fallback (open without version)...`);
-      
-      // SAFE FALLBACK: If detection fails for any reason, open without version number
-      // This is the safest option - it will use whatever version exists or create new
-      await this._openWithVersionAsync(null, true); // true = force open without version
     }
   }
 
@@ -478,10 +478,66 @@ export class IndexedDBService {
       missing: missingStores
     });
     
+    // If stores are missing, we need to trigger an upgrade to create them
     if (missingStores.length > 0) {
       console.warn('⚠️ Missing object stores detected:', missingStores);
-      // Force database recreation
-      await this._recreateDatabase();
+      
+      // Check if we can trigger an upgrade by opening with a higher version
+      const currentVersion = this.db.version;
+      const targetVersion = currentVersion + 1;
+      
+      console.log(`🔧 Attempting to upgrade database from version ${currentVersion} to ${targetVersion} to create missing stores...`);
+      
+      // Close current connection
+      this.db.close();
+      this.db = null;
+      
+      // Try to open with higher version to trigger upgrade
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const upgradeRequest = indexedDB.open(this.DB_NAME, targetVersion);
+          
+          upgradeRequest.onupgradeneeded = (event) => {
+            console.log('🔧 Upgrade triggered to create missing stores...');
+            this._handleUpgrade(event);
+          };
+          
+          upgradeRequest.onsuccess = () => {
+            this.db = upgradeRequest.result;
+            const actualVersion = this.db.version;
+            this._dbVersion = actualVersion; // Update internal version tracking
+            console.log(`✅ Database upgraded successfully to version ${actualVersion}`);
+            resolve();
+          };
+          
+          upgradeRequest.onerror = () => {
+            const error = upgradeRequest.error || new Error('Failed to upgrade database');
+            console.error('❌ Database upgrade failed:', error);
+            reject(error);
+          };
+        });
+        
+        // Re-verify after upgrade
+        if (!this.db) {
+          throw new Error('Database not opened after upgrade');
+        }
+        
+        const db: IDBDatabase = this.db; // Store in local variable with explicit type
+        const storesAfterUpgrade = Array.from(db.objectStoreNames);
+        const stillMissing = requiredStores.filter(storeName => !db.objectStoreNames.contains(storeName));
+        
+        if (stillMissing.length > 0) {
+          console.warn('⚠️ Some stores still missing after upgrade:', stillMissing);
+          // Force full recreation
+          await this._recreateDatabase();
+          return;
+        }
+      } catch (upgradeError) {
+        console.warn('⚠️ Upgrade failed, attempting full database recreation...', upgradeError);
+        // If upgrade fails, try full recreation
+        await this._recreateDatabase();
+        return;
+      }
     }
 
     // Verify we can perform basic operations
@@ -490,17 +546,61 @@ export class IndexedDBService {
       const store = transaction.objectStore('surveys');
       await new Promise<void>((resolve, reject) => {
         const request = store.count();
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          console.log('✅ Object store verification passed');
+          resolve();
+        };
+        request.onerror = () => {
+          console.error('❌ Object store count failed:', request.error);
+          reject(request.error);
+        };
       });
     } catch (error) {
       console.error('❌ Object store verification failed:', error);
-      throw new Error('Database object stores are not functional');
+      // ENTERPRISE FIX: If stores exist but are corrupted/unusable, attempt a full rebuild once.
+      // This prevents the app from getting stuck in a broken IndexedDB state.
+      try {
+        console.warn('🔧 Attempting database recreation due to non-functional object stores...');
+        await this._recreateDatabase();
+
+        // Retry the basic operation once after recreation
+        if (!this.db) {
+          throw new Error('Database not opened after recreation');
+        }
+        const retryTx = this.db.transaction(['surveys'], 'readonly');
+        const retryStore = retryTx.objectStore('surveys');
+        await new Promise<void>((resolve, reject) => {
+          const request = retryStore.count();
+          request.onsuccess = () => {
+            console.log('✅ Database recreation resolved object store verification failure');
+            resolve();
+          };
+          request.onerror = () => {
+            console.error('❌ Retry verification failed:', request.error);
+            reject(request.error);
+          };
+        });
+        return;
+      } catch (recreateError) {
+        console.error('❌ Database recreation failed:', recreateError);
+        const errorMessage = recreateError instanceof Error ? recreateError.message : String(recreateError);
+        
+        // Provide more helpful error message
+        if (errorMessage.includes('blocked')) {
+          throw new Error('Database is blocked by another tab/window. Please close other tabs and refresh the page.');
+        } else {
+          throw new Error(`Database object stores are not functional: ${errorMessage}`);
+        }
+      }
     }
   }
 
   private async _recreateDatabase(): Promise<void> {
     console.log('🔧 Recreating database due to missing object stores...');
+    
+    // Reset initialization state
+    this.isReady = false;
+    this.isInitializing = false;
     
     if (this.db) {
       this.db.close();
@@ -508,14 +608,80 @@ export class IndexedDBService {
     }
 
     // Delete the existing database
-    await new Promise<void>((resolve, reject) => {
-      const deleteRequest = indexedDB.deleteDatabase(this.DB_NAME);
-      deleteRequest.onsuccess = () => resolve();
-      deleteRequest.onerror = () => reject(deleteRequest.error);
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const deleteRequest = indexedDB.deleteDatabase(this.DB_NAME);
+        let resolved = false;
+        
+        deleteRequest.onsuccess = () => {
+          if (resolved) return;
+          resolved = true;
+          console.log('✅ Database deleted successfully');
+          resolve();
+        };
+        
+        deleteRequest.onerror = () => {
+          if (resolved) return;
+          resolved = true;
+          const error = deleteRequest.error || new Error('Failed to delete database');
+          console.error('❌ Failed to delete database:', error);
+          reject(error);
+        };
+        
+        deleteRequest.onblocked = () => {
+          console.warn('⚠️ IndexedDB deleteDatabase is blocked (another tab/window may still be using the database).');
+          console.warn('💡 Please close other tabs/windows using this application and refresh the page.');
+          // Don't reject immediately - wait a bit for the block to clear
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              reject(new Error('Database deletion is blocked. Please close other tabs/windows and refresh the page.'));
+            }
+          }, 3000);
+        };
+        
+        // Safety timeout: don't hang forever if browser blocks deletion
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('Database recreation timed out. Please close other tabs/windows and refresh the page.'));
+          }
+        }, 8000);
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // If deletion fails due to blocking, try to continue anyway - the upgrade might still work
+      if (errorMessage.includes('blocked')) {
+        console.warn('⚠️ Database deletion blocked, but attempting to continue with upgrade...');
+      } else {
+        throw error;
+      }
+    }
 
-    // Reopen with upgrade
+    // Reset state before reopening
+    this.isReady = false;
+    this.isInitializing = false;
+    this.initializationPromise = null;
+    
+    // Reopen with upgrade - this will trigger onupgradeneeded to create all stores
     await this._openDatabase();
+    
+    // Verify stores were created after recreation (skip full verification to avoid recursion)
+    if (!this.db) {
+      throw new Error('Database not opened after recreation');
+    }
+    
+    // Quick check that required stores exist (don't call full _verifyObjectStores to avoid recursion)
+    const db: IDBDatabase = this.db; // Store in local variable with explicit type
+    const requiredStores = ['surveys', 'surveyData', 'specialtyMappings', 'cache'];
+    const existingStores = Array.from(db.objectStoreNames);
+    const missingStores = requiredStores.filter(storeName => !db.objectStoreNames.contains(storeName));
+    
+    if (missingStores.length > 0) {
+      throw new Error(`Database recreation failed: stores still missing after recreation: ${missingStores.join(', ')}`);
+    }
+    
+    console.log('✅ Database recreation completed successfully, all stores created');
   }
 
   /**
@@ -2914,6 +3080,10 @@ export class IndexedDBService {
             let rowCount = 0;
             let processedCount = 0;
             
+            // Keep transaction reference to prevent it from finishing prematurely
+            // IndexedDB transactions stay active as long as there are pending requests
+            let isComplete = false;
+            
             // Get count first
             const countRequest = surveyIdIndex.count(IDBKeyRange.only(survey.id));
             countRequest.onsuccess = () => {
@@ -2923,6 +3093,11 @@ export class IndexedDBService {
               const cursorRequest = surveyIdIndex.openCursor(IDBKeyRange.only(survey.id));
               
               cursorRequest.onsuccess = (event) => {
+                // Check if transaction is still active
+                if (transaction.error || isComplete) {
+                  return;
+                }
+                
                 const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
                 if (cursor) {
                   processedCount++;
@@ -2933,23 +3108,43 @@ export class IndexedDBService {
                     variables.add(variable.toLowerCase());
                   }
                   
-                  // Process in batches to avoid blocking
-                  if (processedCount % BATCH_SIZE === 0) {
-                    // Yield to event loop
-                    setTimeout(() => cursor.continue(), 0);
-                  } else {
+                  // Continue cursor - IndexedDB operations are already async and won't block
+                  // No need for setTimeout as it can cause transaction to finish prematurely
+                  try {
                     cursor.continue();
+                  } catch (error) {
+                    // Transaction may have finished - resolve with what we have
+                    if (error instanceof DOMException && error.name === 'TransactionInactiveError') {
+                      console.warn('Transaction finished early, resolving with partial results');
+                      isComplete = true;
+                      resolve({ surveySource, variables, rowCount });
+                    } else {
+                      reject(error);
+                    }
                   }
                 } else {
                   // Done - resolve with results
+                  isComplete = true;
                   resolve({ surveySource, variables, rowCount });
                 }
               };
               
-              cursorRequest.onerror = () => reject(cursorRequest.error);
+              cursorRequest.onerror = () => {
+                isComplete = true;
+                reject(cursorRequest.error);
+              };
             };
             
-            countRequest.onerror = () => reject(countRequest.error);
+            countRequest.onerror = () => {
+              isComplete = true;
+              reject(countRequest.error);
+            };
+            
+            // Handle transaction completion/error
+            transaction.onerror = () => {
+              isComplete = true;
+              reject(transaction.error);
+            };
           });
         })
       );

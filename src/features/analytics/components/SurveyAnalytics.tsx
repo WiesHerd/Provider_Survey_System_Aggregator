@@ -125,12 +125,21 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     loadFormattingRules();
   }, [formattingService]);
   
-  // Save to localStorage when variables change
+  // Save to DataService when variables change
   useEffect(() => {
-    if (selectedVariables.length > 0) {
-      localStorage.setItem('analytics_selected_variables', JSON.stringify(selectedVariables));
-      console.log('🔍 SurveyAnalytics: Saved selectedVariables to localStorage:', selectedVariables);
-    }
+    const saveSelectedVariables = async () => {
+      if (selectedVariables.length > 0) {
+        try {
+          const { getDataService } = await import('../../../services/DataService');
+          const dataService = getDataService();
+          await dataService.saveUserPreference('analytics_selected_variables', selectedVariables);
+          console.log('🔍 SurveyAnalytics: Saved selectedVariables to DataService:', selectedVariables);
+        } catch (error) {
+          console.error('Failed to save selected variables:', error);
+        }
+      }
+    };
+    saveSelectedVariables();
   }, [selectedVariables]);
   
   // TEMPORARILY DISABLED: Cache clearing to stop infinite loop

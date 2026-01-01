@@ -32,14 +32,16 @@ export class VariableFormattingService {
   }
 
   /**
-   * Load formatting rules from localStorage
+   * Load formatting rules from DataService
    */
   async loadRules(): Promise<VariableFormattingRule[]> {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-      if (stored) {
-        this.formattingRules = JSON.parse(stored);
-        console.log('✅ Loaded variable formatting rules from localStorage');
+      const { getDataService } = await import('../../../services/DataService');
+      const dataService = getDataService();
+      const stored = await dataService.getUserPreference(this.STORAGE_KEY);
+      if (stored && Array.isArray(stored)) {
+        this.formattingRules = stored;
+        console.log('✅ Loaded variable formatting rules from DataService');
       }
       return this.formattingRules;
     } catch (error) {
@@ -49,13 +51,15 @@ export class VariableFormattingService {
   }
 
   /**
-   * Save formatting rules to localStorage
+   * Save formatting rules to DataService
    */
   async saveRules(rules: VariableFormattingRule[]): Promise<void> {
     try {
       this.formattingRules = rules;
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(rules));
-      console.log('✅ Saved variable formatting rules to localStorage');
+      const { getDataService } = await import('../../../services/DataService');
+      const dataService = getDataService();
+      await dataService.saveUserPreference(this.STORAGE_KEY, rules);
+      console.log('✅ Saved variable formatting rules to DataService');
     } catch (error) {
       console.warn('Failed to save formatting rules:', error);
     }
@@ -278,8 +282,14 @@ export class VariableFormattingService {
   /**
    * Clear all formatting rules
    */
-  clearRules(): void {
+  async clearRules(): Promise<void> {
     this.formattingRules = [];
-    localStorage.removeItem(this.STORAGE_KEY);
+    try {
+      const { getDataService } = await import('../../../services/DataService');
+      const dataService = getDataService();
+      await dataService.deleteUserPreference(this.STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear formatting rules:', error);
+    }
   }
 }

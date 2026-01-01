@@ -174,8 +174,9 @@ export const useRegionalQuery = (
     enabled: true,
     staleTime: 1000 * 60 * 60 * 24, // 24 hours - regional data changes only on upload
     gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Don't refetch on focus - data only changes on upload (which invalidates cache)
     refetchOnMount: false, // Don't refetch if data is fresh (stale-while-revalidate)
+    refetchOnReconnect: false, // Don't refetch on reconnect - data is local
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (v5 API)
   });
 

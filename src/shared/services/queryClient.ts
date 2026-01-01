@@ -59,21 +59,23 @@ export const createQueryClient = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
+        // ENTERPRISE: Aggressive caching for lightning-fast performance
         // Stale-while-revalidate: show cached data immediately, refresh in background
-        staleTime: 1000 * 60 * 60, // 1 hour default (overridden per query type)
+        staleTime: 1000 * 60 * 60 * 24, // 24 hours default - data rarely changes
         gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days default (garbage collection)
         
         // Retry configuration
-        retry: 3,
-        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff, max 30s
+        retry: 2, // Reduced retries for faster failure detection
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Faster backoff, max 10s
         
-        // Refetch behavior
-        refetchOnWindowFocus: true, // Refetch on window focus for fresh data
-        refetchOnReconnect: true, // Refetch on network reconnect
+        // Refetch behavior - ENTERPRISE: Aggressive caching for instant navigation
+        // Data only changes on explicit user actions (upload/delete/mapping), which invalidate cache
+        refetchOnWindowFocus: false, // Don't refetch on focus - data is local
+        refetchOnReconnect: false, // Don't refetch on reconnect - data is local (IndexedDB)
         refetchOnMount: false, // Don't refetch if data is fresh (stale-while-revalidate)
         
         // Network mode
-        networkMode: 'online', // Only fetch when online (can be overridden for offline support)
+        networkMode: 'online', // Only fetch when online
       },
       mutations: {
         retry: 1, // Retry mutations once
@@ -82,11 +84,70 @@ export const createQueryClient = () => {
     },
   });
 
-  // Enable persistence to IndexedDB (manual implementation)
-  // Note: Full persistence will be implemented in Phase 8 as we integrate queries
-  // For now, QueryClient handles in-memory caching with request deduplication
+  // Enable persistence to IndexedDB
   if (typeof window !== 'undefined') {
-    console.log('✅ Query client initialized with caching and request deduplication');
+    // Persist query cache to IndexedDB on changes
+    const persistCache = async () => {
+      try {
+        const cache = queryClient.getQueryCache();
+        const queries = cache.getAll();
+        const cacheData: Record<string, any> = {};
+        
+        queries.forEach(query => {
+          if (query.state.data !== undefined) {
+            cacheData[query.queryHash] = {
+              data: query.state.data,
+              dataUpdatedAt: query.state.dataUpdatedAt,
+              status: query.state.status,
+              queryKey: query.queryKey,
+            };
+          }
+        });
+        
+        await indexedDBPersister.persistClient(JSON.stringify(cacheData));
+      } catch (error) {
+        console.error('Failed to persist query cache:', error);
+      }
+    };
+
+    // Restore cache from IndexedDB on initialization
+    const restoreCache = async () => {
+      try {
+        const cached = await indexedDBPersister.restoreClient();
+        if (cached) {
+          const cacheData = JSON.parse(cached);
+          
+          Object.entries(cacheData).forEach(([queryHash, queryData]: [string, any]) => {
+            // Only restore if data is less than 24 hours old
+            const age = Date.now() - queryData.dataUpdatedAt;
+            const maxAge = 1000 * 60 * 60 * 24; // 24 hours
+            
+            if (age < maxAge) {
+              queryClient.setQueryData(queryData.queryKey, queryData.data, {
+                updatedAt: queryData.dataUpdatedAt,
+              });
+            }
+          });
+          
+          console.log('✅ Query cache restored from IndexedDB');
+        }
+      } catch (error) {
+        console.error('Failed to restore query cache:', error);
+      }
+    };
+
+    // Restore on initialization
+    restoreCache();
+
+    // Persist on cache updates (debounced)
+    let persistTimeout: NodeJS.Timeout;
+    const cache = queryClient.getQueryCache();
+    cache.subscribe(() => {
+      clearTimeout(persistTimeout);
+      persistTimeout = setTimeout(persistCache, 1000); // Debounce by 1 second
+    });
+
+    console.log('✅ Query client initialized with IndexedDB persistence');
   }
 
   return queryClient;

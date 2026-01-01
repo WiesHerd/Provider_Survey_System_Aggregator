@@ -3,7 +3,7 @@
  * This hook handles file uploads, survey management, and state management
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getDataService } from '../../../services/DataService';
 import { AnalyticsDataService } from '../../analytics/services/analyticsDataService';
 import { 
@@ -152,6 +152,17 @@ export const useUploadData = (
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   
+  // ENTERPRISE FIX: Use ref to track selectedSurvey to avoid dependency issues
+  const selectedSurveyRef = useRef<string | null>(null);
+  
+  // ENTERPRISE FIX: Track last processed survey IDs string to prevent unnecessary updates
+  const lastSurveyIdsStringRef = useRef<string>('');
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedSurveyRef.current = selectedSurvey;
+  }, [selectedSurvey]);
+  
   // Form state
   const [formState, setFormState] = useState<UploadFormState>({
     surveyType: '',
@@ -215,6 +226,19 @@ export const useUploadData = (
   // Data service and database context
   const dataService = useMemo(() => getDataService(), []);
   const { isReady: isDatabaseReady, getService: getDatabaseService } = useDatabase();
+
+  // ENTERPRISE FIX: Store callbacks in refs to prevent infinite loops
+  // Callbacks may not be memoized in parent components, causing re-renders
+  const onSurveySelectRef = useRef(onSurveySelect);
+  const onUploadCompleteRef = useRef(onUploadComplete);
+  const onSurveyDeleteRef = useRef(onSurveyDelete);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onSurveySelectRef.current = onSurveySelect;
+    onUploadCompleteRef.current = onUploadComplete;
+    onSurveyDeleteRef.current = onSurveyDelete;
+  }, [onSurveySelect, onUploadComplete, onSurveyDelete]);
 
   // ENTERPRISE FIX: Use React Query for intelligent caching
   // This provides instant navigation (cached data) and background refresh
@@ -383,14 +407,26 @@ export const useUploadData = (
     setSectionState(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
 
+  // ENTERPRISE FIX: Create stable string representation of survey IDs using useMemo
+  // This prevents the effect from running when rawSurveys is a new array reference with same data
+  const surveyIdsString = useMemo(() => {
+    if (!rawSurveys || rawSurveys.length === 0) return '';
+    return rawSurveys.map((s: any) => s.id).sort().join(',');
+  }, [rawSurveys]);
+
   // ENTERPRISE FIX: Process React Query data into component format
-  // This runs whenever the query data changes, but React Query handles caching
+  // This runs only when survey IDs actually change (not just array reference)
   useEffect(() => {
+    // Only process if survey IDs actually changed
+    if (surveyIdsString === lastSurveyIdsStringRef.current) {
+      return;
+    }
+
+    // Update ref immediately to prevent duplicate processing
+    lastSurveyIdsStringRef.current = surveyIdsString;
+
     if (!rawSurveys || rawSurveys.length === 0) {
       setUploadedSurveys([]);
-      if (!selectedSurvey) {
-        setSelectedSurvey(null);
-      }
       return;
     }
 
@@ -420,12 +456,20 @@ export const useUploadData = (
 
     setUploadedSurveys(processedSurveys);
     
-    // Auto-select first survey if none selected
-    if (!selectedSurvey && processedSurveys.length > 0) {
-      setSelectedSurvey(processedSurveys[0].id);
-      onSurveySelect?.(processedSurveys[0].id);
+    // ENTERPRISE FIX: Auto-select first survey if none selected
+    // Use ref to read current value without including in dependency array
+    // This prevents infinite loops when we update selectedSurvey
+    // Only auto-select once when surveys first load
+    const currentSelectedSurvey = selectedSurveyRef.current;
+    if (!currentSelectedSurvey && processedSurveys.length > 0) {
+      const firstSurveyId = processedSurveys[0].id;
+      // Update ref immediately to prevent duplicate auto-selection
+      selectedSurveyRef.current = firstSurveyId;
+      setSelectedSurvey(firstSurveyId);
+      onSurveySelectRef.current?.(firstSurveyId);
     }
-  }, [rawSurveys, selectedSurvey, onSurveySelect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyIdsString]); // ENTERPRISE FIX: Only depend on stable surveyIdsString - rawSurveys is accessed from closure
 
   // Handle query errors
   useEffect(() => {
@@ -696,7 +740,7 @@ export const useUploadData = (
       }
       
       // Call callback
-      onUploadComplete?.(uploadedSurveys);
+      onUploadCompleteRef.current?.(uploadedSurveys);
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload files';
@@ -791,7 +835,7 @@ export const useUploadData = (
       // Clear selection if deleted survey was selected
       if (selectedSurvey === surveyId) {
         setSelectedSurvey(null);
-        onSurveySelect?.(null);
+        onSurveySelectRef.current?.(null);
       }
 
       // ENTERPRISE: Use unified cache invalidation helpers
@@ -831,7 +875,7 @@ export const useUploadData = (
       
       console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
       
-      onSurveyDelete?.(surveyId);
+      onSurveyDeleteRef.current?.(surveyId);
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete survey';

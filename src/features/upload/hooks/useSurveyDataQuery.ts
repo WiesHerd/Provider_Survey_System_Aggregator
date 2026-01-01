@@ -11,6 +11,10 @@ import { queryKeys } from '../../../shared/services/queryClient';
 import { createQueryFn } from '../../../shared/services/queryFetcher';
 import { trackFetch } from '../../../shared/hooks/useQueryTelemetry';
 
+// IMPORTANT: Avoid returning a new [] on every render when query.data is undefined.
+// A changing array reference can trigger downstream effects that set state repeatedly.
+const EMPTY_SURVEY_DATA: any[] = [];
+
 interface SurveyDataFilters {
   specialty?: string;
   providerType?: string;
@@ -74,7 +78,7 @@ export const useSurveyDataQuery = (
   });
   
   return {
-    data: query.data || [],
+    data: query.data ?? EMPTY_SURVEY_DATA,
     loading: query.isLoading || query.isFetching,
     error: query.error ? (query.error instanceof Error ? query.error.message : String(query.error)) : null,
     refetch: query.refetch,

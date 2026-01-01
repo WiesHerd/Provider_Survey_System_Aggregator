@@ -7,9 +7,11 @@ The app now supports **IndexedDB** for browser-based data storage, making it wor
 ## 🚀 **How It Works**
 
 ### **Storage Modes:**
-- **IndexedDB**: All data stored in browser (default)
-- **Backend**: Traditional server-based storage
-- **Hybrid**: Try backend first, fallback to IndexedDB
+- **IndexedDB**: All data stored in browser (local storage)
+- **Firebase**: Cloud storage with user authentication
+- **Hybrid (Default)**: Automatically uses Firebase if available, otherwise IndexedDB
+  - IndexedDB is always initialized for seamless fallback
+  - If Firebase fails, automatically falls back to IndexedDB
 
 ### **Benefits:**
 - ✅ **Works offline**

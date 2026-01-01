@@ -56,6 +56,17 @@ export class PerformanceOptimizedDataService {
   }
 
   /**
+   * Public cache access for external services
+   */
+  public getCacheEntry<T>(key: string): T | null {
+    return this.getCached<T>(key);
+  }
+
+  public setCacheEntry<T>(key: string, data: T, ttl: number = this.CACHE_TTL): void {
+    this.setCached(key, data, ttl);
+  }
+
+  /**
    * Batch query processor for optimal performance
    */
   private startBatchProcessor(): void {

@@ -61,7 +61,20 @@ const SystemSettings: React.FC = () => {
 
   useEffect(() => {
     loadStorageStats();
-  }, [loadStorageStats]);
+    
+    // Load settings from DataService
+    const loadSettings = async () => {
+      try {
+        const savedSettings = await dataService.getUserPreference('benchpoint-settings');
+        if (savedSettings) {
+          setSettings(savedSettings);
+        }
+      } catch (error) {
+        console.warn('Failed to load settings:', error);
+      }
+    };
+    loadSettings();
+  }, [loadStorageStats, dataService]);
 
   const exportAllData = async () => {
     setLoading(true);
@@ -120,9 +133,14 @@ const SystemSettings: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const saveSettings = () => {
-    localStorage.setItem('benchpoint-settings', JSON.stringify(settings));
-    setMessage({ type: 'success', text: 'Settings saved successfully!' });
+  const saveSettings = async () => {
+    try {
+      await dataService.saveUserPreference('benchpoint-settings', settings);
+      setMessage({ type: 'success', text: 'Settings saved successfully!' });
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      setMessage({ type: 'error', text: 'Failed to save settings' });
+    }
   };
 
   return (

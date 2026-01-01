@@ -41,13 +41,13 @@ service cloud.firestore {
       /**
        * Survey data rows access rules
        * 
-       * Pattern: users/{userId}/surveyData/{surveyId}/data/{dataId}
+       * Pattern: users/{userId}/surveyData/{dataId}
        * 
        * Security:
        * - Only the owner can read/write survey data rows
-       * - Large datasets are stored in subcollections for performance
+       * - Large datasets are stored in collections for performance
        */
-      match /surveyData/{surveyId}/data/{dataId} {
+      match /surveyData/{dataId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
       
@@ -119,13 +119,14 @@ service cloud.firestore {
       /**
        * Learned mappings access rules
        * 
-       * Pattern: users/{userId}/learnedMappings/{mappingType}/{mappingId}
+       * Pattern: users/{userId}/learnedMappings/{mappingId}
        * 
        * Security:
        * - Only the owner can manage their learned mappings
        * - Used for ML-based mapping suggestions
+       * - ENTERPRISE FIX: Updated to flat structure (mappingType stored as field, not path segment)
        */
-      match /learnedMappings/{mappingType}/{mappingId} {
+      match /learnedMappings/{mappingId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
       
@@ -155,6 +156,58 @@ service cloud.firestore {
       match /auditLogs/{logId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Blend templates access rules
+       * 
+       * Pattern: users/{userId}/blendTemplates/{templateId}
+       * 
+       * Security:
+       * - Only the owner can manage their blend templates
+       * - Used for saving specialty blending configurations
+       */
+      match /blendTemplates/{templateId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Specialty mapping sources access rules
+       * 
+       * Pattern: users/{userId}/specialtyMappingSources/{sourceId}
+       * 
+       * Security:
+       * - Only the owner can manage their specialty mapping sources
+       * - Used for tracking source specialties for mappings
+       */
+      match /specialtyMappingSources/{sourceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Custom reports access rules
+       * 
+       * Pattern: users/{userId}/customReports/{reportId}
+       * 
+       * Security:
+       * - Only the owner can manage their custom reports
+       * - Used for storing saved report configurations
+       */
+      match /customReports/{reportId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      /**
+       * Cache access rules
+       * 
+       * Pattern: users/{userId}/cache/{cacheKey}
+       * 
+       * Security:
+       * - Only the owner can manage their cache
+       * - Used for temporary data caching
+       */
+      match /cache/{cacheKey} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
     

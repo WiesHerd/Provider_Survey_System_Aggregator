@@ -59,26 +59,29 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 px-6 py-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         {steps.map((step, index) => {
           const isClickable = onStepClick && (step.completed || step.current);
           
           return (
             <React.Fragment key={step.id}>
-              <div className="flex items-center flex-1">
+              <div className="flex items-center flex-1 min-w-0">
                 <button
                   type="button"
                   onClick={() => isClickable && onStepClick?.(step.id)}
                   disabled={!isClickable}
-                  className={`flex flex-col items-center flex-1 ${
-                    isClickable ? 'cursor-pointer' : 'cursor-default'
+                  className={`flex flex-col items-center flex-1 min-w-0 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 rounded-lg p-2 ${
+                    isClickable 
+                      ? 'cursor-pointer hover:bg-gray-50 active:bg-gray-100' 
+                      : 'cursor-default'
                   }`}
+                  aria-label={`${step.label} ${step.completed ? 'completed' : step.current ? 'current step' : 'pending'}`}
                 >
-                  <div className={`relative flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
+                  <div className={`relative flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors duration-200 ${
                     step.completed
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      ? 'bg-purple-600 border-purple-600 text-white'
                       : step.current
-                      ? 'bg-indigo-50 border-indigo-600 text-indigo-600'
+                      ? 'bg-purple-50 border-purple-600 text-purple-600'
                       : 'bg-white border-gray-300 text-gray-400'
                   }`}>
                     {step.completed ? (
@@ -87,9 +90,9 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
                       <span className="text-sm font-semibold">{index + 1}</span>
                     )}
                   </div>
-                  <span className={`mt-2 text-xs font-medium ${
+                  <span className={`mt-2 text-sm font-medium text-center ${
                     step.current
-                      ? 'text-indigo-600'
+                      ? 'text-purple-600'
                       : step.completed
                       ? 'text-gray-600'
                       : 'text-gray-400'
@@ -100,8 +103,8 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
                 
                 {/* Connector Line */}
                 {index < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${
-                    step.completed ? 'bg-indigo-600' : 'bg-gray-300'
+                  <div className={`flex-1 h-1 mx-2 transition-colors duration-200 ${
+                    step.completed ? 'bg-purple-600' : 'bg-gray-300'
                   }`} />
                 )}
               </div>

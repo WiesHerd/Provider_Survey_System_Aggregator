@@ -16,6 +16,7 @@ import {
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
 import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
+import { getDataService } from '../../../services/DataService';
 
 interface APPSupervisionLevelMapping {
   id: string;
@@ -117,16 +118,24 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
       setLoading(true);
       setError(null);
       
-      // Load from localStorage or use defaults
-      const stored = localStorage.getItem('app_supervision_level_mappings');
-      if (stored) {
-        const parsedMappings = JSON.parse(stored);
+      // Load from DataService or use defaults
+      const dataService = getDataService();
+      const stored = await dataService.getUserPreference('app_supervision_level_mappings');
+      
+      if (stored && Array.isArray(stored)) {
+        // Convert date strings back to Date objects
+        const parsedMappings = stored.map((mapping: any) => ({
+          ...mapping,
+          createdAt: mapping.createdAt ? new Date(mapping.createdAt) : new Date(),
+          updatedAt: mapping.updatedAt ? new Date(mapping.updatedAt) : new Date()
+        }));
         setMappings(parsedMappings);
       } else {
         setMappings(defaultMappings);
-        saveMappings(defaultMappings);
+        await saveMappings(defaultMappings);
       }
     } catch (err) {
+      console.error('Failed to load mappings:', err);
       setError(err instanceof Error ? err.message : 'Failed to load mappings');
       setMappings(defaultMappings);
     } finally {
@@ -134,9 +143,10 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
     }
   };
 
-  const saveMappings = (mappingsToSave: APPSupervisionLevelMapping[]) => {
+  const saveMappings = async (mappingsToSave: APPSupervisionLevelMapping[]) => {
     try {
-      localStorage.setItem('app_supervision_level_mappings', JSON.stringify(mappingsToSave));
+      const dataService = getDataService();
+      await dataService.saveUserPreference('app_supervision_level_mappings', mappingsToSave);
     } catch (err) {
       console.error('Failed to save mappings:', err);
     }
@@ -180,7 +190,7 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
 
       const updatedMappings = [...mappings, mapping];
       setMappings(updatedMappings);
-      saveMappings(updatedMappings);
+      await saveMappings(updatedMappings);
       
       // Reset form
       setNewMapping({
@@ -202,7 +212,7 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
           : mapping
       );
       setMappings(updatedMappings);
-      saveMappings(updatedMappings);
+      await saveMappings(updatedMappings);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update mapping');
     }
@@ -212,7 +222,7 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
     try {
       const updatedMappings = mappings.filter(mapping => mapping.id !== id);
       setMappings(updatedMappings);
-      saveMappings(updatedMappings);
+      await saveMappings(updatedMappings);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete mapping');
     }
@@ -427,10 +437,10 @@ export const APPSupervisionLevelMapping: React.FC<APPSupervisionLevelMappingProp
             )}
             {activeTab === 'mapped' && (
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (window.confirm('Are you sure you want to clear all supervision level mappings?')) {
                     setMappings([]);
-                    saveMappings([]);
+                    await saveMappings([]);
                   }
                 }}
                 className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"

@@ -26,66 +26,26 @@ This feature provides enterprise-grade report building capabilities following pa
 
 ### Basic Integration
 
-```tsx
-import { EnhancedCustomReports } from './features/reports';
+The reports feature provides two main screens:
 
-function App() {
-  return (
-    <EnhancedCustomReports 
-      data={surveyData}
-      title="Custom Reports"
-    />
-  );
-}
-```
+1. **Custom Reports** (`/custom-reports`) - Chart builder for creating custom reports
+2. **Canned Reports** (`/canned-reports`) - Pre-built report templates
 
-### Individual Components
-
-```tsx
-import { 
-  ReportBuilder, 
-  ReportTemplates, 
-  VisualFilterBuilder 
-} from './features/reports';
-
-// Visual Report Builder
-<ReportBuilder
-  onSave={(report) => console.log('Report saved:', report)}
-  onExport={(report) => console.log('Report exported:', report)}
-/>
-
-// Template Library
-<ReportTemplates
-  onSelectTemplate={(template) => console.log('Template selected:', template)}
-  onCreateCustom={() => console.log('Create custom report')}
-/>
-
-// Visual Filter Builder
-<VisualFilterBuilder
-  availableFields={fields}
-  onFiltersChange={(filters) => console.log('Filters changed:', filters)}
-/>
-```
+These are accessed via routes in the main application.
 
 ## 🎨 Component Architecture
 
-### ReportBuilder
-- **Drag-and-drop interface** for building reports
-- **Component palette** with available elements
-- **Visual canvas** for arranging components
-- **Properties panel** for configuration
+### CustomReports
+- **Chart builder interface** for creating custom reports
+- **Filter configuration** for data selection
+- **Chart/table preview** with real-time updates
+- **Save/export functionality** for reports
 
-### ReportTemplates
+### CannedReports
 - **Template library** with pre-built reports
-- **Category filtering** and search
-- **Template preview** functionality
-- **Popularity ratings** and metadata
-
-### VisualFilterBuilder
-- **Visual filter creation** with drag-and-drop
-- **Logical grouping** with AND/OR operators
-- **Smart field suggestions** based on data types
-- **Real-time filter preview**
+- **Report generation** from templates
+- **Configuration dialogs** for report parameters
+- **Export functionality** for generated reports
 
 ## 🔧 Configuration
 
@@ -151,16 +111,13 @@ Templates are organized by category:
 - **Error handling** with user-friendly messages
 - **Loading states** for async operations
 
-## 🔄 Migration from Legacy
+## 🔄 Usage
 
-### Replacing CustomReports
-```tsx
-// Old way
-import CustomReports from './components/CustomReports';
+### Accessing Reports
 
-// New way
-import { EnhancedCustomReports } from './features/reports';
-```
+Reports are accessed via routes:
+- `/custom-reports` - Custom chart builder
+- `/canned-reports` - Pre-built report templates
 
 ### Data Integration
 The new components integrate seamlessly with existing data services:

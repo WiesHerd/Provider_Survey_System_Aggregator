@@ -33,8 +33,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onSelectTemp
   };
 
   return (
-    <div className="mb-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">Start from Template</h3>
+    <div>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">Start from Template</h3>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {REPORT_TEMPLATES.slice(0, 6).map((template) => {
           const Icon = template.icon;

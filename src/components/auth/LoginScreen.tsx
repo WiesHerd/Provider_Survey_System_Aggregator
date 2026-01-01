@@ -16,7 +16,8 @@ import {
   Alert,
   CircularProgress,
   InputAdornment,
-  IconButton
+  IconButton,
+  Link
 } from '@mui/material';
 import { 
   Visibility, 
@@ -25,6 +26,7 @@ import {
   Lock as LockIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
+import { GoogleLogo } from './GoogleLogo';
 
 /**
  * Login screen props
@@ -44,7 +46,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onSwitchToSignup, 
   onClose 
 }) => {
-  const { signIn, loading, error, clearError, isAvailable } = useAuth();
+  const { signIn, signInWithGoogle, loading, error, clearError, isAvailable } = useAuth();
   
   // Form state
   const [email, setEmail] = useState('');
@@ -219,7 +221,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               py: 1.5,
               borderRadius: 2,
               textTransform: 'none',
-              fontSize: '1rem'
+              fontSize: '1rem',
+              fontWeight: 500,
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              },
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
             }}
           >
             {loading ? (
@@ -229,22 +237,74 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             )}
           </Button>
 
+          {/* Divider */}
+          <Box sx={{ display: 'flex', alignItems: 'center', my: 3 }}>
+            <Box sx={{ flex: 1, height: 1, bgcolor: 'divider' }} />
+            <Typography variant="body2" color="text.secondary" sx={{ px: 2 }}>
+              OR
+            </Typography>
+            <Box sx={{ flex: 1, height: 1, bgcolor: 'divider' }} />
+          </Box>
+
+          {/* Google Sign In Button */}
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={async () => {
+              try {
+                clearError(); // Clear any previous errors
+                await signInWithGoogle();
+                // Success - auth state change will be handled by AuthContext
+              } catch (err) {
+                // Error is already set in AuthContext, but we log it for debugging
+                const errorMessage = err instanceof Error ? err.message : 'Google sign in failed';
+                console.error('Google sign in failed:', errorMessage);
+                // Error will be displayed by the error Alert above
+              }
+            }}
+            disabled={loading}
+            sx={{ 
+              mb: 3,
+              py: 1.5,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontSize: '1rem',
+              fontWeight: 500,
+              borderColor: '#dadce0',
+              color: '#3c4043',
+              '&:hover': {
+                borderColor: '#dadce0',
+                backgroundColor: '#f8f9fa',
+                boxShadow: '0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15)'
+              }
+            }}
+            startIcon={<GoogleLogo size={18} />}
+          >
+            Continue with Google
+          </Button>
+
           <Box textAlign="center">
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.9375rem' }}>
               Don't have an account?{' '}
-              <Button
-                variant="text"
+              <Link
+                component="button"
+                type="button"
                 onClick={onSwitchToSignup}
                 disabled={loading}
                 sx={{ 
                   textTransform: 'none',
-                  p: 0,
-                  minWidth: 'auto',
-                  textDecoration: 'underline'
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  color: '#6366f1',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                    color: '#4f46e5'
+                  },
+                  cursor: loading ? 'not-allowed' : 'pointer'
                 }}
               >
                 Sign up
-              </Button>
+              </Link>
             </Typography>
           </Box>
         </Box>

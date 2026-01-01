@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BoltIcon,
   TrashIcon as DeleteSweepIcon
 } from '@heroicons/react/24/outline';
 import { VariableMappingProps } from '../types/mapping';
-import { useVariableMappingData } from '../hooks/useVariableMappingData';
+import { useVariableMappingQuery } from '../hooks/useVariableMappingQuery';
+import { IUnmappedVariable } from '../types/mapping';
 import { UnmappedVariables } from './UnmappedVariables';
 import { MappedVariables } from './MappedVariables';
 import { LearnedVariableMappings } from './LearnedVariableMappings';
@@ -22,55 +23,84 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   onUnmappedVariableChange
 }) => {
   const [showHelp, setShowHelp] = useState(false);
+  const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
+  const [selectedVariables, setSelectedVariables] = useState<IUnmappedVariable[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [mappedSearchTerm, setMappedSearchTerm] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
-  // Custom hook for data management
+  // ENTERPRISE: Use React Query for lightning-fast data loading with caching
   const {
-    // State
-    variableMappings,
-    unmappedVariables,
-    selectedVariables,
-    learnedMappings,
-    loading,
+    mappings: variableMappings,
+    unmapped: unmappedVariables,
+    learned: learnedMappings,
+    isLoading,
     error,
-    activeTab,
-    
-    // Search state
-    searchTerm,
-    mappedSearchTerm,
-    
-    // Computed values
-    filteredUnmapped,
-    filteredMappings,
-    filteredLearned,
-    
-    // Actions
-    setActiveTab,
-    selectVariable,
-    clearSelectedVariables,
-    selectAllVariables,
-    deselectAllVariables,
-    
-    // Data operations
-    loadData,
-    createGroupedVariableMapping,
-    deleteVariableMapping,
-    clearAllVariableMappings,
+    createMapping,
+    deleteMapping,
+    clearAllMappings,
     removeLearnedMapping,
-    
-    // Search and filters
-    setSearchTerm,
-    setMappedSearchTerm,
-    
-    // Cross-category toggle
-    showAllCategories,
-    setShowAllCategories
-  } = useVariableMappingData();
+    refetch
+  } = useVariableMappingQuery(showAllCategories);
+
+  // Computed filtered values
+  const filteredUnmapped = useMemo(() => {
+    if (!searchTerm) return unmappedVariables;
+    return unmappedVariables.filter(variable =>
+      variable.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      variable.surveySource.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (variable.variableType && variable.variableType.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [unmappedVariables, searchTerm]);
+
+  const filteredMappings = useMemo(() => {
+    if (!mappedSearchTerm) return variableMappings;
+    return variableMappings.filter(mapping => 
+      mapping.standardizedName?.toLowerCase().includes(mappedSearchTerm.toLowerCase())
+    );
+  }, [variableMappings, mappedSearchTerm]);
+
+  const filteredLearned = useMemo(() => {
+    if (!mappedSearchTerm) return learnedMappings;
+    const filtered: Record<string, string> = {};
+    Object.entries(learnedMappings).forEach(([key, value]) => {
+      if (key.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+          value.toLowerCase().includes(mappedSearchTerm.toLowerCase())) {
+        filtered[key] = value;
+      }
+    });
+    return filtered;
+  }, [learnedMappings, mappedSearchTerm]);
+
+  // Selection handlers
+  const selectVariable = (variable: IUnmappedVariable) => {
+    setSelectedVariables(prev => {
+      const exists = prev.find(v => v.id === variable.id);
+      if (exists) {
+        return prev.filter(v => v.id !== variable.id);
+      }
+      return [...prev, variable];
+    });
+  };
+
+  const clearSelectedVariables = () => setSelectedVariables([]);
+  const selectAllVariables = () => setSelectedVariables([...filteredUnmapped]);
+  const deselectAllVariables = () => setSelectedVariables([]);
+
+  // Notify parent of changes
+  useEffect(() => {
+    onVariableMappingChange?.(variableMappings);
+  }, [variableMappings, onVariableMappingChange]);
+
+  useEffect(() => {
+    onUnmappedVariableChange?.(unmappedVariables);
+  }, [unmappedVariables, onUnmappedVariableChange]);
 
 
   // Handle clear all mappings
-  const handleClearAllMappings = () => {
+  const handleClearAllMappings = async () => {
     if (window.confirm('Are you sure you want to clear all variable mappings? This cannot be undone.')) {
-      clearAllVariableMappings();
+      await clearAllMappings();
     }
   };
 
@@ -89,12 +119,17 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
       // Auto-generate standardized name from first variable (like auto-mapping)
       const standardizedName = selectedVariables[0].name.toLowerCase().replace(/\s+/g, '_');
       
-      await createGroupedVariableMapping(
+      await createMapping({
         standardizedName,
-        'compensation', // Default to compensation for consistency
-        'general', // Default subtype
-        selectedVariables
-      );
+        variableType: 'compensation',
+        variableSubType: 'general',
+        sourceVariables: selectedVariables.map(v => ({
+          id: v.id || crypto.randomUUID(),
+          surveySource: v.surveySource,
+          originalVariableName: v.name,
+          frequency: v.frequency || 0
+        }))
+      });
       
       // Clear selections and switch to mapped tab
       clearSelectedVariables();
@@ -111,12 +146,17 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     try {
       // Create separate mappings for each selected variable
       for (const variable of selectedVariables) {
-        await createGroupedVariableMapping(
-          variable.name.toLowerCase().replace(/\s+/g, '_'),
-          'compensation', // Default to compensation for consistency
-          'general', // Default subtype
-          [variable]
-        );
+        await createMapping({
+          standardizedName: variable.name.toLowerCase().replace(/\s+/g, '_'),
+          variableType: 'compensation',
+          variableSubType: 'general',
+          sourceVariables: [{
+            id: variable.id || crypto.randomUUID(),
+            surveySource: variable.surveySource,
+            originalVariableName: variable.name,
+            frequency: variable.frequency || 0
+          }]
+        });
       }
       
       // Clear selections and switch to mapped tab
@@ -128,16 +168,11 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
   };
 
   // Handle delete mapping
-  const handleDeleteMapping = (mappingId: string) => {
+  const handleDeleteMapping = async (mappingId: string) => {
     if (window.confirm('Are you sure you want to delete this variable mapping?')) {
-      deleteVariableMapping(mappingId);
+      await deleteMapping(mappingId);
     }
   };
-
-  // Load data on mount
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Notify parent of changes
   useEffect(() => {
@@ -148,6 +183,10 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     onUnmappedVariableChange?.(unmappedVariables);
   }, [unmappedVariables, onUnmappedVariableChange]);
 
+  // ENTERPRISE: Show cached data immediately, only show loading on first load
+  // This enables stale-while-revalidate pattern for instant navigation
+  const loading = isLoading && !variableMappings.length && !unmappedVariables.length;
+  
   if (loading) {
     return <MappingLoadingSpinner entityName="Variable" />;
   }
@@ -207,7 +246,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm text-red-800">{error}</p>
+                    <p className="text-sm text-red-800">{error instanceof Error ? error.message : String(error)}</p>
                   </div>
                 </div>
               </div>
@@ -226,7 +265,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
                     onVariableSelect={selectVariable}
-                    onRefresh={loadData}
+                    onRefresh={() => refetch()}
                     showAllCategories={showAllCategories}
                     onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
                   />
@@ -239,7 +278,7 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">No Unmapped Fields Found</h3>
                       <p className="text-gray-600 mb-4">All fields are mapped, or no survey data is available.</p>
                       <button
-                        onClick={loadData}
+                        onClick={() => refetch()}
                         className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         <BoltIcon className="h-4 w-4 mr-2" />

@@ -37,12 +37,12 @@ export const VariableCard: React.FC<VariableCardProps> = ({
     >
       {/* Green checkmark for selected items */}
       {isSelected && (
-        <div className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm">
+        <div className="absolute top-1 right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm z-10">
           <CheckIcon className="w-3 h-3 text-white" />
         </div>
       )}
       
-      <div className="flex items-center">
+      <div className="flex items-center pr-8">
         <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
           {formatFieldNameForDisplay(variable.name)}
         </Typography>

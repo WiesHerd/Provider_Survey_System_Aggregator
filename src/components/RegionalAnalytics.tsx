@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback, memo } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { FormControl, Autocomplete, TextField, Drawer, Typography, List, ListItem, ListItemText, Divider, Tooltip } from '@mui/material';
 import { PrinterIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
@@ -19,6 +19,7 @@ import { VariableDiscoveryService } from '../features/analytics/services/variabl
 import { formatVariableDisplayName } from '../features/analytics/utils/variableFormatters';
 import { VariableFormattingService } from '../features/analytics/services/variableFormattingService';
 import { matchSpecialtyName } from '../features/analytics/utils/analyticsCalculations';
+import { EmptyState } from '../features/mapping/components/shared/EmptyState';
 import RegionalPrintable from './RegionalPrintable';
 
 // These will be dynamically populated from region mappings
@@ -256,7 +257,7 @@ const hasValidVariableData = (
   });
 };
 
-export const RegionalAnalytics: React.FC = () => {
+const RegionalAnalyticsComponent: React.FC = () => {
   // Use smooth progress for dynamic loading
   const { progress, startProgress, completeProgress } = useSmoothProgress({
     duration: 3000,
@@ -1319,22 +1320,8 @@ export const RegionalAnalytics: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">
-                {selectedDataCategory === 'Call Pay' 
-                  ? 'Call Pay by Region' 
-                  : selectedDataCategory === 'Compensation' 
-                  ? 'Regional Compensation Analytics'
-                  : 'Regional Analytics'}
-              </h3>
-              <p className="text-gray-600 text-sm">
-                {selectedDataCategory === 'Call Pay'
-                  ? 'Analyze regional call pay rates across percentiles'
-                  : 'Choose filters to analyze regional compensation patterns'}
-              </p>
-            </div>
             {/* Print, Export, and Clear Filters Buttons - Top Right */}
             <div className="flex items-center gap-2">
               {/* Print Button - Circular Icon */}
@@ -1718,26 +1705,51 @@ export const RegionalAnalytics: React.FC = () => {
 
         </div>
 
-        {/* Empty State - When no specialty is selected */}
-        {!selectedSpecialty && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center max-w-xl w-full border border-dashed border-gray-300 rounded-xl p-10 bg-gray-50">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+        {/* Main Data Container - Matches Fair Market Value screen structure */}
+        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                  {selectedDataCategory === 'Call Pay' 
+                    ? 'Call Pay by Region' 
+                    : selectedDataCategory === 'Compensation' 
+                    ? 'Regional Compensation Analytics'
+                    : 'Regional Analytics'}
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {selectedDataCategory === 'Call Pay'
+                    ? 'Analyze regional call pay rates across percentiles'
+                    : 'Choose filters to analyze regional compensation patterns'}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {!selectedSpecialty ? (
+            /* Empty State - No specialty selected */
+            <EmptyState
+              icon={
                 <svg className="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Mapped Regions Found</h3>
-              <p className="text-gray-600 mb-4">
-                Create region mappings to organize and standardize your survey data.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Regional Comparison Data */}
-        {selectedSpecialty && regionalComparisonData.length > 0 && (
-          <div className="mt-6">
+              }
+              title="No Mapped Regions Found"
+              message="Create region mappings to organize and standardize your survey data."
+            />
+          ) : regionalComparisonData.length === 0 ? (
+            /* Empty State - Specialty selected but no data */
+            <EmptyState
+              icon={
+                <svg className="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
+                </svg>
+              }
+              title="No Regional Data Found"
+              message={`No compensation data available for ${formatSpecialtyForDisplay(selectedSpecialty)} across the selected regions.`}
+            />
+          ) : (
+            /* Regional Comparison Data */
             <RegionalComparison 
               data={regionalComparisonData}
               selectedVariables={selectedVariables}
@@ -1770,21 +1782,8 @@ export const RegionalAnalytics: React.FC = () => {
               regionTooltips={regionTooltips}
               onRegionInfoClick={(region) => { setProvenanceRegion(region); setProvenanceOpen(true); }}
             />
-          </div>
-        )}
-
-        {/* Empty State */}
-        {selectedSpecialty && regionalComparisonData.length === 0 && (
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Regional Data Found</h3>
-            <p className="text-gray-600">No compensation data available for {formatSpecialtyForDisplay(selectedSpecialty)} across the selected regions.</p>
-          </div>
-        )}
+          )}
+        </div>
         {/* Provenance Drawer */}
         <Drawer anchor="right" open={provenanceOpen} onClose={() => setProvenanceOpen(false)}>
           <div style={{ width: 420 }} className="p-6">
@@ -1953,5 +1952,8 @@ export const RegionalAnalytics: React.FC = () => {
     </div>
   );
 };
+
+const RegionalAnalytics = memo(RegionalAnalyticsComponent);
+RegionalAnalytics.displayName = 'RegionalAnalytics';
 
 export default RegionalAnalytics; 

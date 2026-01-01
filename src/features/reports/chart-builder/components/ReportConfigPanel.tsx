@@ -27,7 +27,10 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({
       </div>
       <div className="px-6 py-6">
         {onTemplateSelect && (
-          <TemplateSelector onSelectTemplate={onTemplateSelect} />
+          <>
+            <TemplateSelector onSelectTemplate={onTemplateSelect} />
+            <div className="border-t border-gray-200 my-6"></div>
+          </>
         )}
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

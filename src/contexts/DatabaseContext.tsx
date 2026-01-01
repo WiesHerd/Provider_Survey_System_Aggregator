@@ -43,20 +43,20 @@ interface DatabaseProviderProps {
  * Manages IndexedDB initialization and provides global database state
  */
 export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) => {
-  // CRITICAL FIX: Check storage mode BEFORE creating IndexedDB service
-  // This prevents IndexedDB from being initialized when Firebase is the primary storage
-  // ENTERPRISE: Removed Firebase require() check that was causing hangs - only check env var
+  // HYBRID MODE: Always initialize IndexedDB for fallback support
+  // Even when Firebase is primary, IndexedDB is available for seamless fallback
   const [storageMode] = useState(() => {
-    // Check environment variable first (most reliable)
-    const envMode = process.env.REACT_APP_STORAGE_MODE;
-    if (envMode === 'firebase' || envMode === 'indexeddb') {
-      console.log(`📦 DatabaseContext: Storage mode from environment: ${envMode}`);
-      return envMode;
+    // Use centralized storage mode detection
+    try {
+      const { getCurrentStorageMode } = require('../config/storage');
+      const { StorageMode } = require('../services/DataService');
+      const mode = getCurrentStorageMode();
+      console.log(`📦 DatabaseContext: Storage mode detected: ${mode} (hybrid mode enabled)`);
+      return mode;
+    } catch (error) {
+      console.warn('⚠️ DatabaseContext: Could not detect storage mode, defaulting to IndexedDB');
+      return 'indexeddb';
     }
-    
-    // Default to IndexedDB (no Firebase check to prevent hangs)
-    console.log('📦 DatabaseContext: Defaulting to IndexedDB storage (no Firebase check)');
-    return 'indexeddb';
   });
 
   const [state, setState] = useState<DatabaseState>({
@@ -70,32 +70,35 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
   // Use ref to track initialization to prevent race conditions
   const initializationStartedRef = React.useRef(false);
 
-  // Only create IndexedDB service if IndexedDB is the active storage mode
+  // HYBRID MODE: Always create IndexedDB service for fallback support
+  // This ensures IndexedDB is ready even when Firebase is primary storage
   const [service] = useState(() => {
-    if (storageMode !== 'indexeddb') {
-      console.log(`📦 DatabaseContext: Skipping IndexedDB service creation - using ${storageMode} storage`);
-      return null;
-    }
+    console.log('🔧 DatabaseContext: Initializing IndexedDB service (always available for fallback)');
     return new IndexedDBService();
   });
 
   // Initialize database on mount
   const initialize = useCallback(async () => {
-    // If not using IndexedDB, mark as ready immediately
-    if (storageMode !== 'indexeddb' || !service) {
-      console.log(`📦 DatabaseContext: Skipping IndexedDB initialization - using ${storageMode} storage`);
-      setState(prev => {
-        if (prev.isReady) return prev; // Already ready, don't update
-        return {
-          ...prev,
-          isReady: true, // Mark as ready since we're using Firebase
-          isInitializing: false,
-          healthStatus: 'healthy',
-          error: null,
-          lastChecked: Date.now()
-        };
-      });
+    // HYBRID MODE: Always initialize IndexedDB, even when Firebase is primary
+    // This ensures IndexedDB is ready for fallback if Firebase fails
+    if (!service) {
+      console.error('❌ DatabaseContext: IndexedDB service not available');
+      setState(prev => ({
+        ...prev,
+        isReady: false,
+        isInitializing: false,
+        healthStatus: 'unhealthy',
+        error: 'IndexedDB service not available',
+        lastChecked: Date.now()
+      }));
       return;
+    }
+
+    // If using Firebase as primary, still initialize IndexedDB for fallback
+    // but mark as ready faster (IndexedDB is backup, Firebase handles primary operations)
+    const isFirebasePrimary = storageMode === 'firebase';
+    if (isFirebasePrimary) {
+      console.log('📦 DatabaseContext: Firebase is primary, initializing IndexedDB for fallback support');
     }
 
     // Prevent multiple simultaneous initializations
@@ -196,12 +199,14 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
 
   // Check database health
   const checkHealth = useCallback(async () => {
+    // HYBRID MODE: Always check IndexedDB health (even when Firebase is primary)
+    // This ensures IndexedDB is ready for fallback
     if (!service) {
-      // If using Firebase, health is always good (IndexedDB not needed)
+      console.error('❌ DatabaseContext: Cannot check health - IndexedDB service not available');
       setState(prev => ({
         ...prev,
-        healthStatus: 'healthy',
-        error: null,
+        healthStatus: 'unhealthy',
+        error: 'IndexedDB service not available',
         lastChecked: Date.now()
       }));
       return;

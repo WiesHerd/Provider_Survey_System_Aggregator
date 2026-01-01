@@ -5,7 +5,7 @@
  * featuring modern drag & drop interface and precision controls.
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -36,7 +36,7 @@ interface SpecialtyBlendingScreenProps {
   onClose?: () => void;
 }
 
-export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = ({
+const SpecialtyBlendingScreenComponent: React.FC<SpecialtyBlendingScreenProps> = ({
   onBlendCreated,
   onClose
 }) => {
@@ -1838,3 +1838,6 @@ export const SpecialtyBlendingScreen: React.FC<SpecialtyBlendingScreenProps> = (
     </div>
   );
 };
+
+export const SpecialtyBlendingScreen = memo(SpecialtyBlendingScreenComponent);
+SpecialtyBlendingScreen.displayName = 'SpecialtyBlendingScreen';

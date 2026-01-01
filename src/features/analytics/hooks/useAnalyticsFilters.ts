@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AnalyticsFilters } from '../types/analytics';
 import { performanceMonitor } from '../../../shared/utils/performance';
+import { getDataService } from '../../../services/DataService';
 
 interface UseAnalyticsFiltersReturn {
   filters: AnalyticsFilters;
@@ -31,27 +32,42 @@ export const useAnalyticsFilters = (
     year: ''
   }
 ): UseAnalyticsFiltersReturn => {
-  // State management with localStorage persistence
-  const [filters, setFilters] = useState<AnalyticsFilters>(() => {
-    try {
-      const savedFilters = localStorage.getItem('analyticsFilters');
-      if (savedFilters) {
-        return JSON.parse(savedFilters);
-      }
-    } catch (error) {
-      console.warn('Failed to load saved filters:', error);
-    }
-    return initialFilters;
-  });
+  // State management with DataService persistence
+  const [filters, setFilters] = useState<AnalyticsFilters>(initialFilters);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Save filters to localStorage whenever they change
+  // Load filters from DataService on mount
   useEffect(() => {
-    try {
-      localStorage.setItem('analyticsFilters', JSON.stringify(filters));
-    } catch (error) {
-      console.warn('Failed to save filters:', error);
+    const loadFilters = async () => {
+      try {
+        const dataService = getDataService();
+        const savedFilters = await dataService.getUserPreference('analyticsFilters');
+        if (savedFilters) {
+          setFilters(savedFilters);
+        }
+      } catch (error) {
+        console.warn('Failed to load saved filters:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadFilters();
+  }, []);
+
+  // Save filters to DataService whenever they change
+  useEffect(() => {
+    if (!isLoading) {
+      const saveFilters = async () => {
+        try {
+          const dataService = getDataService();
+          await dataService.saveUserPreference('analyticsFilters', filters);
+        } catch (error) {
+          console.warn('Failed to save filters:', error);
+        }
+      };
+      saveFilters();
     }
-  }, [filters]);
+  }, [filters, isLoading]);
 
   // Debounced filter change handler
   const debouncedFilterChange = useMemo(

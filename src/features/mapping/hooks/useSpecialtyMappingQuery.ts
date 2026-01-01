@@ -61,16 +61,19 @@ export const useSpecialtyMappingQuery = (
   providerType?: string,
   enabled: boolean = true
 ) => {
-  const queryKey = queryKeys.mappings.specialty();
+  // ENTERPRISE FIX: Include providerType in query key for proper cache separation
+  // This ensures Physician and APP data are cached separately
+  const queryKey = [...queryKeys.mappings.specialty(), providerType || 'all'] as const;
   
   const query = useQuery<SpecialtyMappingData>({
     queryKey,
     queryFn: createQueryFn((signal) => fetchSpecialtyMappingData(providerType, signal)),
     enabled,
-    staleTime: 1000 * 60 * 5, // 5 minutes - mapping data changes on create/delete
-    gcTime: 1000 * 60 * 30, // 30 minutes - keep in cache for 30 minutes
-    refetchOnWindowFocus: true, // Refetch on focus (mappings might be created elsewhere)
+    staleTime: 1000 * 60 * 30, // 30 minutes - mapping data only changes on create/delete (which invalidates cache)
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours - keep in cache for entire session
+    refetchOnWindowFocus: false, // Don't refetch on focus - mappings only change on explicit actions
     refetchOnMount: false, // Use cached data if available (stale-while-revalidate)
+    refetchOnReconnect: false, // Don't refetch on reconnect - data is local
     placeholderData: (previousData) => previousData, // Keep previous data while fetching
   });
   

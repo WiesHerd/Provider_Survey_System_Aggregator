@@ -721,9 +721,29 @@ export class FirestoreService {
     providerType: string,
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
-    if (!this.db || !this.userId) {
-      throw new Error('Firestore not initialized or user not authenticated');
+    // CRITICAL: Check authentication and initialization with detailed error messages
+    if (!this.db) {
+      console.error('❌ FirestoreService: Firestore database not initialized');
+      throw new Error('Firestore database not initialized. Please check your Firebase configuration.');
     }
+    
+    if (!this.userId) {
+      console.error('❌ FirestoreService: User not authenticated');
+      console.error('🔍 Current auth state:', {
+        hasAuth: !!this.auth,
+        currentUser: this.auth?.currentUser,
+        userId: this.userId
+      });
+      throw new Error('User not authenticated. Please sign in to upload surveys.');
+    }
+    
+    console.log('✅ FirestoreService: Ready to upload survey', {
+      userId: this.userId,
+      fileName: file.name,
+      surveyYear,
+      surveyType,
+      providerType
+    });
 
     onProgress?.(10);
 
@@ -764,10 +784,25 @@ export class FirestoreService {
 
     await this.createSurvey(survey);
     onProgress?.(70);
+    
+    console.log('💾 FirestoreService: Survey record created:', {
+      surveyId: survey.id,
+      year: survey.year,
+      yearType: typeof survey.year,
+      providerType: survey.providerType,
+      name: survey.name
+    });
 
     // Save survey data with progress reporting
     await this.saveSurveyData(surveyId, rows, onProgress);
     onProgress?.(100);
+    
+    console.log('✅ FirestoreService: Survey upload completed successfully:', {
+      surveyId,
+      rowCount: rows.length,
+      year: survey.year,
+      providerType: survey.providerType
+    });
 
     return { surveyId, rowCount: rows.length };
   }

@@ -77,13 +77,13 @@ export const useSpecialtyBlending = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Load saved templates from IndexedDB
+  // Load saved templates from Firebase or IndexedDB
   useEffect(() => {
     const loadTemplates = async () => {
       try {
-        const { IndexedDBService } = await import('../../../services/IndexedDBService');
-        const dbService = new IndexedDBService();
-        const savedTemplates = await dbService.getAllBlendTemplates();
+        const { getDataService } = await import('../../../services/DataService');
+        const dataService = getDataService();
+        const savedTemplates = await dataService.getAllBlendTemplates();
         setTemplates(savedTemplates);
         console.log('🔍 useSpecialtyBlending: Loaded', savedTemplates.length, 'templates');
       } catch (error) {
@@ -374,9 +374,9 @@ export const useSpecialtyBlending = ({
 
   const refreshTemplates = useCallback(async () => {
     try {
-      const { IndexedDBService } = await import('../../../services/IndexedDBService');
-      const dbService = new IndexedDBService();
-      const updatedTemplates = await dbService.getAllBlendTemplates();
+      const { getDataService } = await import('../../../services/DataService');
+      const dataService = getDataService();
+      const updatedTemplates = await dataService.getAllBlendTemplates();
       setTemplates(updatedTemplates);
       console.log('🔍 useSpecialtyBlending: Templates refreshed');
     } catch (error) {
@@ -389,9 +389,9 @@ export const useSpecialtyBlending = ({
     setError(null);
     
     try {
-      const { IndexedDBService } = await import('../../../services/IndexedDBService');
-      const dbService = new IndexedDBService();
-      await dbService.deleteBlendTemplate(templateId);
+      const { getDataService } = await import('../../../services/DataService');
+      const dataService = getDataService();
+      await dataService.deleteBlendTemplate(templateId);
       
       setTemplates(prev => prev.filter(t => t.id !== templateId));
       console.log('🔍 useSpecialtyBlending: Template deleted successfully');
@@ -445,19 +445,19 @@ const fetchSpecialtyData = async (specialties: SpecialtyItem[]): Promise<any[]> 
 
 const saveTemplateToStorage = async (template: SpecialtyBlendTemplate): Promise<void> => {
   try {
-    console.log('🔍 Attempting to save template to IndexedDB:', template);
+    console.log('🔍 Attempting to save template:', template);
     
-    // Import the IndexedDB service
-    const { IndexedDBService } = await import('../../../services/IndexedDBService');
-    const dbService = new IndexedDBService();
+    // Import the DataService (works with both IndexedDB and Firebase)
+    const { getDataService } = await import('../../../services/DataService');
+    const dataService = getDataService();
     
-    console.log('🔍 IndexedDB service imported successfully');
+    console.log('🔍 DataService imported successfully');
     
-    // Save the template to IndexedDB
-    await dbService.saveBlendTemplate(template);
-    console.log('✅ Template saved to IndexedDB:', template.name);
+    // Save the template (to Firebase or IndexedDB based on mode)
+    await dataService.saveBlendTemplate(template);
+    console.log('✅ Template saved:', template.name);
   } catch (error) {
-    console.error('❌ Error saving template to IndexedDB:', error);
+    console.error('❌ Error saving template:', error);
     console.error('❌ Error details:', error);
     throw error;
   }

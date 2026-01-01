@@ -77,3 +77,6 @@ export { ClearFilterButton } from './ClearFilterButton';
 
 // Welcome Banner - First-time user guidance
 export { WelcomeBanner, isWelcomeBannerDismissed, resetWelcomeBanner } from './WelcomeBanner';
+
+// Error Boundary - Enterprise-grade error handling
+export { ErrorBoundary } from './ErrorBoundary';

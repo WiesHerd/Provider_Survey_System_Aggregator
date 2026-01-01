@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { useDebouncedValue } from '../../../shared/hooks/useDebouncedValue';
 
 export interface BlendingFilters {
   selectedSurvey: string;
@@ -41,6 +42,9 @@ export const useBlendingFilters = (allData: any[]) => {
   const [selectedRegion, setSelectedRegion] = useState('');
   const [selectedProviderType, setSelectedProviderType] = useState('');
   const [specialtySearch, setSpecialtySearch] = useState('');
+  
+  // Debounce specialty search to avoid excessive filtering on every keystroke
+  const debouncedSpecialtySearch = useDebouncedValue(specialtySearch, 300);
 
   // Cascading filter options - computed based on current selections
   const filterOptions = useMemo((): FilterOptions => {
@@ -170,9 +174,9 @@ export const useBlendingFilters = (allData: any[]) => {
         }
       }
 
-      const matchesSpecialty = !specialtySearch || (() => {
+      const matchesSpecialty = !debouncedSpecialtySearch || (() => {
         // Use flexible word matching for specialty search
-        const searchTerms = specialtySearch.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
+        const searchTerms = debouncedSpecialtySearch.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
         if (searchTerms.length === 0) return true;
         
         const specialtyText = specialtyValue.toLowerCase();
@@ -181,7 +185,7 @@ export const useBlendingFilters = (allData: any[]) => {
 
       return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
     });
-  }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, specialtySearch, safeString]);
+  }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, debouncedSpecialtySearch, safeString]);
 
   return {
     // Filter state

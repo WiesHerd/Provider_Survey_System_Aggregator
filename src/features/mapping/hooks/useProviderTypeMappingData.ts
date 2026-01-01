@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { IProviderTypeMapping, IUnmappedProviderType } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';
 import { useProviderContext } from '../../../contexts/ProviderContext';
+import { getPerformanceOptimizedDataService } from '../../../services/PerformanceOptimizedDataService';
 
 const dataService = getDataService();
 
@@ -108,36 +109,61 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     return filtered;
   }, [learnedMappings, mappedSearchTerm]);
 
-  // Load data
+  // Performance service for caching (5-minute TTL)
+  const performanceService = useMemo(() => getPerformanceOptimizedDataService(), []);
+  
+  // Track last loaded provider type to prevent unnecessary reloads
+  const lastLoadedProviderType = useRef<string | undefined>(undefined);
+  const lastLoadedShowAll = useRef<boolean>(false);
+  const isInitialLoad = useRef(true);
+
+  // Load data with intelligent caching
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      // NEW: If showAllCategories is true, don't filter by data category
-      // This allows cross-category mapping (Call Pay, Physician, APP)
+      // Calculate current provider type filter
       const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
         ? undefined 
         : selectedProviderType;
       
-      // Load actual data from services with provider type filtering
-      const [mappingsData, unmappedData, learnedData] = await Promise.all([
-        dataService.getProviderTypeMappings(dataProviderType),
-        dataService.getUnmappedProviderTypes(dataProviderType),
-        dataService.getLearnedMappings('providerType', dataProviderType)
-      ]);
+      // Skip reload if same parameters and not initial load
+      if (!isInitialLoad.current && 
+          lastLoadedProviderType.current === dataProviderType && 
+          lastLoadedShowAll.current === showAllCategories) {
+        console.log('🎯 Skipping reload - data already loaded with same parameters');
+        return;
+      }
       
-      setMappings(mappingsData);
-      setUnmappedProviderTypes(unmappedData);
-      setLearnedMappings(learnedData || {});
+      setLoading(true);
+      setError(null);
       
+      console.log('🚀 Loading provider type mapping data...', {
+        dataProviderType,
+        showAllCategories
+      });
+      const startTime = performance.now();
+      
+      // Use performance service for caching (5-minute TTL)
+      const data = await performanceService.getProviderTypeMappingData(dataProviderType);
+      
+      const duration = performance.now() - startTime;
+      console.log(`✅ Provider type mapping data loaded in ${duration.toFixed(2)}ms`);
+      
+      setMappings(data.mappings);
+      setUnmappedProviderTypes(data.unmapped);
+      setLearnedMappings(data.learned || {});
+      
+      // Update tracking refs
+      lastLoadedProviderType.current = dataProviderType;
+      lastLoadedShowAll.current = showAllCategories;
+      isInitialLoad.current = false;
       
     } catch (err) {
+      console.error('Error loading provider type mapping data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load provider type mapping data. Please ensure you have uploaded survey data first.');
     } finally {
       setLoading(false);
     }
-  }, [selectedProviderType, showAllCategories]);
+  }, [selectedProviderType, showAllCategories, performanceService]);
 
   // Selection management
   const selectProviderType = useCallback((providerType: IUnmappedProviderType) => {
@@ -256,15 +282,27 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
   }, []);
 
   // Load data on mount and when provider type or toggle changes
-  // CRITICAL FIX: Watch for changes in showAllCategories directly, not just loadData
+  // Only reload if parameters actually changed (prevent infinite loops)
   useEffect(() => {
-    console.log('🔍 useProviderTypeMappingData: Reloading data due to state change:', {
-      selectedProviderType,
-      showAllCategories
-    });
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProviderType, showAllCategories]); // loadData is a useCallback that depends on these values
+    const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
+      ? undefined 
+      : selectedProviderType;
+    
+    // Only reload if parameters changed
+    if (isInitialLoad.current || 
+        lastLoadedProviderType.current !== dataProviderType || 
+        lastLoadedShowAll.current !== showAllCategories) {
+      console.log('🔍 useProviderTypeMappingData: Reloading data due to state change:', {
+        selectedProviderType,
+        showAllCategories,
+        dataProviderType,
+        wasInitialLoad: isInitialLoad.current
+      });
+      loadData();
+    } else {
+      console.log('🎯 useProviderTypeMappingData: Skipping reload - no parameter change');
+    }
+  }, [selectedProviderType, showAllCategories, loadData]);
 
   return {
     // State

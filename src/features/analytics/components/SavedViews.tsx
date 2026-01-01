@@ -53,16 +53,17 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
 }) => {
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
 
-  // Load saved views from localStorage
+  // Load saved views from DataService
   useEffect(() => {
-    const loadSavedViews = () => {
+    const loadSavedViews = async () => {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const views = parsed.map((view: any) => ({
+        const { getDataService } = await import('../../../services/DataService');
+        const dataService = getDataService();
+        const saved = await dataService.getUserPreference(STORAGE_KEY);
+        if (saved && Array.isArray(saved)) {
+          const views = saved.map((view: any) => ({
             ...view,
-            created: new Date(view.created),
+            created: view.created ? new Date(view.created) : new Date(),
             lastUsed: view.lastUsed ? new Date(view.lastUsed) : undefined
           }));
           setSavedViews(views);
@@ -75,10 +76,12 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
     loadSavedViews();
   }, []);
 
-  // Save views to localStorage
-  const saveToStorage = useCallback((views: SavedView[]) => {
+  // Save views to DataService
+  const saveToStorage = useCallback(async (views: SavedView[]) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(views));
+      const { getDataService } = await import('../../../services/DataService');
+      const dataService = getDataService();
+      await dataService.saveUserPreference(STORAGE_KEY, views);
     } catch (error) {
       console.error('Failed to save views:', error);
     }
@@ -90,7 +93,7 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
   }, [onShowSaveModal]);
 
   // Save current view - called from modal
-  const handleSaveView = useCallback(() => {
+  const handleSaveView = useCallback(async () => {
     if (!viewName.trim()) {
       alert('Please enter a view name');
       return;
@@ -113,7 +116,7 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
 
       const updatedViews = [...savedViews, newView];
       setSavedViews(updatedViews);
-      saveToStorage(updatedViews);
+      await saveToStorage(updatedViews);
       
       // Clear the name field and close modal
       onViewNameChange('');
@@ -125,7 +128,7 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
   }, [viewName, filters, selectedVariables, savedViews, saveToStorage, onViewNameChange, onShowSaveModal]);
 
   // Load a saved view from dropdown
-  const handleLoadViewFromDropdown = useCallback((viewId: string) => {
+  const handleLoadViewFromDropdown = useCallback(async (viewId: string) => {
     try {
       const view = savedViews.find(v => v.id === viewId);
       if (!view) return;
@@ -135,7 +138,7 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
         v.id === view.id ? { ...v, lastUsed: new Date() } : v
       );
       setSavedViews(updatedViews);
-      saveToStorage(updatedViews);
+      await saveToStorage(updatedViews);
       
       onLoadView(view);
     } catch (error) {
@@ -145,13 +148,13 @@ export const SavedViews: React.FC<SavedViewsProps> = ({
   }, [savedViews, onLoadView, saveToStorage]);
 
   // Delete a saved view
-  const handleDeleteView = useCallback((viewId: string, e: React.MouseEvent) => {
+  const handleDeleteView = useCallback(async (viewId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent dropdown from closing
     if (window.confirm('Are you sure you want to delete this saved view?')) {
       try {
         const updatedViews = savedViews.filter(v => v.id !== viewId);
         setSavedViews(updatedViews);
-        saveToStorage(updatedViews);
+        await saveToStorage(updatedViews);
       } catch (error) {
         console.error('Failed to delete view:', error);
         alert('Failed to delete view');

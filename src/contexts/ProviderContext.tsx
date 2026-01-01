@@ -9,6 +9,7 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect } 
 import { ProviderType, UIProviderType } from '../types/provider';
 import { providerDataService } from '../services/ProviderDataService';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
+import { getDataService } from '../services/DataService';
 
 // Provider Context State
 interface ProviderContextState {
@@ -145,44 +146,78 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
   // Persistence Logic and Auto-Detection
   useEffect(() => {
     if (enablePersistence) {
-      const savedState = localStorage.getItem('provider-context-state');
-      if (savedState) {
+      const loadSavedState = async () => {
         try {
-          const parsedState = JSON.parse(savedState);
-          if (parsedState.selectedProviderType) {
+          const dataService = getDataService();
+          const savedState = await dataService.getUserPreference('provider-context-state');
+          
+          if (savedState && savedState.selectedProviderType) {
             dispatch({
               type: 'SET_PROVIDER_TYPE',
               payload: { 
-                providerType: parsedState.selectedProviderType,
+                providerType: savedState.selectedProviderType,
                 context: 'persistence'
               }
             });
+            return; // Exit early if we loaded saved state
           }
+          
+          // No saved state - auto-detect available provider types
+          const autoDetectProviderType = async () => {
+            try {
+              const result = await providerTypeDetectionService.detectAvailableProviderTypes();
+              
+              if (result.availableTypes.length > 0) {
+                // Sort by most recent data first, then by survey count
+                const sortedTypes = result.availableTypes.sort((a, b) => {
+                  // First sort by most recent data
+                  if (a.lastUpdated && b.lastUpdated) {
+                    const dateDiff = b.lastUpdated.getTime() - a.lastUpdated.getTime();
+                    if (dateDiff !== 0) return dateDiff;
+                  }
+                  // Then by survey count
+                  return b.surveyCount - a.surveyCount;
+                });
+                
+                // Default to the provider type with most recent data
+                const firstProviderType = sortedTypes[0].type;
+                if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+                  console.log(`🔍 Auto-detected provider type: ${firstProviderType} (${sortedTypes[0].surveyCount} surveys, last updated: ${sortedTypes[0].lastUpdated})`);
+                  dispatch({
+                    type: 'SET_PROVIDER_TYPE',
+                    payload: { 
+                      providerType: firstProviderType,
+                      context: 'auto_detection'
+                    }
+                  });
+                }
+              } else {
+                // No data available - set to a neutral state that shows "No data available"
+                console.log('🔍 No survey data found - Data View will show empty state');
+                // Don't change the provider type - let the UI show "No data available"
+              }
+            } catch (error) {
+              console.error('Failed to auto-detect provider types:', error);
+              // Keep the default but don't force it
+            }
+          };
+          
+          await autoDetectProviderType();
         } catch (error) {
-          console.warn('Failed to parse saved provider context state:', error);
-        }
-      } else {
-        // No saved state - auto-detect available provider types
-        const autoDetectProviderType = async () => {
+          console.warn('Failed to load saved provider context state:', error);
+          // Fallback to auto-detection on error
           try {
             const result = await providerTypeDetectionService.detectAvailableProviderTypes();
-            
             if (result.availableTypes.length > 0) {
-              // Sort by most recent data first, then by survey count
               const sortedTypes = result.availableTypes.sort((a, b) => {
-                // First sort by most recent data
                 if (a.lastUpdated && b.lastUpdated) {
                   const dateDiff = b.lastUpdated.getTime() - a.lastUpdated.getTime();
                   if (dateDiff !== 0) return dateDiff;
                 }
-                // Then by survey count
                 return b.surveyCount - a.surveyCount;
               });
-              
-              // Default to the provider type with most recent data
               const firstProviderType = sortedTypes[0].type;
               if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
-                console.log(`🔍 Auto-detected provider type: ${firstProviderType} (${sortedTypes[0].surveyCount} surveys, last updated: ${sortedTypes[0].lastUpdated})`);
                 dispatch({
                   type: 'SET_PROVIDER_TYPE',
                   payload: { 
@@ -191,28 +226,32 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
                   }
                 });
               }
-            } else {
-              // No data available - set to a neutral state that shows "No data available"
-              console.log('🔍 No survey data found - Data View will show empty state');
-              // Don't change the provider type - let the UI show "No data available"
             }
-          } catch (error) {
-            console.error('Failed to auto-detect provider types:', error);
-            // Keep the default but don't force it
+          } catch (detectionError) {
+            console.error('Failed to auto-detect provider types:', detectionError);
           }
-        };
-        
-        autoDetectProviderType();
-      }
+        }
+      };
+      
+      loadSavedState();
     }
   }, [enablePersistence]);
 
   useEffect(() => {
     if (enablePersistence) {
-      localStorage.setItem('provider-context-state', JSON.stringify({
-        selectedProviderType: state.selectedProviderType,
-        isProviderDetectionEnabled: state.isProviderDetectionEnabled
-      }));
+      const saveState = async () => {
+        try {
+          const dataService = getDataService();
+          await dataService.saveUserPreference('provider-context-state', {
+            selectedProviderType: state.selectedProviderType,
+            isProviderDetectionEnabled: state.isProviderDetectionEnabled
+          });
+        } catch (error) {
+          console.error('Failed to save provider context state:', error);
+        }
+      };
+      
+      saveState();
     }
   }, [state.selectedProviderType, state.isProviderDetectionEnabled, enablePersistence]);
 

@@ -6,6 +6,10 @@ import {
 } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';
 import { useProviderContext } from '../../../contexts/ProviderContext';
+import { useDatabase } from '../../../contexts/DatabaseContext';
+import { useSpecialtyMappingQuery } from './useSpecialtyMappingQuery';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../shared/services/queryClient';
 import { 
   filterUnmappedSpecialties,
   groupSpecialtiesBySurvey,
@@ -72,6 +76,12 @@ interface UseMappingDataReturn {
 export const useMappingData = (): UseMappingDataReturn => {
   // Provider context
   const { selectedProviderType } = useProviderContext();
+  
+  // Database context - check if database is ready
+  const { isReady: isDatabaseReady, isInitializing } = useDatabase();
+  
+  // React Query client for cache invalidation
+  const queryClient = useQueryClient();
   
   // Core state (using old types internally)
   const [mappings, setMappings] = useState<ISpecialtyMapping[]>([]);
@@ -148,54 +158,54 @@ export const useMappingData = (): UseMappingDataReturn => {
   // Default to false (filtered by current Data View selection) to match expected UI behavior
   const [showAllProviderTypes, setShowAllProviderTypes] = useState(false);
   
-  // Data loading
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Checkbox logic: 
-      // - When checked (showAllProviderTypes = true): Show ALL surveys regardless of Data View (override filter)
-      // - When unchecked (showAllProviderTypes = false): Respect Data View selection (filter by selectedProviderType)
-      const dataProviderType = showAllProviderTypes 
-        ? undefined // undefined = show all (override Data View filter)
-        : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType); // Respect Data View selection
-      
-      
-      // ENTERPRISE DEBUG: Log provider type conversion - removed for performance
-      const [mappingsData, unmappedData, learnedData, learnedDataWithSource] = await Promise.all([
-        dataService.getAllSpecialtyMappings(dataProviderType),
-        dataService.getUnmappedSpecialties(dataProviderType),
-        dataService.getLearnedMappings('specialty', dataProviderType),
-        dataService.getLearnedMappingsWithSource('specialty', dataProviderType)
-      ]);
-      
-      
-      // ENTERPRISE DEBUG: Log mappings details - removed for performance
-      
-      // ENTERPRISE DEBUG: Look specifically for MGMA mappings
-      const mgmaMappings = mappingsData.filter(m => 
-        m.sourceSpecialties.some((s: any) => s.surveySource === 'MGMA Physician')
-      );
-      if (mgmaMappings.length > 0) {
-        // MGMA mappings found - logging removed for performance
-      }
-      
-      // ENTERPRISE DEBUG: Log unmapped specialties details - removed for performance
-      
-      setMappings(mappingsData);
-      setUnmappedSpecialties(unmappedData);
-      setLearnedMappings(learnedData || {});
-      setLearnedMappingsWithSource(learnedDataWithSource || []);
+  // ENTERPRISE FIX: Use React Query for Google-style caching
+  // Checkbox logic: 
+  // - When checked (showAllProviderTypes = true): Show ALL surveys regardless of Data View (override filter)
+  // - When unchecked (showAllProviderTypes = false): Respect Data View selection (filter by selectedProviderType)
+  const dataProviderType = showAllProviderTypes 
+    ? undefined // undefined = show all (override Data View filter)
+    : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType); // Respect Data View selection
+  
+  const {
+    data: queryData,
+    loading: queryLoading,
+    error: queryError,
+    refetch: refetchData
+  } = useSpecialtyMappingQuery(
+    dataProviderType,
+    isDatabaseReady && !isInitializing
+  );
+  
+  // Update local state from React Query data
+  useEffect(() => {
+    if (queryData) {
+      setMappings(queryData.mappings);
+      setUnmappedSpecialties(queryData.unmapped);
+      setLearnedMappings(queryData.learned);
+      setLearnedMappingsWithSource(queryData.learnedWithSource);
       
       // Clear selected specialties when data loads to ensure clean state
       setSelectedSpecialties([]);
-    } catch (err) {
-      setError('Failed to load specialty data');
-    } finally {
-      setLoading(false);
     }
-  }, [dataService, selectedProviderType, showAllProviderTypes]);
+  }, [queryData]);
+  
+  // Update loading and error state from React Query
+  useEffect(() => {
+    setLoading(queryLoading);
+  }, [queryLoading]);
+  
+  useEffect(() => {
+    if (queryError) {
+      setError(`Failed to load specialty data: ${queryError}. Please try refreshing the page.`);
+    } else {
+      setError(null);
+    }
+  }, [queryError]);
+  
+  // Data loading function - now just triggers refetch (React Query handles caching)
+  const loadData = useCallback(async () => {
+    await refetchData();
+  }, [refetchData]);
 
   // Reload data on mount and when data category or showAllProviderTypes toggle changes
   // CRITICAL FIX: Include loadData in dependencies to ensure we always use the latest version
@@ -233,6 +243,9 @@ export const useMappingData = (): UseMappingDataReturn => {
     try {
       setError(null);
       
+      // ENTERPRISE FIX: Determine providerType for mapping (needed for proper filtering)
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
       // Create individual mappings for each selected specialty
       const newMappings: ISpecialtyMapping[] = [];
       
@@ -246,13 +259,20 @@ export const useMappingData = (): UseMappingDataReturn => {
           mappingId: ''
         };
 
-        const mapping = await dataService.createSpecialtyMapping({
+        const mappingData: ISpecialtyMapping = {
           id: crypto.randomUUID(),
           standardizedName: specialty.name, // Each specialty maps to itself
           sourceSpecialties: [sourceSpecialty], // Only one source specialty per mapping
           createdAt: new Date(),
           updatedAt: new Date()
-        });
+        };
+        
+        // ENTERPRISE FIX: Include providerType so mapping appears in filtered views
+        if (dataProviderType && (dataProviderType === 'PHYSICIAN' || dataProviderType === 'APP')) {
+          mappingData.providerType = dataProviderType;
+        }
+        
+        const mapping = await dataService.createSpecialtyMapping(mappingData);
         
         // Create learned mapping for future automap runs
         await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name, selectedProviderType);
@@ -260,20 +280,19 @@ export const useMappingData = (): UseMappingDataReturn => {
         newMappings.push(mapping);
       }
       
-      // Update state
-      setMappings(prev => [...prev, ...newMappings]);
-      setUnmappedSpecialties(prev => 
-        prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
-      );
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
+      
+      // Update state (will be updated by React Query refetch)
       setSelectedSpecialties([]);
       
-      // Refresh learned mappings to show the new ones (provider-type specific)
-      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
-      setLearnedMappings(learnedData);
-      
       // Invalidate analytics cache since mappings changed
-      const { cacheInvalidation } = await import('../../analytics/utils/cacheInvalidation');
-      cacheInvalidation.onMappingChanged();
+      try {
+        const { cacheInvalidation } = await import('../../analytics/utils/cacheInvalidation');
+        cacheInvalidation.onMappingChanged();
+      } catch (err) {
+        // Analytics cache invalidation is optional
+      }
       
       // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
@@ -288,6 +307,9 @@ export const useMappingData = (): UseMappingDataReturn => {
     try {
       setError(null);
       
+      // ENTERPRISE FIX: Determine providerType for mapping (needed for proper filtering)
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+      
       // Create individual mappings for each selected specialty
       const newMappings: ISpecialtyMapping[] = [];
       
@@ -301,13 +323,20 @@ export const useMappingData = (): UseMappingDataReturn => {
           mappingId: ''
         };
 
-        const mapping = await dataService.createSpecialtyMapping({
+        const mappingData: ISpecialtyMapping = {
           id: crypto.randomUUID(),
           standardizedName: specialty.name, // Each specialty maps to itself
           sourceSpecialties: [sourceSpecialty], // Only one source specialty per mapping
           createdAt: new Date(),
           updatedAt: new Date()
-        });
+        };
+        
+        // ENTERPRISE FIX: Include providerType so mapping appears in filtered views
+        if (dataProviderType && (dataProviderType === 'PHYSICIAN' || dataProviderType === 'APP')) {
+          mappingData.providerType = dataProviderType;
+        }
+        
+        const mapping = await dataService.createSpecialtyMapping(mappingData);
         
         // Create learned mapping for future automap runs
         await dataService.saveLearnedMapping('specialty', specialty.name, specialty.name, selectedProviderType);
@@ -315,21 +344,16 @@ export const useMappingData = (): UseMappingDataReturn => {
         newMappings.push(mapping);
       }
       
-      // Update state
-      setMappings(prev => [...prev, ...newMappings]);
-      setUnmappedSpecialties(prev => 
-        prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
-      );
-      setSelectedSpecialties([]);
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
       
-      // Refresh learned mappings to show the new ones (provider-type specific)
-      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
-      setLearnedMappings(learnedData);
+      // Update state (will be updated by React Query refetch)
+      setSelectedSpecialties([]);
       // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
       setError('Failed to create individual mappings');
     }
-  }, [selectedSpecialties, dataService, selectedProviderType]);
+  }, [selectedSpecialties, dataService, selectedProviderType, queryClient]);
 
   // Create grouped mapping - all selected specialties in one mapping
   const createGroupedMapping = useCallback(async () => {
@@ -349,63 +373,63 @@ export const useMappingData = (): UseMappingDataReturn => {
         mappingId: ''
       }));
 
-      const mapping = await dataService.createSpecialtyMapping({
+      // ENTERPRISE FIX: Determine providerType for mapping (needed for proper filtering)
+      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : (selectedProviderType as 'PHYSICIAN' | 'APP' | undefined);
+      
+      const mappingData: ISpecialtyMapping = {
         id: crypto.randomUUID(),
         standardizedName,
         sourceSpecialties, // All specialties in one mapping
         createdAt: new Date(),
         updatedAt: new Date()
-      });
+      };
+      
+      // ENTERPRISE FIX: Include providerType so mapping appears in filtered views
+      if (dataProviderType) {
+        mappingData.providerType = dataProviderType;
+      }
+      
+      const mapping = await dataService.createSpecialtyMapping(mappingData);
       
       // Create learned mappings for all specialties in the group
       for (const specialty of selectedSpecialties) {
         await dataService.saveLearnedMapping('specialty', specialty.name, standardizedName, selectedProviderType);
       }
       
-      // Update state
-      setMappings(prev => [...prev, mapping]);
-      setUnmappedSpecialties(prev => 
-        prev.filter(s => !selectedSpecialties.some(selected => selected.id === s.id))
-      );
-      setSelectedSpecialties([]);
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
       
-      // Refresh learned mappings to show the new ones (provider-type specific)
-      const learnedData = await dataService.getLearnedMappings('specialty', selectedProviderType);
-      setLearnedMappings(learnedData);
+      // Update state (will be updated by React Query refetch)
+      setSelectedSpecialties([]);
       // Keep user on unmapped tab to continue mapping more specialties
     } catch (err) {
       setError('Failed to create grouped mapping');
     }
-  }, [selectedSpecialties, dataService, selectedProviderType]);
+  }, [selectedSpecialties, dataService, selectedProviderType, queryClient]);
 
   const deleteMapping = useCallback(async (mappingId: string) => {
     try {
       setError(null);
       await dataService.deleteSpecialtyMapping(mappingId);
       
-      // Update state
-      setMappings(prev => prev.filter(m => m.id !== mappingId));
-      
-      // Refresh unmapped specialties to show the deleted ones - WITH provider type filtering
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
-      const unmappedData = await dataService.getUnmappedSpecialties(dataProviderType);
-      setUnmappedSpecialties(unmappedData);
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
       
       // Switch to unmapped tab
       setActiveTab('unmapped');
     } catch (err) {
       setError('Failed to delete mapping');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, queryClient]);
 
   const clearAllMappings = useCallback(async () => {
     try {
       setError(null);
       await dataService.clearAllSpecialtyMappings();
       
-      // Reset state
-      setMappings([]);
-      setLearnedMappings({});
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
+      
       setActiveTab('unmapped');
       
       // Reload data
@@ -420,21 +444,12 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError(null);
       await dataService.removeLearnedMapping('specialty', original);
       
-      // Clear global analytics cache to force refresh of learned mappings
-      // Note: We would need to import and use the AnalyticsDataService here
-      // For now, the cache will be refreshed on next data fetch
-      
-      // Refresh learned mappings with provider type filtering
-      const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
-      const learnedData = await dataService.getLearnedMappings('specialty', dataProviderType);
-      const learnedDataWithSource = await dataService.getLearnedMappingsWithSource('specialty', dataProviderType);
-      
-      setLearnedMappings(learnedData);
-      setLearnedMappingsWithSource(learnedDataWithSource);
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
     } catch (err) {
       setError('Failed to remove learned mapping');
     }
-  }, [dataService, selectedProviderType]);
+  }, [dataService, queryClient]);
 
   // Clear all learned mappings function
   const clearAllLearnedMappings = useCallback(async () => {
@@ -442,17 +457,12 @@ export const useMappingData = (): UseMappingDataReturn => {
       setError(null);
       await dataService.clearLearnedMappings('specialty');
       
-      // Clear global analytics cache to force refresh of learned mappings
-      // Note: We would need to import and use the AnalyticsDataService here
-      // For now, the cache will be refreshed on next data fetch
-      
-      // Clear learned mappings from state
-      setLearnedMappings({});
-      setLearnedMappingsWithSource([]);
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
     } catch (err) {
       setError('Failed to clear all learned mappings');
     }
-  }, [dataService]);
+  }, [dataService, queryClient]);
 
   const applyAllLearnedMappings = useCallback(async () => {
     try {
@@ -487,14 +497,12 @@ export const useMappingData = (): UseMappingDataReturn => {
         }
       }
       
-      // Refresh all data
-      await loadData();
-      
-      
+      // ENTERPRISE FIX: Invalidate React Query cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappings.specialty() });
     } catch (err) {
       setError('Failed to apply learned mappings');
     }
-  }, [learnedMappings, dataService, loadData]); // Remove selectedProviderType from deps as it's not used directly
+  }, [learnedMappings, dataService, queryClient]);
 
 
   // Utility functions

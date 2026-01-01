@@ -93,7 +93,16 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
   // Update total rows when data changes
   useEffect(() => {
     setTotalRows(rowData?.length || 0);
-  }, [rowData]);
+    // Force grid to refresh when data changes
+    if (gridApi && rowData) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        if (gridApi.setRowData) {
+          gridApi.setRowData(paginatedData || rowData);
+        }
+      }, 0);
+    }
+  }, [rowData, gridApi, paginatedData]);
 
   // Handle page size changes for autoHeight layout
   useEffect(() => {

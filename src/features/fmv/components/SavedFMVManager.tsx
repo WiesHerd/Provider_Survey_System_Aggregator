@@ -26,6 +26,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { SavedFMVCalculation, FMVFilters, CompensationComponent, CompareType, MarketData, UserPercentiles } from '../types/fmv';
 import { formatCurrency } from '../../../shared/utils/formatters';
+import { getDataService } from '../../../services/DataService';
 
 interface SavedFMVManagerProps {
   onLoadCalculation: (calculation: SavedFMVCalculation) => void;
@@ -46,8 +47,6 @@ interface SavedFMVManagerProps {
   };
 }
 
-const STORAGE_KEY = 'saved_fmv_calculations';
-
 export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
   onLoadCalculation,
   onSaveCalculation,
@@ -62,24 +61,30 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
   const [notes, setNotes] = useState('');
   const [selectedCalculation, setSelectedCalculation] = useState<SavedFMVCalculation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load saved calculations from localStorage
+  // Load saved calculations from DataService
   useEffect(() => {
-    const loadSavedCalculations = () => {
+    const loadSavedCalculations = async () => {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          // Convert date strings back to Date objects
-          const calculations = parsed.map((calc: any) => ({
-            ...calc,
-            created: new Date(calc.created),
-            lastModified: new Date(calc.lastModified)
-          }));
-          setSavedCalculations(calculations);
-        }
+        setLoading(true);
+        setError(null);
+        const dataService = getDataService();
+        const calculations = await dataService.getAllFMVCalculations();
+        
+        // Convert date strings back to Date objects if needed
+        const processedCalculations = calculations.map((calc: any) => ({
+          ...calc,
+          created: calc.created instanceof Date ? calc.created : new Date(calc.created),
+          lastModified: calc.lastModified instanceof Date ? calc.lastModified : new Date(calc.lastModified)
+        }));
+        
+        setSavedCalculations(processedCalculations);
       } catch (error) {
+        console.error('Failed to load saved calculations:', error);
         setError('Failed to load saved calculations');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -91,16 +96,7 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
     onCalculationsCountChange?.(savedCalculations.length);
   }, [savedCalculations.length, onCalculationsCountChange]);
 
-  // Save calculations to localStorage
-  const saveToStorage = (calculations: SavedFMVCalculation[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(calculations));
-    } catch (error) {
-      setError('Failed to save calculations');
-    }
-  };
-
-  const handleSaveCalculation = () => {
+  const handleSaveCalculation = async () => {
     if (!providerName.trim()) {
       setError('Please enter a provider name');
       return;
@@ -130,25 +126,34 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
       notes: notes.trim() || undefined
     };
 
-    onSaveCalculation(newCalculation);
+    try {
+      const dataService = getDataService();
+      const savedCalculation: SavedFMVCalculation = {
+        ...newCalculation,
+        id: `fmv_${Date.now()}`,
+        created: new Date(),
+        lastModified: new Date()
+      };
 
-    // Add to local state
-    const savedCalculation: SavedFMVCalculation = {
-      ...newCalculation,
-      id: Date.now().toString(),
-      created: new Date(),
-      lastModified: new Date()
-    };
+      // Save to DataService
+      await dataService.saveFMVCalculation(savedCalculation);
+      
+      // Update local state
+      const updatedCalculations = [...savedCalculations, savedCalculation];
+      setSavedCalculations(updatedCalculations);
+      
+      // Notify parent
+      onSaveCalculation(newCalculation);
 
-    const updatedCalculations = [...savedCalculations, savedCalculation];
-    setSavedCalculations(updatedCalculations);
-    saveToStorage(updatedCalculations);
-
-    // Reset form
-    setProviderName('');
-    setNotes('');
-    setIsSaveDialogOpen(false);
-    setError(null);
+      // Reset form
+      setProviderName('');
+      setNotes('');
+      setIsSaveDialogOpen(false);
+      setError(null);
+    } catch (error) {
+      console.error('Failed to save calculation:', error);
+      setError('Failed to save calculation');
+    }
   };
 
   const handleLoadCalculation = (calculation: SavedFMVCalculation) => {
@@ -163,11 +168,21 @@ export const SavedFMVManager: React.FC<SavedFMVManagerProps> = ({
     setError(null);
   };
 
-  const handleDeleteCalculation = (id: string) => {
-    const updatedCalculations = savedCalculations.filter(calc => calc.id !== id);
-    setSavedCalculations(updatedCalculations);
-    saveToStorage(updatedCalculations);
-    onDeleteCalculation(id);
+  const handleDeleteCalculation = async (id: string) => {
+    try {
+      const dataService = getDataService();
+      await dataService.deleteFMVCalculation(id);
+      
+      // Update local state
+      const updatedCalculations = savedCalculations.filter(calc => calc.id !== id);
+      setSavedCalculations(updatedCalculations);
+      
+      // Notify parent
+      onDeleteCalculation(id);
+    } catch (error) {
+      console.error('Failed to delete calculation:', error);
+      setError('Failed to delete calculation');
+    }
   };
 
   const formatCalculationSummary = (calc: SavedFMVCalculation) => {

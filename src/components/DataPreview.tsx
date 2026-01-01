@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   FormControl,
-  InputLabel,
   MenuItem,
   Select,
   Box,
@@ -13,6 +12,7 @@ import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/util
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
+import { useColumnSizing } from '../shared/hooks/useColumnSizing';
 import AgGridWrapper from './AgGridWrapper';
 
 // Custom header component for pinning columns
@@ -80,7 +80,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const dataService = getDataService();
   
   // Use smooth progress for dynamic loading
-  const { progress, startProgress, completeProgress } = useSmoothProgress({
+  const { progress } = useSmoothProgress({
     duration: 3000,
     maxProgress: 90,
     intervalMs: 100
@@ -136,6 +136,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   useEffect(() => {
     let isCancelled = false;
     let timeoutId: NodeJS.Timeout;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY = 500;
     
     console.log('Data loading effect triggered:', {
       fileId: file.id,
@@ -145,7 +148,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       variable: globalFilters.variable
     });
     
-    const loadSurveyData = async () => {
+    const loadSurveyData = async (attempt: number = 0): Promise<void> => {
       try {
         // Check if file exists and has valid data
         if (!file || !file.id) {
@@ -170,7 +173,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           variable: globalFilters.variable || undefined
         };
         
-        console.log('Loading survey data with filters:', filters);
+        console.log(`Loading survey data (attempt ${attempt + 1}) with filters:`, filters);
         
         const { rows: surveyData } = await dataService.getSurveyData(
           file.id,
@@ -187,6 +190,17 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         if (!isCancelled) {
           // Check if survey data is empty (survey might have been deleted)
           if (surveyData.length === 0) {
+            // Retry if we got empty data on first attempt (might be Firebase not ready)
+            if (attempt < MAX_RETRIES && !originalData.length) {
+              console.log(`No data returned, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+              setTimeout(() => {
+                if (!isCancelled) {
+                  loadSurveyData(attempt + 1);
+                }
+              }, RETRY_DELAY);
+              return;
+            }
+            
             console.log('No survey data found - survey may have been deleted');
             setOriginalData([]);
             setPreviewData([]);
@@ -200,13 +214,49 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           // Store original data for filtering
           setOriginalData(surveyData);
           
-          // Get headers from the first row
+          // ENTERPRISE FIX: Get headers in original Excel/CSV order
+          // First, try to get original headers from survey metadata
           let headers: string[] = [];
-          if (surveyData.length > 0) {
-            headers = Object.keys(surveyData[0]);
+          try {
+            const survey = await dataService.getSurveyById(file.id);
+            if (survey?.metadata?.originalHeaders && Array.isArray(survey.metadata.originalHeaders)) {
+              // Use stored original column order from Excel/CSV file
+              const storedHeaders = survey.metadata.originalHeaders.filter((h: string) => 
+                h && h.trim() && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid'
+              );
+              
+              // Verify all stored headers exist in the data (in case of column mapping changes)
+              if (surveyData.length > 0) {
+                const availableKeys = Object.keys(surveyData[0]);
+                // Use stored order, but only include headers that exist in the data
+                headers = storedHeaders.filter((h: string) => availableKeys.includes(h));
+                // Add any missing headers from data (new columns added after upload)
+                const missingHeaders = availableKeys.filter((k: string) => 
+                  !storedHeaders.includes(k) && 
+                  k.toLowerCase() !== 'id' && 
+                  k.toLowerCase() !== 'surveyid'
+                );
+                headers = [...headers, ...missingHeaders];
+              } else {
+                headers = storedHeaders;
+              }
+              console.log('✅ Using original column order from metadata:', headers);
+            } else {
+              // Fallback: Extract from data (may not preserve order)
+              if (surveyData.length > 0) {
+                headers = Object.keys(surveyData[0]);
+              }
+              console.log('⚠️ Original headers not found in metadata, using Object.keys()');
+            }
+          } catch (error) {
+            // Fallback if survey metadata fetch fails
+            console.warn('Could not fetch survey metadata, using Object.keys():', error);
+            if (surveyData.length > 0) {
+              headers = Object.keys(surveyData[0]);
+            }
           }
           
-          // Hide db identifiers from preview
+          // Hide db identifiers from preview (if not already filtered)
           headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
           const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
           
@@ -218,6 +268,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           });
           setPreviewHeaders(headers);
           setPreviewData(rows);
+          
+          // Force a small delay to ensure state updates propagate
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         if (!isCancelled) {
@@ -226,6 +279,18 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }
       } catch (error) {
         console.error('Error loading survey data:', error);
+        
+        // Retry on error if we haven't exceeded max retries
+        if (attempt < MAX_RETRIES && !originalData.length) {
+          console.log(`Error occurred, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          setTimeout(() => {
+            if (!isCancelled) {
+              loadSurveyData(attempt + 1);
+            }
+          }, RETRY_DELAY);
+          return;
+        }
+        
         onError('Error loading survey data from backend');
         if (!isCancelled) {
           setIsLoading(false);
@@ -234,12 +299,15 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       }
     };
 
-    // Debounce to prevent rapid API calls when filters change
+    // Initial delay to allow Firebase/auth to initialize, then load data
+    // Use a longer delay on first mount to ensure Firebase is ready
+    const initialDelay = !originalData.length ? 300 : 100;
+    
     timeoutId = setTimeout(() => {
       if (file.id) {
-        loadSurveyData();
+        loadSurveyData(0);
       }
-    }, 100); // Reduced debounce time for better responsiveness
+    }, initialDelay);
 
     return () => {
       isCancelled = true;
@@ -370,49 +438,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
-  // Google-style intelligent column sizing
-  useEffect(() => {
-    if (gridApi && filteredData.length > 0) {
-      const intelligentSizing = () => {
-        try {
-          if (gridApi) {
-            // Step 1: Auto-size based on content to get natural widths
-            if (gridApi.autoSizeAllColumns) {
-              gridApi.autoSizeAllColumns();
-            }
-            
-            // Step 2: Get the grid's available width
-            const gridWidth = gridApi.getDisplayedColumns().reduce((total: number, col: any) => {
-              return total + (col.getActualWidth() || 0);
-            }, 0);
-            
-            // Step 3: If we have extra space, distribute it intelligently
-            const containerWidth = gridApi.getDisplayedColumns().length > 0 ? 
-              gridApi.getDisplayedColumns()[0].getGridApi().getDisplayedColumns().reduce((total: number, col: any) => {
-                return total + (col.getActualWidth() || 0);
-              }, 0) : 0;
-            
-            // Step 4: Use sizeColumnsToFit to fill remaining space intelligently
-            if (gridApi.sizeColumnsToFit) {
-              gridApi.sizeColumnsToFit();
-            }
-            
-            console.log('Google-style intelligent sizing applied');
-          }
-        } catch (error) {
-          console.log('Intelligent sizing failed:', error);
-        }
-      };
-      
-      // Multiple attempts with progressive delays for more reliable rendering
-      intelligentSizing(); // Immediate
-      setTimeout(intelligentSizing, 100);
-      setTimeout(intelligentSizing, 300);
-      setTimeout(intelligentSizing, 500);
-      setTimeout(intelligentSizing, 800);
-      setTimeout(intelligentSizing, 1200);
-    }
-  }, [gridApi, filteredData, file]);
+  // Enterprise-grade column sizing with ResizeObserver support
+  useColumnSizing({
+    gridApi,
+    enabled: !!gridApi && filteredData.length > 0
+  });
 
   const createColumnDefs = () => {
     // Use the stored headers
@@ -475,21 +505,19 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         sortable: true,
         filter: isNumeric ? 'agNumberColumnFilter' : 'agTextColumnFilter',
         resizable: true,
-        // Google-style intelligent column sizing
-        // Benchmark/variable columns need width constraint to prevent overflow
+        // Enterprise column sizing: minWidth for readability, flex for distribution
+        // No maxWidth - let flex handle proportional distribution
         minWidth: isSpecialty ? 250 : isVariable ? 180 : isNumeric ? 90 : 130,
-        maxWidth: isSpecialty ? 400 : isVariable ? 220 : isNumeric ? 120 : 200,
         // Smart flex ratios based on content importance and typical length
         flex: isSpecialty ? 3 : isVariable ? 2 : isNumeric ? 1 : 1.5,
-        // Enable text wrapping for long content BUT limit to prevent overflow
-        wrapText: false, // Disable wrapping - use truncation instead for better control
-        autoHeight: false, // Disable auto-height to prevent row expansion
-        // Apply CSS for text truncation on variable/benchmark columns
+        // Disable wrapping - use truncation instead for better control
+        wrapText: false,
+        autoHeight: false,
+        // Apply CSS for text truncation on variable/benchmark columns (visual only, not sizing)
         cellStyle: isVariable ? {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: '220px'
+          whiteSpace: 'nowrap'
         } : undefined,
         tooltipValueGetter: isVariable ? (params: any) => params.value || '' : undefined, // Show full text on hover
         cellClass: isNumeric ? 'ag-right-aligned-cell' : (isSpecialty ? 'font-semibold' : undefined),
@@ -855,6 +883,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           </div>
         )}
         <AgGridWrapper
+            key={`grid-${file.id}-${previewData.length}-${previewHeaders.length}`}
             onGridReady={(params: any) => {
               setGridApi(params.api);
               setColumnApi(params.columnApi);
@@ -864,31 +893,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                 onGridReady(params.api);
                 console.log('Grid API passed to parent component');
               }
-              
-              // Google-style intelligent sizing when grid is ready
-              if (params.api) {
-                const intelligentSizing = () => {
-                  try {
-                    // Step 1: Auto-size based on content
-                    if (params.api.autoSizeAllColumns) {
-                      params.api.autoSizeAllColumns();
-                    }
-                    // Step 2: Size to fit container intelligently
-                    if (params.api.sizeColumnsToFit) {
-                      params.api.sizeColumnsToFit();
-                    }
-                    console.log('Initial intelligent sizing successful');
-                  } catch (error) {
-                    console.log('Initial intelligent sizing failed:', error);
-                  }
-                };
-                
-                // Multiple attempts with progressive delays for more reliable sizing
-                setTimeout(intelligentSizing, 100);
-                setTimeout(intelligentSizing, 300);
-                setTimeout(intelligentSizing, 600);
-                setTimeout(intelligentSizing, 1000);
-              }
+              // Column sizing is handled by useColumnSizing hook
             }}
             rowData={filteredData.map((row) => {
               const obj: Record<string, string> = {};

@@ -289,7 +289,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
               cursor: 'pointer',
               '&:hover': { opacity: 0.7 }
             }}
-            onClick={handleSectionToggle('isUploadSectionCollapsed')}
+            onClick={() => handleSectionToggle('isUploadSectionCollapsed')}
           >
             {sectionState.isUploadSectionCollapsed ? (
               <ChevronRightIcon style={{ width: 20, height: 20 }} />

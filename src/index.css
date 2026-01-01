@@ -114,4 +114,29 @@ input, select, textarea, button {
   margin-right: 8px; /* Match table right margin */
   width: calc(100% - 16px); /* Account for left and right margins */
   box-sizing: border-box; /* Include borders in width calculation */
+}
+
+/* Beautiful animations for user menu dropdown */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation: slideUp 0.2s ease-out, fadeIn 0.2s ease-out;
 } 

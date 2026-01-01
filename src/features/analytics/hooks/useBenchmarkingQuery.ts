@@ -51,8 +51,9 @@ export interface UseBenchmarkingQueryReturn {
 
 /**
  * Fetch function for benchmarking data
+ * Exported for use in prefetching
  */
-async function fetchBenchmarkingData(
+export async function fetchBenchmarkingData(
   filters: AnalyticsFilters,
   signal?: AbortSignal
 ): Promise<BenchmarkingQueryData> {
@@ -144,8 +145,9 @@ export const useBenchmarkingQuery = (
     enabled: true,
     staleTime: 1000 * 60 * 60 * 24, // 24 hours - benchmarking data changes only on upload
     gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days - keep in cache for a week
-    refetchOnWindowFocus: true, // Refresh on window focus
+    refetchOnWindowFocus: false, // Don't refetch on focus - data only changes on upload (which invalidates cache)
     refetchOnMount: false, // Don't refetch if data is fresh (stale-while-revalidate)
+    refetchOnReconnect: false, // Don't refetch on reconnect - data is local
     placeholderData: (previousData) => previousData, // Keep previous data while fetching new data (v5 API)
   });
 

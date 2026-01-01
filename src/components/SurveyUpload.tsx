@@ -12,6 +12,7 @@ import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useSurveyListQuery } from '../features/upload/hooks/useSurveyListQuery';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
+import { getPerformanceOptimizedDataService } from '../services/PerformanceOptimizedDataService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
 import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
@@ -593,12 +594,46 @@ const SurveyUpload: React.FC = () => {
       setIsDeletingAll(false);
       startProgress(); // Start smooth progress animation
       
-      await dataService.deleteSurvey(surveyToDelete.id);
+      console.log(`🗑️ Deleting survey: ${surveyToDelete.id}`);
+      
+      // ENTERPRISE: Use deleteWithVerification for atomic deletion
+      const deleteResult = await dataService.deleteWithVerification(surveyToDelete.id);
+      
+      if (!deleteResult.success) {
+        throw new Error(deleteResult.error || 'Delete verification failed');
+      }
+      
+      // ENTERPRISE: Verify deletion before proceeding with cache invalidation
+      const { verifySurveyDeletion, invalidateAllCachesAfterDelete, notifySurveyDeletion } = require('../shared/utils/deleteHelpers');
+      const isDeleted = await verifySurveyDeletion(dataService, surveyToDelete.id);
+      
+      if (!isDeleted) {
+        console.warn('⚠️ Survey deletion verification failed - survey may still exist');
+        // Continue anyway, but log the warning
+      }
+      
+      // ENTERPRISE: Use unified cache invalidation helpers
+      await invalidateAllCachesAfterDelete(surveyToDelete.id);
+      
+      // Update local state immediately
       setUploadedSurveys(prev => prev.filter(s => s.id !== surveyToDelete.id));
       
       if (selectedSurvey === surveyToDelete.id) {
         setSelectedSurvey(null);
       }
+      
+      // Force immediate refetch to update UI (now that all caches are cleared)
+      try {
+        await refetchSurveys();
+        console.log('✅ Refetched survey list after deletion');
+      } catch (error) {
+        console.warn('Failed to refetch survey list:', error);
+      }
+      
+      // Notify other components of deletion
+      notifySurveyDeletion(surveyToDelete.id);
+      
+      console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
       
       completeProgress(); // Complete progress animation
       
@@ -608,7 +643,9 @@ const SurveyUpload: React.FC = () => {
         setSurveyToDelete(null);
       }, 1000);
     } catch (error) {
-      handleError('Error removing survey');
+      console.error('❌ Error deleting survey:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      handleError(`Error removing survey: ${errorMessage}`);
       completeProgress(); // Complete progress even on error
       
       // Close modal after a delay even on error
@@ -906,10 +943,12 @@ const SurveyUpload: React.FC = () => {
     const surveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
     
     // Build survey object - CRITICAL: Never include undefined values
+    // ENTERPRISE FIX: Ensure year is always stored as string for consistent filtering
+    const surveyYearString = String(surveyYear).trim();
     const survey: any = {
       id: surveyId,
       name: surveyName,
-      year: surveyYear,
+      year: surveyYearString, // CRITICAL: Always store as string for consistent filtering
       // NEW FIELDS
       dataCategory: finalDataCategory as 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM',
       source: finalSource,
@@ -932,6 +971,17 @@ const SurveyUpload: React.FC = () => {
         originalHeaders: headers.filter(h => h && h.trim())
       }
     };
+    
+    // CRITICAL DEBUG: Log survey object before saving
+    console.log('💾 Survey object to save:', {
+      id: survey.id,
+      name: survey.name,
+      year: survey.year,
+      yearType: typeof survey.year,
+      providerType: survey.providerType,
+      source: survey.source,
+      dataCategory: survey.dataCategory
+    });
     
     // Only add surveyLabel if it has a value (never add undefined)
     if (safeSurveyLabel) {
@@ -1187,18 +1237,80 @@ const SurveyUpload: React.FC = () => {
       // State already updated above, just set the flag to prevent useEffect override
       setJustUploaded(true);
       
+      // CRITICAL FIX: Clear performance cache BEFORE invalidating React Query cache
+      // The performance cache stores survey list data with keys like "all_surveys_2025_PHYSICIAN"
+      // If we don't clear it, refetchSurveys() will return stale cached data
+      try {
+        const { getPerformanceOptimizedDataService } = require('../services/PerformanceOptimizedDataService');
+        const performanceService = getPerformanceOptimizedDataService();
+        // Clear all survey list cache entries (pattern matches "all_surveys_*")
+        performanceService.clearCache('all_surveys');
+        console.log('✅ Cleared performance cache for survey list');
+      } catch (error) {
+        console.warn('Failed to clear performance cache:', error);
+      }
+      
       // ENTERPRISE FIX: Invalidate React Query cache to trigger automatic refetch
       // This ensures the survey list is updated immediately with the new survey
       try {
         const { queryClient } = require('../shared/services/queryClient');
+        
+        // CRITICAL FIX: Add delay to ensure database transaction is fully committed
+        // Database operations (IndexedDB/Firestore) are asynchronous and may not be immediately visible
+        // Firestore has eventual consistency, so a small delay ensures data is queryable
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Invalidate all survey list queries (for all year/providerType combinations)
-        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
+        queryClient.queryClient.invalidateQueries({ 
+          queryKey: ['surveys', 'list'],
+          exact: false // Invalidate all queries that start with ['surveys', 'list']
+        });
         console.log('✅ Invalidated survey list cache after upload - React Query will refetch automatically');
         
         // ENTERPRISE FIX: Explicitly refetch to ensure immediate update
         // This ensures survey pills appear immediately without page refresh
         await refetchSurveys();
         console.log('✅ Refetched survey list after upload');
+        
+        // CRITICAL DEBUG: Verify survey was saved by checking database directly
+        // Find survey by name and year since surveyId is not in scope here
+        console.log('🔍 Verifying survey was saved...');
+        const savedSurveys = await dataService.getAllSurveys();
+        
+        // Build expected survey name to find it
+        const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
+        const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
+        const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+        const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
+          : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+          : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
+          : finalDataCategory;
+        const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
+        const labelSuffix = safeSurveyLabel ? ` - ${safeSurveyLabel}` : '';
+        const expectedSurveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
+        const surveyYearString = String(surveyYear).trim();
+        
+        const savedSurvey = savedSurveys.find(s => 
+          s.name === expectedSurveyName && 
+          String(s.year || '').trim() === surveyYearString
+        );
+        
+        if (savedSurvey) {
+          console.log('✅ Survey verified in database:', {
+            id: savedSurvey.id,
+            name: savedSurvey.name,
+            year: savedSurvey.year,
+            providerType: savedSurvey.providerType,
+            source: savedSurvey.source
+          });
+        } else {
+          console.error('❌ Survey NOT found in database after upload!', {
+            expectedName: expectedSurveyName,
+            expectedYear: surveyYearString,
+            totalSurveys: savedSurveys.length,
+            allSurveyNames: savedSurveys.map(s => ({ name: s.name, year: s.year }))
+          });
+        }
       } catch (error) {
         console.warn('Failed to invalidate/refetch query cache:', error);
       }
@@ -1295,6 +1407,50 @@ const SurveyUpload: React.FC = () => {
       setUploadedSurveys([]);
       setSelectedSurvey(null);
       setGridApi(null); // Clear grid API reference
+      
+      // CRITICAL FIX: Clear performance cache BEFORE invalidating React Query cache
+      // The performance cache stores survey list data with keys like "all_surveys_2025_PHYSICIAN"
+      // If we don't clear it, refetchSurveys() will return stale cached data
+      try {
+        const performanceService = getPerformanceOptimizedDataService();
+        // Clear all survey list cache entries (pattern matches "all_surveys_*")
+        performanceService.clearCache('all_surveys');
+        console.log('✅ Cleared performance cache for survey list');
+      } catch (error) {
+        console.warn('Failed to clear performance cache:', error);
+      }
+      
+      // Invalidate React Query cache to ensure UI refreshes
+      try {
+        const { queryClient } = require('../shared/services/queryClient');
+        // Invalidate all survey list queries (matches queryKeys.surveyList pattern)
+        queryClient.queryClient.invalidateQueries({ 
+          queryKey: ['surveys', 'list'],
+          exact: false // Invalidate all queries that start with ['surveys', 'list']
+        });
+        // Invalidate all survey data queries
+        queryClient.queryClient.invalidateQueries({ 
+          queryKey: ['surveyData'],
+          exact: false
+        });
+        console.log('✅ Invalidated React Query cache after clear all');
+        
+        // Force immediate refetch to update UI
+        await refetchSurveys();
+        console.log('✅ Refetched survey list after clear all');
+      } catch (error) {
+        console.warn('Failed to invalidate/refetch query cache:', error);
+      }
+      
+      // Invalidate analytics cache since all data was removed
+      try {
+        const { AnalyticsDataService } = require('../services/AnalyticsDataService');
+        const analyticsService = new AnalyticsDataService();
+        analyticsService.invalidateCache();
+        console.log('✅ Invalidated analytics cache after clear all');
+      } catch (error) {
+        console.warn('Failed to invalidate analytics cache:', error);
+      }
       
       // Trigger storage event to notify other components
       window.dispatchEvent(new StorageEvent('storage', {
@@ -1442,50 +1598,109 @@ const SurveyUpload: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Upload New Survey</h3>
               </div>
               {!isUploadSectionCollapsed && (
-                <div className="relative group">
-                  <button
-                    onClick={() => {
-                      // Validate required fields for sample generation
-                      if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
-                        setError('Please select Data Category first');
-                        return;
+                <div className="flex items-center gap-3">
+                  {/* Upload Button - Matches mapping screen button style (minimal, white/grey) */}
+                  {files.length === 0 ? (
+                    // File selection button (matches "Select" button style)
+                    <div {...getRootProps()} className="relative">
+                      <input {...getInputProps()} />
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500"
+                        disabled={isUploading || isValidating}
+                      >
+                        <CloudArrowUpIcon className="h-4 w-4" />
+                        <span>Select File</span>
+                      </button>
+                    </div>
+                  ) : (
+                    // Upload button (matches mapping screen style - white with border, or indigo when active)
+                    <button
+                      type="button"
+                      onClick={handleSurveyUpload}
+                      disabled={
+                        !surveyYear || 
+                        isUploading ||
+                        isValidating ||
+                        // Data category validation
+                        !dataCategory ||
+                        (dataCategory === 'CUSTOM' && !customDataCategory.trim()) ||
+                        // Survey source validation
+                        !surveySource ||
+                        (surveySource === 'Custom' && !customSurveySource.trim()) ||
+                        // Provider type validation  
+                        (providerType === 'CUSTOM' && !customProviderType.trim()) ||
+                        // Critical validation errors (check both old and new validation)
+                        (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') || false) ||
+                        (columnValidation && !columnValidation.isValid) ||
+                        (validationResult && !validationResult.canProceed)
                       }
-                      if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
-                        setError('Please select Provider Type first');
-                        return;
-                      }
-                      try {
-                        // Generate sample based on selected Data Category and Provider Type
-                        // For Google-style UX: Sample matches the exact structure user selected
-                        const sampleProviderType = dataCategory === 'CALL_PAY' ? 'CALL' 
-                          : dataCategory === 'MOONLIGHTING' ? 'CALL' // Moonlighting uses similar structure to Call Pay
-                          : (providerType === 'CUSTOM' ? undefined : providerType);
-                        
-                        const surveySourceName = surveySource === 'Custom' && customSurveySource 
-                          ? customSurveySource 
-                          : surveySource || 'Sample';
-                        
-                        const dataCategoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
-                          : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-                          : dataCategory === 'CUSTOM' ? customDataCategory
-                          : 'Compensation';
-                        
-                        downloadGeneratedSample(sampleProviderType, `${surveySourceName} ${dataCategoryDisplay}`);
-                      } catch (error) {
-                        console.error('Download failed:', error);
-                        setError('Failed to generate sample file. Please try again.');
-                      }
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
-                    aria-label="Download sample CSV template"
-                  >
-                    <ArrowDownTrayIcon className="h-4 w-4" />
-                  </button>
-                  {/* Tooltip */}
-                  <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                    <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
-                      Download Template
-                      <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isUploading
+                          ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
+                      }`}
+                    >
+                      {isUploading ? (
+                        <>
+                          <div className="w-4 h-4 rounded-full animate-spin border-2 border-white border-t-transparent"></div>
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowUpTrayIcon className="h-4 w-4" />
+                          <span>Upload</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  
+                  {/* Download Template Button - Secondary action (icon-only is fine) */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => {
+                        // Validate required fields for sample generation
+                        if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
+                          setError('Please select Data Category first');
+                          return;
+                        }
+                        if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
+                          setError('Please select Provider Type first');
+                          return;
+                        }
+                        try {
+                          // Generate sample based on selected Data Category and Provider Type
+                          // For Google-style UX: Sample matches the exact structure user selected
+                          const sampleProviderType = dataCategory === 'CALL_PAY' ? 'CALL' 
+                            : dataCategory === 'MOONLIGHTING' ? 'CALL' // Moonlighting uses similar structure to Call Pay
+                            : (providerType === 'CUSTOM' ? undefined : providerType);
+                          
+                          const surveySourceName = surveySource === 'Custom' && customSurveySource 
+                            ? customSurveySource 
+                            : surveySource || 'Sample';
+                          
+                          const dataCategoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
+                            : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+                            : dataCategory === 'CUSTOM' ? customDataCategory
+                            : 'Compensation';
+                          
+                          downloadGeneratedSample(sampleProviderType, `${surveySourceName} ${dataCategoryDisplay}`);
+                        } catch (error) {
+                          console.error('Download failed:', error);
+                          setError('Failed to generate sample file. Please try again.');
+                        }
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
+                      aria-label="Download sample CSV template"
+                    >
+                      <ArrowDownTrayIcon className="h-4 w-4" />
+                    </button>
+                    {/* Tooltip */}
+                    <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                      <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                        Download Template
+                        <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1702,61 +1917,6 @@ const SurveyUpload: React.FC = () => {
                     }}
                   />
                 </div>
-                </div>
-
-                {/* Action Buttons - Browse and Upload (on new row below Survey Label) */}
-                <div className="flex items-center justify-end space-x-3 mt-4">
-                  <div {...getRootProps()} className="flex-shrink-0">
-                    <input {...getInputProps()} />
-                    <button
-                      type="button"
-                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center h-10 min-w-[100px]"
-                      title="Browse for file"
-                    >
-                      <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                      Browse
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSurveyUpload}
-                    disabled={
-                      files.length === 0 || 
-                      !surveyYear || 
-                      isUploading ||
-                      isValidating ||
-                      // Data category validation
-                      !dataCategory ||
-                      (dataCategory === 'CUSTOM' && !customDataCategory.trim()) ||
-                      // Survey source validation
-                      !surveySource ||
-                      (surveySource === 'Custom' && !customSurveySource.trim()) ||
-                      // Provider type validation  
-                      (providerType === 'CUSTOM' && !customProviderType.trim()) ||
-                      // Critical validation errors (check both old and new validation)
-                      (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') || false) ||
-                      (columnValidation && !columnValidation.isValid) ||
-                      (validationResult && !validationResult.canProceed)
-                    }
-                    title={
-                      files.length === 0 ? 'Please select a file to upload' :
-                      !surveyYear ? 'Please enter a survey year' :
-                      !dataCategory ? 'Please select a data category' :
-                      (dataCategory === 'CUSTOM' && !customDataCategory.trim()) ? 'Please enter a custom data category' :
-                      !surveySource ? 'Please select a survey source' :
-                      (surveySource === 'Custom' && !customSurveySource.trim()) ? 'Please enter a custom survey source' :
-                      (providerType === 'CUSTOM' && !customProviderType.trim()) ? 'Please enter a custom provider type' :
-                      isValidating ? 'Validating file...' :
-                      (validationResult && !validationResult.canProceed) ? 'Fix validation errors below to upload' :
-                      (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical')) ? 'Fix file structure errors to upload' :
-                      (columnValidation && !columnValidation.isValid) ? 'Fix column validation errors to upload' :
-                      'Ready to upload'
-                    }
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-sm font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center h-10 min-w-[100px]"
-                  >
-                    <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
-                    {isUploading ? 'Uploading...' : 'Upload'}
-                  </button>
                 </div>
 
                 {/* Validation blocking message */}

@@ -83,18 +83,37 @@ const useAnalyticsData = (
         return;
       }
       
-      // DEBUG: Check if survey data exists for each survey
+      // DEBUG: Check if survey data exists for each survey (batched for performance)
       console.log('🔍 useAnalyticsData: Checking survey data for each survey...');
-      for (const survey of surveys) {
+      if (surveys.length > 0) {
         try {
-          const surveyData = await dataService.getSurveyData(survey.id, {}, { limit: 10 });
-          console.log(`🔍 Survey ${survey.id} (${survey.name}):`, {
-            hasData: surveyData.rows.length > 0,
-            rowCount: surveyData.rows.length,
-            firstRow: surveyData.rows[0] || 'No rows'
+          // Batch all survey data checks in parallel instead of sequential loop
+          const surveyDataChecks = await Promise.allSettled(
+            surveys.map(survey => 
+              dataService.getSurveyData(survey.id, {}, { limit: 10 })
+                .then(surveyData => ({
+                  survey,
+                  surveyData,
+                  hasData: surveyData.rows.length > 0,
+                  rowCount: surveyData.rows.length,
+                  firstRow: surveyData.rows[0] || 'No rows'
+                }))
+            )
+          );
+          
+          surveyDataChecks.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              console.log(`🔍 Survey ${result.value.survey.id} (${result.value.survey.name}):`, {
+                hasData: result.value.hasData,
+                rowCount: result.value.rowCount,
+                firstRow: result.value.firstRow
+              });
+            } else {
+              console.error(`❌ Failed to get data for survey ${surveys[index].id}:`, result.reason);
+            }
           });
         } catch (error) {
-          console.error(`❌ Failed to get data for survey ${survey.id}:`, error);
+          console.error('❌ Error during batch survey data check:', error);
         }
       }
       
