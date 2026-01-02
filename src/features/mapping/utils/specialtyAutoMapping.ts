@@ -7,7 +7,6 @@
  */
 
 import { IUnmappedSpecialty } from '../types/mapping';
-import { Domain } from './domainDetection';
 
 /**
  * Auto-map suggestion interface (kept for type compatibility)
@@ -20,7 +19,7 @@ export interface SpecialtyAutoMapSuggestion {
   reason: string;
   isAmbiguous: boolean;
   candidateCount: number;
-  sourceDomain: Domain;
-  targetDomain: Domain;
+  sourceDomain: string;
+  targetDomain: string;
   domainMismatch: boolean;
 }
