@@ -210,7 +210,6 @@ const SurveyUpload: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [justUploaded, setJustUploaded] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Confirmation dialog states
@@ -313,12 +312,8 @@ const SurveyUpload: React.FC = () => {
 
   // Process React Query data into component format
   useEffect(() => {
-    // Skip processing if we just uploaded (let cache invalidation handle it)
-    if (justUploaded) {
-      setJustUploaded(false);
-      return;
-    }
-
+    // CRITICAL FIX: Always process surveys from React Query, even right after upload
+    // The cache invalidation and refetch will ensure fresh data is available
     if (!rawSurveys || rawSurveys.length === 0) {
       setUploadedSurveys([]);
       if (!selectedSurvey) {
@@ -367,7 +362,7 @@ const SurveyUpload: React.FC = () => {
       // No surveys available, clear selection
       setSelectedSurvey('');
     }
-  }, [rawSurveys, currentYear, selectedSurvey, justUploaded]);
+  }, [rawSurveys, currentYear, selectedSurvey]);
 
   // Update loading state from React Query
   useEffect(() => {
@@ -554,28 +549,38 @@ const SurveyUpload: React.FC = () => {
     setCustomDataCategory(''); // Reset custom data category
     setSurveySource(''); // Reset survey source
     setCustomSurveySource(''); // Reset custom survey source
-    setFiles([]); // Clear any selected file
+    // ENTERPRISE FIX: Don't clear files - user may have already selected a file
+    // setFiles([]); // Clear any selected file
   };
 
   const handleProviderTypeChange = (e: any) => {
     const newProviderType = e.target.value as ProviderType;
     setProviderType(newProviderType);
     setCustomProviderType(''); // Reset custom provider type
-    setFiles([]); // Clear any selected file
+    // ENTERPRISE FIX: Don't clear files - user may have already selected a file
+    // setFiles([]); // Clear any selected file
   };
 
   // CHANGED: Handle survey source change (simplified - just company names)
+  // ENTERPRISE FIX: Don't clear files when survey source changes - this is frustrating UX
   const handleSurveySourceChange = (e: React.ChangeEvent<{ value: unknown }>) => {
     const value = e.target.value as string;
     setIsCustom(value === 'Custom');
     setSurveySource(value);
     setCustomSurveySource(''); // Reset custom survey source
     setCustomSurveyName(''); // Reset custom survey name
-    setFiles([]); // Clear any selected file when survey source changes
+    // ENTERPRISE FIX: Keep the file - user shouldn't have to re-select it
+    // setFiles([]); // Clear any selected file when survey source changes
   };
 
   const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    
+    // ENTERPRISE FIX: Prevent multiple clicks during deletion
+    if (isDeleting) {
+      console.log('⚠️ Delete already in progress, ignoring click');
+      return;
+    }
     
     // Find the survey to delete
     const survey = uploadedSurveys.find(s => s.id === surveyId);
@@ -590,14 +595,20 @@ const SurveyUpload: React.FC = () => {
     if (!surveyToDelete || isDeleting) return; // Prevent multiple clicks
     
     try {
+      // ENTERPRISE FIX: Close confirmation modal immediately when deletion starts
+      // This prevents visual overlap - progress modal will take over cleanly
+      setShowDeleteConfirmation(false);
+      const surveyIdToDelete = surveyToDelete.id; // Store ID before clearing
+      setSurveyToDelete(null);
+      
       setIsDeleting(true);
       setIsDeletingAll(false);
       startProgress(); // Start smooth progress animation
       
-      console.log(`🗑️ Deleting survey: ${surveyToDelete.id}`);
+      console.log(`🗑️ Deleting survey: ${surveyIdToDelete}`);
       
       // ENTERPRISE: Use deleteWithVerification for atomic deletion
-      const deleteResult = await dataService.deleteWithVerification(surveyToDelete.id);
+      const deleteResult = await dataService.deleteWithVerification(surveyIdToDelete);
       
       if (!deleteResult.success) {
         throw new Error(deleteResult.error || 'Delete verification failed');
@@ -605,7 +616,7 @@ const SurveyUpload: React.FC = () => {
       
       // ENTERPRISE: Verify deletion before proceeding with cache invalidation
       const { verifySurveyDeletion, invalidateAllCachesAfterDelete, notifySurveyDeletion } = require('../shared/utils/deleteHelpers');
-      const isDeleted = await verifySurveyDeletion(dataService, surveyToDelete.id);
+      const isDeleted = await verifySurveyDeletion(dataService, surveyIdToDelete);
       
       if (!isDeleted) {
         console.warn('⚠️ Survey deletion verification failed - survey may still exist');
@@ -613,14 +624,20 @@ const SurveyUpload: React.FC = () => {
       }
       
       // ENTERPRISE: Use unified cache invalidation helpers
-      await invalidateAllCachesAfterDelete(surveyToDelete.id);
+      await invalidateAllCachesAfterDelete(surveyIdToDelete);
       
-      // Update local state immediately
-      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyToDelete.id));
-      
-      if (selectedSurvey === surveyToDelete.id) {
-        setSelectedSurvey(null);
+      // ENTERPRISE FIX: Clear selected survey FIRST and update state IMMEDIATELY
+      // This ensures DataPreview unmounts immediately and stops loading
+      if (selectedSurvey === surveyIdToDelete) {
+        setSelectedSurvey(null); // This will unmount DataPreview immediately
       }
+      
+      // Update local state immediately - this also helps unmount DataPreview
+      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyIdToDelete));
+      
+      // Notify other components of deletion IMMEDIATELY (before refetch)
+      // This ensures DataPreview stops loading right away
+      notifySurveyDeletion(surveyIdToDelete);
       
       // Force immediate refetch to update UI (now that all caches are cleared)
       try {
@@ -630,18 +647,9 @@ const SurveyUpload: React.FC = () => {
         console.warn('Failed to refetch survey list:', error);
       }
       
-      // Notify other components of deletion
-      notifySurveyDeletion(surveyToDelete.id);
-      
       console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
       
       completeProgress(); // Complete progress animation
-      
-      // Close modal after a delay to show progress
-      setTimeout(() => {
-        setShowDeleteConfirmation(false);
-        setSurveyToDelete(null);
-      }, 1000);
     } catch (error) {
       console.error('❌ Error deleting survey:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1223,6 +1231,51 @@ const SurveyUpload: React.FC = () => {
       // Process the uploaded data (pass resetTimeout to prevent premature timeout)
       await processUploadedData(parsedRows, file, headers, resetTimeout);
       
+      // CRITICAL FIX: Verify survey was saved before cache invalidation
+      console.log('🔍 Verifying survey was saved to database before cache invalidation...');
+      const savedSurveysBefore = await dataService.getAllSurveys();
+      
+      // Build expected survey name to find it
+      const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
+      const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
+      const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+      const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
+        : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+        : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
+        : finalDataCategory;
+      const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
+      const labelSuffix = safeSurveyLabel ? ` - ${safeSurveyLabel}` : '';
+      const expectedSurveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
+      const surveyYearString = String(surveyYear).trim();
+      
+      const savedSurveyBefore = savedSurveysBefore.find(s => 
+        s.name === expectedSurveyName && 
+        String(s.year || '').trim() === surveyYearString
+      );
+      
+      if (savedSurveyBefore) {
+        console.log('✅ Survey verified in database before cache invalidation:', {
+          id: savedSurveyBefore.id,
+          name: savedSurveyBefore.name,
+          year: savedSurveyBefore.year,
+          providerType: savedSurveyBefore.providerType,
+          source: savedSurveyBefore.source
+        });
+      } else {
+        console.error('❌ Survey NOT found in database before cache invalidation!', {
+          expectedName: expectedSurveyName,
+          expectedYear: surveyYearString,
+          totalSurveys: savedSurveysBefore.length,
+          allSurveyNames: savedSurveysBefore.map(s => ({ name: s.name, year: s.year }))
+        });
+        // Continue anyway - might be a timing issue with IndexedDB
+      }
+      
+      // CRITICAL FIX: Set isUploading to false BEFORE cache invalidation
+      // This allows the query to refetch when cache is invalidated
+      setIsUploading(false);
+      console.log('✅ Upload complete, isUploading set to false - query can now refetch');
+      
       // Clear provider type detection cache and refresh in background (non-blocking)
       setTimeout(async () => {
         try {
@@ -1233,9 +1286,6 @@ const SurveyUpload: React.FC = () => {
           console.error('Failed to refresh provider type detection:', error);
         }
       }, 1000); // 1 second delay to ensure data is fully persisted
-
-      // State already updated above, just set the flag to prevent useEffect override
-      setJustUploaded(true);
       
       // CRITICAL FIX: Clear performance cache BEFORE invalidating React Query cache
       // The performance cache stores survey list data with keys like "all_surveys_2025_PHYSICIAN"
@@ -1261,7 +1311,8 @@ const SurveyUpload: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 500));
         
         // Invalidate all survey list queries (for all year/providerType combinations)
-        queryClient.queryClient.invalidateQueries({ 
+        // CRITICAL FIX: queryClient is the QueryClient instance directly, not queryClient.queryClient
+        queryClient.invalidateQueries({ 
           queryKey: ['surveys', 'list'],
           exact: false // Invalidate all queries that start with ['surveys', 'list']
         });
@@ -1269,50 +1320,45 @@ const SurveyUpload: React.FC = () => {
         
         // ENTERPRISE FIX: Explicitly refetch to ensure immediate update
         // This ensures survey pills appear immediately without page refresh
-        await refetchSurveys();
-        console.log('✅ Refetched survey list after upload');
+        // Since isUploading is now false, the query is enabled and can refetch
+        const refetchResult = await refetchSurveys();
+        console.log('✅ Refetched survey list after upload:', {
+          surveyCount: refetchResult.data?.length || 0,
+          includesNewSurvey: refetchResult.data?.some((s: any) => 
+            s.name === expectedSurveyName && 
+            String(s.year || '').trim() === surveyYearString
+          ) || false
+        });
         
-        // CRITICAL DEBUG: Verify survey was saved by checking database directly
-        // Find survey by name and year since surveyId is not in scope here
-        console.log('🔍 Verifying survey was saved...');
-        const savedSurveys = await dataService.getAllSurveys();
-        
-        // Build expected survey name to find it
-        const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
-        const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
-        const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
-        const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
-          : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-          : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
-          : finalDataCategory;
-        const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
-        const labelSuffix = safeSurveyLabel ? ` - ${safeSurveyLabel}` : '';
-        const expectedSurveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
-        const surveyYearString = String(surveyYear).trim();
-        
-        const savedSurvey = savedSurveys.find(s => 
+        // CRITICAL FIX: If refetch didn't include the new survey, force another refetch
+        // This handles cases where the database transaction hasn't fully committed yet
+        if (!refetchResult.data?.some((s: any) => 
           s.name === expectedSurveyName && 
           String(s.year || '').trim() === surveyYearString
-        );
-        
-        if (savedSurvey) {
-          console.log('✅ Survey verified in database:', {
-            id: savedSurvey.id,
-            name: savedSurvey.name,
-            year: savedSurvey.year,
-            providerType: savedSurvey.providerType,
-            source: savedSurvey.source
-          });
-        } else {
-          console.error('❌ Survey NOT found in database after upload!', {
-            expectedName: expectedSurveyName,
-            expectedYear: surveyYearString,
-            totalSurveys: savedSurveys.length,
-            allSurveyNames: savedSurveys.map(s => ({ name: s.name, year: s.year }))
+        )) {
+          console.warn('⚠️ New survey not found in refetch result, waiting and retrying...');
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          const retryResult = await refetchSurveys();
+          console.log('✅ Retry refetch result:', {
+            surveyCount: retryResult.data?.length || 0,
+            includesNewSurvey: retryResult.data?.some((s: any) => 
+              s.name === expectedSurveyName && 
+              String(s.year || '').trim() === surveyYearString
+            ) || false
           });
         }
+        
       } catch (error) {
-        console.warn('Failed to invalidate/refetch query cache:', error);
+        console.error('❌ Failed to invalidate/refetch query cache:', error);
+        // CRITICAL FIX: Even if cache invalidation fails, try to refetch directly
+        // This ensures surveys appear even if there's a cache issue
+        try {
+          console.log('🔄 Attempting direct refetch after cache invalidation error...');
+          await refetchSurveys();
+          console.log('✅ Direct refetch completed');
+        } catch (refetchError) {
+          console.error('❌ Direct refetch also failed:', refetchError);
+        }
       }
 
       // Clear form and validation state
@@ -1328,9 +1374,7 @@ const SurveyUpload: React.FC = () => {
 
       // Show success message
       completeProgress(); // Complete progress animation
-      setTimeout(() => {
-        setIsUploading(false);
-      }, 1000);
+      // Note: isUploading was already set to false before cache invalidation
 
     } catch (error) {
       console.error('❌ Upload error:', error);
@@ -1424,12 +1468,12 @@ const SurveyUpload: React.FC = () => {
       try {
         const { queryClient } = require('../shared/services/queryClient');
         // Invalidate all survey list queries (matches queryKeys.surveyList pattern)
-        queryClient.queryClient.invalidateQueries({ 
+        queryClient.invalidateQueries({ 
           queryKey: ['surveys', 'list'],
           exact: false // Invalidate all queries that start with ['surveys', 'list']
         });
         // Invalidate all survey data queries
-        queryClient.queryClient.invalidateQueries({ 
+        queryClient.invalidateQueries({ 
           queryKey: ['surveyData'],
           exact: false
         });
@@ -1615,11 +1659,9 @@ const SurveyUpload: React.FC = () => {
                     </div>
                   ) : (
                     // Upload button (matches mapping screen style - white with border, or indigo when active)
-                    <button
-                      type="button"
-                      onClick={handleSurveyUpload}
-                      disabled={
-                        !surveyYear || 
+                    (() => {
+                      const isUploadDisabled =
+                        !surveyYear ||
                         isUploading ||
                         isValidating ||
                         // Data category validation
@@ -1628,31 +1670,46 @@ const SurveyUpload: React.FC = () => {
                         // Survey source validation
                         !surveySource ||
                         (surveySource === 'Custom' && !customSurveySource.trim()) ||
-                        // Provider type validation  
+                        // Provider type validation
                         (providerType === 'CUSTOM' && !customProviderType.trim()) ||
                         // Critical validation errors (check both old and new validation)
                         (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') || false) ||
                         (columnValidation && !columnValidation.isValid) ||
-                        (validationResult && !validationResult.canProceed)
-                      }
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        isUploading
-                          ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500'
-                      }`}
-                    >
-                      {isUploading ? (
-                        <>
-                          <div className="w-4 h-4 rounded-full animate-spin border-2 border-white border-t-transparent"></div>
-                          <span>Uploading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <ArrowUpTrayIcon className="h-4 w-4" />
-                          <span>Upload</span>
-                        </>
-                      )}
-                    </button>
+                        (validationResult && !validationResult.canProceed);
+
+                      // "Ready" means the next step is available and actionable
+                      const isUploadReady = !isUploadDisabled;
+
+                      return (
+                        <button
+                          type="button"
+                          onClick={handleSurveyUpload}
+                          disabled={isUploadDisabled}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isUploading
+                              ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                              : `bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500 ${
+                                  // Tailwind-only "ready" cue (reliable, no custom CSS dependency)
+                                  isUploadReady
+                                    ? 'upload-cta-ready'
+                                    : ''
+                                }`
+                          }`}
+                        >
+                          {isUploading ? (
+                            <>
+                              <div className="w-4 h-4 rounded-full animate-spin border-2 border-white border-t-transparent"></div>
+                              <span>Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowUpTrayIcon className="h-4 w-4" />
+                              <span>Upload</span>
+                            </>
+                          )}
+                        </button>
+                      );
+                    })()
                   )}
                   
                   {/* Download Template Button - Secondary action (icon-only is fine) */}
@@ -2264,18 +2321,22 @@ const SurveyUpload: React.FC = () => {
         />
       )}
       {/* Deleting Progress Modal - Fixed Position Overlay */}
+      {/* ENTERPRISE FIX: Higher z-index to ensure it's above confirmation modal */}
       {isDeleting && (
-        <EnterpriseLoadingSpinner
-          message={isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
-          progress={progress}
-          variant="overlay"
-          loading={isDeleting}
-        />
+        <div className="fixed inset-0 z-[70]">
+          <EnterpriseLoadingSpinner
+            message={isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
+            progress={progress}
+            variant="overlay"
+            loading={isDeleting}
+          />
+        </div>
       )}
 
       {/* Individual Survey Delete Confirmation Modal */}
+      {/* ENTERPRISE FIX: Confirmation modal closes immediately when deletion starts to avoid visual overlap with progress modal */}
       {showDeleteConfirmation && surveyToDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
             <p className="text-sm text-gray-700 mb-6">
@@ -2328,8 +2389,9 @@ const SurveyUpload: React.FC = () => {
       )}
 
       {/* Clear All Surveys Confirmation Modal */}
+      {/* ENTERPRISE FIX: Confirmation modal closes immediately when deletion starts to avoid visual overlap with progress modal */}
       {showClearAllConfirmation && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-white rounded-xl shadow-lg border border-red-400 w-full max-w-sm p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Clear All Surveys</h3>
             <p className="text-sm text-gray-700 mb-6">

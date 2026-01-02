@@ -667,9 +667,13 @@ export const validateFileUpload = (
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Check file type
-  if (!file.name.toLowerCase().endsWith('.csv')) {
-    errors.push('Only CSV files are allowed');
+  // Check file type - support CSV and Excel files
+  const fileName = file.name.toLowerCase();
+  const isCSV = fileName.endsWith('.csv');
+  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+  
+  if (!isCSV && !isExcel) {
+    errors.push('File must be a CSV or Excel file (.csv, .xlsx, .xls)');
   }
 
   // Check file size (10MB limit)

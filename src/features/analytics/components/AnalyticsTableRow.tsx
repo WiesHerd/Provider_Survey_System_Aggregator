@@ -7,6 +7,8 @@
 
 import React, { memo } from 'react';
 import { formatSpecialtyForDisplay, formatRegionForDisplay, formatProviderTypeForDisplay } from '../../../shared/utils/formatters';
+import { sanitizeHtml } from '../../../shared/utils/sanitization';
+import { logger } from '../../../shared/utils/logger';
 import { 
   getVariableLightBackgroundColor,
   mapVariableNameToStandard,
@@ -66,7 +68,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             minWidth: '150px'
           }}
         >
-          {specialty ? formatSpecialtyForDisplay(specialty) : formatSpecialtyForDisplay(row.originalSpecialty)}
+          {specialty ? formatSpecialtyForDisplay(sanitizeHtml(specialty)) : formatSpecialtyForDisplay(sanitizeHtml(row.originalSpecialty))}
         </td>
       )}
       {showSurveySource && (
@@ -84,7 +86,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             minWidth: '120px'
           }}
         >
-          {surveySource || row.surveySource}
+          {sanitizeHtml(surveySource || row.surveySource)}
         </td>
       )}
       {showRegion && (
@@ -102,7 +104,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             minWidth: '100px'
           }}
         >
-          {formatRegionForDisplay(row.geographicRegion)}
+          {formatRegionForDisplay(sanitizeHtml(row.geographicRegion))}
         </td>
       )}
       {showProviderType && (
@@ -120,7 +122,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             minWidth: '120px'
           }}
         >
-          {formatProviderTypeForDisplay(row.providerType || 'Unknown')}
+          {formatProviderTypeForDisplay(sanitizeHtml(row.providerType || 'Unknown'))}
         </td>
       )}
       
@@ -128,7 +130,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
       {selectedVariables.map((varName, varIndex) => {
         // CRITICAL DEBUG: Log variable rendering for first few rows and specific variables
         if (index < 2 && (varName === 'base_salary' || varName === 'on_call_compensation' || varName.includes('base') || varName.includes('on_call'))) {
-          console.log('🔍 AnalyticsTableRow: Rendering variable column:', {
+          logger.debug('🔍 AnalyticsTableRow: Rendering variable column:', {
             rowIndex: index,
             varIndex,
             varName,
@@ -158,7 +160,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
         
         // General debug logging for first few rows
         if (index < 3 && varName === 'Total Cash Compensation Per Work RVUs') {
-          console.log('🔍 General Data Structure Debug:', {
+          logger.debug('🔍 General Data Structure Debug:', {
             index,
             surveySource: legacyRow.surveySource,
             varName,
@@ -177,7 +179,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           
           // CRITICAL DEBUG: Log data lookup for base_salary and other variables that are failing
           if (index < 3 && (varName === 'base_salary' || normalizedVarName === 'base_salary' || !metrics)) {
-            console.log('🔍 AnalyticsTableRow: Variable Data Lookup:', {
+            logger.debug('🔍 AnalyticsTableRow: Variable Data Lookup:', {
               rowIndex: index,
               surveySource: legacyRow.surveySource,
               specialty: legacyRow.standardizedName || legacyRow.surveySpecialty,
@@ -217,7 +219,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
             for (const altKey of alternativeKeys) {
               if (dynamicRow.variables[altKey]) {
                 metrics = dynamicRow.variables[altKey];
-                console.log(`✅ Found Call Pay variable with alternative key: ${altKey} (was looking for ${normalizedVarName})`);
+                logger.debug(`✅ Found Call Pay variable with alternative key: ${altKey} (was looking for ${normalizedVarName})`);
                 break;
               }
             }
@@ -234,7 +236,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
                                   legacyRow.providerType === 'CALL';
           
           if (isCallPayVariable || (isCallPaySurvey && isCallPayVariable)) {
-            console.log('🔍 AnalyticsTableRow: Call Pay Variable Lookup:', {
+            logger.debug('🔍 AnalyticsTableRow: Call Pay Variable Lookup:', {
               index,
               surveySource: legacyRow.surveySource,
               specialty: legacyRow.standardizedName || legacyRow.surveySpecialty,
@@ -257,7 +259,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           
           // Debug logging for dynamic format
           if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan') || legacyRow.surveySource?.toLowerCase().includes('gallagher'))) {
-            console.log('🔍 Dynamic Format TCC per Work RVU Debug:', {
+            logger.debug('🔍 Dynamic Format TCC per Work RVU Debug:', {
               surveySource: legacyRow.surveySource,
               varName,
               normalizedVarName,
@@ -307,7 +309,7 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           
           // Debug logging for TCC per Work RVU data
           if (varName === 'Total Cash Compensation Per Work RVUs' && (legacyRow.surveySource?.toLowerCase().includes('mgma') || legacyRow.surveySource?.toLowerCase().includes('sullivan') || legacyRow.surveySource?.toLowerCase().includes('gallagher'))) {
-            console.log('🔍 TCC per Work RVU Debug:', {
+            logger.debug('🔍 TCC per Work RVU Debug:', {
               surveySource: legacyRow.surveySource,
               varName,
               normalizedVarName,

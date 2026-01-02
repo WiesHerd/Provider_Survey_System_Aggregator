@@ -139,4 +139,31 @@ input, select, textarea, button {
 
 .animate-in {
   animation: slideUp 0.2s ease-out, fadeIn 0.2s ease-out;
-} 
+}
+
+/* Upload CTA: subtle "ready" cue (professional, not flashy) */
+@keyframes uploadCtaPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.14), 0 4px 14px rgba(99, 102, 241, 0.10);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22), 0 6px 18px rgba(99, 102, 241, 0.14);
+  }
+}
+
+/* Works for both plain <button> and MUI Button root */
+.upload-cta-ready,
+.MuiButton-root.upload-cta-ready {
+  /* Visible even if motion is reduced (Google-style subtle “next step” cue) */
+  border-color: rgba(99, 102, 241, 0.58) !important;
+  background-color: rgba(99, 102, 241, 0.03) !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18), 0 4px 14px rgba(99, 102, 241, 0.12) !important;
+  animation: uploadCtaPulse 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-cta-ready,
+  .MuiButton-root.upload-cta-ready {
+    animation: none !important;
+  }
+}

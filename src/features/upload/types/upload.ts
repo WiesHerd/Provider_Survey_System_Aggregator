@@ -131,6 +131,32 @@ export interface UploadProps {
 }
 
 /**
+ * Auto-detection info for form fields
+ */
+export interface AutoDetectionInfo {
+  surveyType?: {
+    value: string;
+    confidence: number;
+    method: 'filename' | 'content' | 'default' | 'none';
+  };
+  surveyYear?: {
+    value: string;
+    confidence: number;
+    method: 'filename' | 'content' | 'default' | 'none';
+  };
+  providerType?: {
+    value: string;
+    confidence: number;
+    method: 'filename' | 'content' | 'none';
+  };
+  dataCategory?: {
+    value: string;
+    confidence: number;
+    method: 'filename' | 'content' | 'none';
+  };
+}
+
+/**
  * Upload form component props
  */
 export interface UploadFormProps {
@@ -138,6 +164,7 @@ export interface UploadFormProps {
   onFormChange: (field: keyof UploadFormState, value: any) => void;
   onCustomToggle: () => void;
   disabled?: boolean;
+  autoDetection?: AutoDetectionInfo;
 }
 
 /**

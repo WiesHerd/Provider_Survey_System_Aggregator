@@ -54,7 +54,12 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   // Default: Allow IndexedDB-only mode if Firebase not available
   const envRequireAuth = process.env.REACT_APP_REQUIRE_AUTH === 'true';
   const isProduction = process.env.NODE_ENV === 'production';
-  const shouldRequireAuth = requireAuth || envRequireAuth;
+  
+  // CRITICAL: In production, always require authentication unless explicitly disabled
+  // This ensures security by default in production environments
+  const shouldRequireAuth = isProduction 
+    ? (envRequireAuth !== false) // In production, require auth unless explicitly disabled
+    : (requireAuth || envRequireAuth); // In development, use prop or env var
   
   // If Firebase is not available
   if (!isAvailable) {
@@ -75,15 +80,40 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
             Authentication Required
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
-            Firebase authentication is required. Please configure Firebase environment variables in Vercel or set REACT_APP_REQUIRE_AUTH=false to allow IndexedDB-only mode.
+            {isProduction 
+              ? 'Firebase authentication is required in production. Please configure Firebase environment variables in Vercel.'
+              : 'Firebase authentication is required. Please configure Firebase environment variables in Vercel or set REACT_APP_REQUIRE_AUTH=false to allow IndexedDB-only mode.'}
           </Typography>
           <SimpleAuthScreen />
         </Box>
       );
     }
     
-    // Allow IndexedDB-only mode (no authentication required)
-    return <>{children}</>;
+    // Allow IndexedDB-only mode (no authentication required) - only in development
+    if (!isProduction) {
+      return <>{children}</>;
+    }
+    
+    // In production, if Firebase is not available and auth is required, show error
+    return (
+      <Box 
+        display="flex" 
+        flexDirection="column"
+        alignItems="center" 
+        justifyContent="center"
+        minHeight="100vh"
+        gap={2}
+        bgcolor="grey.50"
+        p={3}
+      >
+        <Typography variant="h5" color="error" sx={{ mb: 2 }}>
+          Configuration Error
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
+          Firebase authentication is required in production but is not properly configured. Please configure Firebase environment variables.
+        </Typography>
+      </Box>
+    );
   }
 
   // If authentication is required but user is not authenticated

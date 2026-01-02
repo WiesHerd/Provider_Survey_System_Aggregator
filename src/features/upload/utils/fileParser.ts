@@ -1,10 +1,13 @@
 /**
  * Unified file parser for CSV and Excel files
  * Routes files to appropriate parser and returns consistent structure
+ * 
+ * Enterprise-Grade: Uses streaming parser for large files to prevent memory issues
  */
 
 import { readCSVFile } from '../../../shared/utils';
 import { parseCSVContent } from '../../../shared/utils/csvParser';
+import { parseCSVSmart, shouldUseStreaming, type StreamingParseOptions } from '../../../shared/utils/streamingCSVParser';
 import { parseExcelFile } from './excelParser';
 import { ParseResult, FileMetadata } from '../types/validation';
 
@@ -13,11 +16,13 @@ import { ParseResult, FileMetadata } from '../types/validation';
  * 
  * @param file - File to parse (CSV or Excel)
  * @param selectedSheet - Optional sheet name for Excel files
+ * @param options - Streaming parser options (for CSV files)
  * @returns Parse result with headers, rows, and metadata
  */
 export async function parseFile(
   file: File,
-  selectedSheet?: string
+  selectedSheet?: string,
+  options?: StreamingParseOptions
 ): Promise<ParseResult> {
   const fileName = file.name.toLowerCase();
   const fileType = fileName.endsWith('.xlsx') 
@@ -36,26 +41,68 @@ export async function parseFile(
 
   try {
     if (fileType === 'csv') {
-      // Parse CSV file
-      const { text, encoding, issues, normalized } = await readCSVFile(file);
-      
-      if (issues.length > 0) {
-        console.warn('CSV encoding issues detected:', issues);
-      }
-      if (normalized) {
-        console.log('Character normalization applied to CSV file');
-      }
+      // Use streaming parser for large files, traditional parser for small files
+      if (shouldUseStreaming(file.size)) {
+        console.log(`📊 Using streaming parser for file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+        
+        const result = await parseCSVSmart(file, {
+          ...options,
+          onProgress: (progress) => {
+            if (options?.onProgress) {
+              // Convert streaming progress to overall progress
+              const parseProgress = (progress.bytesRead / progress.totalBytes) * 100;
+              options.onProgress({
+                bytesRead: progress.bytesRead,
+                totalBytes: progress.totalBytes,
+                rowsParsed: progress.rowsParsed
+              });
+            }
+          }
+        });
+        
+        if (result.issues.length > 0) {
+          console.warn('CSV encoding issues detected:', result.issues);
+        }
+        if (result.normalized) {
+          console.log('Character normalization applied to CSV file');
+        }
+        
+        // Convert rows from Record<string, string>[] to any[][] (array of arrays)
+        // This matches the expected ParseResult format
+        const rows: any[][] = result.rows.map(row => 
+          result.headers.map(header => row[header] || '')
+        );
+        
+        metadata.rowCount = rows.length;
+        metadata.columnCount = result.headers.length;
 
-      const { headers, rows } = parseCSVContent(text);
-      
-      metadata.rowCount = rows.length;
-      metadata.columnCount = headers.length;
+        return {
+          headers: result.headers,
+          rows,
+          metadata
+        };
+      } else {
+        // Use traditional parser for small files (backward compatibility)
+        const { text, encoding, issues, normalized } = await readCSVFile(file);
+        
+        if (issues.length > 0) {
+          console.warn('CSV encoding issues detected:', issues);
+        }
+        if (normalized) {
+          console.log('Character normalization applied to CSV file');
+        }
 
-      return {
-        headers,
-        rows,
-        metadata
-      };
+        const { headers, rows } = parseCSVContent(text);
+        
+        metadata.rowCount = rows.length;
+        metadata.columnCount = headers.length;
+
+        return {
+          headers,
+          rows,
+          metadata
+        };
+      }
     } else {
       // Parse Excel file
       const excelResult = await parseExcelFile(file, selectedSheet);

@@ -8,6 +8,7 @@ export type UploadStep =
   | 'validating'
   | 'parsing'
   | 'saving'
+  | 'mapping'
   | 'verifying'
   | 'completed'
   | 'error';
@@ -100,6 +101,7 @@ export const UPLOAD_STEP_MESSAGES: Record<UploadStep, string> = {
   validating: 'Validating file format and content...',
   parsing: 'Parsing CSV data...',
   saving: 'Saving to database...',
+  mapping: 'Applying learned mappings...',
   verifying: 'Verifying data integrity...',
   completed: 'Upload completed successfully',
   error: 'Upload failed'

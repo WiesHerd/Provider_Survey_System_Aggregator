@@ -6,7 +6,6 @@
 
 import React from 'react';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import { CircleStackIcon } from '@heroicons/react/24/outline';
 
 interface WorkflowStep {
   id: string;
@@ -53,10 +52,6 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
     }
   ];
 
-  const getStepIndex = (stepId: string) => {
-    return steps.findIndex(s => s.id === stepId);
-  };
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 px-6 py-4">
       <div className="flex items-center justify-between gap-2">
@@ -101,9 +96,9 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
                   </span>
                 </button>
                 
-                {/* Connector Line */}
+                {/* Connector Line - thinner */}
                 {index < steps.length - 1 && (
-                  <div className={`flex-1 h-1 mx-2 transition-colors duration-200 ${
+                  <div className={`flex-1 h-px mx-2 transition-colors duration-200 ${
                     step.completed ? 'bg-purple-600' : 'bg-gray-300'
                   }`} />
                 )}

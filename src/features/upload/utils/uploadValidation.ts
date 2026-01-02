@@ -30,15 +30,19 @@ export interface DuplicateCheckResult {
 }
 
 /**
- * Validate CSV file structure and format
+ * Validate file structure and format (CSV and Excel)
  */
 export const validateCSVStructure = (file: File): ValidationResult => {
   const errors: string[] = [];
   const warnings: string[] = [];
   
-  // Basic file validation
-  if (!file.name.toLowerCase().endsWith('.csv')) {
-    errors.push('File must be a CSV file');
+  // Basic file validation - support CSV and Excel files
+  const fileName = file.name.toLowerCase();
+  const isCSV = fileName.endsWith('.csv');
+  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+  
+  if (!isCSV && !isExcel) {
+    errors.push('File must be a CSV or Excel file (.csv, .xlsx, .xls)');
   }
   
   if (file.size === 0) {
@@ -68,38 +72,38 @@ export const validateCSVStructure = (file: File): ValidationResult => {
 };
 
 /**
- * Parse and validate CSV content
+ * Parse and validate file content (CSV and Excel)
  */
 export const validateCSVContent = async (file: File): Promise<ValidationResult> => {
   const errors: string[] = [];
   const warnings: string[] = [];
   
   try {
-    const text = await file.text();
-    const lines = text.split('\n').filter(line => line.trim());
+    // Use unified parser that handles both CSV and Excel
+    const { parseFile } = await import('./fileParser');
+    const parseResult = await parseFile(file);
     
-    if (lines.length === 0) {
-      errors.push('File contains no data');
+    const headers = parseResult.headers;
+    const rows = parseResult.rows;
+    
+    if (headers.length === 0) {
+      errors.push('No column headers found');
+    }
+    
+    if (rows.length === 0) {
+      errors.push('File contains no data rows');
       return {
         isValid: false,
         errors,
         warnings,
         details: {
           rowCount: 0,
-          columnCount: 0,
-          detectedColumns: [],
+          columnCount: headers.length,
+          detectedColumns: headers,
           dataTypes: {},
           sampleData: []
         }
       };
-    }
-    
-    // Parse header row
-    const headerLine = lines[0];
-    const headers = parseCSVLine(headerLine);
-    
-    if (headers.length === 0) {
-      errors.push('No column headers found');
     }
     
     // Check for required columns
@@ -112,35 +116,19 @@ export const validateCSVContent = async (file: File): Promise<ValidationResult> 
       warnings.push(`Missing recommended columns: ${missingRequired.join(', ')}`);
     }
     
-    // Parse data rows
-    const dataRows: Record<string, any>[] = [];
-    for (let i = 1; i < Math.min(lines.length, 1001); i++) { // Limit to 1000 rows for validation
-      const line = lines[i].trim();
-      if (!line) continue;
-      
-      const values = parseCSVLine(line);
-      if (values.length !== headers.length) {
-        errors.push(`Row ${i + 1}: Column count mismatch (expected ${headers.length}, got ${values.length})`);
-        continue;
-      }
-      
-      const row: Record<string, any> = {};
-      headers.forEach((header, index) => {
-        row[header] = values[index] || '';
-      });
-      dataRows.push(row);
-    }
+    // Convert rows to record format for validation
+    const dataRows: Record<string, any>[] = rows.slice(0, 1000); // Limit to 1000 rows for validation
     
     // Analyze data types
     const dataTypes: Record<string, string> = {};
     headers.forEach(header => {
-      const values = dataRows.map(row => row[header]).filter(val => val !== '');
+      const values = dataRows.map(row => row[header]).filter(val => val !== null && val !== undefined && val !== '');
       dataTypes[header] = detectDataType(values);
     });
     
     // Check for empty rows
     const emptyRows = dataRows.filter(row => 
-      Object.values(row).every(val => !val || val.toString().trim() === '')
+      Object.values(row).every(val => val === null || val === undefined || val === '' || val.toString().trim() === '')
     );
     
     if (emptyRows.length > 0) {
@@ -159,7 +147,7 @@ export const validateCSVContent = async (file: File): Promise<ValidationResult> 
       errors,
       warnings,
       details: {
-        rowCount: dataRows.length,
+        rowCount: rows.length,
         columnCount: headers.length,
         detectedColumns: headers,
         dataTypes,
@@ -168,7 +156,7 @@ export const validateCSVContent = async (file: File): Promise<ValidationResult> 
     };
     
   } catch (error) {
-    errors.push(`Failed to parse CSV: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    errors.push(`Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return {
       isValid: false,
       errors,

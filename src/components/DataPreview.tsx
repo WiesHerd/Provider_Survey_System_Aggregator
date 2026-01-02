@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   FormControl,
   MenuItem,
@@ -92,6 +92,19 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // ENTERPRISE FIX: Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Clear all loading states on unmount
+      setIsLoading(false);
+      setIsRefreshing(false);
+    };
+  }, []);
 
   const [gridApi, setGridApi] = useState<any | null>(null);
   const [columnApi, setColumnApi] = useState<any | null>(null);
@@ -116,21 +129,38 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
 
 
-  // Listen for data changes (like when all surveys are cleared)
+  // Listen for data changes (like when all surveys are cleared or deleted)
   useEffect(() => {
-    const handleDataChange = () => {
+    const handleDataChange = (event: CustomEvent) => {
+      const deletedSurveyId = event.detail?.surveyId;
+      
+      // ENTERPRISE FIX: If the deleted survey is the one being displayed, clear everything IMMEDIATELY
+      if (deletedSurveyId === file.id) {
+        console.log('🔄 Current survey deleted, clearing DataPreview IMMEDIATELY...');
+        // CRITICAL: Clear refreshing state FIRST to stop the modal immediately
+        if (isMountedRef.current) {
+          setIsRefreshing(false); // STOP THE MODAL FIRST
+          setIsLoading(false);
+          setOriginalData([]);
+          setPreviewData([]);
+          setPreviewHeaders([]);
+          setStats(null);
+        }
+        return;
+      }
+      
       console.log('🔄 Data change detected in DataPreview, refreshing...');
       setIsRefreshing(true);
-      // Clear current data
+      // Clear current data for refresh
       setOriginalData([]);
       setPreviewData([]);
       setPreviewHeaders([]);
       setStats(null);
     };
 
-    window.addEventListener('survey-deleted', handleDataChange);
-    return () => window.removeEventListener('survey-deleted', handleDataChange);
-  }, []);
+    window.addEventListener('survey-deleted', handleDataChange as EventListener);
+    return () => window.removeEventListener('survey-deleted', handleDataChange as EventListener);
+  }, [file.id]);
 
   // Consolidated data loading effect to prevent race conditions
   useEffect(() => {
@@ -150,6 +180,13 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     
     const loadSurveyData = async (attempt: number = 0): Promise<void> => {
       try {
+        // ENTERPRISE FIX: Check if cancelled before proceeding
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
         // Check if file exists and has valid data
         if (!file || !file.id) {
           console.log('No file or file ID provided, skipping data load');
@@ -158,11 +195,25 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           return;
         }
 
+        // ENTERPRISE FIX: Check if cancelled before setting loading state
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
         // Show loading only on initial load or when switching surveys
         if (!originalData.length || !previewData.length) {
           setIsLoading(true);
         } else {
           setIsRefreshing(true);
+        }
+        
+        // ENTERPRISE FIX: Double-check cancelled after setting state
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
         }
         
         // Pass current filters to server for server-side filtering
@@ -175,11 +226,60 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         
         console.log(`Loading survey data (attempt ${attempt + 1}) with filters:`, filters);
         
+        // ENTERPRISE FIX: Check if cancelled before checking survey existence
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
+        // ENTERPRISE FIX: Check if survey still exists before trying to load data
+        let surveyExists = false;
+        try {
+          const survey = await dataService.getSurveyById(file.id);
+          surveyExists = !!survey;
+        } catch (error) {
+          console.log('Survey not found, may have been deleted:', error);
+          surveyExists = false;
+        }
+        
+        // ENTERPRISE FIX: Check if cancelled again after async operation
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
+        if (!surveyExists) {
+          console.log('Survey no longer exists, clearing DataPreview');
+          setOriginalData([]);
+          setPreviewData([]);
+          setPreviewHeaders([]);
+          setStats(null);
+          setIsLoading(false);
+          setIsRefreshing(false); // CRITICAL: Clear refreshing state
+          return;
+        }
+        
+        // ENTERPRISE FIX: Check if cancelled before fetching data
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
         const { rows: surveyData } = await dataService.getSurveyData(
           file.id,
           filters,
           { limit: 10000 } // Fetch all data (up to 10,000 rows)
         );
+        
+        // ENTERPRISE FIX: Check if cancelled after async data fetch
+        if (isCancelled) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
         
         console.log('Survey data returned:', {
           rowCount: surveyData.length,
@@ -187,104 +287,155 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           sampleSpecialties: [...new Set(surveyData.map(row => row.specialty))].slice(0, 5)
         });
         
-        if (!isCancelled) {
-          // Check if survey data is empty (survey might have been deleted)
-          if (surveyData.length === 0) {
-            // Retry if we got empty data on first attempt (might be Firebase not ready)
-            if (attempt < MAX_RETRIES && !originalData.length) {
-              console.log(`No data returned, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
-              setTimeout(() => {
-                if (!isCancelled) {
-                  loadSurveyData(attempt + 1);
-                }
-              }, RETRY_DELAY);
-              return;
-            }
-            
-            console.log('No survey data found - survey may have been deleted');
+        // ENTERPRISE FIX: Check if cancelled or unmounted before processing
+        if (isCancelled || !isMountedRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
+        // Check if survey data is empty (survey might have been deleted)
+        if (surveyData.length === 0) {
+          // Retry if we got empty data on first attempt (might be Firebase not ready)
+          if (attempt < MAX_RETRIES && !originalData.length && isMountedRef.current) {
+            console.log(`No data returned, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+            setTimeout(() => {
+              if (!isCancelled && isMountedRef.current) {
+                loadSurveyData(attempt + 1);
+              }
+            }, RETRY_DELAY);
+            return;
+          }
+          
+          console.log('No survey data found - survey may have been deleted');
+          if (isMountedRef.current) {
+            setIsRefreshing(false); // CRITICAL: Stop modal FIRST
+            setIsLoading(false);
             setOriginalData([]);
             setPreviewData([]);
             setPreviewHeaders([]);
             setStats(null);
+          }
+          return;
+        }
+        
+        // Store original data for filtering
+        setOriginalData(surveyData);
+        
+        // ENTERPRISE FIX: Check if cancelled before fetching metadata
+        if (isCancelled || !isMountedRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
+        // ENTERPRISE FIX: Get headers in original Excel/CSV order
+        // First, try to get original headers from survey metadata
+        let headers: string[] = [];
+        try {
+          const survey = await dataService.getSurveyById(file.id);
+          
+          // ENTERPRISE FIX: Check if cancelled or unmounted after metadata fetch
+          if (isCancelled || !isMountedRef.current) {
             setIsLoading(false);
             setIsRefreshing(false);
             return;
           }
-          
-          // Store original data for filtering
-          setOriginalData(surveyData);
-          
-          // ENTERPRISE FIX: Get headers in original Excel/CSV order
-          // First, try to get original headers from survey metadata
-          let headers: string[] = [];
-          try {
-            const survey = await dataService.getSurveyById(file.id);
-            if (survey?.metadata?.originalHeaders && Array.isArray(survey.metadata.originalHeaders)) {
-              // Use stored original column order from Excel/CSV file
-              const storedHeaders = survey.metadata.originalHeaders.filter((h: string) => 
-                h && h.trim() && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid'
+          if (survey?.metadata?.originalHeaders && Array.isArray(survey.metadata.originalHeaders)) {
+            // Use stored original column order from Excel/CSV file
+            const storedHeaders = survey.metadata.originalHeaders.filter((h: string) => 
+              h && h.trim() && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid'
+            );
+            
+            // Verify all stored headers exist in the data (in case of column mapping changes)
+            if (surveyData.length > 0) {
+              const availableKeys = Object.keys(surveyData[0]);
+              // Use stored order, but only include headers that exist in the data
+              headers = storedHeaders.filter((h: string) => availableKeys.includes(h));
+              // Add any missing headers from data (new columns added after upload)
+              const missingHeaders = availableKeys.filter((k: string) => 
+                !storedHeaders.includes(k) && 
+                k.toLowerCase() !== 'id' && 
+                k.toLowerCase() !== 'surveyid'
               );
-              
-              // Verify all stored headers exist in the data (in case of column mapping changes)
-              if (surveyData.length > 0) {
-                const availableKeys = Object.keys(surveyData[0]);
-                // Use stored order, but only include headers that exist in the data
-                headers = storedHeaders.filter((h: string) => availableKeys.includes(h));
-                // Add any missing headers from data (new columns added after upload)
-                const missingHeaders = availableKeys.filter((k: string) => 
-                  !storedHeaders.includes(k) && 
-                  k.toLowerCase() !== 'id' && 
-                  k.toLowerCase() !== 'surveyid'
-                );
-                headers = [...headers, ...missingHeaders];
-              } else {
-                headers = storedHeaders;
-              }
-              console.log('✅ Using original column order from metadata:', headers);
+              headers = [...headers, ...missingHeaders];
             } else {
-              // Fallback: Extract from data (may not preserve order)
-              if (surveyData.length > 0) {
-                headers = Object.keys(surveyData[0]);
-              }
-              console.log('⚠️ Original headers not found in metadata, using Object.keys()');
+              headers = storedHeaders;
             }
-          } catch (error) {
-            // Fallback if survey metadata fetch fails
-            console.warn('Could not fetch survey metadata, using Object.keys():', error);
+            console.log('✅ Using original column order from metadata:', headers);
+          } else {
+            // Fallback: Extract from data (may not preserve order)
             if (surveyData.length > 0) {
               headers = Object.keys(surveyData[0]);
             }
+            console.log('⚠️ Original headers not found in metadata, using Object.keys()');
           }
-          
-          // Hide db identifiers from preview (if not already filtered)
-          headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
-          const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
-          
-          setStats({
-            columnNames: headers,
-            totalRows: surveyData.length,
-            uniqueSpecialties: new Set(surveyData.map(row => row.specialty)).size,
-            totalDataPoints: surveyData.length * headers.length
-          });
-          setPreviewHeaders(headers);
-          setPreviewData(rows);
-          
-          // Force a small delay to ensure state updates propagate
-          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (error) {
+          // Fallback if survey metadata fetch fails
+          console.warn('Could not fetch survey metadata, using Object.keys():', error);
+          if (surveyData.length > 0) {
+            headers = Object.keys(surveyData[0]);
+          }
         }
+        
+        // ENTERPRISE FIX: Check if cancelled or unmounted before setting state
+        if (isCancelled || !isMountedRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
+        // Hide db identifiers from preview (if not already filtered)
+        headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+        const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+        
+        setStats({
+          columnNames: headers,
+          totalRows: surveyData.length,
+          uniqueSpecialties: new Set(surveyData.map(row => row.specialty)).size,
+          totalDataPoints: surveyData.length * headers.length
+        });
+        setPreviewHeaders(headers);
+        setPreviewData(rows);
+        
+        // Force a small delay to ensure state updates propagate
+        await new Promise(resolve => setTimeout(resolve, 50));
 
-        if (!isCancelled) {
+        // ENTERPRISE FIX: Only update state if component is still mounted
+        if (!isCancelled && isMountedRef.current) {
           setIsLoading(false);
           setIsRefreshing(false);
         }
       } catch (error) {
         console.error('Error loading survey data:', error);
         
+        // ENTERPRISE FIX: Check if cancelled or unmounted FIRST
+        if (isCancelled || !isMountedRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+        
+        // ENTERPRISE FIX: Check if error is due to survey being deleted
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('not found') || errorMessage.includes('deleted') || errorMessage.includes('does not exist')) {
+          console.log('Survey appears to have been deleted, clearing DataPreview');
+          if (isMountedRef.current) {
+            setIsRefreshing(false); // CRITICAL: Stop modal FIRST
+            setIsLoading(false);
+            setOriginalData([]);
+            setPreviewData([]);
+            setPreviewHeaders([]);
+            setStats(null);
+          }
+          return;
+        }
+        
         // Retry on error if we haven't exceeded max retries
-        if (attempt < MAX_RETRIES && !originalData.length) {
+        if (attempt < MAX_RETRIES && !originalData.length && !isCancelled && isMountedRef.current) {
           console.log(`Error occurred, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
           setTimeout(() => {
-            if (!isCancelled) {
+            if (!isCancelled && isMountedRef.current) {
               loadSurveyData(attempt + 1);
             }
           }, RETRY_DELAY);
@@ -292,9 +443,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }
         
         onError('Error loading survey data from backend');
-        if (!isCancelled) {
+        // ENTERPRISE FIX: Only update state if component is still mounted
+        if (!isCancelled && isMountedRef.current) {
+          setIsRefreshing(false); // CRITICAL: Stop modal FIRST
           setIsLoading(false);
-          setIsRefreshing(false);
         }
       }
     };
@@ -312,6 +464,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return () => {
       isCancelled = true;
       clearTimeout(timeoutId);
+      // ENTERPRISE FIX: Clear all loading states on unmount
+      setIsLoading(false);
+      setIsRefreshing(false);
     };
   }, [file.id, globalFilters.specialty, globalFilters.providerType, globalFilters.region, globalFilters.variable]);
 

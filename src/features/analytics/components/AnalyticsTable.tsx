@@ -18,6 +18,7 @@ import { AnalyticsTableRow } from './AnalyticsTableRow';
 import { AnalyticsSummaryRow } from './AnalyticsSummaryRow';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { EmptyState } from '../../mapping/components/shared/EmptyState';
+import { logger } from '../../../shared/utils/logger';
 
 // formatRegionForDisplay is now imported from shared utils
 
@@ -43,7 +44,7 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
   // CRITICAL DEBUG: Log selectedVariables received by AnalyticsTable
   useEffect(() => {
     const { formatVariableDisplayName } = require('../utils/variableFormatters');
-    console.log('🔍 AnalyticsTable: Received selectedVariables:', {
+    logger.debug('🔍 AnalyticsTable: Received selectedVariables:', {
       count: selectedVariables.length,
       variables: selectedVariables,
       hasBaseSalary: selectedVariables.includes('base_salary'),

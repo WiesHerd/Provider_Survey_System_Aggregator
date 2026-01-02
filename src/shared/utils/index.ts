@@ -59,3 +59,17 @@ export type {
   EncodingIssue,
   FileEncodingResult
 } from './textEncoding';
+
+// Streaming CSV parser utilities
+export {
+  parseCSVStreaming,
+  parseCSVNonStreaming,
+  parseCSVSmart,
+  shouldUseStreaming,
+  shouldUseWorker
+} from './streamingCSVParser';
+
+export type {
+  StreamingParseOptions,
+  StreamingParseResult
+} from './streamingCSVParser';

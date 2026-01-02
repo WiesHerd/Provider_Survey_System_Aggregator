@@ -191,7 +191,9 @@ export class ErrorLoggingService {
     // Remote logging
     if (this.config.enableRemoteLogging && this.config.remoteEndpoint) {
       this.sendToRemote(entry).catch(err => {
-        console.error('Failed to send error log to remote:', err);
+        // Use logger for error logging (logger.error always logs, even in production)
+        const { logger } = require('../utils/logger');
+        logger.error('Failed to send error log to remote:', err);
       });
     }
   }

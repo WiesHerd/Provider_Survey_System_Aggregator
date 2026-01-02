@@ -30,6 +30,11 @@ import { StorageStatusIndicator } from './StorageStatusIndicator';
 import { CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { downloadGeneratedSample } from '../../../utils/generateSampleFile';
+import { MappingCoverageSummary } from './MappingCoverageSummary';
+import { UploadSuccessSummary } from './UploadSuccessSummary';
+import { useNavigate } from 'react-router-dom';
+import { useYear } from '../../../contexts/YearContext';
+import { useProviderContext } from '../../../contexts/ProviderContext';
 
 /**
  * Main Survey Upload component
@@ -45,6 +50,10 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
   onSurveyDelete,
   initialFilters
 }) => {
+  const navigate = useNavigate();
+  const { setCurrentYear } = useYear();
+  const { setProviderType } = useProviderContext();
+  
   // Use custom hook for state management
   const {
     // File state
@@ -62,6 +71,10 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     formState,
     updateFormState,
     toggleCustom,
+    autoDetection,
+    mappingCoverage,
+    lastUploadedSurvey,
+    filterMismatch,
     
     // Progress state
     uploadProgress,
@@ -164,10 +177,24 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     fileInputRef.current?.click();
   };
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const fileArray = Array.from(e.target.files);
-      addFiles(fileArray);
+      console.log('🔍 File selected:', fileArray.map(f => ({ name: f.name, size: f.size, type: f.type })));
+      try {
+        await addFiles(fileArray);
+        console.log('✅ Files added successfully');
+        // Reset the input so the same file can be selected again
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } catch (error) {
+        console.error('❌ Error adding files:', error);
+        // Show error to user
+        if (error instanceof Error) {
+          alert(`Failed to add files: ${error.message}`);
+        }
+      }
     }
   };
 
@@ -382,6 +409,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
               onFormChange={updateFormState}
               onCustomToggle={toggleCustom}
               disabled={isUploading}
+              autoDetection={autoDetection}
             />
 
             {/* File Upload */}
@@ -397,24 +425,49 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
             {/* Upload Buttons */}
             {files.length > 0 && (
               <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
-                <Button
-                  variant="contained"
-                  onClick={handleUpload}
-                  disabled={
-                    isUploading || 
-                    !formValidation.isValid || 
-                    !fileValidation.isValid ||
-                    files.length === 0 ||
-                    !isDatabaseReady
-                  }
-                  sx={{ 
-                    borderRadius: '8px',
-                    px: 4,
-                    py: 1.5
-                  }}
-                >
-                  {isUploading ? 'Uploading...' : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
-                </Button>
+                {(() => {
+                  const isButtonReady =
+                    !isUploading &&
+                    formValidation.isValid &&
+                    fileValidation.isValid &&
+                    files.length > 0 &&
+                    isDatabaseReady;
+
+                  return (
+                    <Button
+                      variant="contained"
+                      onClick={handleUpload}
+                      disabled={
+                        isUploading ||
+                        !formValidation.isValid ||
+                        !fileValidation.isValid ||
+                        files.length === 0 ||
+                        !isDatabaseReady
+                      }
+                      className={isButtonReady ? 'upload-cta-ready' : ''}
+                      sx={{
+                        borderRadius: '8px',
+                        px: 4,
+                        py: 1.5,
+                        transition: 'all 0.2s ease',
+                        ...(isButtonReady && {
+                          // Keep the contained style, add a subtle "ready" cue
+                          boxShadow:
+                            '0 0 0 2px rgba(99, 102, 241, 0.18), 0 6px 18px rgba(99, 102, 241, 0.12)',
+                          '&:hover': {
+                            boxShadow:
+                              '0 0 0 3px rgba(99, 102, 241, 0.28), 0 8px 22px rgba(99, 102, 241, 0.18)',
+                            transform: 'translateY(-1px)',
+                          },
+                        }),
+                      }}
+                    >
+                      {isUploading
+                        ? 'Uploading...'
+                        : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+                    </Button>
+                  );
+                })()}
                 
                 <Button
                   variant="outlined"
@@ -478,6 +531,74 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
         onSectionToggle={toggleSection}
         loading={isLoading}
       />
+
+      {/* Filter Mismatch Warning */}
+      {filterMismatch && (
+        <Alert 
+          severity="warning" 
+          sx={{ mt: 3 }}
+          action={
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {filterMismatch.yearMismatch && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={async () => {
+                    await setCurrentYear(filterMismatch.surveyYear);
+                  }}
+                  sx={{ borderRadius: '8px' }}
+                >
+                  Change Year to {filterMismatch.surveyYear}
+                </Button>
+              )}
+              {filterMismatch.providerTypeMismatch && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setProviderType(filterMismatch.surveyProviderType as any, 'filter-mismatch-fix');
+                  }}
+                  sx={{ borderRadius: '8px' }}
+                >
+                  Change Provider Type
+                </Button>
+              )}
+            </Box>
+          }
+        >
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+            Survey uploaded successfully, but it's not visible
+          </Typography>
+          <Typography variant="body2">
+            {filterMismatch.yearMismatch && `The year filter is set to a different year, but the survey is ${filterMismatch.surveyYear}. `}
+            {filterMismatch.providerTypeMismatch && `The provider type filter doesn't match the survey's provider type. `}
+            Click the button above to change the filter and see this survey.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Upload Success Summary */}
+      {lastUploadedSurvey && (
+        <UploadSuccessSummary
+          surveyName={lastUploadedSurvey.name}
+          rowCount={lastUploadedSurvey.rowCount}
+          coverage={mappingCoverage || null}
+          onViewAnalytics={() => navigate('/benchmarking')}
+          onReviewMappings={() => navigate('/specialty-mapping')}
+          onUploadAnother={clearFiles}
+        />
+      )}
+
+      {/* Mapping Coverage Summary */}
+      {mappingCoverage && lastUploadedSurvey && (
+        <MappingCoverageSummary
+          coverage={mappingCoverage}
+          onReviewMappings={() => {
+            // Navigate to specialty mapping screen
+            navigate('/specialty-mapping');
+          }}
+        />
+      )}
 
       {/* Summary */}
       {uploadedSurveys.length > 0 && (

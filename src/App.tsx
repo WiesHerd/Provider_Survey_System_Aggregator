@@ -536,7 +536,11 @@ const PageContent = () => {
                   <Dashboard />
                 </ErrorBoundary>
               } />
-              <Route path="/upload" element={<SurveyUpload />} />
+              <Route path="/upload" element={
+                <ErrorBoundary componentName="Upload">
+                  <SurveyUpload />
+                </ErrorBoundary>
+              } />
               <Route path="/upload-beta" element={<SurveyUploadBeta />} />
               
               {/* Legacy routes (for backward compatibility) */}
@@ -544,7 +548,11 @@ const PageContent = () => {
               <Route path="/provider-type-mapping" element={<ProviderTypeMapping />} />
               <Route path="/region-mapping" element={<RegionMapping />} />
               <Route path="/variable-mapping" element={<VariableMapping />} />
-              <Route path="/benchmarking" element={<SurveyAnalytics />} />
+              <Route path="/benchmarking" element={
+                <ErrorBoundary componentName="Analytics">
+                  <SurveyAnalytics />
+                </ErrorBoundary>
+              } />
               <Route path="/regional-analytics" element={
                 <ErrorBoundary componentName="Regional Analytics">
                   <RegionalAnalytics />
@@ -555,8 +563,16 @@ const PageContent = () => {
                   <FairMarketValue />
                 </ErrorBoundary>
               } />
-              <Route path="/custom-reports" element={<CustomReports />} />
-              <Route path="/canned-reports" element={<CannedReports />} />
+              <Route path="/custom-reports" element={
+                <ErrorBoundary componentName="Custom Reports">
+                  <CustomReports />
+                </ErrorBoundary>
+              } />
+              <Route path="/canned-reports" element={
+                <ErrorBoundary componentName="Canned Reports">
+                  <CannedReports />
+                </ErrorBoundary>
+              } />
               <Route path="/system-settings" element={
                 <ErrorBoundary componentName="System Settings">
                   <SystemSettings />

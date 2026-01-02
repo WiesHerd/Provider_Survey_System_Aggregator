@@ -27,14 +27,17 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
   const performanceService = getPerformanceOptimizedDataService();
   const cacheKey = `all_surveys_${year || 'all'}_${providerType || 'all'}`;
   
-  // Check cache first
-  const cached = performanceService.getCacheEntry<any[]>(cacheKey);
-  if (cached) {
-    console.log('🎯 Cache hit for survey list');
-    const fetchTime = performance.now() - startTime;
-    trackFetch(fetchTime);
-    return cached;
-  }
+  // CRITICAL FIX: Don't use performance cache for upload screen queries
+  // The performance cache can return stale data (0 surveys) even when database has surveys
+  // React Query's cache is sufficient and more reliable for this use case
+  // Only check performance cache if explicitly needed (not for upload screen)
+  // const cached = performanceService.getCacheEntry<any[]>(cacheKey);
+  // if (cached) {
+  //   console.log('🎯 Cache hit for survey list');
+  //   const fetchTime = performance.now() - startTime;
+  //   trackFetch(fetchTime);
+  //   return cached;
+  // }
   
   console.log('🚀 Loading survey list from IndexedDB...', { year, providerType });
   const dataService = getDataService();
@@ -102,8 +105,9 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
     console.log(`👥 After provider type filter (${providerType}): ${beforeCount} → ${filteredSurveys.length} surveys`);
   }
   
-  // Cache the result
-  performanceService.setCacheEntry(cacheKey, filteredSurveys, 5 * 60 * 1000); // 5 minutes TTL
+  // CRITICAL FIX: Don't cache in performance service for upload screen
+  // React Query handles caching, and performance cache was causing stale data issues
+  // performanceService.setCacheEntry(cacheKey, filteredSurveys, 5 * 60 * 1000); // 5 minutes TTL
   
   const fetchTime = performance.now() - startTime;
   trackFetch(fetchTime);
@@ -146,8 +150,9 @@ export const useSurveyListQuery = (
     // ENTERPRISE: Disable refetch on window focus - surveys don't change unless explicitly uploaded/deleted
     // Cache invalidation on upload/delete handles updates automatically
     refetchOnWindowFocus: false,
-    // ENTERPRISE: Use cached data if available - provides instant navigation
-    refetchOnMount: false,
+    // CRITICAL FIX: Refetch on mount to ensure fresh data after cache invalidation
+    // This ensures surveys appear immediately after upload
+    refetchOnMount: true,
     // Keep previous data visible while fetching in background (stale-while-revalidate)
     placeholderData: (previousData) => previousData,
   });

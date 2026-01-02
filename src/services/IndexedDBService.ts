@@ -6,6 +6,8 @@ import { SurveySource } from '../shared/types';
 import { parseCSVLine } from '../shared/utils/csvParser';
 import { readCSVFile } from '../shared/utils';
 import { ProviderType, DataCategory } from '../types/provider';
+import { parseFile } from '../features/upload/utils/fileParser';
+import { isExcelFile } from '../features/upload/utils/fileParser';
 import { TransactionQueue } from '../shared/services/TransactionQueue';
 import { AuditLogService } from './AuditLogService';
 import { safeValidateSurvey, safeValidateSpecialtyMapping, validateColumnMapping } from '../shared/schemas/dataSchemas';
@@ -1427,12 +1429,14 @@ export class IndexedDBService {
       // Get survey info before deletion for verification
       const survey = await this.getSurveyById(surveyId);
       if (!survey) {
+        // ENTERPRISE FIX: Treat "not found" as idempotent - survey already deleted
+        // This provides better UX and follows enterprise best practices
+        console.log(`✅ Survey ${surveyId} not found - treating as already deleted (idempotent operation)`);
         return {
-          success: false,
-          deletedSurvey: false,
+          success: true,
+          deletedSurvey: false, // Wasn't found, so wasn't deleted
           deletedDataRows: 0,
           deletedMappings: 0,
-          error: 'Survey not found'
         };
       }
 
@@ -1861,20 +1865,35 @@ export class IndexedDBService {
         surveyYear,
         surveyType,
         providerType,
-        fileSize: file.size
+        fileSize: file.size,
+        isExcel: isExcelFile(file)
       });
 
-      // Parse CSV file with encoding detection and normalization
-      const { text, encoding, issues, normalized } = await readCSVFile(file);
+      // Parse file (CSV or Excel) using unified parser
+      let rows: any[] = [];
       
-      if (issues.length > 0) {
-        console.warn('📤 IndexedDBService: Encoding issues detected:', issues);
+      if (isExcelFile(file)) {
+        // Use unified parser for Excel files
+        const parseResult = await parseFile(file);
+        rows = parseResult.rows;
+        console.log('📊 IndexedDBService: Parsed Excel file:', {
+          rowCount: rows.length,
+          headers: parseResult.headers,
+          firstRowKeys: rows.length > 0 ? Object.keys(rows[0]) : []
+        });
+      } else {
+        // Parse CSV file with encoding detection and normalization
+        const { text, encoding, issues, normalized } = await readCSVFile(file);
+        
+        if (issues.length > 0) {
+          console.warn('📤 IndexedDBService: Encoding issues detected:', issues);
+        }
+        if (normalized) {
+          console.log('📤 IndexedDBService: Character normalization applied');
+        }
+        
+        rows = this.parseCSV(text);
       }
-      if (normalized) {
-        console.log('📤 IndexedDBService: Character normalization applied');
-      }
-      
-      const rows = this.parseCSV(text);
       
       console.log('📊 IndexedDBService: Parsed CSV data:', {
         rowCount: rows.length,

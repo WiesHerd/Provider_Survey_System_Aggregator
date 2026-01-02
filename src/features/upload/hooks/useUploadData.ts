@@ -46,6 +46,10 @@ import { isExcelFile } from '../utils/fileParser';
 import { useSurveyListQuery } from './useSurveyListQuery';
 import { useYear } from '../../../contexts/YearContext';
 import { useProviderContext } from '../../../contexts/ProviderContext';
+import { useToast } from '../../../contexts/ToastContext';
+import { autoDetectSurveyMetadata, saveSmartDefaults, getSmartDefaults } from '../utils/autoDetection';
+import { AutoDetectionInfo } from '../types/upload';
+import { applyLearnedMappingsToSurvey, MappingApplicationResult } from '../utils/mappingApplication';
 
 interface UseUploadDataReturn {
   // File state
@@ -64,6 +68,10 @@ interface UseUploadDataReturn {
   formState: UploadFormState;
   updateFormState: (field: keyof UploadFormState, value: any) => void;
   toggleCustom: () => void;
+  autoDetection?: AutoDetectionInfo;
+  mappingCoverage?: MappingApplicationResult | null;
+  lastUploadedSurvey?: { id: string; name: string; rowCount: number } | null;
+  filterMismatch?: { yearMismatch: boolean; providerTypeMismatch: boolean; surveyYear: string; surveyProviderType: string } | null;
   
   // Progress state
   uploadProgress: UploadProgress;
@@ -146,6 +154,7 @@ export const useUploadData = (
   const { selectedProviderType: contextProviderType } = useProviderContext();
   const currentYear = overrideYear ?? contextYear;
   const selectedProviderType = overrideProviderType ?? contextProviderType;
+  const toast = useToast();
 
   // State declarations
   const [files, setFiles] = useState<FileWithPreview[]>([]);
@@ -163,13 +172,16 @@ export const useUploadData = (
     selectedSurveyRef.current = selectedSurvey;
   }, [selectedSurvey]);
   
-  // Form state
-  const [formState, setFormState] = useState<UploadFormState>({
-    surveyType: '',
-    customSurveyType: '',
-    surveyYear: '',
-    providerType: '',
-    isCustom: false
+  // Form state - initialize with smart defaults if available
+  const [formState, setFormState] = useState<UploadFormState>(() => {
+    const defaults = getSmartDefaults();
+    return {
+      surveyType: defaults.surveySource || '',
+      customSurveyType: '',
+      surveyYear: defaults.surveyYear || currentYear || '',
+      providerType: defaults.providerType || selectedProviderType || '',
+      isCustom: false
+    };
   });
   
   // Progress state
@@ -205,6 +217,14 @@ export const useUploadData = (
   const [validationResults, setValidationResults] = useState<Map<string, CompleteValidationResult>>(new Map());
   const [selectedSheets, setSelectedSheets] = useState<Map<string, string>>(new Map()); // fileId -> sheetName
   const [excelSheetInfo, setExcelSheetInfo] = useState<Map<string, Array<{ name: string; rowCount: number; columnCount: number }>>>(new Map());
+  
+  // Auto-detection state
+  const [autoDetection, setAutoDetection] = useState<AutoDetectionInfo | undefined>(undefined);
+  
+  // Mapping coverage state (for last uploaded survey)
+  const [mappingCoverage, setMappingCoverage] = useState<MappingApplicationResult | null>(null);
+  const [lastUploadedSurvey, setLastUploadedSurvey] = useState<{ id: string; name: string; rowCount: number } | null>(null);
+  const [filterMismatch, setFilterMismatch] = useState<{ yearMismatch: boolean; providerTypeMismatch: boolean; surveyYear: string; surveyProviderType: string } | null>(null);
 
   // Enhanced upload state
   const [uploadState, setUploadState] = useState<UploadState>({
@@ -241,15 +261,17 @@ export const useUploadData = (
   }, [onSurveySelect, onUploadComplete, onSurveyDelete]);
 
   // ENTERPRISE FIX: Use React Query for intelligent caching
-  // This provides instant navigation (cached data) and background refresh
+  // CRITICAL: Fetch ALL surveys (no filters) for upload screen
+  // Users need to see all uploaded surveys regardless of year/provider type filters
+  // Filtering should only happen in display/analytics components, not in upload management
   const { 
     data: rawSurveys, 
     loading: queryLoading, 
     error: queryError,
     refetch: refetchSurveys 
   } = useSurveyListQuery(
-    currentYear, 
-    selectedProviderType === 'BOTH' ? undefined : selectedProviderType,
+    undefined, // No year filter - show all surveys
+    undefined, // No provider type filter - show all surveys
     autoLoad && isDatabaseReady
   );
 
@@ -315,13 +337,104 @@ export const useUploadData = (
   }, []);
 
   // File management actions
-  const addFiles = useCallback((newFiles: File[]) => {
+  const addFiles = useCallback(async (newFiles: File[]) => {
     const filesWithPreview = newFiles.map(file => Object.assign(file, {
       preview: URL.createObjectURL(file),
       id: `${file.name}-${file.size}-${Date.now()}`
     }));
     
     setFiles(prev => [...prev, ...filesWithPreview]);
+
+    // Auto-detect metadata from first file (run detection even if parsing fails)
+    if (filesWithPreview.length > 0) {
+      const firstFile = filesWithPreview[0];
+      
+      // Run detection in background - don't block file addition
+      (async () => {
+        try {
+          // Try to parse file to get headers and sample rows for better detection
+          let headers: string[] = [];
+          let sampleRows: any[] = [];
+          
+          try {
+            const parsed = await parseFile(firstFile);
+            if (parsed.headers && parsed.rows) {
+              headers = parsed.headers;
+              sampleRows = parsed.rows.slice(0, 10); // Sample first 10 rows
+            }
+          } catch (parseError) {
+            console.warn('Could not parse file for auto-detection, using filename only:', parseError);
+          }
+
+          console.log('🔍 Starting auto-detection for file:', firstFile.name);
+          const detectionResult = await autoDetectSurveyMetadata(firstFile, headers, sampleRows);
+          console.log('🔍 Auto-detection result:', detectionResult);
+        
+        // Convert detection result to AutoDetectionInfo format
+        const detectionInfo: AutoDetectionInfo = {
+          surveyType: detectionResult.surveySource ? {
+            value: detectionResult.surveySource,
+            confidence: detectionResult.confidence.source,
+            method: detectionResult.detectionMethod.source
+          } : undefined,
+          surveyYear: detectionResult.surveyYear ? {
+            value: detectionResult.surveyYear,
+            confidence: detectionResult.confidence.year,
+            method: detectionResult.detectionMethod.year
+          } : undefined,
+          providerType: detectionResult.providerType ? {
+            value: detectionResult.providerType,
+            confidence: detectionResult.confidence.providerType,
+            method: detectionResult.detectionMethod.providerType
+          } : undefined,
+          dataCategory: detectionResult.dataCategory ? {
+            value: detectionResult.dataCategory,
+            confidence: detectionResult.confidence.dataCategory,
+            method: detectionResult.detectionMethod.dataCategory
+          } : undefined
+        };
+        
+        setAutoDetection(detectionInfo);
+        
+        // Auto-fill form with detected values (only if confidence is high enough)
+        setFormState(prev => {
+          const newState = { ...prev };
+          let changed = false;
+          
+          if (detectionResult.surveySource && detectionResult.confidence.source > 0.7) {
+            newState.surveyType = detectionResult.surveySource;
+            newState.isCustom = false;
+            changed = true;
+            console.log(`✅ Auto-filled Survey Type: ${detectionResult.surveySource} (confidence: ${detectionResult.confidence.source})`);
+          }
+          
+          if (detectionResult.surveyYear && detectionResult.confidence.year > 0.7) {
+            newState.surveyYear = detectionResult.surveyYear;
+            changed = true;
+            console.log(`✅ Auto-filled Survey Year: ${detectionResult.surveyYear} (confidence: ${detectionResult.confidence.year})`);
+          }
+          
+          if (detectionResult.providerType && detectionResult.confidence.providerType > 0.7) {
+            newState.providerType = detectionResult.providerType;
+            changed = true;
+            console.log(`✅ Auto-filled Provider Type: ${detectionResult.providerType} (confidence: ${detectionResult.confidence.providerType})`);
+          }
+          
+          if (!changed) {
+            console.log('⚠️ No form fields auto-filled - confidence thresholds not met');
+          }
+          
+          return newState;
+        });
+        
+          console.log('✅ Auto-detection completed and form updated');
+        } catch (error) {
+          console.error('❌ Auto-detection failed, continuing with manual entry:', error);
+          // Still set empty detection info so UI knows detection was attempted
+          setAutoDetection({});
+        }
+      })();
+    }
 
     // Load Excel sheet info for Excel files
     filesWithPreview.forEach(async (file) => {
@@ -381,6 +494,10 @@ export const useUploadData = (
     setValidationResults(new Map());
     setSelectedSheets(new Map());
     setExcelSheetInfo(new Map());
+    setAutoDetection(undefined);
+    // Clear mapping coverage when starting a new upload
+    setMappingCoverage(null);
+    setLastUploadedSurvey(null);
   }, [files]);
 
   // Form state actions
@@ -586,17 +703,25 @@ export const useUploadData = (
         }));
         
         try {
-          // Parse file content with encoding detection and normalization
-          const { text: fileContent, encoding, issues, normalized } = await readCSVFile(file);
+          // Parse file (CSV or Excel) using unified parser
+          const selectedSheet = selectedSheets.get(file.id || '');
+          const parseResult = await parseFile(file, selectedSheet);
           
-          if (issues.length > 0) {
-            console.warn('📤 useUploadData: Encoding issues detected:', issues);
-          }
-          if (normalized) {
-            console.log('📤 useUploadData: Character normalization applied');
-          }
+          // Convert parsed rows to CSV-like format for stats calculation
+          // (calculateSurveyStats expects CSV text, but we can work with rows)
+          const headers = parseResult.headers;
+          const rows = parseResult.rows;
           
-          const stats = calculateSurveyStats(fileContent);
+          // Calculate stats from parsed data
+          const stats = {
+            totalRows: rows.length,
+            uniqueSpecialties: new Set(rows.map((row: any) => 
+              row.specialty || row.Specialty || row['Provider Type'] || ''
+            ).filter(Boolean)).size,
+            totalDataPoints: rows.length * headers.length
+          };
+          
+          console.log('📊 useUploadData: Calculated stats from parsed file:', stats);
           
           // Upload to database
           setUploadState(prev => ({
@@ -616,17 +741,33 @@ export const useUploadData = (
             fileSize: file.size
           });
 
-          const uploadedSurvey = await dataService.uploadSurvey(
-            file,
-            file.name,
-            surveyYear,
-            surveyType,
-            providerType
-          );
+          // CRITICAL: Wrap upload in try-catch to catch and log any errors
+          let uploadedSurvey;
+          try {
+            uploadedSurvey = await dataService.uploadSurvey(
+              file,
+              file.name,
+              surveyYear,
+              surveyType,
+              providerType
+            );
+          } catch (uploadError) {
+            console.error('❌ useUploadData: Survey upload failed:', uploadError);
+            const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown upload error';
+            throw new Error(`Failed to upload survey "${file.name}": ${errorMessage}`);
+          }
 
           console.log('✅ useUploadData: Survey upload completed:', {
             surveyId: uploadedSurvey.surveyId,
-            rowCount: uploadedSurvey.rowCount
+            rowCount: uploadedSurvey.rowCount,
+            surveyYear,
+            surveyType,
+            providerType,
+            note: 'Survey will appear in list if year/providerType match current filters',
+            currentYearFilter: currentYear,
+            currentProviderTypeFilter: selectedProviderType,
+            yearMatches: String(surveyYear) === String(currentYear),
+            providerTypeMatches: providerType === selectedProviderType
           });
           
           // Verify upload
@@ -653,19 +794,121 @@ export const useUploadData = (
             throw new Error(`Verification failed: ${verification.errors.join(', ')}`);
           }
           
+          // CRITICAL: Verify the survey was actually saved and get its actual year/providerType
+          let actualSurveyYear = formState.surveyYear;
+          let actualProviderType = providerType;
+          try {
+            const savedSurvey = await dataService.getSurveyById(uploadedSurvey.surveyId);
+            if (savedSurvey) {
+              actualSurveyYear = String(savedSurvey.year || savedSurvey.surveyYear || formState.surveyYear);
+              actualProviderType = savedSurvey.providerType || providerType;
+              console.log('✅ Verified survey in database:', {
+                id: savedSurvey.id,
+                name: savedSurvey.name,
+                actualYear: actualSurveyYear,
+                actualProviderType: actualProviderType,
+                formYear: formState.surveyYear,
+                formProviderType: providerType,
+                currentYearFilter: currentYear,
+                currentProviderTypeFilter: selectedProviderType,
+                willShowInList: String(actualSurveyYear) === String(currentYear) && actualProviderType === selectedProviderType
+              });
+              
+              // Show user-friendly notification if survey is filtered out
+              const yearMismatch = String(actualSurveyYear) !== String(currentYear);
+              const providerTypeMismatch = actualProviderType !== selectedProviderType;
+              
+              if (yearMismatch || providerTypeMismatch) {
+                // Store mismatch info for UI display
+                setFilterMismatch({
+                  yearMismatch,
+                  providerTypeMismatch,
+                  surveyYear: actualSurveyYear,
+                  surveyProviderType: actualProviderType
+                });
+                
+                // Build user-friendly message
+                const issues: string[] = [];
+                if (yearMismatch) {
+                  issues.push(`Year filter is set to ${currentYear}, but survey is ${actualSurveyYear}`);
+                }
+                if (providerTypeMismatch) {
+                  issues.push(`Provider type filter is set to ${selectedProviderType}, but survey is ${actualProviderType}`);
+                }
+                
+                const message = `Survey uploaded successfully!\n\nHowever, it won't appear in the list because:\n${issues.join('\n')}\n\nChange the filters above to see this survey.`;
+                
+                toast.warning(
+                  'Survey Uploaded but Not Visible',
+                  message,
+                  10000 // Show for 10 seconds
+                );
+                
+                console.warn(`⚠️ Survey uploaded with year ${actualSurveyYear} but current filter is ${currentYear}. Survey will not appear until you change the year filter.`);
+                if (providerTypeMismatch) {
+                  console.warn(`⚠️ Survey uploaded with providerType ${actualProviderType} but current filter is ${selectedProviderType}. Survey will not appear until you change the provider type filter.`);
+                }
+              } else {
+                // Clear mismatch if survey matches filters
+                setFilterMismatch(null);
+              }
+            } else {
+              console.error('❌ Survey was not found in database after upload!', uploadedSurvey.surveyId);
+            }
+          } catch (verifyError) {
+            console.error('❌ Failed to verify survey in database:', verifyError);
+            // Continue anyway
+          }
+          
           const processedSurvey: UploadedSurvey = {
             id: uploadedSurvey.surveyId,
             fileName: file.name,
             surveyType: surveyType as SurveySource,
-            surveyYear: formState.surveyYear,
+            surveyYear: actualSurveyYear,
             uploadDate: new Date(),
-            fileContent,
+            fileContent: '', // File content is stored in database, not needed here
             rows: [],
             stats,
             columnMappings: {}
           };
           
           uploadedSurveys.push(processedSurvey);
+          
+          // Track last uploaded survey for success summary
+          setLastUploadedSurvey({
+            id: uploadedSurvey.surveyId,
+            name: file.name,
+            rowCount: uploadedSurvey.rowCount
+          });
+          
+          // Auto-apply learned mappings after upload
+          try {
+            setUploadState(prev => ({
+              ...prev,
+              progress: { 
+                ...prev.progress, 
+                step: 'mapping', 
+                message: 'Applying learned mappings...' 
+              }
+            }));
+            
+            const mappingResult = await applyLearnedMappingsToSurvey(
+              uploadedSurvey.surveyId,
+              providerType,
+              surveyType
+            );
+            
+            setMappingCoverage(mappingResult);
+            
+            console.log('✅ Learned mappings applied:', {
+              surveyId: uploadedSurvey.surveyId,
+              coverage: mappingResult.coverage,
+              applied: mappingResult.appliedCounts
+            });
+          } catch (mappingError) {
+            console.warn('Failed to apply learned mappings (non-blocking):', mappingError);
+            // Don't fail the upload if mapping application fails
+          }
           
           // Mark transaction as completed
           transaction.surveyId = uploadedSurvey.surveyId;
@@ -726,20 +969,60 @@ export const useUploadData = (
       // This ensures the survey list is updated immediately with the new survey
       // Using ['surveys', 'list'] invalidates all survey list queries (all year/providerType combinations)
       try {
+        // CRITICAL: Clear performance cache first to ensure fresh data
+        // ENTERPRISE FIX: Clear ALL survey list cache entries (including the "all_all" key used by upload screen)
+        const { getPerformanceOptimizedDataService } = require('../../../services/PerformanceOptimizedDataService');
+        const performanceService = getPerformanceOptimizedDataService();
+        // Clear all survey list cache entries - use pattern matching to clear all variations
+        performanceService.clearCache('all_surveys'); // Clears all keys starting with "all_surveys"
+        console.log('✅ Cleared ALL performance cache entries for survey lists');
+        
         const { queryClient } = require('../../../shared/services/queryClient');
-        // Invalidate all survey list queries (for all year/providerType combinations)
-        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
+        // CRITICAL FIX: Invalidate and refetch with force to bypass stale cache
+        // This ensures surveys appear immediately after upload
+        queryClient.queryClient.invalidateQueries({ 
+          queryKey: ['surveys', 'list'],
+          refetchType: 'active' // Force refetch of active queries
+        });
         console.log('✅ Invalidated survey list cache after upload - React Query will refetch automatically');
         
-        // ENTERPRISE FIX: Explicitly refetch to ensure immediate update
+        // ENTERPRISE FIX: Explicitly refetch with force to bypass any stale cache
         // This ensures survey pills appear immediately without page refresh
-        await refetchSurveys();
-        console.log('✅ Refetched survey list after upload');
+        const refetchResult = await refetchSurveys();
+        console.log('✅ Refetched survey list after upload:', {
+          surveyCount: refetchResult.data?.length || 0,
+          currentYear,
+          selectedProviderType,
+          uploadedSurveys: uploadedSurveys.map(s => ({ id: s.id, name: s.fileName, year: s.surveyYear }))
+        });
+        
+        // CRITICAL: If refetch returned 0 surveys but we just uploaded, force another refetch
+        // This handles race conditions where cache hasn't updated yet
+        if (refetchResult.data?.length === 0 && uploadedSurveys.length > 0) {
+          console.warn('⚠️ Refetch returned 0 surveys after upload - forcing another refetch...');
+          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
+          const secondRefetch = await refetchSurveys();
+          console.log('✅ Second refetch result:', {
+            surveyCount: secondRefetch.data?.length || 0
+          });
+        }
       } catch (error) {
-        console.warn('Failed to invalidate/refetch query cache:', error);
+        console.error('❌ Failed to invalidate/refetch query cache:', error);
       }
       
       // Call callback
+      // Save smart defaults for next upload
+      if (uploadedSurveys.length > 0) {
+        const lastSurvey = uploadedSurveys[uploadedSurveys.length - 1];
+        const surveyType = formState.isCustom ? formState.customSurveyType : formState.surveyType;
+        saveSmartDefaults(
+          surveyType,
+          formState.surveyYear,
+          formState.providerType as any,
+          'COMPENSATION' as any // Default data category
+        );
+      }
+      
       onUploadCompleteRef.current?.(uploadedSurveys);
       
     } catch (err) {
@@ -837,6 +1120,12 @@ export const useUploadData = (
         setSelectedSurvey(null);
         onSurveySelectRef.current?.(null);
       }
+      
+      // Clear mapping coverage and last uploaded survey if they were for the deleted survey
+      if (lastUploadedSurvey?.id === surveyId) {
+        setLastUploadedSurvey(null);
+        setMappingCoverage(null);
+      }
 
       // ENTERPRISE: Use unified cache invalidation helpers
       const { invalidateAllCachesAfterDelete, notifySurveyDeletion } = require('../../../shared/utils/deleteHelpers');
@@ -866,11 +1155,19 @@ export const useUploadData = (
         await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
         const { queryClient } = require('../../../shared/services/queryClient');
         queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
-        await refetchSurveys();
+        
+        // Add timeout to prevent hanging
+        const refetchPromise = refetchSurveys();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Refetch timeout')), 5000)
+        );
+        
+        await Promise.race([refetchPromise, timeoutPromise]);
         console.log('✅ Refetched survey list after deletion');
       } catch (error) {
         console.warn('⚠️ Failed to refetch survey list after deletion:', error);
         // Don't throw - local state is already updated, so UI should be correct
+        // The query will eventually refetch on its own
       }
       
       console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
@@ -885,6 +1182,7 @@ export const useUploadData = (
       // Show user-friendly error message
       setError(`Failed to delete survey: ${errorMessage}. Please try again or refresh the page.`);
     } finally {
+      // Always clear delete state, even on error
       setIsDeleting(false);
       setDeleteProgress({
         isDeleting: false,
@@ -892,6 +1190,12 @@ export const useUploadData = (
         totalFiles: 0,
         currentFileIndex: 0
       });
+      
+      // Clear any upload-related state that might be stuck
+      setMappingCoverage(null);
+      if (lastUploadedSurvey?.id === surveyId) {
+        setLastUploadedSurvey(null);
+      }
     }
   }, [selectedSurvey, dataService, onSurveySelect, onSurveyDelete]);
 
@@ -998,6 +1302,10 @@ export const useUploadData = (
     formState,
     updateFormState,
     toggleCustom,
+    autoDetection,
+    mappingCoverage,
+    lastUploadedSurvey,
+    filterMismatch,
     
     // Progress state
     uploadProgress,

@@ -7,6 +7,7 @@
 
 import { getUserId } from '../shared/utils/userScoping';
 import { ErrorLoggingService } from '../shared/services/ErrorLoggingService';
+import { logger } from '../shared/utils/logger';
 
 export interface AuditLogEntry {
   id: string;
@@ -88,7 +89,7 @@ export class AuditLogService {
       );
     }
 
-    console.log(`📝 Audit: ${action} ${resourceType}:${resourceId}`, details);
+    logger.log(`📝 Audit: ${action} ${resourceType}:${resourceId}`, details);
   }
 
   /**

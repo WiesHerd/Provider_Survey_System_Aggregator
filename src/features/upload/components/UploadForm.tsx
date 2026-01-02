@@ -16,9 +16,12 @@ import {
   FormControlLabel,
   Switch,
   Alert,
-  Autocomplete
+  Autocomplete,
+  Chip,
+  Tooltip
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
+import { CheckCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { UploadFormProps } from '../types/upload';
 import { SURVEY_SOURCES } from '../../../shared/constants';
 
@@ -34,7 +37,8 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
   formState,
   onFormChange,
   onCustomToggle,
-  disabled = false
+  disabled = false,
+  autoDetection
 }) => {
   // Event handlers
   const handleSurveyTypeChange = (e: SelectChangeEvent<string> | { target: { value: string } }) => {
@@ -91,30 +95,46 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
               selectOnFocus
               freeSolo
               renderInput={(params: any) => (
-                <TextField
-                  {...params}
-                  label="Survey Type"
-                                     placeholder="Search type"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                      </svg>
-                    ),
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                    },
-                    '& .MuiAutocomplete-input': {
-                      padding: '8px 12px',
-                    },
-                    '& .MuiAutocomplete-inputRoot': {
-                      padding: '0 8px',
-                    },
-                  }}
-                />
+                <Box>
+                  <TextField
+                    {...params}
+                    label="Survey Type"
+                    placeholder="Search type"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                        </svg>
+                      ),
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                      },
+                      '& .MuiAutocomplete-input': {
+                        padding: '8px 12px',
+                      },
+                      '& .MuiAutocomplete-inputRoot': {
+                        padding: '0 8px',
+                      },
+                    }}
+                  />
+                  {autoDetection?.surveyType && autoDetection.surveyType.confidence > 0.5 && (
+                    <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Tooltip title={`Auto-detected from ${autoDetection.surveyType.method} (${Math.round(autoDetection.surveyType.confidence * 100)}% confident)`}>
+                        <Chip
+                          icon={<CheckCircleIcon style={{ width: 14, height: 14 }} />}
+                          label={`Auto-detected (${Math.round(autoDetection.surveyType.confidence * 100)}%)`}
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </Tooltip>
+                    </Box>
+                  )}
+                </Box>
               )}
               sx={{
                 '& .MuiOutlinedInput-root': {
@@ -175,53 +195,85 @@ export const UploadForm: React.FC<UploadFormProps> = memo(({
 
         {/* Survey Year Selection */}
         <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            size="small"
-            label="Survey Year"
-            value={formState.surveyYear}
-            onChange={handleSurveyYearChange}
-            disabled={disabled}
-            placeholder="Year"
-            type="text"
-            inputProps={{
-              pattern: "[0-9]*",
-              inputMode: "numeric"
-            }}
-            InputProps={{
-              startAdornment: (
-                <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-              }
-            }}
-          />
-        </Grid>
-
-        {/* Provider Type Selection */}
-        <Grid item xs={12} md={6}>
-          <FormControl fullWidth size="small" disabled={disabled}>
-            <InputLabel>Provider Type</InputLabel>
-            <Select
-              value={formState.providerType}
-              label="Provider Type"
-              onChange={handleProviderTypeChange}
+          <Box>
+            <TextField
+              fullWidth
+              size="small"
+              label="Survey Year"
+              value={formState.surveyYear}
+              onChange={handleSurveyYearChange}
+              disabled={disabled}
+              placeholder="Year"
+              type="text"
+              inputProps={{
+                pattern: "[0-9]*",
+                inputMode: "numeric"
+              }}
+              InputProps={{
+                startAdornment: (
+                  <svg className="w-4 h-4 text-gray-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                  </svg>
+                ),
+              }}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '8px',
                 }
               }}
-            >
-              <MenuItem value="PHYSICIAN">Physicians</MenuItem>
-              <MenuItem value="APP">APPs</MenuItem>
-              <MenuItem value="CALL">Call Pay</MenuItem>
-            </Select>
-          </FormControl>
+            />
+            {autoDetection?.surveyYear && autoDetection.surveyYear.confidence > 0.5 && (
+              <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title={`Auto-detected from ${autoDetection.surveyYear.method} (${Math.round(autoDetection.surveyYear.confidence * 100)}% confident)`}>
+                  <Chip
+                    icon={<CheckCircleIcon style={{ width: 14, height: 14 }} />}
+                    label={`From ${autoDetection.surveyYear.method} (${Math.round(autoDetection.surveyYear.confidence * 100)}%)`}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Tooltip>
+              </Box>
+            )}
+          </Box>
+        </Grid>
+
+        {/* Provider Type Selection */}
+        <Grid item xs={12} md={6}>
+          <Box>
+            <FormControl fullWidth size="small" disabled={disabled}>
+              <InputLabel>Provider Type</InputLabel>
+              <Select
+                value={formState.providerType}
+                label="Provider Type"
+                onChange={handleProviderTypeChange}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                  }
+                }}
+              >
+                <MenuItem value="PHYSICIAN">Physicians</MenuItem>
+                <MenuItem value="APP">APPs</MenuItem>
+                <MenuItem value="CALL">Call Pay</MenuItem>
+              </Select>
+            </FormControl>
+            {autoDetection?.providerType && autoDetection.providerType.confidence > 0.5 && (
+              <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title={`Auto-detected from ${autoDetection.providerType.method} (${Math.round(autoDetection.providerType.confidence * 100)}% confident)`}>
+                  <Chip
+                    icon={<CheckCircleIcon style={{ width: 14, height: 14 }} />}
+                    label={`${Math.round(autoDetection.providerType.confidence * 100)}% confident`}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Tooltip>
+              </Box>
+            )}
+          </Box>
         </Grid>
       </Grid>
 
