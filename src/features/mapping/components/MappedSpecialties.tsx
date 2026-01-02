@@ -8,7 +8,8 @@ import {
   MagnifyingGlassIcon as SearchIcon,
   XMarkIcon,
   TrashIcon,
-  RectangleStackIcon
+  RectangleStackIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { 
   RectangleStackIcon as RectangleStackIconSolid
@@ -33,7 +34,7 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
   onDeleteMapping,
   onEditMapping
 }) => {
-  // Bulk selection state
+  // Selection state and bulk mode toggle
   const [selectedMappings, setSelectedMappings] = useState<Set<string>>(new Set());
   const [isBulkMode, setIsBulkMode] = useState(false);
   
@@ -67,10 +68,13 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
     }
   }, [onEditMapping]);
 
-  // Bulk selection handlers
+  // Bulk mode toggle handler
   const handleToggleBulkMode = useCallback(() => {
-    setIsBulkMode(!isBulkMode);
-    setSelectedMappings(new Set());
+    setIsBulkMode(prev => !prev);
+    if (isBulkMode) {
+      // Clear selections when exiting bulk mode
+      setSelectedMappings(new Set());
+    }
   }, [isBulkMode]);
 
   const handleSelectMapping = useCallback((mappingId: string) => {
@@ -158,50 +162,38 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
         />
       </div>
 
-      {/* Bulk Action Bar - Icon-only toolbar (matching LearnedMappings pattern) */}
+      {/* Bulk Action Bar - Buttons below search bar (matching region/provider types screens) */}
       {isBulkMode && (
-        <div className="mb-4 flex items-center justify-between">
-          {selectedMappings.size > 0 ? (
-            <div className="text-sm text-gray-600 font-medium">
-              {selectedMappings.size} selected
-            </div>
-          ) : (
-            <div></div>
-          )}
-          
+        <div className="mb-4 flex items-center justify-end">
           <div className="flex items-center gap-2">
-            {/* Select All - Icon Button */}
+            {/* Save Button */}
             <div className="relative group">
               <button
-                onClick={handleSelectAll}
-                className={`p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                  selectedMappings.size > 0
-                    ? 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-300 hover:border-indigo-400 focus:ring-indigo-500'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-300 hover:border-gray-400 focus:ring-gray-500'
-                }`}
-                aria-label={selectedMappings.size > 0 ? 'Deselect all' : 'Select all mappings'}
+                onClick={() => {
+                  // Save functionality - could save selected mappings or export
+                  console.log('Save selected mappings:', Array.from(selectedMappings));
+                }}
+                disabled={selectedMappings.size === 0}
+                className="p-1.5 rounded-full border border-gray-200 hover:border-gray-300 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Save selected mappings"
               >
-                {selectedMappings.size > 0 ? (
-                  <RectangleStackIconSolid className="h-4 w-4" />
-                ) : (
-                  <RectangleStackIcon className="h-4 w-4" />
-                )}
+                <ArrowDownTrayIcon className="h-4 w-4" />
               </button>
               {/* Tooltip */}
               <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
                 <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
-                  {selectedMappings.size > 0 ? 'Deselect All' : 'Select All'}
+                  Save
                   <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
                 </div>
               </div>
             </div>
 
-            {/* Delete Selected - Icon Button */}
+            {/* Delete Selected Button */}
             <div className="relative group">
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedMappings.size === 0}
-                className="p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed text-red-500 hover:text-red-700 hover:bg-red-50 border-red-300 hover:border-red-400 focus:ring-red-500"
+                className="p-1.5 rounded-full border border-red-200 hover:border-red-300 text-red-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Delete selected mappings"
               >
                 <TrashIcon className="h-4 w-4" />
@@ -215,11 +207,11 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
               </div>
             </div>
 
-            {/* Exit Bulk Mode - Icon Button */}
+            {/* Exit Bulk Mode Button */}
             <div className="relative group">
               <button
                 onClick={handleToggleBulkMode}
-                className="p-1.5 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-300 hover:border-gray-400 focus:ring-gray-500"
+                className="p-1.5 rounded-full border border-red-200 hover:border-red-300 text-red-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 aria-label="Exit bulk selection mode"
               >
                 <XMarkIcon className="h-4 w-4" />
@@ -236,7 +228,7 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
         </div>
       )}
 
-      {/* Bulk Select Toggle Button - Icon-only when not in bulk mode */}
+      {/* Bulk Select Toggle Button */}
       {!isBulkMode && (
         <div className="mb-4 flex items-center justify-end">
           <div className="relative group">
@@ -247,7 +239,6 @@ export const MappedSpecialties: React.FC<MappedSpecialtiesProps> = memo(({
             >
               <RectangleStackIcon className="h-4 w-4" />
             </button>
-            {/* Tooltip */}
             <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
               <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
                 Bulk Select
