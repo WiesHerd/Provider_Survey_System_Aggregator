@@ -128,6 +128,7 @@ const CannedReports = lazy(() => import('./features/reports/components/CannedRep
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
+const GeminiMappingTest = lazy(() => import('./features/mapping/components/GeminiMappingTest').then(module => ({ default: module.GeminiMappingTest })));
 
 
 /**
@@ -607,6 +608,13 @@ const PageContent = () => {
               
               {/* Simple authentication test route */}
               <Route path="/auth-test" element={<SimpleAuthScreen />} />
+              
+              {/* Experimental Gemini API test route */}
+              <Route path="/test/gemini-mapping" element={
+                <ErrorBoundary componentName="Gemini Mapping Test">
+                  <GeminiMappingTest />
+                </ErrorBoundary>
+              } />
               
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
