@@ -148,11 +148,11 @@ export const GeminiMappingTest: React.FC = () => {
               <TextField
                 label="Source Specialty"
                 value={sourceSpecialty}
-                onChange={(e) => setSourceSpecialty(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSourceSpecialty(e.target.value)}
                 placeholder="e.g., Cardiology - Interventional, Pediatric Cardiology, etc."
                 fullWidth
                 disabled={loading || !isConfigured}
-                onKeyPress={(e) => {
+                onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === 'Enter' && !loading && isConfigured) {
                     handleTest();
                   }
@@ -164,7 +164,7 @@ export const GeminiMappingTest: React.FC = () => {
                   <InputLabel>Survey Source</InputLabel>
                   <Select
                     value={surveySource}
-                    onChange={(e) => setSurveySource(e.target.value as typeof surveySource)}
+                    onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSurveySource(e.target.value as typeof surveySource)}
                     label="Survey Source"
                     disabled={loading || !isConfigured}
                   >
@@ -178,7 +178,7 @@ export const GeminiMappingTest: React.FC = () => {
                   <InputLabel>Provider Type (Optional)</InputLabel>
                   <Select
                     value={providerType}
-                    onChange={(e) => setProviderType(e.target.value as typeof providerType)}
+                    onChange={(e: React.ChangeEvent<{ value: unknown }>) => setProviderType(e.target.value as typeof providerType)}
                     label="Provider Type (Optional)"
                     disabled={loading || !isConfigured}
                   >
