@@ -26,6 +26,7 @@ import {
   Paper,
   Stack
 } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import {
   SparklesIcon,
   CheckCircleIcon,
@@ -164,7 +165,7 @@ export const GeminiMappingTest: React.FC = () => {
                   <InputLabel>Survey Source</InputLabel>
                   <Select
                     value={surveySource}
-                    onChange={(e: React.ChangeEvent<{ value: unknown }>) => setSurveySource(e.target.value as typeof surveySource)}
+                    onChange={(e: SelectChangeEvent<string>) => setSurveySource(e.target.value as typeof surveySource)}
                     label="Survey Source"
                     disabled={loading || !isConfigured}
                   >
@@ -178,7 +179,7 @@ export const GeminiMappingTest: React.FC = () => {
                   <InputLabel>Provider Type (Optional)</InputLabel>
                   <Select
                     value={providerType}
-                    onChange={(e: React.ChangeEvent<{ value: unknown }>) => setProviderType(e.target.value as typeof providerType)}
+                    onChange={(e: SelectChangeEvent<string>) => setProviderType(e.target.value as typeof providerType)}
                     label="Provider Type (Optional)"
                     disabled={loading || !isConfigured}
                   >
@@ -225,7 +226,7 @@ export const GeminiMappingTest: React.FC = () => {
                           {result.request.sourceSpecialty}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {result.request.surveySource} â€¢ {result.timestamp.toLocaleTimeString()}
+                          {result.request.surveySource} • {result.timestamp.toLocaleTimeString()}
                         </Typography>
                       </Box>
                       {result.response && (
