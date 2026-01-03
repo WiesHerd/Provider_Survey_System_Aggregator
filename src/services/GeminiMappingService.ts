@@ -44,7 +44,8 @@ export interface GeminiBatchResponse {
 
 class GeminiMappingService {
   private apiKey: string | null = null;
-  private baseUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
+  // Using gemini-1.5-pro-002 (latest stable) - gemini-pro was deprecated
+  private baseUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro-002:generateContent';
 
   constructor() {
     // Get API key from environment variable
