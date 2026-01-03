@@ -44,7 +44,7 @@ export interface GeminiBatchResponse {
 
 class GeminiMappingService {
   private apiKey: string | null = null;
-  private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  private baseUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
 
   constructor() {
     // Get API key from environment variable
@@ -95,7 +95,14 @@ class GeminiMappingService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+        const errorMessage = errorData.error?.message || response.statusText;
+        
+        // Provide more helpful error messages
+        if (response.status === 400 && errorMessage.includes('API key')) {
+          throw new Error(`Invalid API key. Please verify your REACT_APP_GEMINI_API_KEY in .env.local and ensure the Gemini API is enabled in Google Cloud Console.`);
+        }
+        
+        throw new Error(`Gemini API error: ${response.status} - ${errorMessage}`);
       }
 
       const data = await response.json();
