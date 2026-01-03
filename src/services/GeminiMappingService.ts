@@ -103,6 +103,14 @@ class GeminiMappingService {
           throw new Error(`Invalid API key. Please verify your REACT_APP_GEMINI_API_KEY in .env.local and ensure the Gemini API is enabled in Google Cloud Console.`);
         }
         
+        if (response.status === 403) {
+          throw new Error(`API access denied. Please check: 1) Gemini API is enabled in Google Cloud Console, 2) API key has proper permissions, 3) Billing is enabled for your project.`);
+        }
+        
+        if (response.status === 429) {
+          throw new Error(`Rate limit exceeded. Please try again in a moment.`);
+        }
+        
         throw new Error(`Gemini API error: ${response.status} - ${errorMessage}`);
       }
 
