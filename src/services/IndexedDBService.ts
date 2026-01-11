@@ -11,6 +11,7 @@ import { isExcelFile } from '../features/upload/utils/fileParser';
 import { TransactionQueue } from '../shared/services/TransactionQueue';
 import { AuditLogService } from './AuditLogService';
 import { safeValidateSurvey, safeValidateSpecialtyMapping, validateColumnMapping } from '../shared/schemas/dataSchemas';
+import { duplicateDetectionService } from './DuplicateDetectionService';
 
 interface Survey {
   id: string;
@@ -28,6 +29,7 @@ interface Survey {
   dataCategory?: DataCategory; // What type of compensation data
   source?: string; // Just company name: 'MGMA', 'SullivanCotter', etc.
   surveyLabel?: string; // Optional label to differentiate surveys (e.g., "Pediatrics", "Adult Medicine")
+  compositeKey?: string; // Computed composite key for duplicate detection
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -68,7 +70,7 @@ interface SurveyData {
 export class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'SurveyAggregatorDB';
-  private _dbVersion = 9; // Incremented to add variable index for fast queries
+  private _dbVersion = 10; // Incremented to add composite key index for duplicate detection
   // Getter to allow external access while allowing internal mutation
   private get DB_VERSION(): number {
     return this._dbVersion;
@@ -348,6 +350,17 @@ export class IndexedDBService {
       surveyStore.createIndex('name', 'name', { unique: false });
       surveyStore.createIndex('type', 'type', { unique: false });
       surveyStore.createIndex('year', 'year', { unique: false });
+      surveyStore.createIndex('compositeKey', 'compositeKey', { unique: false });
+    } else if (oldVersion < 10) {
+      // Migration: Add composite key index if it doesn't exist
+      const transaction = (event.target as IDBOpenDBRequest).transaction;
+      if (transaction) {
+        const surveyStore = transaction.objectStore('surveys');
+        if (!surveyStore.indexNames.contains('compositeKey')) {
+          surveyStore.createIndex('compositeKey', 'compositeKey', { unique: false });
+          console.log('✅ Added compositeKey index to surveys store');
+        }
+      }
     }
 
     // Create survey data store
@@ -1198,6 +1211,56 @@ export class IndexedDBService {
     });
   }
 
+  /**
+   * Get survey by composite key for fast duplicate detection
+   */
+  async getSurveyByCompositeKey(compositeKey: string): Promise<Survey | null> {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      if (!db.objectStoreNames.contains('surveys')) {
+        resolve(null);
+        return;
+      }
+
+      try {
+        const transaction = db.transaction(['surveys'], 'readonly');
+        const store = transaction.objectStore('surveys');
+        
+        // Check if compositeKey index exists
+        if (!store.indexNames.contains('compositeKey')) {
+          // Fallback: search all surveys (for databases without index)
+          const request = store.getAll();
+          request.onsuccess = () => {
+            const surveys = request.result || [];
+            const matchingSurvey = surveys.find(s => s.compositeKey === compositeKey);
+            resolve(matchingSurvey ? this.migrateSurveyStructure(matchingSurvey) : null);
+          };
+          request.onerror = () => resolve(null);
+          return;
+        }
+
+        const index = store.index('compositeKey');
+        const request = index.get(compositeKey);
+
+        request.onerror = () => {
+          console.error('❌ Failed to get survey by composite key:', request.error);
+          resolve(null);
+        };
+        request.onsuccess = () => {
+          const survey = request.result;
+          if (survey) {
+            resolve(this.migrateSurveyStructure(survey));
+          } else {
+            resolve(null);
+          }
+        };
+      } catch (error) {
+        console.error('❌ Transaction error in getSurveyByCompositeKey:', error);
+        resolve(null);
+      }
+    });
+  }
+
   async createSurvey(survey: Survey): Promise<Survey> {
     // Validate survey data before write
     const validationResult = safeValidateSurvey(survey);
@@ -1226,12 +1289,22 @@ export class IndexedDBService {
             const transaction = db.transaction(['surveys'], 'readwrite');
             const store = transaction.objectStore('surveys');
             // Convert validated data back to Survey format (with Date objects)
+            // Compute composite key for duplicate detection
+            const compositeKey = duplicateDetectionService.generateCompositeKey({
+              source: validatedSurvey.source || '',
+              dataCategory: validatedSurvey.dataCategory || '',
+              providerType: validatedSurvey.providerType || '',
+              year: validatedSurvey.year || '',
+              surveyLabel: validatedSurvey.surveyLabel || validatedSurvey.metadata?.surveyLabel || ''
+            });
+            
             const surveyToStore: Survey = {
               ...validatedSurvey,
               uploadDate: validatedSurvey.uploadDate instanceof Date ? validatedSurvey.uploadDate : new Date(validatedSurvey.uploadDate),
               metadata: validatedSurvey.metadata || {},
               providerType: validatedSurvey.providerType as ProviderType | undefined,
               dataCategory: validatedSurvey.dataCategory as DataCategory | undefined,
+              compositeKey: compositeKey, // Store composite key for fast duplicate lookups
               createdAt: validatedSurvey.createdAt instanceof Date ? validatedSurvey.createdAt : validatedSurvey.createdAt ? new Date(validatedSurvey.createdAt) : undefined,
               updatedAt: validatedSurvey.updatedAt instanceof Date ? validatedSurvey.updatedAt : validatedSurvey.updatedAt ? new Date(validatedSurvey.updatedAt) : undefined
             };

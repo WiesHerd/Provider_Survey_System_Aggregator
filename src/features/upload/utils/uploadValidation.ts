@@ -4,6 +4,12 @@
  */
 
 import { FileWithPreview } from '../types/upload';
+import { 
+  DuplicateCheckResult as ServiceDuplicateCheckResult,
+  DuplicateCheckInput,
+  duplicateDetectionService 
+} from '../../../services/DuplicateDetectionService';
+import { DataCategory, ProviderType } from '../../../types/provider';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -18,6 +24,9 @@ export interface ValidationResult {
   };
 }
 
+/**
+ * Legacy interface for backward compatibility
+ */
 export interface DuplicateCheckResult {
   isDuplicate: boolean;
   similarSurveys: Array<{
@@ -27,6 +36,13 @@ export interface DuplicateCheckResult {
     year: string;
     similarity: number;
   }>;
+}
+
+/**
+ * Enhanced duplicate check result with full metadata
+ */
+export interface EnhancedDuplicateCheckResult extends ServiceDuplicateCheckResult {
+  // Re-export from service for convenience
 }
 
 /**
@@ -223,7 +239,7 @@ export const validateDataTypes = (validationResult: ValidationResult): Validatio
 };
 
 /**
- * Detect potential duplicate surveys
+ * Detect potential duplicate surveys (legacy method for backward compatibility)
  */
 export const detectDuplicates = async (
   fileName: string,
@@ -253,6 +269,55 @@ export const detectDuplicates = async (
     return {
       isDuplicate: false,
       similarSurveys: []
+    };
+  }
+};
+
+/**
+ * Enhanced duplicate detection using DuplicateDetectionService
+ * Provides comprehensive duplicate checking with exact, content, and fuzzy matching
+ */
+export const detectDuplicatesEnhanced = async (
+  input: {
+    source: string;
+    dataCategory: DataCategory | string;
+    providerType: ProviderType | string;
+    year: string;
+    surveyLabel?: string;
+    file?: File;
+    fileHash?: string;
+    rowCount?: number;
+  }
+): Promise<ServiceDuplicateCheckResult> => {
+  try {
+    const checkInput: DuplicateCheckInput = {
+      metadata: {
+        source: input.source,
+        dataCategory: input.dataCategory,
+        providerType: input.providerType,
+        year: input.year,
+        surveyLabel: input.surveyLabel
+      },
+      file: input.file,
+      fileHash: input.fileHash,
+      rowCount: input.rowCount
+    };
+
+    return await duplicateDetectionService.checkForDuplicates(checkInput);
+  } catch (error) {
+    console.error('Error in enhanced duplicate detection:', error);
+    // Return no duplicates on error to allow upload to proceed
+    return {
+      hasDuplicate: false,
+      similarSurveys: [],
+      matchType: 'none',
+      compositeKey: duplicateDetectionService.generateCompositeKey({
+        source: input.source,
+        dataCategory: input.dataCategory,
+        providerType: input.providerType,
+        year: input.year,
+        surveyLabel: input.surveyLabel
+      })
     };
   }
 };

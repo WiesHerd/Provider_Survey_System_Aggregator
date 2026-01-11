@@ -33,6 +33,10 @@ import { parseFile } from '../features/upload/utils/fileParser';
 import { validateAll, CompleteValidationResult } from '../features/upload/utils/validationEngine';
 import { getExcelSheetNames } from '../features/upload/utils/excelParser';
 import { isExcelFile } from '../features/upload/utils/fileParser';
+import { duplicateDetectionService } from '../services/DuplicateDetectionService';
+import { DuplicateSurveyDialog, DuplicateResolutionAction } from '../features/upload/components/DuplicateSurveyDialog';
+import { AuditLogService } from '../services/AuditLogService';
+import { calculateFileHash } from '../features/upload/utils/fileHash';
 
 
 // Provider type categories for survey selection
@@ -223,6 +227,17 @@ const SurveyUpload: React.FC = () => {
   const [showClearAllConfirmation, setShowClearAllConfirmation] = useState(false);
   const [showForceClose, setShowForceClose] = useState(false);
   const [surveyToDelete, setSurveyToDelete] = useState<UploadedSurvey | null>(null);
+  
+  // Duplicate detection states
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateCheckResult, setDuplicateCheckResult] = useState<any>(null);
+  const [pendingUploadData, setPendingUploadData] = useState<{
+    parsedRows: any[];
+    file: File;
+    headers: string[];
+    resetTimeout?: () => void;
+  } | null>(null);
+  const auditLog = AuditLogService.getInstance();
   
   // Add global filter state
   const [globalFilters, setGlobalFilters] = useState({
@@ -942,7 +957,8 @@ const SurveyUpload: React.FC = () => {
     parsedRows: any[],
     file: File,
     headers: string[],
-    resetTimeout?: () => void
+    resetTimeout?: () => void,
+    skipDuplicateCheck: boolean = false
   ) => {
     // Extract provider types from data for validation
     const uniqueProviderTypes = new Set(
@@ -985,14 +1001,82 @@ const SurveyUpload: React.FC = () => {
       return;
     }
     
-    // Create survey object with new architecture
-    const surveyId = crypto.randomUUID();
-    const defaultSurveyName = file.name.replace('.csv', '');
-    
     // NEW: Extract source and data category
     const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
     const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
     const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+    const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
+    const surveyYearString = String(surveyYear).trim();
+    
+    // ENTERPRISE: Check for duplicates before proceeding
+    // Calculate file hash for content comparison (declare outside if block for later use)
+    let fileHash: string | undefined;
+    
+    // Always calculate hash for storage (even if skipping duplicate check)
+    try {
+      fileHash = await calculateFileHash(file);
+    } catch (hashError) {
+      console.warn('⚠️ Failed to calculate file hash:', hashError);
+      // Continue without hash - exact match will still work
+    }
+    
+    if (!skipDuplicateCheck) {
+      try {
+        console.log('🔍 Checking for duplicate surveys...');
+        
+        const duplicateCheck = await duplicateDetectionService.checkForDuplicates({
+          metadata: {
+            source: finalSource,
+            dataCategory: finalDataCategory,
+            providerType: finalProviderType,
+            year: surveyYearString,
+            surveyLabel: safeSurveyLabel
+          },
+          file: file,
+          fileHash: fileHash,
+          rowCount: parsedRows.length
+        });
+        
+        if (duplicateCheck.hasDuplicate) {
+          console.log('⚠️ Duplicate survey detected:', duplicateCheck.matchType);
+          
+          // Log duplicate detection
+          const existingSurvey = duplicateCheck.exactMatch?.survey || 
+                                 duplicateCheck.contentMatch?.survey || 
+                                 duplicateCheck.similarSurveys[0]?.survey;
+          
+          if (existingSurvey) {
+            await auditLog.logDuplicateDetection(
+              {
+                source: finalSource,
+                dataCategory: finalDataCategory,
+                providerType: finalProviderType,
+                year: surveyYearString,
+                surveyLabel: safeSurveyLabel
+              },
+              existingSurvey.id,
+              duplicateCheck.matchType,
+              fileHash
+            );
+          }
+          
+          // Store pending upload data and show dialog
+          setPendingUploadData({ parsedRows, file, headers, resetTimeout });
+          setDuplicateCheckResult(duplicateCheck);
+          setShowDuplicateDialog(true);
+          setIsUploading(false);
+          return; // Stop here, wait for user decision
+        }
+      } catch (duplicateError) {
+        console.error('❌ Error checking for duplicates:', duplicateError);
+        // Continue with upload if duplicate check fails (graceful degradation)
+        console.warn('⚠️ Continuing with upload despite duplicate check failure');
+      }
+    }
+    
+    // Create survey object with new architecture
+    const surveyId = crypto.randomUUID();
+    const defaultSurveyName = file.name.replace('.csv', '');
     
     // BACKWARD COMPATIBILITY: Derive type field from source + dataCategory + providerType
     const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
@@ -1003,13 +1087,10 @@ const SurveyUpload: React.FC = () => {
     
     // Generate survey name for display (include label if provided)
     // CRITICAL: Safely handle surveyLabel - ensure it's never undefined
-    const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
     const labelSuffix = safeSurveyLabel ? ` - ${safeSurveyLabel}` : '';
     const surveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
     
     // Build survey object - CRITICAL: Never include undefined values
-    // ENTERPRISE FIX: Ensure year is always stored as string for consistent filtering
-    const surveyYearString = String(surveyYear).trim();
     const survey: any = {
       id: surveyId,
       name: surveyName,
@@ -1052,6 +1133,11 @@ const SurveyUpload: React.FC = () => {
     if (safeSurveyLabel) {
       survey.surveyLabel = safeSurveyLabel;
       survey.metadata.surveyLabel = safeSurveyLabel;
+    }
+    
+    // Store file hash in metadata for future duplicate detection
+    if (fileHash) {
+      survey.metadata.fileHash = fileHash;
     }
 
     // Add survey to state immediately for visual feedback
@@ -1111,6 +1197,124 @@ const SurveyUpload: React.FC = () => {
     setColumnValidation(null);
     setPreUploadValidation(null);
     setDataValidation(null);
+    
+    // Clear duplicate detection cache
+    duplicateDetectionService.clearCache();
+  };
+
+  // Handle duplicate resolution
+  const handleDuplicateResolution = async (
+    action: DuplicateResolutionAction,
+    newLabel?: string
+  ) => {
+    if (!pendingUploadData || !duplicateCheckResult) {
+      setShowDuplicateDialog(false);
+      setIsUploading(false);
+      return;
+    }
+
+    const existingSurvey = duplicateCheckResult.exactMatch?.survey || 
+                           duplicateCheckResult.contentMatch?.survey || 
+                           duplicateCheckResult.similarSurveys[0]?.survey;
+
+    if (!existingSurvey) {
+      setShowDuplicateDialog(false);
+      setIsUploading(false);
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      
+      switch (action) {
+        case 'cancel':
+          // Log cancellation
+          await auditLog.logDuplicateResolution('cancel', existingSurvey.id);
+          setShowDuplicateDialog(false);
+          setIsUploading(false);
+          setPendingUploadData(null);
+          setDuplicateCheckResult(null);
+          break;
+
+        case 'replace':
+          // Delete existing survey and proceed with upload
+          console.log('🔄 Replacing existing survey:', existingSurvey.id);
+          await auditLog.logDuplicateResolution('replace', existingSurvey.id);
+          await dataService.deleteWithVerification(existingSurvey.id);
+          console.log('✅ Existing survey deleted, proceeding with upload');
+          
+          // Clear cache and proceed with upload
+          duplicateDetectionService.clearCache();
+          setShowDuplicateDialog(false);
+          setPendingUploadData(null);
+          setDuplicateCheckResult(null);
+          
+          // Proceed with upload (skip duplicate check)
+          await processUploadedData(
+            pendingUploadData.parsedRows,
+            pendingUploadData.file,
+            pendingUploadData.headers,
+            pendingUploadData.resetTimeout,
+            true // skip duplicate check
+          );
+          break;
+
+        case 'rename':
+          // Update survey label and proceed with upload
+          if (newLabel && newLabel.trim()) {
+            console.log('🏷️ Renaming survey with label:', newLabel);
+            await auditLog.logDuplicateResolution('rename', existingSurvey.id, undefined, newLabel);
+            
+            // Update the survey label in state
+            setSurveyLabel(newLabel.trim());
+            
+            // Clear cache and proceed with upload
+            duplicateDetectionService.clearCache();
+            setShowDuplicateDialog(false);
+            setPendingUploadData(null);
+            setDuplicateCheckResult(null);
+            
+            // Proceed with upload (skip duplicate check, new label makes it unique)
+            await processUploadedData(
+              pendingUploadData.parsedRows,
+              pendingUploadData.file,
+              pendingUploadData.headers,
+              pendingUploadData.resetTimeout,
+              true // skip duplicate check
+            );
+          } else {
+            setError('Please enter a label to differentiate this survey');
+            setIsUploading(false);
+          }
+          break;
+
+        case 'upload-anyway':
+          // Proceed despite duplicate
+          console.log('⚠️ Uploading anyway despite duplicate');
+          await auditLog.logDuplicateResolution('upload-anyway', existingSurvey.id);
+          
+          // Clear cache and proceed with upload
+          duplicateDetectionService.clearCache();
+          setShowDuplicateDialog(false);
+          setPendingUploadData(null);
+          setDuplicateCheckResult(null);
+          
+          // Proceed with upload (skip duplicate check)
+          await processUploadedData(
+            pendingUploadData.parsedRows,
+            pendingUploadData.file,
+            pendingUploadData.headers,
+            pendingUploadData.resetTimeout,
+            true // skip duplicate check
+          );
+          break;
+      }
+    } catch (error) {
+      console.error('❌ Error handling duplicate resolution:', error);
+      setError(`Failed to ${action} survey: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsUploading(false);
+      setShowDuplicateDialog(false);
+    }
   };
 
   const handleSurveyUpload = async () => {
@@ -2402,6 +2606,30 @@ const SurveyUpload: React.FC = () => {
 
       {/* Individual Survey Delete Confirmation Modal */}
       {/* ENTERPRISE FIX: Confirmation modal closes immediately when deletion starts to avoid visual overlap with progress modal */}
+      {/* Duplicate Survey Dialog */}
+      {showDuplicateDialog && duplicateCheckResult && pendingUploadData && (
+        <DuplicateSurveyDialog
+          open={showDuplicateDialog}
+          onClose={() => {
+            setShowDuplicateDialog(false);
+            setIsUploading(false);
+            setPendingUploadData(null);
+            setDuplicateCheckResult(null);
+          }}
+          onResolve={handleDuplicateResolution}
+          duplicateResult={duplicateCheckResult}
+          newSurveyMetadata={{
+            name: `${surveySource === 'Custom' ? customSurveySource : surveySource} ${dataCategory === 'CALL_PAY' ? 'Call Pay' : dataCategory === 'MOONLIGHTING' ? 'Moonlighting' : dataCategory === 'COMPENSATION' ? (providerType === 'APP' ? 'APP' : 'Physician') : dataCategory} ${surveyYear}${surveyLabel ? ` - ${surveyLabel}` : ''}`,
+            source: surveySource === 'Custom' ? customSurveySource : surveySource,
+            dataCategory: dataCategory === 'CUSTOM' ? customDataCategory : dataCategory,
+            providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
+            year: String(surveyYear),
+            surveyLabel: surveyLabel || undefined,
+            rowCount: pendingUploadData.parsedRows.length
+          }}
+        />
+      )}
+
       {showDeleteConfirmation && surveyToDelete && (
         <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">

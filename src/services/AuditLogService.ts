@@ -171,6 +171,56 @@ export class AuditLogService {
   }
 
   /**
+   * Log duplicate detection event
+   */
+  public async logDuplicateDetection(
+    newSurveyMetadata: {
+      source: string;
+      dataCategory: string;
+      providerType: string;
+      year: string;
+      surveyLabel?: string;
+    },
+    existingSurveyId: string,
+    matchType: 'exact' | 'content' | 'similar' | 'none',
+    fileHash?: string
+  ): Promise<void> {
+    await this.logAuditEvent(
+      'duplicate_detected',
+      'survey',
+      existingSurveyId,
+      {
+        newSurvey: newSurveyMetadata,
+        matchType,
+        fileHash: fileHash ? fileHash.substring(0, 16) + '...' : undefined // Log partial hash for privacy
+      },
+      true
+    );
+  }
+
+  /**
+   * Log duplicate resolution action
+   */
+  public async logDuplicateResolution(
+    action: 'cancel' | 'replace' | 'rename' | 'upload-anyway',
+    existingSurveyId: string,
+    newSurveyId?: string,
+    newLabel?: string
+  ): Promise<void> {
+    await this.logAuditEvent(
+      'duplicate_resolved',
+      'survey',
+      existingSurveyId,
+      {
+        action,
+        newSurveyId,
+        newLabel
+      },
+      true
+    );
+  }
+
+  /**
    * Clear audit logs
    */
   public clearAuditLogs(): void {
