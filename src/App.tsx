@@ -92,10 +92,27 @@ const LazyDevTools = lazy(() => {
     default: module.ReactQueryDevtools 
   })).catch(() => ({ default: () => null }));
 });
-const SpecialtyMapping = lazy(() => import('./features/mapping/components/SpecialtyMapping').then(module => ({ default: module.SpecialtyMapping })));
-const ProviderTypeMapping = lazy(() => import('./features/mapping/components/ProviderTypeMapping').then(module => ({ default: module.ProviderTypeMapping })));
-const RegionMapping = lazy(() => import('./features/mapping/components/RegionMapping').then(module => ({ default: module.RegionMapping })));
-const VariableMapping = lazy(() => import('./features/mapping/components/VariableMapping').then(module => ({ default: module.VariableMapping })));
+// Mapping screens: keep lazy loaders simple to avoid HMR/circular-init edge cases
+const SpecialtyMapping = lazy(() =>
+  import('./features/mapping/components/SpecialtyMapping').then((module) => ({
+    default: module.SpecialtyMapping
+  }))
+);
+const ProviderTypeMapping = lazy(() =>
+  import('./features/mapping/components/ProviderTypeMapping').then((module) => ({
+    default: module.ProviderTypeMapping
+  }))
+);
+const RegionMapping = lazy(() =>
+  import('./features/mapping/components/RegionMapping').then((module) => ({
+    default: module.RegionMapping
+  }))
+);
+const VariableMapping = lazy(() =>
+  import('./features/mapping/components/VariableMapping').then((module) => ({
+    default: module.VariableMapping
+  }))
+);
 const SurveyAnalytics = lazy(() => 
   import('./features/analytics/components/SurveyAnalytics')
     .catch(error => {
@@ -128,7 +145,6 @@ const CannedReports = lazy(() => import('./features/reports/components/CannedRep
 const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
-const GeminiMappingTest = lazy(() => import('./features/mapping/components/GeminiMappingTest').then(module => ({ default: module.GeminiMappingTest })));
 
 
 /**
@@ -608,13 +624,6 @@ const PageContent = () => {
               
               {/* Simple authentication test route */}
               <Route path="/auth-test" element={<SimpleAuthScreen />} />
-              
-              {/* Experimental Gemini API test route */}
-              <Route path="/test/gemini-mapping" element={
-                <ErrorBoundary componentName="Gemini Mapping Test">
-                  <GeminiMappingTest />
-                </ErrorBoundary>
-              } />
               
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

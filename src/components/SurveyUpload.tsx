@@ -1488,7 +1488,8 @@ const SurveyUpload: React.FC = () => {
       
       // Invalidate analytics cache since all data was removed
       try {
-        const { AnalyticsDataService } = require('../services/AnalyticsDataService');
+        // NOTE: AnalyticsDataService lives under features/analytics (case-sensitive path)
+        const { AnalyticsDataService } = require('../features/analytics/services/analyticsDataService');
         const analyticsService = new AnalyticsDataService();
         analyticsService.invalidateCache();
         console.log('✅ Invalidated analytics cache after clear all');
