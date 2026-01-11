@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useLocation } from 'react-router-dom';
-import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
@@ -155,6 +155,8 @@ interface UploadedSurveyMetadata {
 interface UploadedSurvey extends UploadedSurveyMetadata {
   fileContent: string;
   rows: ISurveyRow[];
+  isDuplicate?: boolean; // Flag to indicate if this survey is a potential duplicate
+  duplicateKey?: string; // Key used to identify duplicate groups
 }
 
 // Normalization Note:
@@ -167,6 +169,10 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 // See mapping logic in handleSurveyUpload for details.
 
 const SurveyUpload: React.FC = () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:169',message:'SurveyUpload component mounted',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
+  // #endregion
+  
   const dataService = getDataService();
   const { currentYear } = useYear();
   const location = useLocation();
@@ -312,9 +318,16 @@ const SurveyUpload: React.FC = () => {
 
   // Process React Query data into component format
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:316',message:'Processing surveys - useEffect entry',data:{rawSurveysCount:rawSurveys?.length,currentYear,selectedProviderType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,C,D'})}).catch(()=>{});
+    // #endregion
+    
     // CRITICAL FIX: Always process surveys from React Query, even right after upload
     // The cache invalidation and refetch will ensure fresh data is available
     if (!rawSurveys || rawSurveys.length === 0) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:320',message:'No rawSurveys - early return',data:{rawSurveys:rawSurveys,length:rawSurveys?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       setUploadedSurveys([]);
       if (!selectedSurvey) {
         setSelectedSurvey('');
@@ -322,34 +335,78 @@ const SurveyUpload: React.FC = () => {
       return;
     }
 
-    // Build lightweight survey list; fetch detailed rows only when a survey is selected
-    // Remove duplicates by using a Map with a unique key
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:327',message:'Raw surveys received - starting processing',data:{count:rawSurveys.length,surveyIds:rawSurveys.map((s:any)=>s.id),surveyNames:rawSurveys.map((s:any)=>s.name)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
+    // #endregion
+
+    // Build lightweight survey list; show all surveys (use ID as unique key)
+    // Detect potential duplicates but don't hide them - let user decide
     const surveyMap = new Map();
+    const duplicateKeys = new Set<string>();
     
+    // First pass: identify potential duplicates
+    const duplicateCheckMap = new Map<string, number>();
     rawSurveys.forEach((survey: any) => {
-      // Create a unique key based on name, type, and year to identify duplicates
-      const uniqueKey = `${survey.name || ''}-${survey.type || ''}-${survey.year || ''}`;
-      
-      if (!surveyMap.has(uniqueKey)) {
-        surveyMap.set(uniqueKey, {
-          id: survey.id,
-          fileName: survey.name || '',
-          surveyType: survey.type || '',
-          surveyYear: survey.year?.toString() || currentYear,
-          uploadDate: new Date(survey.uploadDate || new Date()),
-          fileContent: '',
-          rows: [],
-          stats: {
-            totalRows: survey.rowCount ?? survey.row_count ?? 0,
-            uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
-            totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
-          },
-          columnMappings: {}
-        });
+      // Create a key based on source, provider type, year, and data category to detect duplicates
+      const duplicateKey = `${survey.source || survey.type || ''}-${survey.providerType || ''}-${survey.year || ''}-${survey.dataCategory || ''}`;
+      const count = duplicateCheckMap.get(duplicateKey) || 0;
+      duplicateCheckMap.set(duplicateKey, count + 1);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:337',message:'Duplicate check - first pass',data:{surveyId:survey.id,surveyName:survey.name,duplicateKey,count:count+1,source:survey.source,providerType:survey.providerType,year:survey.year,dataCategory:survey.dataCategory},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
+      // #endregion
+    });
+    
+    // Mark all keys that have more than 1 survey as duplicates (fix: mark ALL surveys in duplicate groups, not just the second+)
+    duplicateCheckMap.forEach((count, duplicateKey) => {
+      if (count > 1) {
+        duplicateKeys.add(duplicateKey);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:345',message:'Duplicate group detected - marking all surveys with this key',data:{duplicateKey,count},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
       }
     });
     
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:345',message:'First pass complete - duplicate keys found',data:{duplicateKeysCount:duplicateKeys.size,duplicateKeys:Array.from(duplicateKeys),duplicateCheckMapEntries:Array.from(duplicateCheckMap.entries())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
+    // Second pass: build survey list with duplicate flags
+    rawSurveys.forEach((survey: any) => {
+      // Use survey ID as unique key to ensure all surveys are shown
+      const uniqueKey = survey.id;
+      const duplicateKey = `${survey.source || survey.type || ''}-${survey.providerType || ''}-${survey.year || ''}-${survey.dataCategory || ''}`;
+      const isDuplicate = duplicateKeys.has(duplicateKey);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:350',message:'Processing survey - second pass',data:{surveyId:survey.id,uniqueKey,duplicateKey,isDuplicate,surveyName:survey.name,hasSource:!!survey.source,hasType:!!survey.type,hasProviderType:!!survey.providerType,hasYear:!!survey.year,hasDataCategory:!!survey.dataCategory},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
+      // #endregion
+      
+      surveyMap.set(uniqueKey, {
+        id: survey.id,
+        fileName: survey.name || '',
+        surveyType: survey.type || '',
+        surveyYear: survey.year?.toString() || currentYear,
+        uploadDate: new Date(survey.uploadDate || new Date()),
+        fileContent: '',
+        rows: [],
+        stats: {
+          totalRows: survey.rowCount ?? survey.row_count ?? 0,
+          uniqueSpecialties: survey.specialtyCount ?? survey.specialty_count ?? 0,
+          totalDataPoints: survey.dataPoints ?? survey.data_points ?? 0
+        },
+        columnMappings: {},
+        providerType: survey.providerType || 'PHYSICIAN',
+        // Add duplicate flag for UI display
+        isDuplicate: isDuplicate,
+        duplicateKey: duplicateKey
+      });
+    });
+    
     const processedSurveys = Array.from(surveyMap.values());
+
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:373',message:'Processing complete - setting uploadedSurveys',data:{processedCount:processedSurveys.length,rawCount:rawSurveys.length,processedIds:processedSurveys.map((s:any)=>s.id),processedNames:processedSurveys.map((s:any)=>s.fileName),duplicateFlags:processedSurveys.map((s:any)=>s.isDuplicate)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
+    // #endregion
 
     setUploadedSurveys(processedSurveys);
     // Auto-select first survey if none selected, or if current selection is no longer available
@@ -2245,11 +2302,20 @@ const SurveyUpload: React.FC = () => {
                               setTimeout(triggerIntelligentSizing, 600);
                               setTimeout(triggerIntelligentSizing, 1000);
                             }}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
-                            title={`${survey.surveyType} • ${survey.surveyYear}`}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${
+                              isActive 
+                                ? 'bg-indigo-600 text-white border-indigo-600' 
+                                : survey.isDuplicate
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                  : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                            }`}
+                            title={`${survey.surveyType} • ${survey.surveyYear}${survey.isDuplicate ? ' • Possible duplicate' : ''}`}
                           >
+                            {survey.isDuplicate && (
+                              <ExclamationTriangleIcon className="h-4 w-4 text-amber-600 flex-shrink-0" title="Possible duplicate survey" />
+                            )}
                             <span className="font-medium">{getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType, survey)}</span>
-                            <span className={`text-xs ${isActive ? 'text-indigo-100' : 'text-gray-500'}`}>{survey.surveyYear}</span>
+                            <span className={`text-xs ${isActive ? 'text-indigo-100' : survey.isDuplicate ? 'text-amber-700' : 'text-gray-500'}`}>{survey.surveyYear}</span>
                           </button>
                           <button
                             onClick={(e) => removeUploadedSurvey(survey.id, e)}

@@ -39,10 +39,18 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
   //   return cached;
   // }
   
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSurveyListQuery.ts:42',message:'Starting survey list fetch',data:{year,providerType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+  // #endregion
+  
   console.log('🚀 Loading survey list from IndexedDB...', { year, providerType });
   const dataService = getDataService();
   const allSurveys = await dataService.getAllSurveys();
   console.log(`📊 Loaded ${allSurveys.length} total surveys from IndexedDB`);
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSurveyListQuery.ts:45',message:'All surveys loaded from IndexedDB',data:{totalCount:allSurveys.length,surveyIds:allSurveys.map((s:any)=>s.id),surveyNames:allSurveys.map((s:any)=>s.name),surveyYears:allSurveys.map((s:any)=>s.year),surveyProviderTypes:allSurveys.map((s:any)=>s.providerType)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+  // #endregion
   
   // Filter by year if provided
   let filteredSurveys = allSurveys;
@@ -64,6 +72,9 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
       return matches;
     });
     console.log(`📅 After year filter (${year}): ${beforeCount} → ${filteredSurveys.length} surveys`);
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSurveyListQuery.ts:66',message:'After year filter',data:{year,beforeCount,afterCount:filteredSurveys.length,filteredIds:filteredSurveys.map((s:any)=>s.id),filteredNames:filteredSurveys.map((s:any)=>s.name)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
   }
   
   // Filter by provider type if provided
@@ -103,6 +114,9 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
       return matches;
     });
     console.log(`👥 After provider type filter (${providerType}): ${beforeCount} → ${filteredSurveys.length} surveys`);
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSurveyListQuery.ts:105',message:'After provider type filter',data:{providerType,beforeCount,afterCount:filteredSurveys.length,filteredIds:filteredSurveys.map((s:any)=>s.id),filteredNames:filteredSurveys.map((s:any)=>s.name),excludedIds:allSurveys.filter((s:any)=>!filteredSurveys.some((f:any)=>f.id===s.id)).map((s:any)=>s.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
   }
   
   // CRITICAL FIX: Don't cache in performance service for upload screen
@@ -112,6 +126,10 @@ async function fetchSurveyList(year?: string, providerType?: string, signal?: Ab
   const fetchTime = performance.now() - startTime;
   trackFetch(fetchTime);
   console.log(`✅ Survey list loaded in ${fetchTime.toFixed(2)}ms (${filteredSurveys.length} surveys)`);
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSurveyListQuery.ts:114',message:'Survey list fetch complete',data:{finalCount:filteredSurveys.length,totalCount:allSurveys.length,year,providerType,finalIds:filteredSurveys.map((s:any)=>s.id),finalNames:filteredSurveys.map((s:any)=>s.name)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+  // #endregion
   
   return filteredSurveys;
 }

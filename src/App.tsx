@@ -1,4 +1,7 @@
 import React, { useState, Suspense, lazy, useEffect, memo } from 'react';
+// #region agent log
+fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:1',message:'App.tsx module loaded',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+// #endregion
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
