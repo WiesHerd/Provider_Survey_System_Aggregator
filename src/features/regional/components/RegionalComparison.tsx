@@ -6,6 +6,7 @@ import { PERCENTILES } from '../utils/regionalCalculations';
 import { formatVariableDisplayName } from '../../../features/analytics/utils/variableFormatters';
 import { VariableFormattingService } from '../../../features/analytics/services/variableFormattingService';
 import { formatCurrency, formatNumber } from '../../../shared/utils/formatters';
+import { sanitizeHtml } from '../../../shared/utils/sanitization';
 
 /**
  * Regional Comparison component for displaying regional data in HTML tables
@@ -146,7 +147,7 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
               </div>
               <div>
                 <Typography variant="h6" className="text-gray-900 font-semibold">
-                    {variableLabel}
+                    {sanitizeHtml(variableLabel)}
                 </Typography>
                 <Typography variant="body2" className="text-gray-600">
                   Regional comparison across percentiles
@@ -166,8 +167,8 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
                   {regionNames.map(region => (
                     <th key={region} className="text-center py-4 px-4 font-semibold text-gray-700 text-sm uppercase tracking-wide">
                       <div className="inline-flex items-center justify-center space-x-1">
-                        <span>{region}</span>
-                        <Tooltip title={regionTooltips?.[region] || ''} placement="top" arrow>
+                        <span>{sanitizeHtml(region)}</span>
+                        <Tooltip title={regionTooltips?.[region] ? sanitizeHtml(regionTooltips[region]) : ''} placement="top" arrow>
                           <IconButton size="small" onClick={() => onRegionInfoClick?.(region)}>
                             <InfoOutlinedIcon fontSize="inherit" />
                           </IconButton>
@@ -192,7 +193,7 @@ export const RegionalComparison: React.FC<RegionalComparisonProps> = ({
                       } hover:bg-blue-50`}
                     >
                       <td className="py-4 px-6 font-medium text-gray-900">
-                        {p.label}
+                        {sanitizeHtml(p.label)}
                       </td>
                       {regionNames.map(region => {
                         const regionData = typedData.find(d => d.region === region);

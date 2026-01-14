@@ -14,6 +14,7 @@ import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoading
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useColumnSizing } from '../shared/hooks/useColumnSizing';
 import AgGridWrapper from './AgGridWrapper';
+import { sanitizeHtml } from '../shared/utils/sanitization';
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
@@ -169,6 +170,17 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     let retryCount = 0;
     const MAX_RETRIES = 5;
     const RETRY_DELAY = 500;
+    const MAX_LOAD_TIME = 30000; // 30 seconds max load time
+    
+    // ENTERPRISE FIX: Add timeout to prevent infinite loading
+    const loadTimeoutId = setTimeout(() => {
+      if (!isCancelled) {
+        console.warn('Data loading timeout - stopping spinner');
+        setIsLoading(false);
+        setIsRefreshing(false);
+        isCancelled = true;
+      }
+    }, MAX_LOAD_TIME);
     
     console.log('Data loading effect triggered:', {
       fileId: file.id,
@@ -463,7 +475,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
     return () => {
       isCancelled = true;
-      clearTimeout(timeoutId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (loadTimeoutId) {
+        clearTimeout(loadTimeoutId);
+      }
       // ENTERPRISE FIX: Clear all loading states on unmount
       setIsLoading(false);
       setIsRefreshing(false);
@@ -710,12 +727,13 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             }
           }
           
-          // Handle wide format
+          // Handle wide format (numeric values - no sanitization needed)
           if (isTcc) return formatCurrency(raw, 0);
           if (isCf) return formatCurrency(raw, 2);
           if (isWrvu || isCount) return formatNumber(raw, 0);
           
-          return raw;
+          // Sanitize string values to prevent XSS attacks
+          return sanitizeHtml(String(raw));
         },
       } as any;
     });

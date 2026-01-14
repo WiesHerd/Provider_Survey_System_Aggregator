@@ -1,7 +1,4 @@
 import React, { useState, Suspense, lazy, useEffect, memo } from 'react';
-// #region agent log
-fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:1',message:'App.tsx module loaded',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -659,6 +656,34 @@ function App() {
     };
 
     runMigration();
+  }, []);
+
+  // Run user scoping migration on app startup
+  useEffect(() => {
+    const runUserScopingMigration = async () => {
+      try {
+        const { UserScopedMigrationService } = await import('./services/UserScopedMigrationService');
+        const migrationService = UserScopedMigrationService.getInstance();
+        const needsMigration = await migrationService.checkMigrationNeeded();
+        
+        if (needsMigration) {
+          console.log('🔄 User scoping migration needed, starting migration...');
+          const result = await migrationService.migrateToUserScoped();
+          if (result.success) {
+            console.log(`✅ User scoping migration completed: ${result.surveysMigrated} surveys, ${result.mappingsMigrated} mappings, ${result.dataRowsMigrated} data rows`);
+          } else {
+            console.warn('⚠️ User scoping migration completed with errors:', result.errors);
+          }
+        }
+      } catch (error) {
+        // Migration failed silently - app will continue to function
+        console.error('❌ User scoping migration failed:', error);
+      }
+    };
+
+    // Run after a short delay to ensure database is initialized
+    const timeoutId = setTimeout(runUserScopingMigration, 1000);
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // Derive basename from PUBLIC_URL only when available (e.g., GitHub Pages build)

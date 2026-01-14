@@ -5,7 +5,7 @@
  * to ensure data isolation between users in production.
  */
 
-import { getUserId, isUserAuthenticated } from '../shared/utils/userScoping';
+import { getUserId, isUserAuthenticated, userScopedKey } from '../shared/utils/userScoping';
 import { IndexedDBService } from './IndexedDBService';
 
 export interface MigrationResult {
@@ -53,8 +53,10 @@ export class UserScopedMigrationService {
       return new Promise((resolve) => {
         request.onsuccess = () => {
           const surveys = request.result || [];
-          // Check if any survey lacks userId field (needs migration)
-          const needsMigration = surveys.some((survey: any) => !survey.userId);
+          const userId = getUserId();
+          const userPrefix = `${userId}_`;
+          // Check if any survey ID doesn't start with user prefix (needs migration)
+          const needsMigration = surveys.some((survey: any) => !survey.id.startsWith(userPrefix));
           resolve(needsMigration);
         };
         request.onerror = () => {
@@ -151,22 +153,36 @@ export class UserScopedMigrationService {
       request.onsuccess = () => {
         const surveys = request.result || [];
         let migratedCount = 0;
+        const userPrefix = `${userId}_`;
 
         surveys.forEach((survey: any) => {
-          // Only migrate surveys without userId
-          if (!survey.userId) {
-            const updatedSurvey = {
+          // Only migrate surveys that don't have user-scoped IDs
+          if (!survey.id.startsWith(userPrefix)) {
+            const legacyId = survey.id;
+            const userScopedId = userScopedKey(legacyId);
+            
+            // Create new survey with user-scoped ID
+            const migratedSurvey = {
               ...survey,
-              userId,
-              migratedAt: new Date()
+              id: userScopedId,
+              migratedAt: new Date(),
+              originalId: legacyId // Store original ID for reference
             };
             
-            const putRequest = store.put(updatedSurvey);
-            putRequest.onsuccess = () => {
-              migratedCount++;
+            // Add new survey with user-scoped ID
+            const addRequest = store.add(migratedSurvey);
+            addRequest.onsuccess = () => {
+              // Delete old survey with legacy ID
+              const deleteRequest = store.delete(legacyId);
+              deleteRequest.onsuccess = () => {
+                migratedCount++;
+              };
+              deleteRequest.onerror = () => {
+                console.error(`❌ Failed to delete legacy survey ${legacyId}:`, deleteRequest.error);
+              };
             };
-            putRequest.onerror = () => {
-              console.error(`❌ Failed to migrate survey ${survey.id}:`, putRequest.error);
+            addRequest.onerror = () => {
+              console.error(`❌ Failed to migrate survey ${legacyId}:`, addRequest.error);
             };
           }
         });
@@ -263,18 +279,36 @@ export class UserScopedMigrationService {
       request.onsuccess = () => {
         const dataRows = request.result || [];
         let migratedCount = 0;
+        const userPrefix = `${userId}_`;
 
         dataRows.forEach((row: any) => {
-          if (!row.userId) {
-            const updatedRow = {
+          // Migrate survey data to use user-scoped survey IDs
+          const legacySurveyId = row.surveyId;
+          if (legacySurveyId && !legacySurveyId.startsWith(userPrefix)) {
+            const userScopedSurveyId = userScopedKey(legacySurveyId);
+            const legacyId = row.id;
+            const userScopedId = userScopedKey(legacyId);
+            
+            const migratedRow = {
               ...row,
-              userId,
-              migratedAt: new Date()
+              id: userScopedId,
+              surveyId: userScopedSurveyId,
+              migratedAt: new Date(),
+              originalId: legacyId,
+              originalSurveyId: legacySurveyId
             };
             
-            const putRequest = store.put(updatedRow);
-            putRequest.onsuccess = () => {
-              migratedCount++;
+            // Add new row with user-scoped IDs
+            const addRequest = store.add(migratedRow);
+            addRequest.onsuccess = () => {
+              // Delete old row
+              const deleteRequest = store.delete(legacyId);
+              deleteRequest.onsuccess = () => {
+                migratedCount++;
+              };
+            };
+            addRequest.onerror = () => {
+              console.error(`❌ Failed to migrate survey data row ${legacyId}:`, addRequest.error);
             };
           }
         });

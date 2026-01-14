@@ -12,6 +12,7 @@ import { TransactionQueue } from '../shared/services/TransactionQueue';
 import { AuditLogService } from './AuditLogService';
 import { safeValidateSurvey, safeValidateSpecialtyMapping, validateColumnMapping } from '../shared/schemas/dataSchemas';
 import { duplicateDetectionService } from './DuplicateDetectionService';
+import { getUserId, userScopedKey } from '../shared/utils/userScoping';
 
 interface Survey {
   id: string;
@@ -1179,6 +1180,9 @@ export class IndexedDBService {
 
   async getAllSurveys(): Promise<Survey[]> {
     const db = await this.ensureDB();
+    const userId = getUserId();
+    const userPrefix = `${userId}_`;
+    
     return new Promise((resolve, reject) => {
       // Check if the surveys object store exists
       if (!db.objectStoreNames.contains('surveys')) {
@@ -1197,10 +1201,24 @@ export class IndexedDBService {
           resolve([]); // Return empty array instead of rejecting
         };
         request.onsuccess = () => {
-          const surveys = request.result || [];
+          const allSurveys = request.result || [];
+          
+          // Filter to only return surveys for the current user
+          // Support both user-scoped keys (userId_surveyId) and legacy keys (surveyId)
+          // Legacy keys will be migrated on next write
+          const userSurveys = allSurveys.filter(survey => {
+            // If survey ID starts with user prefix, it's user-scoped
+            if (survey.id.startsWith(userPrefix)) {
+              return true;
+            }
+            // Legacy surveys (without prefix) - only include if no user-scoped surveys exist
+            // This prevents showing legacy data when user-scoped data exists
+            const hasUserScopedSurveys = allSurveys.some(s => s.id.startsWith(userPrefix));
+            return !hasUserScopedSurveys;
+          });
           
           // Apply migration on-the-fly for backward compatibility
-          const migratedSurveys = surveys.map(survey => this.migrateSurveyStructure(survey));
+          const migratedSurveys = userSurveys.map(survey => this.migrateSurveyStructure(survey));
           
           resolve(migratedSurveys);
         };
@@ -1298,8 +1316,13 @@ export class IndexedDBService {
               surveyLabel: validatedSurvey.surveyLabel || validatedSurvey.metadata?.surveyLabel || ''
             });
             
+            // Apply user scoping to survey ID
+            const userId = getUserId();
+            const userScopedId = userScopedKey(validatedSurvey.id);
+            
             const surveyToStore: Survey = {
               ...validatedSurvey,
+              id: userScopedId, // User-scoped ID
               uploadDate: validatedSurvey.uploadDate instanceof Date ? validatedSurvey.uploadDate : new Date(validatedSurvey.uploadDate),
               metadata: validatedSurvey.metadata || {},
               providerType: validatedSurvey.providerType as ProviderType | undefined,
@@ -1343,7 +1366,7 @@ export class IndexedDBService {
   async deleteSurvey(id: string): Promise<void> {
     console.log('🗑️ IndexedDBService: Starting delete survey:', id);
     
-    // First, verify the survey exists
+    // First, verify the survey exists (getSurveyById handles user scoping)
     const survey = await this.getSurveyById(id);
     if (!survey) {
       console.warn(`⚠️ IndexedDBService: Survey ${id} not found - may have already been deleted`);
@@ -1352,6 +1375,9 @@ export class IndexedDBService {
     }
     
     console.log(`🗑️ IndexedDBService: Found survey to delete: ${survey.name} (${survey.year})`);
+    
+    // Use the actual survey ID from the database (which may be user-scoped)
+    const actualSurveyId = survey.id;
     
     // Use transaction queue to prevent race conditions
     return await this.transactionQueue.queueTransaction(async () => {
@@ -1369,14 +1395,18 @@ export class IndexedDBService {
         // Include cache store in transaction to clear analytics cache
         const transaction = db.transaction(['surveys', 'surveyData', 'cache'], 'readwrite');
         
-        // Delete survey
+        // Delete survey using the actual survey ID from database (may be user-scoped)
         const surveyStore = transaction.objectStore('surveys');
-        const surveyDeleteRequest = surveyStore.delete(id);
+        const actualSurveyId = survey?.id || id; // Use survey.id if available, fallback to id
+        const surveyDeleteRequest = surveyStore.delete(actualSurveyId);
         
-        // Delete associated data
+        // Delete associated data - need to handle both user-scoped and legacy survey IDs
         const dataStore = transaction.objectStore('surveyData');
         const dataIndex = dataStore.index('surveyId');
-        const dataRequest = dataIndex.openCursor(IDBKeyRange.only(id));
+        // Try both user-scoped and legacy IDs
+        const userId = getUserId();
+        const userScopedSurveyId = userScopedKey(id);
+        const dataRequest = dataIndex.openCursor(IDBKeyRange.only(actualSurveyId));
         
         // Clear analytics cache since data has changed
         const cacheStore = transaction.objectStore('cache');
@@ -2102,15 +2132,49 @@ export class IndexedDBService {
   // Survey Data Methods
   async getSurveyData(surveyId: string, filters: any = {}, pagination: any = {}): Promise<{ rows: ISurveyRow[] }> {
     const db = await this.ensureDB();
+    const userId = getUserId();
+    
+    // Try user-scoped survey ID first, fallback to legacy ID
+    const userScopedSurveyId = userScopedKey(surveyId);
+    
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['surveyData'], 'readonly');
       const store = transaction.objectStore('surveyData');
       const index = store.index('surveyId');
-      const request = index.getAll(IDBKeyRange.only(surveyId));
+      
+      // Try user-scoped ID first
+      const request = index.getAll(IDBKeyRange.only(userScopedSurveyId));
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        // If user-scoped lookup fails, try legacy ID
+        const legacyRequest = index.getAll(IDBKeyRange.only(surveyId));
+        legacyRequest.onerror = () => reject(legacyRequest.error);
+        legacyRequest.onsuccess = () => {
+          const data = legacyRequest.result || [];
+          this._processSurveyData(data, filters, resolve, reject);
+        };
+      };
       request.onsuccess = () => {
         const data = request.result || [];
+        
+        // If no data found with user-scoped ID, try legacy ID
+        if (data.length === 0) {
+          const legacyRequest = index.getAll(IDBKeyRange.only(surveyId));
+          legacyRequest.onerror = () => reject(legacyRequest.error);
+          legacyRequest.onsuccess = () => {
+            const legacyData = legacyRequest.result || [];
+            this._processSurveyData(legacyData, filters, resolve, reject);
+          };
+          return;
+        }
+        
+        this._processSurveyData(data, filters, resolve, reject);
+      };
+    });
+  }
+  
+  private _processSurveyData(data: any[], filters: any, resolve: (value: { rows: ISurveyRow[] }) => void, reject: (reason?: any) => void): void {
+    try {
         
         // Apply filters to the data
         let filteredData = data;
@@ -2213,12 +2277,17 @@ export class IndexedDBService {
         }
         
         resolve({ rows: filteredRows });
-      };
-    });
+      } catch (error) {
+        reject(error);
+      }
   }
 
   async saveSurveyData(surveyId: string, rows: any[], onProgress?: (percent: number) => void): Promise<void> {
     const db = await this.ensureDB();
+    const userId = getUserId();
+    
+    // Use user-scoped survey ID for storing data
+    const userScopedSurveyId = userScopedKey(surveyId);
     
     // Check if the surveyData object store exists
     if (!db.objectStoreNames.contains('surveyData')) {
@@ -2252,8 +2321,8 @@ export class IndexedDBService {
             chunk.forEach((row, chunkIndex) => {
               const globalIndex = i + chunkIndex;
               const surveyData: SurveyData = {
-                id: `${surveyId}_${globalIndex}`,
-                surveyId,
+                id: `${userScopedSurveyId}_${globalIndex}`,
+                surveyId: userScopedSurveyId, // Use user-scoped survey ID
                 data: row,
                 specialty: row.specialty || row.Specialty || row['Provider Type'],
                 providerType: row.providerType || row['Provider Type'] || row.provider_type,
@@ -3143,12 +3212,11 @@ export class IndexedDBService {
       });
 
       // ENTERPRISE: Use IndexedDB cursor efficiently - only iterate, don't load full rows into memory
-      // Process in smaller batches to avoid memory issues
+      // CRITICAL: Limit concurrency. Opening many IndexedDB transactions/cursors in parallel can stall/hang in browsers.
       const db = await this.ensureDB();
-      const BATCH_SIZE = 1000; // Process 1000 rows at a time
-      
-      const surveyResults = await Promise.all(
-        filteredSurveys.map(async (survey) => {
+      const MAX_CONCURRENT_SURVEYS = 3;
+
+      const processSurvey = async (survey: any) => {
           let surveySource: string;
           if ((survey as any).source && (survey as any).dataCategory) {
             const source = (survey as any).source;
@@ -3170,7 +3238,6 @@ export class IndexedDBService {
             
             const variables = new Set<string>();
             let rowCount = 0;
-            let processedCount = 0;
             
             // Keep transaction reference to prevent it from finishing prematurely
             // IndexedDB transactions stay active as long as there are pending requests
@@ -3192,7 +3259,6 @@ export class IndexedDBService {
                 
                 const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
                 if (cursor) {
-                  processedCount++;
                   const row = cursor.value;
                   // Extract variable from row - check multiple possible locations
                   const variable = row.variable || row.data?.variable || row.data?.Variable || row.data?.['Variable Name'];
@@ -3238,8 +3304,14 @@ export class IndexedDBService {
               reject(transaction.error);
             };
           });
-        })
-      );
+      };
+
+      const surveyResults: Array<{ surveySource: string; variables: Set<string>; rowCount: number }> = [];
+      for (let i = 0; i < filteredSurveys.length; i += MAX_CONCURRENT_SURVEYS) {
+        const batch = filteredSurveys.slice(i, i + MAX_CONCURRENT_SURVEYS);
+        const batchResults = await Promise.all(batch.map(processSurvey));
+        surveyResults.push(...batchResults);
+      }
 
       // Aggregate results
       surveyResults.forEach(({ surveySource, variables, rowCount }) => {
@@ -3406,17 +3478,38 @@ export class IndexedDBService {
 
   /**
    * Get survey by ID for verification
+   * Supports both user-scoped keys and legacy keys for backward compatibility
    */
   async getSurveyById(surveyId: string): Promise<any | null> {
     try {
       const db = await this.ensureDB();
+      const userId = getUserId();
+      
+      // Try user-scoped key first
+      const userScopedId = userScopedKey(surveyId);
+      
       const transaction = db.transaction(['surveys'], 'readonly');
       const store = transaction.objectStore('surveys');
       
       return new Promise((resolve, reject) => {
-        const request = store.get(surveyId);
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error);
+        // First try user-scoped key
+        const request = store.get(userScopedId);
+        request.onsuccess = () => {
+          if (request.result) {
+            resolve(request.result);
+            return;
+          }
+          // Fallback to legacy key (for backward compatibility during migration)
+          const legacyRequest = store.get(surveyId);
+          legacyRequest.onsuccess = () => resolve(legacyRequest.result || null);
+          legacyRequest.onerror = () => resolve(null);
+        };
+        request.onerror = () => {
+          // If user-scoped lookup fails, try legacy key
+          const legacyRequest = store.get(surveyId);
+          legacyRequest.onsuccess = () => resolve(legacyRequest.result || null);
+          legacyRequest.onerror = () => resolve(null);
+        };
       });
     } catch (error) {
       console.error('❌ Failed to get survey by ID:', error);
