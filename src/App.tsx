@@ -707,7 +707,7 @@ function App() {
         <DatabaseProvider>
           <DatabaseInitializationScreen />
           <AuthProvider>
-            <AuthGuard requireAuth={process.env.REACT_APP_REQUIRE_AUTH === 'true'}>
+            <AuthGuard requireAuth={true}>
               <ToastProvider>
                 <StorageProvider>
                   <MappingProvider>

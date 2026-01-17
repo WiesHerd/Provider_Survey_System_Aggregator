@@ -43,23 +43,24 @@ export const getCurrentStorageMode = (): StorageMode => {
     
     // Validate Firebase mode if explicitly requested
     if (envMode === StorageMode.FIREBASE && !isFirebaseAvailable()) {
-      console.warn('⚠️ REACT_APP_STORAGE_MODE=firebase but Firebase is not configured');
-      console.warn('⚠️ Falling back to IndexedDB. Configure Firebase to use cloud storage.');
-      return StorageMode.INDEXED_DB;
+      throw new Error('Firebase storage mode is required but Firebase is not configured.');
+    }
+
+    // Firebase-only mode: block IndexedDB to avoid cross-user data bleed
+    if (envMode === StorageMode.INDEXED_DB) {
+      throw new Error('IndexedDB storage mode is disabled. Configure Firebase for storage.');
     }
     
     return envMode;
   }
 
-  // Hybrid mode: Automatically use Firebase if available, otherwise IndexedDB
+  // Firebase-only default: require Firebase to be available
   if (isFirebaseAvailable()) {
-    console.log('💾 Hybrid mode: Using Firebase (cloud storage) - automatically detected');
+    console.log('💾 Firebase-only mode: Using Firebase (cloud storage)');
     return StorageMode.FIREBASE;
   }
 
-  // Fallback to IndexedDB if Firebase not available
-  console.log('💾 Hybrid mode: Using IndexedDB (local browser storage) - Firebase not configured');
-  return StorageMode.INDEXED_DB;
+  throw new Error('Firebase is required for storage but is not configured.');
 };
 
 // Helper function to check if Firebase backend is available

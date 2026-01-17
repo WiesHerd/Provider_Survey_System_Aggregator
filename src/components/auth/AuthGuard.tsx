@@ -50,51 +50,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
     );
   }
 
-  // Check if authentication is required via environment variable
-  // Default: Allow IndexedDB-only mode if Firebase not available
-  const envRequireAuth = process.env.REACT_APP_REQUIRE_AUTH === 'true';
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  // CRITICAL: In production, always require authentication unless explicitly disabled
-  // This ensures security by default in production environments
-  const shouldRequireAuth = isProduction 
-    ? (envRequireAuth !== false) // In production, require auth unless explicitly disabled
-    : (requireAuth || envRequireAuth); // In development, use prop or env var
+  // Firebase-only tenant isolation: always require authentication
+  const shouldRequireAuth = true;
   
   // If Firebase is not available
   if (!isAvailable) {
-    // If authentication is explicitly required (via prop or env var), show error
-    if (shouldRequireAuth) {
-      return (
-        <Box 
-          display="flex" 
-          flexDirection="column"
-          alignItems="center" 
-          justifyContent="center"
-          minHeight="100vh"
-          gap={2}
-          bgcolor="grey.50"
-          p={3}
-        >
-          <Typography variant="h5" color="error" sx={{ mb: 2 }}>
-            Authentication Required
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
-            {isProduction 
-              ? 'Firebase authentication is required in production. Please configure Firebase environment variables in Vercel.'
-              : 'Firebase authentication is required. Please configure Firebase environment variables in Vercel or set REACT_APP_REQUIRE_AUTH=false to allow IndexedDB-only mode.'}
-          </Typography>
-          <SimpleAuthScreen />
-        </Box>
-      );
-    }
-    
-    // Allow IndexedDB-only mode (no authentication required) - only in development
-    if (!isProduction) {
-      return <>{children}</>;
-    }
-    
-    // In production, if Firebase is not available and auth is required, show error
     return (
       <Box 
         display="flex" 
@@ -107,10 +67,10 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
         p={3}
       >
         <Typography variant="h5" color="error" sx={{ mb: 2 }}>
-          Configuration Error
+          Authentication Required
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
-          Firebase authentication is required in production but is not properly configured. Please configure Firebase environment variables.
+          Firebase authentication is required. Please configure Firebase environment variables.
         </Typography>
       </Box>
     );

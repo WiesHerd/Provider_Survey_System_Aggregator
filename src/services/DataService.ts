@@ -6,6 +6,7 @@ import { isFirebaseAvailable } from '../config/firebase';
 import { StorageMode, getCurrentStorageMode } from '../config/storage';
 import { AtomicOperations } from '../shared/services/AtomicOperations';
 import { logger } from '../shared/utils/logger';
+import { clearStorage } from '../utils/clearStorage';
 
 // Re-export StorageMode for backward compatibility
 export { StorageMode } from '../config/storage';
@@ -95,17 +96,12 @@ export class DataService {
     firestoreFn: () => Promise<T>,
     indexedDbFn: () => Promise<T>
   ): Promise<T> {
-    // If not using Firebase, use IndexedDB directly
     if (this.mode !== StorageMode.FIREBASE) {
-      logger.log(`💾 DataService: ${operation} → IndexedDB (primary mode)`);
-      return await indexedDbFn();
+      throw new Error('Firebase storage mode is required. IndexedDB is disabled.');
     }
 
-    // Firebase mode: Check if Firestore is available
     if (!this.firestore) {
-      logger.warn(`⚠️ DataService: ${operation} → Firestore not initialized, using IndexedDB`);
-      this.switchToIndexedDbForSession(`${operation}: Firestore service not initialized`);
-      return await indexedDbFn();
+      throw new Error('Firestore is not initialized. Please verify Firebase configuration.');
     }
 
     // Try Firebase first
@@ -115,21 +111,10 @@ export class DataService {
       logger.log(`✅ DataService: ${operation} → Firebase Firestore (success)`);
       return result;
     } catch (error) {
-      // Check if this is a recoverable error that should trigger fallback
       if (this.isFirestoreUnavailableError(error)) {
-        logger.warn(`⚠️ DataService: ${operation} → Firebase error detected, falling back to IndexedDB`);
-        this.switchToIndexedDbForSession(`${operation}: Firebase unavailable`, error);
-        
-        // Fallback to IndexedDB
-        try {
-          logger.log(`💾 DataService: ${operation} → IndexedDB (fallback)`);
-          const result = await indexedDbFn();
-          logger.log(`✅ DataService: ${operation} → IndexedDB (fallback success)`);
-          return result;
-        } catch (fallbackError) {
-          logger.error(`❌ DataService: ${operation} → Both Firebase and IndexedDB failed`);
-          throw fallbackError;
-        }
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error(`❌ DataService: ${operation} → Firebase unavailable: ${errorMsg}`);
+        throw new Error('Firebase is required but is unavailable. Please sign in and try again.');
       }
       
       // Non-recoverable error or unexpected error - rethrow
@@ -146,16 +131,14 @@ export class DataService {
 
     this.mode = mode;
 
-    // HYBRID MODE: Always initialize IndexedDB for fallback support
-    // This ensures seamless fallback if Firebase fails or is unavailable
-    logger.log('🔧 DataService: Initializing IndexedDB (always available for fallback)');
+    // Initialize IndexedDB (required for legacy utilities, not for primary storage)
+    logger.log('🔧 DataService: Initializing IndexedDB (legacy support only)');
     this.indexedDB = new IndexedDBService();
 
     // Initialize Firestore if Firebase mode is selected
     if (mode === StorageMode.FIREBASE) {
       if (!isFirebaseAvailable()) {
-        logger.warn('⚠️ Firebase mode requested but Firebase not available. Using IndexedDB.');
-        this.mode = StorageMode.INDEXED_DB;
+        throw new Error('Firebase mode requested but Firebase is not available.');
       } else {
         try {
           logger.log('🔧 DataService: Initializing Firebase Firestore (primary storage)');
@@ -163,12 +146,11 @@ export class DataService {
           logger.log('✅ DataService: Firebase Firestore initialized successfully');
         } catch (error) {
           logger.error('❌ Failed to initialize Firestore:', error);
-          logger.warn('⚠️ Falling back to IndexedDB for this session.');
-          this.mode = StorageMode.INDEXED_DB;
+          throw new Error('Failed to initialize Firebase Firestore. Please check configuration.');
         }
       }
     } else {
-      logger.log('✅ DataService: Using IndexedDB as primary storage');
+      throw new Error('IndexedDB mode is disabled. Firebase is required for storage.');
     }
   }
 
@@ -190,6 +172,24 @@ export class DataService {
       return this.firestore;
     }
     return this.indexedDB;
+  }
+
+  private getFirestoreServiceForCrossStoreOps(): FirestoreService | null {
+    if (this.firestore) {
+      return this.firestore;
+    }
+
+    if (!isFirebaseAvailable()) {
+      return null;
+    }
+
+    try {
+      return new FirestoreService();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.warn(`⚠️ DataService: Unable to initialize Firestore for cross-store ops: ${errorMsg}`);
+      return null;
+    }
   }
 
   setMode(mode: StorageMode) {
@@ -311,6 +311,146 @@ export class DataService {
 
   async forceClearDatabase() {
     return await this.getStorageService().forceClearDatabase();
+  }
+
+  /**
+   * Delete a survey from both Firebase and IndexedDB, and clear app-scoped localStorage keys.
+   * This ensures local and cloud storage remain consistent.
+   */
+  async deleteSurveyEverywhere(surveyId: string): Promise<{
+    success: boolean;
+    errors: string[];
+    deleted: {
+      firestore: boolean;
+      indexedDb: boolean;
+      localStorage: boolean;
+    };
+    counts: {
+      firestoreDataRows: number;
+      indexedDbDataRows: number;
+    };
+  }> {
+    const errors: string[] = [];
+    const deleted = { firestore: false, indexedDb: false, localStorage: false };
+    const counts = { firestoreDataRows: 0, indexedDbDataRows: 0 };
+
+    const firestoreService = this.getFirestoreServiceForCrossStoreOps();
+
+    if (firestoreService) {
+      try {
+        const firestoreResult = await firestoreService.deleteWithVerification(surveyId);
+        if (!firestoreResult.success) {
+          throw new Error(firestoreResult.error || 'Firestore delete failed');
+        }
+        deleted.firestore = firestoreResult.deletedSurvey || firestoreResult.deletedDataRows > 0;
+        counts.firestoreDataRows = firestoreResult.deletedDataRows;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`Firestore delete failed: ${errorMsg}`);
+      }
+    }
+
+    try {
+      const indexedDbResult = await this.indexedDB.deleteWithVerification(surveyId);
+      if (!indexedDbResult.success) {
+        throw new Error(indexedDbResult.error || 'IndexedDB delete failed');
+      }
+      deleted.indexedDb = indexedDbResult.deletedSurvey || indexedDbResult.deletedDataRows > 0;
+      counts.indexedDbDataRows = indexedDbResult.deletedDataRows;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`IndexedDB delete failed: ${errorMsg}`);
+    }
+
+    try {
+      deleted.localStorage = clearStorage.clearLocalStorage();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`localStorage clear failed: ${errorMsg}`);
+    }
+
+    return {
+      success: errors.length === 0,
+      errors,
+      deleted,
+      counts
+    };
+  }
+
+  /**
+   * Delete all surveys from both Firebase and IndexedDB, and clear app-scoped localStorage keys.
+   */
+  async deleteAllSurveysEverywhere(): Promise<{
+    success: boolean;
+    errors: string[];
+    deleted: {
+      firestore: boolean;
+      indexedDb: boolean;
+      localStorage: boolean;
+    };
+    verification: {
+      firestoreSurveyCount: number | null;
+      indexedDbSurveyCount: number | null;
+    };
+  }> {
+    const errors: string[] = [];
+    const deleted = { firestore: false, indexedDb: false, localStorage: false };
+    const verification: { firestoreSurveyCount: number | null; indexedDbSurveyCount: number | null } = {
+      firestoreSurveyCount: null,
+      indexedDbSurveyCount: null
+    };
+
+    const firestoreService = this.getFirestoreServiceForCrossStoreOps();
+
+    if (firestoreService) {
+      try {
+        await firestoreService.deleteAllSurveys();
+        deleted.firestore = true;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`Firestore delete all failed: ${errorMsg}`);
+      }
+    }
+
+    try {
+      await this.indexedDB.deleteAllSurveys();
+      deleted.indexedDb = true;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`IndexedDB delete all failed: ${errorMsg}`);
+    }
+
+    try {
+      deleted.localStorage = clearStorage.clearLocalStorage();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`localStorage clear failed: ${errorMsg}`);
+    }
+
+    try {
+      if (firestoreService) {
+        const firestoreSurveys = await firestoreService.getAllSurveys();
+        verification.firestoreSurveyCount = firestoreSurveys.length;
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`Firestore verification failed: ${errorMsg}`);
+    }
+
+    try {
+      const indexedSurveys = await this.indexedDB.getAllSurveys();
+      verification.indexedDbSurveyCount = indexedSurveys.length;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`IndexedDB verification failed: ${errorMsg}`);
+    }
+
+    return {
+      success: errors.length === 0,
+      errors,
+      deleted,
+      verification
+    };
   }
 
   /**
@@ -529,36 +669,67 @@ export class DataService {
     }
   }
 
+  /**
+   * Get learned mappings - ALWAYS uses IndexedDB for persistence
+   * 
+   * CRITICAL: Learned mappings must persist reliably across years.
+   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   * This ensures learned mappings survive even if Firebase has issues.
+   */
   async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Record<string, string>> {
-    return await this.runWithFirestoreFallback(
-      'getLearnedMappings',
-      async () => await this.firestore!.getLearnedMappings(type, providerType),
-      async () => await this.indexedDB.getLearnedMappings(type, providerType)
-    );
+    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
+    logger.log(`💾 getLearnedMappings: Using IndexedDB (always persistent)`);
+    return await this.indexedDB.getLearnedMappings(type, providerType);
   }
 
+  /**
+   * Save learned mapping - ALWAYS uses IndexedDB for persistence
+   * 
+   * CRITICAL: Learned mappings must persist reliably across years.
+   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   * This ensures learned mappings survive even if Firebase has issues.
+   */
   async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string, surveySource?: string): Promise<void> {
-    return await this.runWithFirestoreFallback(
-      'saveLearnedMapping',
-      async () => await this.firestore!.saveLearnedMapping(type, original, corrected, providerType, surveySource),
-      async () => await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType, surveySource)
-    );
+    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
+    logger.log(`💾 saveLearnedMapping: Using IndexedDB (always persistent)`);
+    return await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType, surveySource);
   }
 
+  /**
+   * Remove learned mapping - ALWAYS uses IndexedDB for persistence
+   * 
+   * CRITICAL: Learned mappings must persist reliably across years.
+   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   */
   async removeLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string): Promise<void> {
-    return await this.getStorageService().removeLearnedMapping(type, original);
+    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
+    logger.log(`💾 removeLearnedMapping: Using IndexedDB (always persistent)`);
+    return await this.indexedDB.removeLearnedMapping(type, original);
   }
 
+  /**
+   * Clear learned mappings - ALWAYS uses IndexedDB for persistence
+   * 
+   * CRITICAL: Learned mappings must persist reliably across years.
+   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   */
   async clearLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<void> {
-    return await this.getStorageService().clearLearnedMappings(type);
+    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
+    logger.log(`💾 clearLearnedMappings: Using IndexedDB (always persistent)`);
+    return await this.indexedDB.clearLearnedMappings(type);
   }
 
+  /**
+   * Get learned mappings with source - ALWAYS uses IndexedDB for persistence
+   * 
+   * CRITICAL: Learned mappings must persist reliably across years.
+   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   * This ensures learned mappings survive even if Firebase has issues.
+   */
   async getLearnedMappingsWithSource(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Array<{original: string, corrected: string, surveySource: string}>> {
-    return await this.runWithFirestoreFallback(
-      'getLearnedMappingsWithSource',
-      async () => await this.firestore!.getLearnedMappingsWithSource(type, providerType),
-      async () => await this.indexedDB.getLearnedMappingsWithSource(type, providerType)
-    );
+    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
+    logger.log(`💾 getLearnedMappingsWithSource: Using IndexedDB (always persistent)`);
+    return await this.indexedDB.getLearnedMappingsWithSource(type, providerType);
   }
 
   async healthCheck() {
@@ -567,27 +738,51 @@ export class DataService {
 
   // Variable Mapping Methods
   async getVariableMappings(providerType?: string) {
-    return await this.getStorageService().getVariableMappings(providerType);
+    return await this.runWithFirestoreFallback(
+      'getVariableMappings',
+      async () => await this.firestore!.getVariableMappings(providerType),
+      async () => await this.indexedDB.getVariableMappings(providerType)
+    );
   }
 
   async getUnmappedVariables(providerType?: string) {
-    return await this.getStorageService().getUnmappedVariables(providerType);
+    return await this.runWithFirestoreFallback(
+      'getUnmappedVariables',
+      async () => await this.firestore!.getUnmappedVariables(providerType),
+      async () => await this.indexedDB.getUnmappedVariables(providerType)
+    );
   }
 
   async createVariableMapping(mapping: any) {
-    return await this.getStorageService().createVariableMapping(mapping);
+    return await this.runWithFirestoreFallback(
+      'createVariableMapping',
+      async () => await this.firestore!.createVariableMapping(mapping),
+      async () => await this.indexedDB.createVariableMapping(mapping)
+    );
   }
 
   async updateVariableMapping(id: string, mapping: any) {
-    return await this.getStorageService().updateVariableMapping(id, mapping);
+    return await this.runWithFirestoreFallback(
+      'updateVariableMapping',
+      async () => await this.firestore!.updateVariableMapping(id, mapping),
+      async () => await this.indexedDB.updateVariableMapping(id, mapping)
+    );
   }
 
   async deleteVariableMapping(id: string) {
-    return await this.getStorageService().deleteVariableMapping(id);
+    return await this.runWithFirestoreFallback(
+      'deleteVariableMapping',
+      async () => await this.firestore!.deleteVariableMapping(id),
+      async () => await this.indexedDB.deleteVariableMapping(id)
+    );
   }
 
   async clearAllVariableMappings() {
-    return await this.getStorageService().clearAllVariableMappings();
+    return await this.runWithFirestoreFallback(
+      'clearAllVariableMappings',
+      async () => await this.firestore!.clearAllVariableMappings(),
+      async () => await this.indexedDB.clearAllVariableMappings()
+    );
   }
 
   // Provider Type Mapping Methods
@@ -617,27 +812,51 @@ export class DataService {
 
   // Region Mapping Methods
   async getRegionMappings(providerType?: string) {
-    return await this.getStorageService().getRegionMappings(providerType);
+    return await this.runWithFirestoreFallback(
+      'getRegionMappings',
+      async () => await this.firestore!.getRegionMappings(providerType),
+      async () => await this.indexedDB.getRegionMappings(providerType)
+    );
   }
 
   async getUnmappedRegions(providerType?: string) {
-    return await this.getStorageService().getUnmappedRegions(providerType);
+    return await this.runWithFirestoreFallback(
+      'getUnmappedRegions',
+      async () => await this.firestore!.getUnmappedRegions(providerType),
+      async () => await this.indexedDB.getUnmappedRegions(providerType)
+    );
   }
 
   async createRegionMapping(mapping: any) {
-    return await this.getStorageService().createRegionMapping(mapping);
+    return await this.runWithFirestoreFallback(
+      'createRegionMapping',
+      async () => await this.firestore!.createRegionMapping(mapping),
+      async () => await this.indexedDB.createRegionMapping(mapping)
+    );
   }
 
   async updateRegionMapping(id: string, mapping: any) {
-    return await this.getStorageService().updateRegionMapping(id, mapping);
+    return await this.runWithFirestoreFallback(
+      'updateRegionMapping',
+      async () => await this.firestore!.updateRegionMapping(id, mapping),
+      async () => await this.indexedDB.updateRegionMapping(id, mapping)
+    );
   }
 
   async deleteRegionMapping(id: string) {
-    return await this.getStorageService().deleteRegionMapping(id);
+    return await this.runWithFirestoreFallback(
+      'deleteRegionMapping',
+      async () => await this.firestore!.deleteRegionMapping(id),
+      async () => await this.indexedDB.deleteRegionMapping(id)
+    );
   }
 
   async clearAllRegionMappings() {
-    return await this.getStorageService().clearAllRegionMappings();
+    return await this.runWithFirestoreFallback(
+      'clearAllRegionMappings',
+      async () => await this.firestore!.clearAllRegionMappings(),
+      async () => await this.indexedDB.clearAllRegionMappings()
+    );
   }
 
   // Blend Template Methods
