@@ -8,6 +8,11 @@ import { AtomicOperations } from '../shared/services/AtomicOperations';
 import { logger } from '../shared/utils/logger';
 import { clearStorage } from '../utils/clearStorage';
 
+const isUploadDebugEnabled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('bp_upload_debug') === 'true';
+};
+
 // Re-export StorageMode for backward compatibility
 export { StorageMode } from '../config/storage';
 
@@ -272,6 +277,16 @@ export class DataService {
     );
   }
 
+  async getSurveyByIdFromFirestore(surveyId: string) {
+    if (!this.firestore) {
+      throw new Error('Firestore is not initialized. Please verify Firebase configuration.');
+    }
+    if (isUploadDebugEnabled()) {
+      logger.log('🧪 UploadDebug: getSurveyByIdFromFirestore', { surveyId });
+    }
+    return await this.firestore.getSurveyById(surveyId);
+  }
+
   async deleteSurvey(id: string) {
     return await this.runWithFirestoreFallback(
       'deleteSurvey',
@@ -527,6 +542,20 @@ export class DataService {
 
   // Survey Data Methods
   async getSurveyData(surveyId: string, filters: any = {}, pagination: any = {}) {
+    if (this.mode === StorageMode.FIREBASE && this.firestore) {
+      const result = await this.firestore.getSurveyData(surveyId, filters, pagination);
+      const hasFilters = Boolean(filters?.specialty || filters?.providerType || filters?.region || filters?.variable);
+      if (!hasFilters && result?.rows?.length === 0) {
+        logger.warn('⚠️ DataService: Firestore returned 0 rows. Checking IndexedDB fallback...');
+        const fallback = await this.indexedDB.getSurveyData(surveyId, filters, pagination);
+        if (fallback?.rows?.length > 0) {
+          logger.warn('⚠️ DataService: Using IndexedDB rows for survey data fallback.');
+          return fallback;
+        }
+      }
+      return result;
+    }
+
     return await this.runWithFirestoreFallback(
       'getSurveyData',
       async () => await this.firestore!.getSurveyData(surveyId, filters, pagination),
@@ -534,14 +563,30 @@ export class DataService {
     );
   }
 
+  async getSurveyDataFromFirestore(surveyId: string, filters: any = {}, pagination: any = {}) {
+    if (!this.firestore) {
+      throw new Error('Firestore is not initialized. Please verify Firebase configuration.');
+    }
+    if (isUploadDebugEnabled()) {
+      logger.log('🧪 UploadDebug: getSurveyDataFromFirestore', { surveyId, filters, pagination });
+    }
+    return await this.firestore.getSurveyData(surveyId, filters, pagination);
+  }
+
   async saveSurveyData(surveyId: string, rows: any[], onProgress?: (percent: number) => void) {
     logger.log(`💾 DataService: Saving ${rows.length} rows...`);
     try {
+      if (isUploadDebugEnabled()) {
+        logger.log('🧪 UploadDebug: saveSurveyData start', { surveyId, rowCount: rows.length });
+      }
       await this.runWithFirestoreFallback(
         'saveSurveyData',
         async () => await this.firestore!.saveSurveyData(surveyId, rows, onProgress),
         async () => await this.indexedDB.saveSurveyData(surveyId, rows, onProgress)
       );
+      if (isUploadDebugEnabled()) {
+        logger.log('🧪 UploadDebug: saveSurveyData complete', { surveyId, rowCount: rows.length });
+      }
       logger.log(`✅ DataService: All ${rows.length} rows saved successfully`);
     } catch (error) {
       logger.error(`❌ DataService: Failed to save survey data:`, error);

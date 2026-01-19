@@ -15,6 +15,8 @@ import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useColumnSizing } from '../shared/hooks/useColumnSizing';
 import AgGridWrapper from './AgGridWrapper';
 import { sanitizeHtml } from '../shared/utils/sanitization';
+import { useDatabaseReady } from '../contexts/DatabaseContext';
+import { getUserId } from '../shared/utils/userScoping';
 
 // Custom header component for pinning columns
 const CustomHeader = (props: any) => {
@@ -79,6 +81,16 @@ interface FileStats {
 
 const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange, onGridReady }) => {
   const dataService = getDataService();
+  const isDatabaseReady = useDatabaseReady();
+  const hasLoadedRef = useRef(false);
+  const resolvedSurveyId = useMemo(() => {
+    const userId = getUserId();
+    const userPrefix = `${userId}_`;
+    if (file?.id && file.id.startsWith(userPrefix)) {
+      return file.id.slice(userPrefix.length);
+    }
+    return file?.id || '';
+  }, [file?.id]);
   
   // Use smooth progress for dynamic loading
   const { progress } = useSmoothProgress({
@@ -89,7 +101,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [previewData, setPreviewData] = useState<string[][]>([]);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [originalData, setOriginalData] = useState<any[]>([]);
-  const [stats, setStats] = useState<FileStats | null>(null);
+  // Stats removed - was unused
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -110,8 +122,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [gridApi, setGridApi] = useState<any | null>(null);
   const [columnApi, setColumnApi] = useState<any | null>(null);
   // Removed table-level quick search to rely on existing dropdown filters
-  const selectableHeaders = useMemo(() => previewHeaders, [previewHeaders]);
-  const [pinColumnId, setPinColumnId] = useState<string>('');
+  // Removed unused selectableHeaders, pinColumnId
 
   const [serverSpecialties, setServerSpecialties] = useState<string[]>([]);
   const [serverProviderTypes, setServerProviderTypes] = useState<string[]>([]);
@@ -145,7 +156,6 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           setOriginalData([]);
           setPreviewData([]);
           setPreviewHeaders([]);
-          setStats(null);
         }
         return;
       }
@@ -156,21 +166,33 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       setOriginalData([]);
       setPreviewData([]);
       setPreviewHeaders([]);
-      setStats(null);
     };
 
     window.addEventListener('survey-deleted', handleDataChange as EventListener);
     return () => window.removeEventListener('survey-deleted', handleDataChange as EventListener);
   }, [file.id]);
 
+  // Reset load tracking when switching surveys
+  useEffect(() => {
+    hasLoadedRef.current = false;
+  }, [file.id]);
+
   // Consolidated data loading effect to prevent race conditions
   useEffect(() => {
     let isCancelled = false;
     let timeoutId: NodeJS.Timeout;
-    let retryCount = 0;
     const MAX_RETRIES = 5;
     const RETRY_DELAY = 500;
     const MAX_LOAD_TIME = 30000; // 30 seconds max load time
+
+    // Wait until IndexedDB is ready before attempting to load survey data
+    if (!isDatabaseReady) {
+      if (!hasLoadedRef.current) {
+        setIsLoading(true);
+        setIsRefreshing(false);
+      }
+      return;
+    }
     
     // ENTERPRISE FIX: Add timeout to prevent infinite loading
     const loadTimeoutId = setTimeout(() => {
@@ -184,6 +206,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     
     console.log('Data loading effect triggered:', {
       fileId: file.id,
+      resolvedSurveyId,
       specialty: globalFilters.specialty,
       providerType: globalFilters.providerType,
       region: globalFilters.region,
@@ -215,7 +238,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }
         
         // Show loading only on initial load or when switching surveys
-        if (!originalData.length || !previewData.length) {
+        if (!hasLoadedRef.current) {
           setIsLoading(true);
         } else {
           setIsRefreshing(true);
@@ -248,7 +271,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // ENTERPRISE FIX: Check if survey still exists before trying to load data
         let surveyExists = false;
         try {
-          const survey = await dataService.getSurveyById(file.id);
+          const survey = await dataService.getSurveyById(resolvedSurveyId);
           surveyExists = !!survey;
         } catch (error) {
           console.log('Survey not found, may have been deleted:', error);
@@ -267,7 +290,6 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           setOriginalData([]);
           setPreviewData([]);
           setPreviewHeaders([]);
-          setStats(null);
           setIsLoading(false);
           setIsRefreshing(false); // CRITICAL: Clear refreshing state
           return;
@@ -281,7 +303,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }
         
         const { rows: surveyData } = await dataService.getSurveyData(
-          file.id,
+          resolvedSurveyId,
           filters,
           { limit: 10000 } // Fetch all data (up to 10,000 rows)
         );
@@ -306,10 +328,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           return;
         }
         
-        // Check if survey data is empty (survey might have been deleted)
+        // Check if survey data is empty (survey might have been deleted or data not synced yet)
         if (surveyData.length === 0) {
-          // Retry if we got empty data on first attempt (might be Firebase not ready)
-          if (attempt < MAX_RETRIES && !originalData.length && isMountedRef.current) {
+          // Retry if we got empty data on first attempt (IndexedDB may still be initializing)
+          if (attempt < MAX_RETRIES && !hasLoadedRef.current && isMountedRef.current) {
             console.log(`No data returned, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
             setTimeout(() => {
               if (!isCancelled && isMountedRef.current) {
@@ -326,7 +348,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             setOriginalData([]);
             setPreviewData([]);
             setPreviewHeaders([]);
-            setStats(null);
+            hasLoadedRef.current = true;
+            onError('No survey data found for this upload. Please re-upload the file.');
           }
           return;
         }
@@ -345,7 +368,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // First, try to get original headers from survey metadata
         let headers: string[] = [];
         try {
-          const survey = await dataService.getSurveyById(file.id);
+          const survey = await dataService.getSurveyById(resolvedSurveyId);
           
           // ENTERPRISE FIX: Check if cancelled or unmounted after metadata fetch
           if (isCancelled || !isMountedRef.current) {
@@ -400,15 +423,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // Hide db identifiers from preview (if not already filtered)
         headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
         const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
-        
-        setStats({
-          columnNames: headers,
-          totalRows: surveyData.length,
-          uniqueSpecialties: new Set(surveyData.map(row => row.specialty)).size,
-          totalDataPoints: surveyData.length * headers.length
-        });
+
         setPreviewHeaders(headers);
         setPreviewData(rows);
+        hasLoadedRef.current = true;
         
         // Force a small delay to ensure state updates propagate
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -438,13 +456,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             setOriginalData([]);
             setPreviewData([]);
             setPreviewHeaders([]);
-            setStats(null);
           }
           return;
         }
         
         // Retry on error if we haven't exceeded max retries
-        if (attempt < MAX_RETRIES && !originalData.length && !isCancelled && isMountedRef.current) {
+        if (attempt < MAX_RETRIES && !hasLoadedRef.current && !isCancelled && isMountedRef.current) {
           console.log(`Error occurred, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
           setTimeout(() => {
             if (!isCancelled && isMountedRef.current) {
@@ -465,10 +482,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
     // Initial delay to allow Firebase/auth to initialize, then load data
     // Use a longer delay on first mount to ensure Firebase is ready
-    const initialDelay = !originalData.length ? 300 : 100;
+    const initialDelay = !hasLoadedRef.current ? 300 : 100;
     
     timeoutId = setTimeout(() => {
-      if (file.id) {
+      if (resolvedSurveyId) {
         loadSurveyData(0);
       }
     }, initialDelay);
@@ -485,7 +502,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       setIsLoading(false);
       setIsRefreshing(false);
     };
-  }, [file.id, globalFilters.specialty, globalFilters.providerType, globalFilters.region, globalFilters.variable]);
+  }, [file.id, resolvedSurveyId, globalFilters.specialty, globalFilters.providerType, globalFilters.region, globalFilters.variable, dataService, onError, isDatabaseReady]);
 
   // Load global filter options from server (not paginated)
   useEffect(() => {
@@ -494,7 +511,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       try {
         console.log('Loading filter options for file:', file.id);
         // For IndexedDB, we'll extract filter options from the data
-        const { rows } = await dataService.getSurveyData(file.id);
+        const { rows } = await dataService.getSurveyData(resolvedSurveyId);
         if (cancelled) return;
         
         console.log('Raw data for filter extraction:', rows.slice(0, 3));
@@ -560,9 +577,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         console.error('Error loading filter options:', error);
       }
     };
-    if (file.id) loadFilters();
+    if (resolvedSurveyId && isDatabaseReady) loadFilters();
     return () => { cancelled = true; };
-  }, [file.id]);
+  }, [file.id, resolvedSurveyId, dataService, isDatabaseReady]);
 
   // Simple filter options - disable cascading for now to fix basic filtering
   const cascadingFilterOptions = useMemo(() => {
@@ -1055,39 +1072,45 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             />
           </div>
         )}
-        <AgGridWrapper
-            key={`grid-${file.id}-${previewData.length}-${previewHeaders.length}`}
-            onGridReady={(params: any) => {
-              setGridApi(params.api);
-              setColumnApi(params.columnApi);
-              
-              // Pass grid API to parent component immediately
-              if (onGridReady) {
-                onGridReady(params.api);
-                console.log('Grid API passed to parent component');
-              }
-              // Column sizing is handled by useColumnSizing hook
-            }}
-            rowData={filteredData.map((row) => {
-              const obj: Record<string, string> = {};
-              previewHeaders.forEach((header, idx) => {
-                obj[header] = row[idx];
-              });
-              return obj;
-            })}
-            columnDefs={createColumnDefs()}
-            pagination={filteredData.length > 0}
-            defaultColDef={{ sortable: true, filter: true, resizable: true }}
-            suppressRowClickSelection={true}
-            components={{
-              CustomHeader: CustomHeader
-            }}
-            domLayout="normal"
-            suppressRowHoverHighlight={true}
-            rowHeight={36}
-            suppressColumnVirtualisation={false}
-            suppressHorizontalScroll={false}
-          />
+        {previewHeaders.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-sm text-gray-500">
+            No rows available for this survey.
+          </div>
+        ) : (
+          <AgGridWrapper
+              key={`grid-${file.id}-${previewData.length}-${previewHeaders.length}`}
+              onGridReady={(params: any) => {
+                setGridApi(params.api);
+                setColumnApi(params.columnApi);
+                
+                // Pass grid API to parent component immediately
+                if (onGridReady) {
+                  onGridReady(params.api);
+                  console.log('Grid API passed to parent component');
+                }
+                // Column sizing is handled by useColumnSizing hook
+              }}
+              rowData={filteredData.map((row) => {
+                const obj: Record<string, string> = {};
+                previewHeaders.forEach((header, idx) => {
+                  obj[header] = row[idx];
+                });
+                return obj;
+              })}
+              columnDefs={createColumnDefs()}
+              pagination={filteredData.length > 0}
+              defaultColDef={{ sortable: true, filter: true, resizable: true }}
+              suppressRowClickSelection={true}
+              components={{
+                CustomHeader: CustomHeader
+              }}
+              domLayout="normal"
+              suppressRowHoverHighlight={true}
+              rowHeight={36}
+              suppressColumnVirtualisation={false}
+              suppressHorizontalScroll={false}
+            />
+        )}
       </div>
     </div>
   );

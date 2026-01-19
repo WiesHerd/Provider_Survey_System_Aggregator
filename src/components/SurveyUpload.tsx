@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useDropzone } from 'react-dropzone';
 import { useLocation } from 'react-router-dom';
 import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress } from '@mui/material';
+import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress, Button } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
 import { ISurveyRow } from '../types/survey';
@@ -14,19 +14,20 @@ import { useSurveyListQuery } from '../features/upload/hooks/useSurveyListQuery'
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { getPerformanceOptimizedDataService } from '../services/PerformanceOptimizedDataService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
-import { clearStorage } from '../utils/clearStorage';
 import { parseCSVLine } from '../shared/utils/csvParser';
 import { readCSVFile } from '../shared/utils';
+import { getFirebaseAuth, isFirebaseAvailable } from '../config/firebase';
+import { FirestoreService } from '../services/FirestoreService';
 import { validateFileStructure, validateHeaders, ValidationError } from '../features/upload/utils/preUploadValidation';
-import { detectFormat, getExpectedFormat } from '../features/upload/utils/formatDetection';
+import { detectFormat, getExpectedFormat, getExpectedFormats, getFormatRequirements } from '../features/upload/utils/formatDetection';
 import { validateDataTypes, validateBusinessRules } from '../features/upload/utils/dataValidation';
-import { ProviderType, DataCategory } from '../types/provider';
+import type { ProviderType, DataCategory, UIProviderType } from '../types/provider';
 import { EmptyState } from '../features/mapping/components/shared/EmptyState';
 import { getShortenedSurveyType as getShortenedSurveyTypeShared } from '../shared/utils/surveyFormatters';
 import { BoltIcon } from '@heroicons/react/24/outline';
 import { ColumnMappingDialog } from '../features/upload/components/ColumnMappingDialog';
-import { downloadGeneratedSample } from '../utils/generateSampleFile';
-import { ValidationBanner } from '../features/upload/components/ValidationBanner';
+import { downloadUploadTemplate, UploadTemplateFormat } from '../utils/downloadUtils';
+import { UploadValidationWizard } from '../features/upload/components/UploadValidationWizard';
 import { SheetSelector } from '../features/upload/components/SheetSelector';
 import { ValidationPreviewTable } from '../features/upload/components/ValidationPreviewTable';
 import { parseFile } from '../features/upload/utils/fileParser';
@@ -38,6 +39,29 @@ import { DuplicateSurveyDialog, DuplicateResolutionAction } from '../features/up
 import { AuditLogService } from '../services/AuditLogService';
 import { calculateFileHash } from '../features/upload/utils/fileHash';
 
+
+class UploadVerificationError extends Error {
+  public persist = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'UploadVerificationError';
+  }
+}
+
+const isUploadDebugEnabled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('bp_upload_debug') === 'true';
+};
+
+const logUploadDebug = (message: string, details?: Record<string, unknown>): void => {
+  if (!isUploadDebugEnabled()) return;
+  if (details) {
+    console.log('🧪 UploadDebug:', message, details);
+    return;
+  }
+  console.log('🧪 UploadDebug:', message);
+};
 
 // Provider type categories for survey selection
 const SURVEY_OPTIONS = {
@@ -90,6 +114,48 @@ const getShortenedSurveyType = (surveyType: string, providerType: ProviderType, 
   }
   
   return shortenedType;
+};
+
+const detectSurveyMetadataFromFileName = (fileName: string) => {
+  const lower = fileName.toLowerCase();
+  const yearMatches = lower.match(/20\d{2}/g) || [];
+  const detectedYear = yearMatches.length > 0
+    ? Math.max(...yearMatches.map(match => Number(match))).toString()
+    : undefined;
+
+  let detectedSource: string | undefined;
+  if (lower.includes('sullivancotter') || lower.includes('sullivan cotter') || lower.includes('sullivan-cotter')) {
+    detectedSource = 'SullivanCotter';
+  } else if (lower.includes('mgma')) {
+    detectedSource = 'MGMA';
+  } else if (lower.includes('gallagher')) {
+    detectedSource = 'Gallagher';
+  } else if (lower.includes('ecg')) {
+    detectedSource = 'ECG';
+  } else if (lower.includes('amga')) {
+    detectedSource = 'AMGA';
+  }
+
+  let detectedDataCategory: 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | undefined;
+  if (lower.includes('call pay') || lower.includes('call_pay') || lower.includes('call-pay') || /\bcall\b/.test(lower)) {
+    detectedDataCategory = 'CALL_PAY';
+  } else if (lower.includes('moonlight')) {
+    detectedDataCategory = 'MOONLIGHTING';
+  }
+
+  let detectedProviderType: ProviderType | undefined;
+  if (/\bapp\b/.test(lower) || lower.includes('advanced practice') || /\bnp\b/.test(lower) || /\bpa\b/.test(lower) || /\bcrna\b/.test(lower)) {
+    detectedProviderType = 'APP';
+  } else if (lower.includes('physician') || /\bmd\b/.test(lower) || /\bdo\b/.test(lower)) {
+    detectedProviderType = 'PHYSICIAN';
+  }
+
+  return {
+    detectedYear,
+    detectedSource,
+    detectedDataCategory,
+    detectedProviderType
+  };
 };
 
 // Function to validate provider type match between form selection and data
@@ -149,11 +215,19 @@ interface UploadedSurveyMetadata {
   providerType: ProviderType | string; // Allow custom provider types as strings
   surveyYear: string;
   uploadDate: Date;
+  dataCategory?: 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | 'CUSTOM' | string;
   stats: {
     totalRows: number;
     uniqueSpecialties: number;
     totalDataPoints: number;
   }
+  metadata?: {
+    fileType?: 'csv' | 'excel';
+    fileSize?: number;
+    sheetName?: string;
+    sheetCount?: number;
+    [key: string]: any;
+  };
 }
 
 interface UploadedSurvey extends UploadedSurveyMetadata {
@@ -172,13 +246,10 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 // If you add new required columns, ensure they are included in the normalization logic.
 // See mapping logic in handleSurveyUpload for details.
 
-const SurveyUpload: React.FC = () => {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:169',message:'SurveyUpload component mounted',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
-  // #endregion
-  
+function SurveyUpload(): JSX.Element {
+
   const dataService = getDataService();
-  const { currentYear } = useYear();
+  const { currentYear, setCurrentYear } = useYear();
   const location = useLocation();
   const hasLoadedOnThisMount = useRef(false);
 
@@ -188,7 +259,7 @@ const SurveyUpload: React.FC = () => {
     maxProgress: 90,
     intervalMs: 100
   });
-  const { selectedProviderType, refreshProviderTypeDetection } = useProviderContext();
+  const { selectedProviderType, refreshProviderTypeDetection, setProviderType: setProviderTypeContext } = useProviderContext();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   // NEW: Data Category state (first dropdown)
@@ -333,26 +404,15 @@ const SurveyUpload: React.FC = () => {
 
   // Process React Query data into component format
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:316',message:'Processing surveys - useEffect entry',data:{rawSurveysCount:rawSurveys?.length,currentYear,selectedProviderType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,C,D'})}).catch(()=>{});
-    // #endregion
-    
     // CRITICAL FIX: Always process surveys from React Query, even right after upload
     // The cache invalidation and refetch will ensure fresh data is available
     if (!rawSurveys || rawSurveys.length === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:320',message:'No rawSurveys - early return',data:{rawSurveys:rawSurveys,length:rawSurveys?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       setUploadedSurveys([]);
       if (!selectedSurvey) {
         setSelectedSurvey('');
       }
       return;
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:327',message:'Raw surveys received - starting processing',data:{count:rawSurveys.length,surveyIds:rawSurveys.map((s:any)=>s.id),surveyNames:rawSurveys.map((s:any)=>s.name)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
-    // #endregion
 
     // Build lightweight survey list; show all surveys (use ID as unique key)
     // Detect potential duplicates but don't hide them - let user decide
@@ -366,24 +426,14 @@ const SurveyUpload: React.FC = () => {
       const duplicateKey = `${survey.source || survey.type || ''}-${survey.providerType || ''}-${survey.year || ''}-${survey.dataCategory || ''}`;
       const count = duplicateCheckMap.get(duplicateKey) || 0;
       duplicateCheckMap.set(duplicateKey, count + 1);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:337',message:'Duplicate check - first pass',data:{surveyId:survey.id,surveyName:survey.name,duplicateKey,count:count+1,source:survey.source,providerType:survey.providerType,year:survey.year,dataCategory:survey.dataCategory},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
-      // #endregion
     });
     
     // Mark all keys that have more than 1 survey as duplicates (fix: mark ALL surveys in duplicate groups, not just the second+)
     duplicateCheckMap.forEach((count, duplicateKey) => {
       if (count > 1) {
         duplicateKeys.add(duplicateKey);
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:345',message:'Duplicate group detected - marking all surveys with this key',data:{duplicateKey,count},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
       }
     });
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:345',message:'First pass complete - duplicate keys found',data:{duplicateKeysCount:duplicateKeys.size,duplicateKeys:Array.from(duplicateKeys),duplicateCheckMapEntries:Array.from(duplicateCheckMap.entries())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     
     // Second pass: build survey list with duplicate flags
     rawSurveys.forEach((survey: any) => {
@@ -391,11 +441,7 @@ const SurveyUpload: React.FC = () => {
       const uniqueKey = survey.id;
       const duplicateKey = `${survey.source || survey.type || ''}-${survey.providerType || ''}-${survey.year || ''}-${survey.dataCategory || ''}`;
       const isDuplicate = duplicateKeys.has(duplicateKey);
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:350',message:'Processing survey - second pass',data:{surveyId:survey.id,uniqueKey,duplicateKey,isDuplicate,surveyName:survey.name,hasSource:!!survey.source,hasType:!!survey.type,hasProviderType:!!survey.providerType,hasYear:!!survey.year,hasDataCategory:!!survey.dataCategory},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
-      // #endregion
-      
+
       surveyMap.set(uniqueKey, {
         id: survey.id,
         fileName: survey.name || '',
@@ -411,6 +457,8 @@ const SurveyUpload: React.FC = () => {
         },
         columnMappings: {},
         providerType: survey.providerType || 'PHYSICIAN',
+        dataCategory: survey.dataCategory,
+        metadata: survey.metadata || {},
         // Add duplicate flag for UI display
         isDuplicate: isDuplicate,
         duplicateKey: duplicateKey
@@ -418,11 +466,6 @@ const SurveyUpload: React.FC = () => {
     });
     
     const processedSurveys = Array.from(surveyMap.values());
-
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/e02b26c0-1b88-4ff1-9bd7-b7a6eed692c8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SurveyUpload.tsx:373',message:'Processing complete - setting uploadedSurveys',data:{processedCount:processedSurveys.length,rawCount:rawSurveys.length,processedIds:processedSurveys.map((s:any)=>s.id),processedNames:processedSurveys.map((s:any)=>s.fileName),duplicateFlags:processedSurveys.map((s:any)=>s.isDuplicate)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
-    // #endregion
-
     setUploadedSurveys(processedSurveys);
     // Auto-select first survey if none selected, or if current selection is no longer available
     if (processedSurveys.length > 0) {
@@ -460,6 +503,20 @@ const SurveyUpload: React.FC = () => {
     
     setFiles(newFiles);
     setError('');
+
+    const { detectedYear, detectedSource, detectedDataCategory, detectedProviderType } = detectSurveyMetadataFromFileName(file.name);
+    if (detectedSource && !surveySource) {
+      setSurveySource(detectedSource);
+    }
+    if (detectedDataCategory && dataCategory === 'COMPENSATION') {
+      setDataCategory(detectedDataCategory);
+    }
+    if (detectedProviderType && providerType === 'PHYSICIAN') {
+      setProviderType(detectedProviderType);
+    }
+    if (detectedYear && String(surveyYear) === String(currentYear)) {
+      setSurveyYear(detectedYear);
+    }
     setColumnValidation(null);
     setPreUploadValidation(null);
     setDataValidation(null);
@@ -492,7 +549,7 @@ const SurveyUpload: React.FC = () => {
         : undefined;
       const parseResult = await parseFile(file, selectedSheetName);
       
-      // Store parsed data so ValidationBanner can display errors
+      // Store parsed data for validation review and preview
       setParsedData({
         headers: parseResult.headers,
         rows: parseResult.rows
@@ -503,7 +560,22 @@ const SurveyUpload: React.FC = () => {
       setValidationResult(newValidationResult);
       
       // Step 4: Header validation (< 1s) - keep for backward compatibility
-      const headerValidation = await validateHeaders(file);
+      // For Excel files, use parsed headers to avoid binary header issues.
+      const headerValidation = isExcelFile(file)
+        ? {
+            isValid: parseResult.headers.length > 0,
+            headers: parseResult.headers,
+            format: undefined,
+            formatConfidence: undefined,
+            errors: parseResult.headers.length > 0 ? [] : [{
+              severity: 'critical',
+              category: 'structure',
+              message: 'File header row is empty',
+              fixInstructions: ['Ensure first row contains column headers']
+            }],
+            warnings: []
+          }
+        : await validateHeaders(file);
       
       // Step 5: Format detection
       let formatDetection;
@@ -528,7 +600,11 @@ const SurveyUpload: React.FC = () => {
           const dataRows = parseResult.rows.map(row => {
             const rowData: any = {};
             parseResult.headers.forEach((header: string, index: number) => {
-              rowData[header] = row[index] || '';
+              const trimmedHeader = String(header || '').trim();
+              if (!trimmedHeader) {
+                return;
+              }
+              rowData[trimmedHeader] = row[index] || '';
             });
             return rowData;
           });
@@ -559,6 +635,32 @@ const SurveyUpload: React.FC = () => {
     }
   }, [providerType, dataCategory, surveySource, customSurveySource]);
 
+  const handleDownloadTemplate = async (format?: UploadTemplateFormat) => {
+    try {
+      if (!format) {
+        // Validate required fields for scenario-specific template
+        if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
+          setError('Please select Data Category first');
+          return;
+        }
+        if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
+          setError('Please select Provider Type first');
+          return;
+        }
+      }
+
+      await downloadUploadTemplate({
+        dataCategory,
+        providerType,
+        format,
+        expectedFormat: expectedFormatForTemplate
+      });
+    } catch (error) {
+      console.error('Download failed:', error);
+      setError('Failed to download template. Please try again.');
+    }
+  };
+
   // Re-validate when sheet selection changes for Excel files
   useEffect(() => {
     if (files.length > 0 && isExcelFile(files[0]) && selectedSheet && excelSheets.length > 0) {
@@ -576,6 +678,24 @@ const SurveyUpload: React.FC = () => {
           
           const newValidationResult = validateAll(parseResult.headers, parseResult.rows);
           setValidationResult(newValidationResult);
+
+          if (parseResult.headers.length > 0) {
+            const fullValidation = validateColumns(parseResult.headers);
+            setColumnValidation(fullValidation);
+
+            setPreUploadValidation(prev => ({
+              ...(prev || { structure: { isValid: true, errors: [], warnings: [], info: [], fileSize: file.size } }),
+              headers: {
+                isValid: true,
+                headers: parseResult.headers,
+                format: undefined,
+                formatConfidence: undefined,
+                errors: [],
+                warnings: []
+              },
+              formatDetection: detectFormat(parseResult.headers)
+            }));
+          }
         } catch (error) {
           console.error('Error re-validating file:', error);
         } finally {
@@ -697,6 +817,7 @@ const SurveyUpload: React.FC = () => {
       
       // ENTERPRISE: Use unified cache invalidation helpers
       await invalidateAllCachesAfterDelete(surveyIdToDelete);
+      duplicateDetectionService.clearCache();
       
       // ENTERPRISE FIX: Clear selected survey FIRST and update state IMMEDIATELY
       // This ensures DataPreview unmounts immediately and stops loading
@@ -783,6 +904,24 @@ const SurveyUpload: React.FC = () => {
   };
 
   // Helper function to check if column mapping is needed
+  const sanitizeHeaders = (rawHeaders: string[]) => {
+    const headerIndexPairs = rawHeaders.map((header, index) => ({
+      header: String(header || '').trim(),
+      index
+    }));
+    const validPairs = headerIndexPairs.filter(pair => pair.header.length > 0);
+    return {
+      headers: validPairs.map(pair => pair.header),
+      indexes: validPairs.map(pair => pair.index),
+      removedCount: headerIndexPairs.length - validPairs.length
+    };
+  };
+
+  const sanitizeRowsByHeaderIndexes = (rows: any[][], indexes: number[]) => {
+    return rows.map(row => indexes.map(index => row[index] ?? ''));
+  };
+
+  // Helper function to check if column mapping is needed
   const checkIfMappingNeeded = (headers: string[], validation: any): boolean => {
     // If validation is invalid, we might need mapping
     if (!validation.isValid && validation.missingColumns.length > 0) {
@@ -827,6 +966,8 @@ const SurveyUpload: React.FC = () => {
     
     setIsUploading(true);
     startProgress();
+    // Close mapping dialog immediately so users can see upload progress
+    setShowMappingDialog(false);
     
     // Calculate adaptive timeout based on file size
     const fileSizeMB = file.size / (1024 * 1024);
@@ -946,7 +1087,9 @@ const SurveyUpload: React.FC = () => {
       clearTimeout(uploadTimeout);
       setIsUploading(false);
       completeProgress();
-      handleError(error.message || 'Failed to upload survey with mappings');
+      handleError(error.message || 'Failed to upload survey with mappings', {
+        persist: isPersistentError(error)
+      });
       setPendingUpload(null);
       setShowMappingDialog(false);
     }
@@ -960,6 +1103,22 @@ const SurveyUpload: React.FC = () => {
     resetTimeout?: () => void,
     skipDuplicateCheck: boolean = false
   ) => {
+    if (isFirebaseAvailable()) {
+      const auth = getFirebaseAuth();
+      const authUser = auth?.currentUser;
+      logUploadDebug('Auth context at upload start', {
+        uid: authUser?.uid,
+        email: authUser?.email
+      });
+      if (!authUser?.uid) {
+        throw new UploadVerificationError('You are signed out. Please sign in and retry the upload.');
+      }
+    }
+    if (!parsedRows || parsedRows.length === 0) {
+      console.error('❌ No rows parsed from upload. Aborting save.');
+      throw new UploadVerificationError('No rows were parsed from this file. Please verify the file contains data rows.');
+    }
+    logUploadDebug('Parsed rows ready for upload', { rowCount: parsedRows.length });
     // Extract provider types from data for validation
     const uniqueProviderTypes = new Set(
       parsedRows
@@ -1022,6 +1181,8 @@ const SurveyUpload: React.FC = () => {
     
     if (!skipDuplicateCheck) {
       try {
+        // Ensure duplicate detection uses fresh survey list after deletions
+        duplicateDetectionService.clearCache();
         console.log('🔍 Checking for duplicate surveys...');
         
         const duplicateCheck = await duplicateDetectionService.checkForDuplicates({
@@ -1117,6 +1278,17 @@ const SurveyUpload: React.FC = () => {
         originalHeaders: headers.filter(h => h && h.trim())
       }
     };
+
+    // Add basic file metadata (useful for auditing and troubleshooting)
+    const isExcelUpload = isExcelFile(file);
+    const sheetName = isExcelUpload ? (selectedSheet || excelSheets[0]?.name) : undefined;
+    const sheetCount = isExcelUpload ? (excelSheets.length || undefined) : undefined;
+    survey.metadata.fileType = isExcelUpload ? 'excel' : 'csv';
+    survey.metadata.fileSize = file.size;
+    if (isExcelUpload) {
+      survey.metadata.sheetName = sheetName;
+      survey.metadata.sheetCount = sheetCount;
+    }
     
     // CRITICAL DEBUG: Log survey object before saving
     console.log('💾 Survey object to save:', {
@@ -1146,6 +1318,7 @@ const SurveyUpload: React.FC = () => {
       fileName: surveyName,
       surveyType: surveyTypeName,
       providerType: providerType === 'CUSTOM' ? customProviderType : providerType,
+      dataCategory: finalDataCategory,
       surveyYear,
       uploadDate: new Date(),
       fileContent: '',
@@ -1155,7 +1328,13 @@ const SurveyUpload: React.FC = () => {
         uniqueSpecialties: survey.specialtyCount,
         totalDataPoints: parsedRows.length
       },
-      columnMappings: survey.metadata.columnMappings
+      columnMappings: survey.metadata.columnMappings,
+      metadata: {
+        fileType: survey.metadata.fileType,
+        fileSize: survey.metadata.fileSize,
+        sheetName: survey.metadata.sheetName,
+        sheetCount: survey.metadata.sheetCount
+      }
     };
 
     setUploadedSurveys(prev => [...prev, immediateSurvey]);
@@ -1167,10 +1346,25 @@ const SurveyUpload: React.FC = () => {
     const storageName = storageMode === 'firebase' ? 'Firebase (Cloud)' : 'IndexedDB (Local)';
     
     console.log(`💾 Saving survey to ${storageName}...`);
+    logUploadDebug('Creating survey metadata', {
+      surveyId,
+      name: surveyName,
+      year: surveyYearString,
+      providerType: finalProviderType,
+      source: finalSource,
+      dataCategory: finalDataCategory
+    });
     await dataService.createSurvey(survey);
     console.log('✅ Survey created successfully');
+    const surveyFromFirestore = await dataService.getSurveyByIdFromFirestore(surveyId);
+    logUploadDebug('Survey metadata verification', { exists: Boolean(surveyFromFirestore) });
+    if (!surveyFromFirestore) {
+      logUploadDebug('Survey metadata missing after create, retrying createSurvey');
+      await dataService.createSurvey(survey);
+    }
     
     console.log(`💾 Saving ${parsedRows.length} rows to ${storageName}...`);
+    logUploadDebug('Saving survey rows', { surveyId, rowCount: parsedRows.length });
     await dataService.saveSurveyData(surveyId, parsedRows, (progress) => {
       // Update progress for user feedback and reset timeout
       if (progress < 100) {
@@ -1182,6 +1376,45 @@ const SurveyUpload: React.FC = () => {
       }
     });
     console.log(`✅ All ${parsedRows.length} rows saved successfully to ${storageName}`);
+
+    const verifyUploadAsync = async (): Promise<void> => {
+      try {
+        const surveyVerified = await dataService.getSurveyByIdFromFirestore(surveyId);
+        logUploadDebug('Survey metadata verification', { exists: Boolean(surveyVerified) });
+        let hasRows = false;
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const { rows } = await dataService.getSurveyDataFromFirestore(surveyId, {}, { limit: 1 });
+          logUploadDebug('Verification check', { attempt: attempt + 1, rowCount: rows.length });
+          if (rows.length > 0) {
+            hasRows = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        if (!surveyVerified) {
+          handleError(
+            'Upload rows saved, but the survey metadata document was not found in Firebase. Please retry.',
+            { persist: true }
+          );
+          return;
+        }
+        if (!hasRows) {
+          handleError(
+            'Upload saved but no rows were found in Firebase. Please verify Firebase permissions and retry.',
+            { persist: true }
+          );
+        }
+      } catch (verifyError) {
+        handleError(
+          `Upload verification failed: ${verifyError instanceof Error ? verifyError.message : 'Unknown error'}`,
+          { persist: true }
+        );
+      }
+    };
+
+    void verifyUploadAsync();
 
     // Trigger storage event to notify other components (non-blocking)
     window.dispatchEvent(new StorageEvent('storage', {
@@ -1415,6 +1648,17 @@ const SurveyUpload: React.FC = () => {
         dataRows = rows.slice(1).filter(row => row.trim());
       }
 
+      // Sanitize headers to remove blank column names (prevents invalid empty-field writes)
+      const {
+        headers: sanitizedHeaders,
+        indexes: sanitizedHeaderIndexes,
+        removedCount
+      } = sanitizeHeaders(headers);
+      if (removedCount > 0) {
+        console.warn(`⚠️ Dropping ${removedCount} blank header column(s) before upload.`);
+      }
+      headers = sanitizedHeaders;
+
       // Validate columns before processing (skip if using cleaned data)
       let validation;
       let needsMapping = false;
@@ -1441,7 +1685,8 @@ const SurveyUpload: React.FC = () => {
           const values = parseCSVLine(row);
           const rowData: any = {};
           headers.forEach((header: string, index: number) => {
-            rowData[header] = values[index] || '';
+            const sourceIndex = sanitizedHeaderIndexes[index];
+            rowData[header] = values[sourceIndex] || '';
           });
           return rowData;
         });
@@ -1457,10 +1702,9 @@ const SurveyUpload: React.FC = () => {
       }
       
       if (!cleanedData && validation && !validation.isValid) {
-        setError('File has missing required columns. Please check the validation details below.');
-        setIsUploading(false);
-        completeProgress(); // Complete progress even on validation error
-        return;
+        // Do not block upload for non-fatal validation issues.
+        // Users can proceed and resolve mismatches in mapping or downstream.
+        console.warn('⚠️ Proceeding with upload despite validation issues:', validation);
       }
 
       // Progress is handled by useSmoothProgress hook
@@ -1469,11 +1713,12 @@ const SurveyUpload: React.FC = () => {
       let parsedRows: any[];
       
       if (cleanedData) {
-        // Use cleaned data directly (already in object format)
+        // Use cleaned data directly (already in array format)
         parsedRows = cleanedData.rows.map(row => {
           const rowData: any = {};
           headers.forEach((header: string, index: number) => {
-            rowData[header] = row[index] || '';
+            const sourceIndex = sanitizedHeaderIndexes[index];
+            rowData[header] = row[sourceIndex] || '';
           });
           return rowData;
         });
@@ -1483,7 +1728,8 @@ const SurveyUpload: React.FC = () => {
           const values = parseCSVLine(row);
           const rowData: any = {};
           headers.forEach((header: string, index: number) => {
-            rowData[header] = values[index] || '';
+            const sourceIndex = sanitizedHeaderIndexes[index];
+            rowData[header] = values[sourceIndex] || '';
           });
           return rowData;
         });
@@ -1639,7 +1885,9 @@ const SurveyUpload: React.FC = () => {
 
     } catch (error) {
       console.error('❌ Upload error:', error);
-      handleError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      handleError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        persist: isPersistentError(error)
+      });
       setIsUploading(false);
       completeProgress(); // Complete progress animation
     } finally {
@@ -1648,7 +1896,10 @@ const SurveyUpload: React.FC = () => {
     }
   };
 
+  const [confirmAllText, setConfirmAllText] = useState('');
+
   const handleClearAll = () => {
+    setConfirmAllText('');
     setShowClearAllConfirmation(true);
   };
 
@@ -1662,6 +1913,68 @@ const SurveyUpload: React.FC = () => {
   };
 
 
+
+  const clearSurveysByIds = async (surveyIds: string[]) => {
+    for (let i = 0; i < surveyIds.length; i += 1) {
+      const surveyId = surveyIds[i];
+      const result = await dataService.deleteSurveyEverywhere(surveyId);
+      if (!result.success) {
+        throw new Error(result.errors.join(' | ') || 'Delete failed');
+      }
+    }
+  };
+
+  const confirmClearCurrentView = async () => {
+    let forceCloseTimeout: NodeJS.Timeout | null = null;
+
+    try {
+      setIsDeleting(true);
+      setIsDeletingAll(false);
+      startProgress();
+
+      const surveyIds = rawSurveys?.map((survey: any) => survey.id) || [];
+      if (surveyIds.length === 0) {
+        setShowClearAllConfirmation(false);
+        setIsDeleting(false);
+        completeProgress();
+        return;
+      }
+
+      forceCloseTimeout = setTimeout(() => {
+        console.warn('⚠️ Clear view operation taking too long, showing force close option');
+        setShowForceClose(true);
+      }, 30000);
+
+      await clearSurveysByIds(surveyIds);
+      console.log('✅ Current view surveys deleted successfully');
+      duplicateDetectionService.clearCache();
+
+      // Clear performance cache and refetch
+      try {
+        const performanceService = getPerformanceOptimizedDataService();
+        performanceService.clearCache('all_surveys');
+      } catch (error) {
+        console.warn('Failed to clear performance cache:', error);
+      }
+
+      try {
+        await refetchSurveys();
+      } catch (error) {
+        console.warn('Failed to refetch surveys after view delete:', error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to clear current view:', error);
+      handleError(`Failed to clear current view: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      if (forceCloseTimeout) {
+        clearTimeout(forceCloseTimeout);
+      }
+      setShowClearAllConfirmation(false);
+      setIsDeleting(false);
+      setShowForceClose(false);
+      completeProgress();
+    }
+  };
 
   const confirmClearAll = async () => {
     let forceCloseTimeout: NodeJS.Timeout | null = null;
@@ -1689,25 +2002,49 @@ const SurveyUpload: React.FC = () => {
         ]);
       };
       
-      // Clear all surveys first with timeout (now includes cache clearing)
+      // Clear all surveys everywhere with timeout
       console.log('🗑️ Deleting all surveys...');
       try {
-        await withTimeout(dataService.deleteAllSurveys(), 10000, 'Delete all surveys');
-        console.log('✅ All surveys deleted successfully');
+        const deleteAllResult = await withTimeout(
+          dataService.deleteAllSurveysEverywhere(),
+          15000,
+          'Delete all surveys everywhere'
+        );
+        if (!deleteAllResult.success) {
+          throw new Error(deleteAllResult.errors.join(' | ') || 'Delete all surveys failed');
+        }
+        console.log('✅ All surveys deleted successfully (local and cloud)');
+        duplicateDetectionService.clearCache();
+
+        const { firestoreSurveyCount, indexedDbSurveyCount } = deleteAllResult.verification;
+        if ((firestoreSurveyCount ?? 0) > 0 || (indexedDbSurveyCount ?? 0) > 0) {
+          console.warn('⚠️ Delete verification: surveys still present after delete', {
+            firestoreSurveyCount,
+            indexedDbSurveyCount
+          });
+        }
       } catch (deleteError) {
         console.warn('⚠️ Regular delete failed, trying force clear:', deleteError);
         try {
-          await withTimeout(dataService.forceClearDatabase(), 5000, 'Force clear database');
+          // Force clear IndexedDB
+          await withTimeout(dataService.forceClearDatabase(), 5000, 'Force clear local database');
+
+          // Force clear Firestore if available (ensure cloud wipe)
+          if (isFirebaseAvailable()) {
+            try {
+              const firestoreService = new FirestoreService();
+              await withTimeout(firestoreService.forceClearDatabase(), 10000, 'Force clear Firestore');
+            } catch (firestoreError) {
+              console.warn('⚠️ Firestore force clear failed:', firestoreError);
+            }
+          }
+
           console.log('✅ Database force cleared successfully');
         } catch (forceError) {
           console.error('❌ Both delete methods failed:', forceError);
           throw new Error(`Failed to clear data: ${forceError instanceof Error ? forceError.message : 'Unknown error'}`);
         }
       }
-      
-      // Clear localStorage as well
-      console.log('🗑️ Clearing localStorage...');
-      clearStorage.clearLocalStorage();
       
       setUploadedSurveys([]);
       setSelectedSurvey(null);
@@ -1826,10 +2163,31 @@ const SurveyUpload: React.FC = () => {
 
 
 
-  const handleError = (errorMessage: string) => {
-    setError(errorMessage);
-    setTimeout(() => setError(''), 5000);
+  const handleError = useCallback(
+    (errorMessage: string, options?: { persist?: boolean }) => {
+      setError(errorMessage);
+      if (!options?.persist) {
+        setTimeout(() => setError(''), 5000);
+      }
+    },
+    []
+  );
+
+  const isPersistentError = (error: unknown): boolean => {
+    return Boolean((error as { persist?: boolean })?.persist);
   };
+
+  useEffect(() => {
+    if (!isUploadDebugEnabled()) {
+      return;
+    }
+    const auth = getFirebaseAuth();
+    const authUser = auth?.currentUser;
+    logUploadDebug('Auth context on page load', {
+      uid: authUser?.uid,
+      email: authUser?.email
+    });
+  }, []);
 
   // Add helper function to calculate survey statistics
   const calculateSurveyStats = (rows: ISurveyRow[] | undefined) => {
@@ -1852,6 +2210,32 @@ const SurveyUpload: React.FC = () => {
       totalDataPoints: rows.length * Object.keys(rows[0] || {}).length
     };
   };
+
+  const activeSurveySource = surveySource === 'Custom' ? customSurveySource : surveySource;
+  const expectedFormats = activeSurveySource ? getExpectedFormats(activeSurveySource) : [];
+  const expectedFormat = activeSurveySource ? getExpectedFormat(activeSurveySource) : undefined;
+  const detectedFormat = preUploadValidation?.formatDetection?.format;
+  const expectedFormatForTemplate = detectedFormat && expectedFormats.includes(detectedFormat)
+    ? detectedFormat
+    : expectedFormat;
+  const acceptedFormat = detectedFormat && expectedFormats.includes(detectedFormat)
+    ? detectedFormat
+    : detectedFormat;
+  const formatRequirements = acceptedFormat
+    ? getFormatRequirements(acceptedFormat)
+    : expectedFormats.length > 0
+      ? getFormatRequirements(expectedFormats[0])
+      : undefined;
+
+  const hasFatalValidation =
+    files.length > 0 &&
+    (
+      preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') ||
+      validationResult?.tier1?.errors?.some(error =>
+        error.message.toLowerCase().includes('no column headers') ||
+        error.message.toLowerCase().includes('no data rows')
+      )
+    );
 
   return (
     <>
@@ -1934,10 +2318,8 @@ const SurveyUpload: React.FC = () => {
                         (surveySource === 'Custom' && !customSurveySource.trim()) ||
                         // Provider type validation
                         (providerType === 'CUSTOM' && !customProviderType.trim()) ||
-                        // Critical validation errors (check both old and new validation)
-                        (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical') || false) ||
-                        (columnValidation && !columnValidation.isValid) ||
-                        (validationResult && !validationResult.canProceed);
+                        // Only block on fatal structural errors
+                        (hasFatalValidation || false);
 
                       // "Ready" means the next step is available and actionable
                       const isUploadReady = !isUploadDisabled;
@@ -1977,38 +2359,7 @@ const SurveyUpload: React.FC = () => {
                   {/* Download Template Button - Secondary action (icon-only is fine) */}
                   <div className="relative group">
                     <button
-                      onClick={() => {
-                        // Validate required fields for sample generation
-                        if (!dataCategory || (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
-                          setError('Please select Data Category first');
-                          return;
-                        }
-                        if (!providerType || (providerType === 'CUSTOM' && !customProviderType.trim())) {
-                          setError('Please select Provider Type first');
-                          return;
-                        }
-                        try {
-                          // Generate sample based on selected Data Category and Provider Type
-                          // For Google-style UX: Sample matches the exact structure user selected
-                          const sampleProviderType = dataCategory === 'CALL_PAY' ? 'CALL' 
-                            : dataCategory === 'MOONLIGHTING' ? 'CALL' // Moonlighting uses similar structure to Call Pay
-                            : (providerType === 'CUSTOM' ? undefined : providerType);
-                          
-                          const surveySourceName = surveySource === 'Custom' && customSurveySource 
-                            ? customSurveySource 
-                            : surveySource || 'Sample';
-                          
-                          const dataCategoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay' 
-                            : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-                            : dataCategory === 'CUSTOM' ? customDataCategory
-                            : 'Compensation';
-                          
-                          downloadGeneratedSample(sampleProviderType, `${surveySourceName} ${dataCategoryDisplay}`);
-                        } catch (error) {
-                          console.error('Download failed:', error);
-                          setError('Failed to generate sample file. Please try again.');
-                        }
-                      }}
+                      onClick={() => handleDownloadTemplate()}
                       className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
                       aria-label="Download sample CSV template"
                     >
@@ -2245,11 +2596,9 @@ const SurveyUpload: React.FC = () => {
                  surveySource && 
                  !isUploading && 
                  !isValidating &&
-                 (validationResult && !validationResult.canProceed || 
-                  (preUploadValidation?.structure?.errors?.some((e: ValidationError) => e.severity === 'critical')) ||
-                  (columnValidation && !columnValidation.isValid)) && (
+                 hasFatalValidation && (
                   <div className="text-xs text-red-600 text-center mt-2">
-                    Fix validation errors below to upload
+                    Fix the critical file errors below to upload
                   </div>
                 )}
 
@@ -2324,46 +2673,42 @@ const SurveyUpload: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Data Validation Section */}
-                  {validationResult && validationResult.totalIssues > 0 && (
-                    <div className="mt-6">
-                      <div className="mb-3">
-                        <h3 className="text-lg font-semibold text-gray-900">Data Validation</h3>
-                        <p className="text-sm text-gray-600 mt-0.5">
-                          Review and resolve the following issues before uploading
-                        </p>
-                      </div>
-                      <ValidationBanner
-                        validationResult={validationResult}
-                        headers={parsedData?.headers || []}
-                        rows={parsedData?.rows || []}
-                        collapsible={true}
-                      />
-                    </div>
-                  )}
-
-                  {/* Validation Preview Table - Only show when there's data AND validation issues */}
-                  {parsedData && parsedData.rows.length > 0 && validationResult && validationResult.totalIssues > 0 && (
-                    <div className="mt-4">
-                      <ValidationPreviewTable
-                        headers={parsedData.headers}
-                        rows={parsedData.rows}
-                        validationResult={validationResult}
-                        onDataChange={(cleaned) => {
-                          setCleanedData(cleaned);
-                          // Re-validate cleaned data
-                          const newValidation = validateAll(cleaned.headers, cleaned.rows);
-                          setValidationResult(newValidation);
-                          // Update parsed data to cleaned data
-                          setParsedData(cleaned);
-                        }}
-                        onValidationChange={(newValidation) => {
-                          setValidationResult(newValidation);
-                        }}
-                        maxPreviewRows={20}
-                        disabled={isValidating || isUploading}
-                      />
-                    </div>
+                  {(hasFatalValidation || (validationResult && validationResult.totalIssues > 0)) && (
+                    <UploadValidationWizard
+                      isVisible={true}
+                      missingColumns={columnValidation?.missingColumns}
+                      unknownHeaders={columnValidation?.unknownHeaders}
+                      requiredColumns={formatRequirements?.requiredColumns}
+                      optionalColumns={formatRequirements?.optionalColumns}
+                      detectedFormat={detectedFormat}
+                      expectedFormats={expectedFormats}
+                      validationResult={validationResult}
+                      onDownloadRecommended={() => handleDownloadTemplate()}
+                      onDownloadFormat={(format) => handleDownloadTemplate(format)}
+                      reviewContent={
+                        parsedData &&
+                        parsedData.rows.length > 0 &&
+                        validationResult &&
+                        validationResult.totalIssues > 0 ? (
+                          <ValidationPreviewTable
+                            headers={parsedData.headers}
+                            rows={parsedData.rows}
+                            validationResult={validationResult}
+                            onDataChange={(cleaned) => {
+                              setCleanedData(cleaned);
+                              const newValidation = validateAll(cleaned.headers, cleaned.rows);
+                              setValidationResult(newValidation);
+                              setParsedData(cleaned);
+                            }}
+                            onValidationChange={(newValidation) => {
+                              setValidationResult(newValidation);
+                            }}
+                            maxPreviewRows={20}
+                            disabled={isValidating || isUploading}
+                          />
+                        ) : null
+                      }
+                    />
                   )}
 
                   {/* Validation Progress */}
@@ -2465,7 +2810,10 @@ const SurveyUpload: React.FC = () => {
                 ) : (
                   <>
         
-                  <div key={`surveys-${refreshTrigger}`} className="relative z-10 flex items-center gap-2 overflow-x-auto overflow-y-visible whitespace-nowrap pb-1">
+                  <div
+                    key={`surveys-${refreshTrigger}`}
+                    className="relative z-10 flex flex-wrap items-center gap-2 overflow-x-hidden overflow-y-visible whitespace-normal pb-1"
+                  >
                     {uploadedSurveys.map((survey) => {
                       const isActive = selectedSurvey === survey.id;
                       const stats = calculateSurveyStats(survey.rows);
@@ -2474,8 +2822,18 @@ const SurveyUpload: React.FC = () => {
                                       survey.surveyType === 'Gallagher' ? '#F472B6' :
                                       survey.surveyType === 'ECG' ? '#FBBF24' :
                                       survey.surveyType === 'AMGA' ? '#60A5FA' : '#9CA3AF';
+                      const wrapperHoverClass = '';
+
                       return (
-                        <div key={survey.id} className="relative group inline-flex items-center">
+                        <div
+                          key={survey.id}
+                          className="relative group inline-flex items-center"
+                          style={{ 
+                            background: 'transparent',
+                            padding: 0,
+                            margin: 0
+                          }}
+                        >
                           <button
                             onClick={() => {
                               setSelectedSurvey(survey.id);
@@ -2506,13 +2864,78 @@ const SurveyUpload: React.FC = () => {
                               setTimeout(triggerIntelligentSizing, 600);
                               setTimeout(triggerIntelligentSizing, 1000);
                             }}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border transition-colors duration-200 ${
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border shadow-none outline-none hover:shadow-none hover:outline-none hover:ring-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 ${
                               isActive 
-                                ? 'bg-indigo-600 text-white border-indigo-600' 
+                                ? 'bg-indigo-600 text-white border-indigo-600'
                                 : survey.isDuplicate
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                  : 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}
+                            style={{
+                              boxShadow: 'none',
+                              outline: 'none',
+                              borderStyle: 'solid',
+                              ...(isActive 
+                                ? {
+                                    backgroundColor: '#4f46e5',
+                                    borderColor: '#4f46e5',
+                                  }
+                                : survey.isDuplicate
+                                  ? {
+                                      backgroundColor: '#fffbeb',
+                                      borderColor: '#fcd34d',
+                                    }
+                                  : {
+                                      backgroundColor: '#f9fafb',
+                                      borderColor: '#f9fafb',
+                                    }
+                              )
+                            }}
+                            onMouseEnter={(e) => {
+                              const btn = e.currentTarget;
+                              // Force no shadow, outline, or visual changes
+                              btn.style.boxShadow = 'none';
+                              btn.style.outline = 'none';
+                              btn.style.borderStyle = 'solid';
+                              
+                              // Keep border color matching background exactly
+                              if (isActive) {
+                                btn.style.backgroundColor = '#4f46e5';
+                                btn.style.borderColor = '#4f46e5';
+                              } else if (survey.isDuplicate) {
+                                btn.style.backgroundColor = '#fffbeb';
+                                btn.style.borderColor = '#fcd34d';
+                              } else {
+                                btn.style.backgroundColor = '#f9fafb';
+                                btn.style.borderColor = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              const btn = e.currentTarget;
+                              btn.style.boxShadow = 'none';
+                              btn.style.outline = 'none';
+                              btn.style.borderStyle = 'solid';
+                              
+                              // Reset to original colors
+                              if (isActive) {
+                                btn.style.backgroundColor = '#4f46e5';
+                                btn.style.borderColor = '#4f46e5';
+                              } else if (survey.isDuplicate) {
+                                btn.style.backgroundColor = '#fffbeb';
+                                btn.style.borderColor = '#fcd34d';
+                              } else {
+                                btn.style.backgroundColor = '#f9fafb';
+                                btn.style.borderColor = '#f9fafb';
+                              }
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.boxShadow = 'none';
+                              e.currentTarget.style.outline = 'none';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.boxShadow = 'none';
+                              e.currentTarget.style.outline = 'none';
+                            }}
                             title={`${survey.surveyType} • ${survey.surveyYear}${survey.isDuplicate ? ' • Possible duplicate' : ''}`}
                           >
                             {survey.isDuplicate && (
@@ -2523,7 +2946,7 @@ const SurveyUpload: React.FC = () => {
                           </button>
                           <button
                             onClick={(e) => removeUploadedSurvey(survey.id, e)}
-                            className="ml-1 text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-gray-100"
+                            className="ml-1 text-gray-400 hover:text-red-500 p-1 rounded-full"
                             title="Remove survey"
                           >
                             <XMarkIcon className="h-4 w-4" />
@@ -2550,6 +2973,19 @@ const SurveyUpload: React.FC = () => {
                                   <div className="text-[10px] text-gray-500 mt-0.5">Data Points</div>
                                 </div>
                               </div>
+                              {survey.metadata?.fileType && (
+                                <div className="mt-2 text-[10px] text-gray-500 text-center">
+                                  {survey.metadata.fileType.toUpperCase()}
+                                  {survey.metadata.sheetName ? ` • Sheet: ${survey.metadata.sheetName}` : ''}
+                                </div>
+                              )}
+                              {(survey.providerType || survey.dataCategory) && (
+                                <div className="mt-1 text-[10px] text-gray-500 text-center">
+                                  {survey.providerType ? `Type: ${survey.providerType}` : ''}
+                                  {survey.providerType && survey.dataCategory ? ' • ' : ''}
+                                  {survey.dataCategory ? `Category: ${survey.dataCategory}` : ''}
+                                </div>
+                              )}
                               <div className="mt-2 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
                             </div>
                           </div>
@@ -2566,7 +3002,12 @@ const SurveyUpload: React.FC = () => {
         {/* Data Preview */}
         {selectedSurvey && uploadedSurveys.length > 0 && (() => {
           const selectedSurveyData = uploadedSurveys.find(s => s.id === selectedSurvey);
-          return selectedSurveyData ? (
+          // ENTERPRISE FIX: Only render DataPreview if survey data exists and is valid
+          // This prevents infinite spinner when survey is deleted
+          if (!selectedSurveyData || !selectedSurveyData.id) {
+            return null;
+          }
+          return (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="w-full overflow-x-auto">
                 <DataPreview
@@ -2578,7 +3019,7 @@ const SurveyUpload: React.FC = () => {
                 />
               </div>
             </div>
-          ) : null;
+          );
         })()}
       </div>
     </div>
@@ -2618,6 +3059,18 @@ const SurveyUpload: React.FC = () => {
           }}
           onResolve={handleDuplicateResolution}
           duplicateResult={duplicateCheckResult}
+          onShowExisting={async (survey) => {
+            const year = survey.year ? String(survey.year).trim() : '';
+            const surveyTypeLabel = (survey.name || survey.type || '').toLowerCase();
+            const isCallPay = survey.dataCategory === 'CALL_PAY' || surveyTypeLabel.includes('call pay');
+            const targetProviderType: UIProviderType = isCallPay ? 'CALL' : ((survey.providerType as UIProviderType) || 'PHYSICIAN');
+
+            if (year) {
+              await setCurrentYear(year);
+            }
+            setProviderTypeContext(targetProviderType, 'duplicate-survey');
+            setShowDuplicateDialog(false);
+          }}
           newSurveyMetadata={{
             name: `${surveySource === 'Custom' ? customSurveySource : surveySource} ${dataCategory === 'CALL_PAY' ? 'Call Pay' : dataCategory === 'MOONLIGHTING' ? 'Moonlighting' : dataCategory === 'COMPENSATION' ? (providerType === 'APP' ? 'APP' : 'Physician') : dataCategory} ${surveyYear}${surveyLabel ? ` - ${surveyLabel}` : ''}`,
             source: surveySource === 'Custom' ? customSurveySource : surveySource,
@@ -2687,10 +3140,10 @@ const SurveyUpload: React.FC = () => {
       {/* ENTERPRISE FIX: Confirmation modal closes immediately when deletion starts to avoid visual overlap with progress modal */}
       {showClearAllConfirmation && (
         <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-xl shadow-lg border border-red-400 w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Clear All Surveys</h3>
-            <p className="text-sm text-gray-700 mb-6">
-              Are you sure you want to delete <strong>all surveys</strong>? This action cannot be undone.
+          <div className="bg-white rounded-xl shadow-lg border border-red-400 w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Clear Surveys</h3>
+            <p className="text-sm text-gray-700 mb-4">
+              Current view: <strong>{currentYear}</strong> • <strong>{selectedProviderType}</strong>
             </p>
             
             {/* Progress indicator when deleting */}
@@ -2698,16 +3151,43 @@ const SurveyUpload: React.FC = () => {
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 mr-3"></div>
-                  <span className="text-sm font-medium text-red-800">Clearing all surveys...</span>
+                  <span className="text-sm font-medium text-red-800">
+                    {isDeletingAll ? 'Clearing all surveys...' : 'Clearing current view...'}
+                  </span>
                 </div>
                 <div className="mt-2 w-full bg-red-200 rounded-full h-1.5">
                   <div className="bg-red-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                 </div>
                 {showForceClose && (
                   <div className="mt-2 text-xs text-orange-600 text-center">
-                    Operation taking longer than expected. You can force close if needed.
+                    Operation taking longer than expected. You can close the modal if needed.
                   </div>
                 )}
+              </div>
+            )}
+
+            {!isDeleting && (
+              <div className="mb-4 space-y-3">
+                <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <p className="text-sm text-gray-700">
+                    <strong>Clear current view</strong> removes surveys shown in the current year and Data View only.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg border border-red-200 bg-red-50">
+                  <p className="text-sm text-red-700">
+                    <strong>Clear all years</strong> permanently deletes every survey across all years and views.
+                  </p>
+                  <div className="mt-2">
+                    <label className="block text-xs text-red-700 mb-1">Type CLEAR ALL to confirm</label>
+                    <input
+                      type="text"
+                      value={confirmAllText}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmAllText(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="CLEAR ALL"
+                    />
+                  </div>
+                </div>
               </div>
             )}
             
@@ -2718,7 +3198,7 @@ const SurveyUpload: React.FC = () => {
                   onClick={forceCloseModal}
                   className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
                 >
-                  Force Close
+                  Close modal
                 </button>
               ) : (
                 <button
@@ -2732,18 +3212,26 @@ const SurveyUpload: React.FC = () => {
               )}
               <button
                 type="button"
-                onClick={confirmClearAll}
+                onClick={confirmClearCurrentView}
                 disabled={isDeleting}
                 className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                {isDeleting ? (
+                {isDeleting && !isDeletingAll ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Clearing...
+                    Clearing view...
                   </>
                 ) : (
-                  'Clear All'
+                  'Clear current view'
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmClearAll()}
+                disabled={isDeleting || confirmAllText.trim().toUpperCase() !== 'CLEAR ALL'}
+                className="px-4 py-2 text-sm font-semibold text-red-700 bg-white border border-red-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Clear all years
               </button>
             </div>
           </div>
@@ -2751,6 +3239,6 @@ const SurveyUpload: React.FC = () => {
       )}
     </>
   );
-};
+}
 
-export default SurveyUpload; 
+export { SurveyUpload };

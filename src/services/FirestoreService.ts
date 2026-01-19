@@ -32,6 +32,12 @@ import { IColumnMapping } from '../types/column';
 import { ISurveyRow } from '../types/survey';
 import { ProviderType, DataCategory } from '../types/provider';
 import { readCSVFile, parseCSVLine } from '../shared/utils';
+import { isExcelFile, parseFile } from '../features/upload/utils/fileParser';
+
+const isUploadDebugEnabled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('bp_upload_debug') === 'true';
+};
 
 interface Survey {
   id: string;
@@ -77,6 +83,44 @@ export class FirestoreService {
   private readonly MAX_QUOTA_RETRIES = 5; // More retries for quota errors
   private offlineQueue: Array<() => Promise<void>> = [];
   private isOnline = true;
+
+  /**
+   * Delete documents from a collection in batches (Firestore limit: 500 writes per batch)
+   */
+  private async deleteCollectionInBatches(
+    collectionPath: string,
+    constraints: QueryConstraint[] = [],
+    batchSize: number = 500
+  ): Promise<number> {
+    if (!this.db) {
+      throw new Error('Firestore not initialized');
+    }
+
+    let deletedCount = 0;
+
+    while (true) {
+      const collRef = collection(this.db, collectionPath);
+      const q = query(collRef, ...constraints, limit(batchSize));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        break;
+      }
+
+      const batch = writeBatch(this.db);
+      snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
+      await batch.commit();
+
+      deletedCount += snapshot.size;
+
+      // Respect rate limits when iterating large collections
+      if (snapshot.size === batchSize) {
+        await this.sleep(this.BATCH_DELAY);
+      }
+    }
+
+    return deletedCount;
+  }
 
   constructor() {
     if (!isFirebaseAvailable()) {
@@ -412,9 +456,8 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const surveyRef = doc(this.db, this.getUserPath('surveys'), id);
-    await deleteDoc(surveyRef);
-    console.log('✅ FirestoreService: Deleted survey:', id);
+    await this.cascadeDelete(id);
+    console.log('✅ FirestoreService: Deleted survey (cascade):', id);
   }
 
   async deleteWithVerification(surveyId: string): Promise<{
@@ -486,33 +529,34 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const batch = writeBatch(this.db);
-
-    // Delete survey
+    // Delete survey document first
     const surveyRef = doc(this.db, this.getUserPath('surveys'), surveyId);
-    batch.delete(surveyRef);
+    await deleteDoc(surveyRef);
 
-    // Delete all survey data
-    const dataRef = collection(this.db, this.getUserPath('surveyData'));
-    const dataQuery = query(dataRef, where('surveyId', '==', surveyId));
-    const dataSnapshot = await getDocs(dataQuery);
-    dataSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    // Delete all survey data in batches
+    const deletedRows = await this.deleteCollectionInBatches(
+      this.getUserPath('surveyData'),
+      [where('surveyId', '==', surveyId)]
+    );
 
-    await batch.commit();
-    console.log('✅ FirestoreService: Cascade deleted survey:', surveyId);
+    console.log('✅ FirestoreService: Cascade deleted survey:', {
+      surveyId,
+      deletedRows
+    });
   }
 
   async deleteAllSurveys(): Promise<void> {
-    const surveys = await this.getAllSurveys();
-    const batch = writeBatch(this.db!);
-    
-    surveys.forEach(survey => {
-      const surveyRef = doc(this.db!, this.getUserPath('surveys'), survey.id);
-      batch.delete(surveyRef);
-    });
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
 
-    await batch.commit();
-    console.log('✅ FirestoreService: Deleted all surveys');
+    const deletedSurveys = await this.deleteCollectionInBatches(this.getUserPath('surveys'));
+    const deletedSurveyData = await this.deleteCollectionInBatches(this.getUserPath('surveyData'));
+
+    console.log('✅ FirestoreService: Deleted all surveys and survey data', {
+      deletedSurveys,
+      deletedSurveyData
+    });
   }
 
   async forceClearDatabase(): Promise<void> {
@@ -521,12 +565,7 @@ export class FirestoreService {
                        'variableMappings', 'regionMappings', 'providerTypeMappings'];
     
     for (const collName of collections) {
-      const collRef = collection(this.db!, this.getUserPath(collName));
-      const snapshot = await getDocs(collRef);
-      const batch = writeBatch(this.db!);
-      
-      snapshot.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
+      await this.deleteCollectionInBatches(this.getUserPath(collName));
     }
     
     console.log('✅ FirestoreService: Cleared all database');
@@ -544,6 +583,13 @@ export class FirestoreService {
     }
 
     console.log(`🔍 FirestoreService: Fetching survey data for ${surveyId}`, { filters, pagination });
+    if (isUploadDebugEnabled()) {
+      console.log('🧪 UploadDebug: Firestore getSurveyData', {
+        surveyId,
+        userId: this.userId,
+        limit: pagination.limit || 10000
+      });
+    }
 
     const dataRef = collection(this.db, this.getUserPath('surveyData'));
     const constraints: QueryConstraint[] = [
@@ -602,6 +648,14 @@ export class FirestoreService {
       let completedBatches = 0;
 
       console.log(`📤 FirestoreService: Saving ${rows.length} rows in ${totalBatches} batches...`);
+      if (isUploadDebugEnabled()) {
+        console.log('🧪 UploadDebug: Firestore saveSurveyData', {
+          surveyId,
+          userId: this.userId,
+          rowCount: rows.length,
+          sampleKeys: rows[0] ? Object.keys(rows[0]) : []
+        });
+      }
 
       const startTime = Date.now();
       const collectionPath = this.getUserPath('surveyData');
@@ -747,18 +801,34 @@ export class FirestoreService {
 
     onProgress?.(10);
 
-    // Parse CSV file with encoding detection
-    const { text, encoding, issues, normalized } = await readCSVFile(file);
-    
-    if (issues.length > 0) {
-      console.warn('📤 FirestoreService: Encoding issues detected:', issues);
-    }
-    if (normalized) {
-      console.log('📤 FirestoreService: Character normalization applied');
-    }
+    let rows: ISurveyRow[] = [];
+    let encoding: string | undefined;
 
-    // Parse CSV text into rows
-    const rows = this.parseCSV(text);
+    if (isExcelFile(file)) {
+      const parseResult = await parseFile(file);
+      rows = parseResult.rows.map((row) => {
+        const rowData: Record<string, any> = {};
+        parseResult.headers.forEach((header, index) => {
+          rowData[header] = row[index] ?? '';
+        });
+        return rowData as ISurveyRow;
+      });
+      encoding = 'excel';
+    } else {
+      // Parse CSV file with encoding detection
+      const { text, encoding: detectedEncoding, issues, normalized } = await readCSVFile(file);
+      
+      if (issues.length > 0) {
+        console.warn('📤 FirestoreService: Encoding issues detected:', issues);
+      }
+      if (normalized) {
+        console.log('📤 FirestoreService: Character normalization applied');
+      }
+
+      // Parse CSV text into rows
+      rows = this.parseCSV(text);
+      encoding = detectedEncoding;
+    }
     onProgress?.(50);
 
     // Create survey
