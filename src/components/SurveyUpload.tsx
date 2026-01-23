@@ -2753,7 +2753,7 @@ function SurveyUpload(): JSX.Element {
             />
           )}
           {/* Uploaded Surveys Section (compact tabs) */}
-          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-visible">
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-x-hidden overflow-y-visible">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <button
