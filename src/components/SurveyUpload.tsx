@@ -2816,23 +2816,11 @@ function SurveyUpload(): JSX.Element {
                   >
                     {uploadedSurveys.map((survey) => {
                       const isActive = selectedSurvey === survey.id;
-                      const stats = calculateSurveyStats(survey.rows);
-                      const accent = survey.surveyType === 'SullivanCotter' ? '#818CF8' :
-                                      survey.surveyType === 'MGMA' ? '#34D399' :
-                                      survey.surveyType === 'Gallagher' ? '#F472B6' :
-                                      survey.surveyType === 'ECG' ? '#FBBF24' :
-                                      survey.surveyType === 'AMGA' ? '#60A5FA' : '#9CA3AF';
-                      const wrapperHoverClass = '';
 
                       return (
                         <div
                           key={survey.id}
-                          className="relative group inline-flex items-center"
-                          style={{ 
-                            background: 'transparent',
-                            padding: 0,
-                            margin: 0
-                          }}
+                          className="relative inline-flex items-center"
                         >
                           <button
                             onClick={() => {
@@ -2936,7 +2924,6 @@ function SurveyUpload(): JSX.Element {
                               e.currentTarget.style.boxShadow = 'none';
                               e.currentTarget.style.outline = 'none';
                             }}
-                            title={`${survey.surveyType} • ${survey.surveyYear}${survey.isDuplicate ? ' • Possible duplicate' : ''}`}
                           >
                             {survey.isDuplicate && (
                               <ExclamationTriangleIcon className="h-4 w-4 text-amber-600 flex-shrink-0" title="Possible duplicate survey" />
@@ -2952,43 +2939,6 @@ function SurveyUpload(): JSX.Element {
                             <XMarkIcon className="h-4 w-4" />
                           </button>
 
-                          {/* Hover stats tooltip */}
-                          <div className="pointer-events-none absolute z-50 -top-32 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 w-64">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="text-xs font-medium text-gray-900">{survey.surveyType} • {survey.surveyYear}</div>
-                                <div className="text-[10px] text-gray-500">{new Date(survey.uploadDate).toLocaleDateString()}</div>
-                              </div>
-                              <div className="grid grid-cols-3 gap-3 text-center">
-                                <div>
-                                  <div className="text-base font-semibold text-gray-900">{stats.totalRows.toLocaleString()}</div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5">Rows</div>
-                                </div>
-                                <div>
-                                  <div className="text-base font-semibold text-gray-900">{stats.uniqueSpecialties.toLocaleString()}</div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5">Specialties</div>
-                                </div>
-                                <div>
-                                  <div className="text-base font-semibold text-gray-900">{stats.totalDataPoints.toLocaleString()}</div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5">Data Points</div>
-                                </div>
-                              </div>
-                              {survey.metadata?.fileType && (
-                                <div className="mt-2 text-[10px] text-gray-500 text-center">
-                                  {survey.metadata.fileType.toUpperCase()}
-                                  {survey.metadata.sheetName ? ` • Sheet: ${survey.metadata.sheetName}` : ''}
-                                </div>
-                              )}
-                              {(survey.providerType || survey.dataCategory) && (
-                                <div className="mt-1 text-[10px] text-gray-500 text-center">
-                                  {survey.providerType ? `Type: ${survey.providerType}` : ''}
-                                  {survey.providerType && survey.dataCategory ? ' • ' : ''}
-                                  {survey.dataCategory ? `Category: ${survey.dataCategory}` : ''}
-                                </div>
-                              )}
-                              <div className="mt-2 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
-                            </div>
-                          </div>
                         </div>
                       );
                     })}
