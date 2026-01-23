@@ -278,6 +278,7 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
         } as React.CSSProperties}
       >
         <AgGridReact
+          theme="legacy"
           rowData={paginatedData}
           columnDefs={columnDefs}
           onGridReady={handleGridReady}
