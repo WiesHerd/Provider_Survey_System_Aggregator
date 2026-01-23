@@ -22,9 +22,9 @@
     <meta name="theme-color" content="#4F46E5" />
     
     <!-- Security Headers -->
-    <!-- NOTE: X-Frame-Options, X-Content-Type-Options, and other security headers are set via HTTP headers in vercel.json -->
+    <!-- NOTE: Security headers (X-Frame-Options, X-Content-Type-Options, etc.) are set via HTTP headers in firebase.json -->
     <!-- Meta tags for these headers are not supported by browsers and will cause errors -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <!-- Only Referrer-Policy and Permissions-Policy can be set via meta tags as fallback -->
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=()" />
     
