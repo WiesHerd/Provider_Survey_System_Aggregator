@@ -10,6 +10,8 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "cleanUrls": true,
+    "trailingSlash": false,
     "headers": [
       {
         "source": "**",
@@ -63,6 +65,15 @@
         ]
       },
       {
+        "source": "**/*.map",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json; charset=utf-8"
+          }
+        ]
+      },
+      {
         "source": "/static/**",
         "headers": [
           {
@@ -73,6 +84,10 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "!/@(static)/**",
+        "destination": "/index.html"
+      },
       {
         "source": "**",
         "destination": "/index.html"
