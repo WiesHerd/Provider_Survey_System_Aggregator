@@ -97,3 +97,21 @@ export const getUserIdSync = (): string | null => {
   return localStorage.getItem('localUserId');
 };
 
+/**
+ * Strip user prefix from a key
+ * 
+ * This is used to normalize survey IDs from IndexedDB (which use prefixed keys)
+ * to match Firebase survey IDs (which use path-based scoping, so no prefix needed)
+ * 
+ * @param key - Potentially user-scoped key
+ * @returns Key without user prefix
+ */
+export const stripUserPrefix = (key: string): string => {
+  const userId = getUserId();
+  const prefix = `${userId}_`;
+  if (key.startsWith(prefix)) {
+    return key.slice(prefix.length);
+  }
+  return key;
+};
+

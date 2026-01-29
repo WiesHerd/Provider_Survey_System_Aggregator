@@ -28,7 +28,10 @@ export type ValidationCategory =
   | 'data' 
   | 'business' 
   | 'encoding'
-  | 'content';
+  | 'content'
+  | 'statistical'  // Statistical analysis (outliers, distributions)
+  | 'completeness' // Data completeness metrics
+  | 'consistency'; // Cross-row consistency checks
 
 /**
  * Cell location for validation issues

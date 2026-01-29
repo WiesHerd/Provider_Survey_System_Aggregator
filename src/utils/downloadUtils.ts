@@ -106,6 +106,68 @@ export const getAvailableSampleFiles = () => {
   ];
 };
 
+export type UploadTemplateFormat = 'normalized';
+
+interface UploadTemplateRequest {
+  dataCategory?: string;
+  providerType?: string;
+  format?: UploadTemplateFormat;
+  expectedFormat?: UploadTemplateFormat;
+}
+
+const FORMAT_TEMPLATE_FILES: Record<UploadTemplateFormat, string> = {
+  normalized: 'sample-normalized-format.csv'
+};
+
+const getScenarioTemplateFile = (dataCategory?: string, providerType?: string): string => {
+  const normalizedCategory = (dataCategory || '').toUpperCase().trim();
+  const normalizedProvider = (providerType || '').toUpperCase().trim();
+
+  if (normalizedCategory === 'CALL_PAY') {
+    return 'sample-call-pay.csv';
+  }
+
+  if (normalizedCategory === 'MOONLIGHTING') {
+    return 'sample-moonlighting.csv';
+  }
+
+  if (normalizedCategory === 'COMPENSATION') {
+    if (normalizedProvider === 'APP') {
+      return 'sample-app-compensation.csv';
+    }
+    if (normalizedProvider === 'PHYSICIAN') {
+      return 'sample-physician-compensation.csv';
+    }
+  }
+
+  return 'sample-normalized-format.csv';
+};
+
+/**
+ * Download the best matching template for the upload scenario.
+ * Falls back to a normalized template if inputs are incomplete.
+ */
+export const downloadUploadTemplate = async ({
+  dataCategory,
+  providerType,
+  format,
+  expectedFormat
+}: UploadTemplateRequest): Promise<void> => {
+  const hasNonNormalizedExpected = expectedFormat && expectedFormat !== 'normalized';
+  const filename = format
+    ? FORMAT_TEMPLATE_FILES[format]
+    : hasNonNormalizedExpected
+      ? FORMAT_TEMPLATE_FILES[expectedFormat as UploadTemplateFormat]
+      : getScenarioTemplateFile(dataCategory, providerType);
+
+  try {
+    await downloadPublicFile(filename);
+  } catch (error) {
+    console.error(`Failed to download template: ${filename}`, error);
+    throw error;
+  }
+};
+
 
 
 

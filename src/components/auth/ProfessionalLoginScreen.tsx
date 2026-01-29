@@ -23,6 +23,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { GoogleLogo } from './GoogleLogo';
+import { StandardDialog } from '../../shared/components';
+import { LegalDialogs } from './LegalDialogs';
 
 interface ProfessionalLoginScreenProps {
   onSwitchToSignup: () => void;
@@ -36,12 +38,20 @@ interface ProfessionalLoginScreenProps {
 export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = ({ 
   onSwitchToSignup
 }) => {
-  const { signIn, signInWithGoogle, loading, error, clearError, isAvailable } = useAuth();
+  const { signIn, signInWithGoogle, resetPassword, loading, error, clearError, isAvailable } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formErrors, setFormErrors] = useState<{ email?: string; password?: string }>({});
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const isResetSending = loading || resetStatus === 'sending';
+  const mfaNotice = process.env.REACT_APP_MFA_NOTICE;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +98,37 @@ export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = (
       setFormErrors(prev => ({ ...prev, password: undefined }));
     }
   };
+
+  const handleOpenReset = () => {
+    setResetEmail(email);
+    setResetStatus('idle');
+    setResetError(null);
+    setIsResetOpen(true);
+  };
+
+  const handleCloseReset = () => {
+    setIsResetOpen(false);
+  };
+
+  const handleSendReset = async () => {
+    if (!resetEmail.trim() || !/\S+@\S+\.\S+/.test(resetEmail)) {
+      setResetError('Enter a valid email address');
+      setResetStatus('error');
+      return;
+    }
+
+    try {
+      setResetStatus('sending');
+      setResetError(null);
+      await resetPassword(resetEmail.trim());
+      setResetStatus('success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send reset email';
+      setResetError(message);
+      setResetStatus('error');
+    }
+  };
+
 
   // Log warning to console instead of showing on screen
   if (!isAvailable && process.env.NODE_ENV === 'development') {
@@ -189,6 +230,7 @@ export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = (
           {error && (
             <Alert 
               severity="error" 
+              aria-live="polite"
               sx={{ 
                 mb: 4, 
                 borderRadius: '8px',
@@ -349,10 +391,7 @@ export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = (
                 <Link
                   component="button"
                   type="button"
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.preventDefault();
-                    // TODO: Implement forgot password flow
-                  }}
+                  onClick={handleOpenReset}
                   disabled={loading}
                   sx={{
                     textTransform: 'none',
@@ -414,6 +453,15 @@ export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = (
                 'Sign in'
               )}
             </Button>
+
+            {mfaNotice && (
+              <Typography
+                variant="body2"
+                sx={{ mt: 2, fontSize: '0.8125rem', color: '#64748b', textAlign: 'center' }}
+              >
+                {mfaNotice}
+              </Typography>
+            )}
 
             {/* Divider - Minimal */}
             <Box sx={{ display: 'flex', alignItems: 'center', my: 4 }}>
@@ -517,6 +565,46 @@ export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = (
                 </Link>
               </Typography>
             </Box>
+
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 3 }}>
+              <Link
+                component="button"
+                type="button"
+                onClick={() => setIsTermsOpen(true)}
+                sx={{
+                  fontSize: '0.8125rem',
+                  color: '#6366f1',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  background: 'none',
+                  border: 'none',
+                  p: 0,
+                  '&:hover': { color: '#4f46e5' },
+                }}
+              >
+                Terms
+              </Link>
+              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.8125rem' }}>
+                •
+              </Typography>
+              <Link
+                component="button"
+                type="button"
+                onClick={() => setIsPrivacyOpen(true)}
+                sx={{
+                  fontSize: '0.8125rem',
+                  color: '#6366f1',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  background: 'none',
+                  border: 'none',
+                  p: 0,
+                  '&:hover': { color: '#4f46e5' },
+                }}
+              >
+                Privacy
+              </Link>
+            </Box>
           </Box>
         </Box>
 
@@ -534,6 +622,87 @@ export const ProfessionalLoginScreen: React.FC<ProfessionalLoginScreenProps> = (
           </Typography>
         </Box>
       </Box>
+
+      <StandardDialog
+        open={isResetOpen}
+        onClose={handleCloseReset}
+        title="Reset your password"
+        subtitle="We’ll email you a secure reset link."
+        maxWidth="sm"
+        actions={
+          <>
+            <Button variant="outlined" onClick={handleCloseReset} disabled={isResetSending}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSendReset}
+              disabled={!isAvailable || isResetSending}
+              sx={{ textTransform: 'none', borderRadius: '8px' }}
+            >
+              {isResetSending ? <CircularProgress size={18} sx={{ color: 'white' }} /> : 'Send email'}
+            </Button>
+          </>
+        }
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
+            label="Email"
+            type="email"
+            value={resetEmail}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              setResetEmail(e.target.value);
+              if (resetStatus !== 'idle') {
+                setResetStatus('idle');
+              }
+              if (resetError) {
+                setResetError(null);
+              }
+            }}
+            size="small"
+            fullWidth
+          />
+          {resetStatus === 'success' && (
+            <Alert
+              severity="success"
+              aria-live="polite"
+              sx={{
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                bgcolor: '#ecfdf5',
+                color: '#065f46',
+                border: '1px solid #a7f3d0',
+                '& .MuiAlert-icon': { color: '#10b981' }
+              }}
+            >
+              Reset email sent. Check your inbox and spam folder.
+            </Alert>
+          )}
+          {resetStatus === 'error' && resetError && (
+            <Alert
+              severity="error"
+              aria-live="polite"
+              sx={{
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                bgcolor: '#fef2f2',
+                color: '#991b1b',
+                border: '1px solid #fecaca',
+                '& .MuiAlert-icon': { color: '#dc2626' }
+              }}
+            >
+              {resetError}
+            </Alert>
+          )}
+        </Box>
+      </StandardDialog>
+
+      <LegalDialogs
+        isTermsOpen={isTermsOpen}
+        isPrivacyOpen={isPrivacyOpen}
+        onCloseTerms={() => setIsTermsOpen(false)}
+        onClosePrivacy={() => setIsPrivacyOpen(false)}
+      />
     </Box>
   );
 };

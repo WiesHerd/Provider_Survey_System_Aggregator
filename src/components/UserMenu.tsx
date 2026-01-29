@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmationDialog } from '../shared/components';
 import { ButtonSpinner } from '../shared/components';
+import { useToast } from '../contexts/ToastContext';
 
 interface UserMenuProps {
   isSidebarOpen: boolean;
@@ -28,6 +29,7 @@ interface UserMenuProps {
 
 export const UserMenu: React.FC<UserMenuProps> = ({ isSidebarOpen }) => {
   const { user, signOut } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -87,6 +89,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({ isSidebarOpen }) => {
     } catch (error) {
       console.error('Sign out failed:', error);
       setIsSigningOut(false);
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      toast.error('Sign out failed', message);
       // Error will be handled by AuthContext
     }
   };

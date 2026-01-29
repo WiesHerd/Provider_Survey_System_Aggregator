@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Auth Diagnostic</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #4338ca;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #4f46e5;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Firebase Authentication Diagnostic</h1>
+        <p>This tool will check your Firebase authentication status and help diagnose permission issues.</p>
+        
+        <button onclick="runDiagnostics()">Run Diagnostics</button>
+        <button onclick="testWritePermission()">Test Write Permission</button>
+        <button onclick="clearResults()">Clear Results</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        // Import Firebase config (adjust path as needed)
+        async function getFirebaseConfig() {
+            try {
+                // Try to access Firebase from the main app
+                const response = await fetch('/static/js/bundle.js');
+                // This is a simplified approach - in reality, you'd need to import from the actual app
+                return null;
+            } catch (error) {
+                console.error('Could not load Firebase config:', error);
+                return null;
+            }
+        }
+
+        window.runDiagnostics = async function() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="info">Running diagnostics...</div>';
+
+            try {
+                // Check if Firebase is available
+                const firebaseModule = await import('/src/config/firebase.js');
+                const { getFirebaseAuth, isFirebaseAvailable, getFirebaseDb } = firebaseModule;
+                
+                let html = '<h2>Diagnostic Results</h2>';
+                
+                // Check 1: Firebase Available
+                const available = isFirebaseAvailable();
+                if (available) {
+                    html += '<div class="status success">✅ Firebase is available</div>';
+                } else {
+                    html += '<div class="status error">❌ Firebase is NOT available - check your configuration</div>';
+                    resultsDiv.innerHTML = html;
+                    return;
+                }
+                
+                // Check 2: Authentication
+                const auth = getFirebaseAuth();
+                const user = auth?.currentUser;
+                
+                if (user && user.uid) {
+                    html += `<div class="status success">✅ User is authenticated</div>`;
+                    html += `<div class="step">
+                        <h3>User Information</h3>
+                        <pre>Email: ${user.email || 'Not set'}
+User ID: ${user.uid}
+Email Verified: ${user.emailVerified ? 'Yes' : 'No'}
+Display Name: ${user.displayName || 'Not set'}</pre>
+                    </div>`;
+                    
+                    // Check 3: Test write permission
+                    html += '<div class="info">Testing write permission...</div>';
+                    try {
+                        const db = getFirebaseDb();
+                        const { doc, setDoc, deleteDoc, Timestamp } = await import('firebase/firestore');
+                        
+                        const testPath = `users/${user.uid}/surveys/_permission_test_${Date.now()}`;
+                        const testRef = doc(db, testPath);
+                        
+                        await setDoc(testRef, {
+                            test: true,
+                            timestamp: Timestamp.now(),
+                            userId: user.uid
+                        });
+                        
+                        await deleteDoc(testRef);
+                        
+                        html += '<div class="status success">✅ Write permission test PASSED</div>';
+                        html += `<div class="step">
+                            <h3>✅ Everything Looks Good!</h3>
+                            <p>Your authentication is working correctly. If uploads are still failing, try:</p>
+                            <ol>
+                                <li>Sign out and sign back in to refresh your auth token</li>
+                                <li>Check the browser console (F12) for detailed error messages</li>
+                                <li>Verify security rules are deployed: <code>firebase deploy --only firestore:rules</code></li>
+                            </ol>
+                        </div>`;
+                    } catch (writeError) {
+                        html += `<div class="status error">❌ Write permission test FAILED</div>`;
+                        html += `<div class="step">
+                            <h3>Permission Error Details</h3>
+                            <pre>Error: ${writeError.message}
+Code: ${writeError.code || 'unknown'}
+Path: users/${user.uid}/surveys/...
+
+This indicates a security rules issue. The rules require:
+- request.auth != null (you are authenticated ✅)
+- request.auth.uid == userId (checking if this matches...)</pre>
+                        </div>`;
+                        
+                        html += `<div class="step">
+                            <h3>🔧 How to Fix</h3>
+                            <ol>
+                                <li><strong>Sign out and sign back in</strong> - This refreshes your auth token</li>
+                                <li><strong>Deploy security rules:</strong> Run <code>firebase deploy --only firestore:rules</code></li>
+                                <li><strong>Check Firebase Console:</strong> Verify rules are deployed at <a href="https://console.firebase.google.com/project/provider-survey-aggregator/firestore/rules" target="_blank">Firebase Console → Firestore → Rules</a></li>
+                            </ol>
+                        </div>`;
+                    }
+                } else {
+                    html += '<div class="status error">❌ User is NOT authenticated</div>';
+                    html += `<div class="step">
+                        <h3>🔧 How to Fix</h3>
+                        <ol>
+                            <li>Go to your app (the main BenchPoint application)</li>
+                            <li>Click the user menu in the top-right corner</li>
+                            <li>Click "Sign In" and enter your email and password</li>
+                            <li>Come back here and run diagnostics again</li>
+                        </ol>
+                    </div>`;
+                }
+                
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="status error">❌ Error running diagnostics: ${error.message}</div>
+                <div class="step">
+                    <h3>Alternative: Check Browser Console</h3>
+                    <p>Open your browser console (F12) and look for authentication-related messages.</p>
+                    <p>You can also run this in the console:</p>
+                    <pre>const auth = firebase.auth();
+const user = auth.currentUser;
+console.log('Auth Status:', user ? \`✅ Signed in as \${user.email}\` : '❌ NOT SIGNED IN');</pre>
+                </div>`;
+            }
+        };
+
+        window.testWritePermission = async function() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="info">Testing write permission...</div>';
+            
+            // This would need to be implemented with actual Firebase imports
+            resultsDiv.innerHTML = '<div class="warning">⚠️ This feature requires running from the main app. Use "Run Diagnostics" instead.</div>';
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+    </script>
+</body>
+</html>

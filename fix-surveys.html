@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fix Firebase Surveys - One Click Solution</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      max-width: 900px;
+      margin: 30px auto;
+      padding: 30px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #6200ea;
+      margin-top: 0;
+    }
+    .status {
+      padding: 20px;
+      margin: 15px 0;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    .info { background: #e3f2fd; color: #1565c0; border-left: 4px solid #1565c0; }
+    .error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+    .success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+    .warning { background: #fff3e0; color: #e65100; border-left: 4px solid #e65100; }
+    button {
+      background: #6200ea;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      margin: 10px 10px 10px 0;
+      transition: all 0.2s;
+    }
+    button:hover:not(:disabled) {
+      background: #4a00b8;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(98,0,234,0.3);
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    button.secondary {
+      background: #757575;
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #616161;
+    }
+    pre {
+      background: #263238;
+      color: #aed581;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .progress {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #6200ea, #b388ff);
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .data-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .data-card {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .data-card .number {
+      font-size: 36px;
+      font-weight: bold;
+      color: #6200ea;
+    }
+    .data-card .label {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔧 Firebase Survey Repair Tool</h1>
+    <p style="font-size: 16px; color: #666;">
+      This tool will diagnose and fix your Firebase survey data structure.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Step 1: Sign In</h2>
+    <div id="authStatus" class="status info">Sign in with your Firebase account</div>
+    
+    <div id="loginForm" style="margin: 20px 0;">
+      <input type="email" id="emailInput" placeholder="Email (herdzik@att.net)" style="padding: 12px; border: 2px solid #ddd; border-radius: 6px; width: 100%; max-width: 400px; font-size: 16px; margin-bottom: 10px;" value="herdzik@att.net">
+      <input type="password" id="passwordInput" placeholder="Password" style="padding: 12px; border: 2px solid #ddd; border-radius: 6px; width: 100%; max-width: 400px; font-size: 16px; margin-bottom: 15px;">
+    </div>
+    
+    <button id="signInBtn" onclick="signInWithEmail()">🔐 Sign In with Email</button>
+    <button id="signInGoogleBtn" onclick="signInWithGoogle()" class="secondary">🔐 Sign In with Google</button>
+    <button id="signOutBtn" onclick="signOut()" style="display: none;" class="secondary">🚪 Sign Out</button>
+  </div>
+
+  <div class="card" id="diagSection" style="display: none;">
+    <h2>Step 2: Diagnose Database</h2>
+    <div id="diagStatus" class="status info">Click to check your Firebase structure</div>
+    <button id="diagnoseBtn" onclick="diagnose()" disabled>🔍 Check Database Structure</button>
+    
+    <div id="diagResults" style="display: none; margin-top: 20px;">
+      <div class="data-summary" id="dataSummary"></div>
+      <pre id="diagDetails"></pre>
+    </div>
+  </div>
+
+  <div class="card" id="fixSection" style="display: none;">
+    <h2>Step 3: Fix Database</h2>
+    <div id="fixStatus" class="status warning">Ready to create missing surveys collection</div>
+    
+    <div style="margin: 20px 0;">
+      <label for="yearInput" style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
+        Survey Year (will be set for all surveys):
+      </label>
+      <input 
+        type="text" 
+        id="yearInput" 
+        placeholder="2025" 
+        value="2025"
+        style="padding: 12px; border: 2px solid #ddd; border-radius: 6px; width: 200px; font-size: 16px; margin-bottom: 15px;"
+      >
+      <p style="font-size: 14px; color: #666; margin-top: 5px;">
+        ℹ️ This year will be used to filter surveys in your app
+      </p>
+    </div>
+    
+    <button id="fixBtn" onclick="fixDatabase()" disabled>✨ Create Missing Surveys</button>
+    <button id="deleteBtn" onclick="deleteSurveys()" disabled class="secondary" style="background: #d32f2f;">🗑️ Delete All Surveys</button>
+    
+    <div class="progress" id="progressBar" style="display: none;">
+      <div class="progress-bar" id="progressBarFill"></div>
+    </div>
+    <pre id="fixLog" style="display: none;"></pre>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAV0l05MZGknZ0i39ETqOT04A06plbcEH4",
+      authDomain: "provider-survey-aggregator.firebaseapp.com",
+      projectId: "provider-survey-aggregator",
+      storageBucket: "provider-survey-aggregator.firebasestorage.app",
+      messagingSenderId: "59362936288",
+      appId: "1:59362936288:web:b1bd80877ae4ffadc09785"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUser = null;
+    let diagData = null;
+
+    function log(message, isError = false) {
+      console.log(message);
+      const logEl = document.getElementById('fixLog');
+      if (logEl) {
+        const timestamp = new Date().toLocaleTimeString();
+        const prefix = isError ? '❌' : '✅';
+        logEl.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+        logEl.style.display = 'block';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUser = user;
+        document.getElementById('authStatus').className = 'status success';
+        document.getElementById('authStatus').textContent = `✅ Signed in as: ${user.email} (${user.uid})`;
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('signInBtn').style.display = 'none';
+        document.getElementById('signInGoogleBtn').style.display = 'none';
+        document.getElementById('signOutBtn').style.display = 'inline-block';
+        document.getElementById('diagSection').style.display = 'block';
+        document.getElementById('diagnoseBtn').disabled = false;
+      } else {
+        currentUser = null;
+        document.getElementById('authStatus').className = 'status info';
+        document.getElementById('authStatus').textContent = 'Sign in with your Firebase account';
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('signInBtn').style.display = 'inline-block';
+        document.getElementById('signInGoogleBtn').style.display = 'inline-block';
+        document.getElementById('signOutBtn').style.display = 'none';
+        document.getElementById('diagSection').style.display = 'none';
+        document.getElementById('fixSection').style.display = 'none';
+      }
+    });
+
+    async function signInWithEmail() {
+      const email = document.getElementById('emailInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
+      
+      if (!email || !password) {
+        document.getElementById('authStatus').className = 'status error';
+        document.getElementById('authStatus').textContent = '❌ Please enter both email and password';
+        return;
+      }
+      
+      try {
+        document.getElementById('authStatus').className = 'status info';
+        document.getElementById('authStatus').textContent = '🔄 Signing in...';
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        document.getElementById('authStatus').className = 'status error';
+        document.getElementById('authStatus').textContent = `❌ Sign in failed: ${error.message}`;
+      }
+    }
+
+    async function signInWithGoogle() {
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await auth.signInWithPopup(provider);
+      } catch (error) {
+        document.getElementById('authStatus').className = 'status error';
+        document.getElementById('authStatus').textContent = `❌ Sign in failed: ${error.message}`;
+      }
+    }
+
+    async function signOut() {
+      try {
+        await auth.signOut();
+        document.getElementById('authStatus').className = 'status info';
+        document.getElementById('authStatus').textContent = 'Signed out successfully';
+        document.getElementById('passwordInput').value = '';
+        diagData = null;
+      } catch (error) {
+        document.getElementById('authStatus').className = 'status error';
+        document.getElementById('authStatus').textContent = `❌ Sign out failed: ${error.message}`;
+      }
+    }
+
+    async function diagnose() {
+      if (!currentUser) return;
+      
+      document.getElementById('diagnoseBtn').disabled = true;
+      document.getElementById('diagStatus').className = 'status info';
+      document.getElementById('diagStatus').textContent = '🔄 Checking database structure...';
+      
+      try {
+        const userId = currentUser.uid;
+        
+        // Check surveys collection
+        const surveysRef = db.collection('users').doc(userId).collection('surveys');
+        const surveysSnapshot = await surveysRef.get();
+        
+        // Check surveyData collection
+        const surveyDataRef = db.collection('users').doc(userId).collection('surveyData');
+        const surveyDataSnapshot = await surveyDataRef.get();
+        
+        // Analyze surveyData
+        const surveyIds = new Set();
+        const surveyDetails = new Map();
+        
+        surveyDataSnapshot.forEach(doc => {
+          const data = doc.data();
+          const surveyId = data.surveyId;
+          if (surveyId) {
+            surveyIds.add(surveyId);
+            if (!surveyDetails.has(surveyId)) {
+              surveyDetails.set(surveyId, {
+                rowCount: 0,
+                specialties: new Set(),
+                sampleData: data
+              });
+            }
+            const details = surveyDetails.get(surveyId);
+            details.rowCount++;
+            if (data.specialty) details.specialties.add(data.specialty);
+          }
+        });
+        
+        diagData = {
+          userId,
+          surveysCount: surveysSnapshot.size,
+          surveyDataCount: surveyDataSnapshot.size,
+          uniqueSurveyIds: Array.from(surveyIds),
+          surveyDetails
+        };
+        
+        // Display results
+        const summaryHtml = `
+          <div class="data-card">
+            <div class="number">${diagData.surveysCount}</div>
+            <div class="label">Surveys Collection</div>
+          </div>
+          <div class="data-card">
+            <div class="number">${diagData.surveyDataCount}</div>
+            <div class="label">Survey Data Rows</div>
+          </div>
+          <div class="data-card">
+            <div class="number">${diagData.uniqueSurveyIds.length}</div>
+            <div class="label">Unique Survey IDs</div>
+          </div>
+        `;
+        document.getElementById('dataSummary').innerHTML = summaryHtml;
+        
+        let detailsText = `User ID: ${userId}\n\n`;
+        detailsText += `📊 DIAGNOSIS:\n`;
+        detailsText += `  • Surveys collection: ${diagData.surveysCount} documents\n`;
+        detailsText += `  • SurveyData collection: ${diagData.surveyDataCount} documents\n`;
+        detailsText += `  • Unique survey IDs in data: ${diagData.uniqueSurveyIds.length}\n\n`;
+        
+        if (diagData.uniqueSurveyIds.length > 0) {
+          detailsText += `🔍 FOUND SURVEY DATA:\n`;
+          diagData.surveyDetails.forEach((details, surveyId) => {
+            detailsText += `\n  Survey ID: ${surveyId}\n`;
+            detailsText += `    • Rows: ${details.rowCount}\n`;
+            detailsText += `    • Specialties: ${details.specialties.size}\n`;
+            detailsText += `    • Sample specialty: ${Array.from(details.specialties)[0] || 'N/A'}\n`;
+          });
+        }
+        
+        detailsText += `\n\n${diagData.surveysCount === 0 && diagData.uniqueSurveyIds.length > 0 ? '⚠️ ISSUE FOUND: Survey data exists but surveys collection is empty!' : ''}`;
+        
+        document.getElementById('diagDetails').textContent = detailsText;
+        document.getElementById('diagResults').style.display = 'block';
+        
+        // Show fix section if needed
+        if (diagData.surveysCount === 0 && diagData.uniqueSurveyIds.length > 0) {
+          document.getElementById('diagStatus').className = 'status error';
+          document.getElementById('diagStatus').textContent = `❌ Found ${diagData.uniqueSurveyIds.length} surveys in data but 0 in surveys collection - Click Fix below!`;
+          document.getElementById('fixSection').style.display = 'block';
+          document.getElementById('fixBtn').disabled = false;
+          document.getElementById('deleteBtn').disabled = true; // No surveys to delete
+        } else if (diagData.surveysCount > 0) {
+          document.getElementById('diagStatus').className = 'status success';
+          document.getElementById('diagStatus').textContent = `✅ Database structure looks good! Found ${diagData.surveysCount} surveys.`;
+          document.getElementById('fixSection').style.display = 'block';
+          document.getElementById('fixBtn').disabled = diagData.surveysCount >= diagData.uniqueSurveyIds.length; // Only enable if missing surveys
+          document.getElementById('deleteBtn').disabled = false; // Enable delete if surveys exist
+        } else {
+          document.getElementById('diagStatus').className = 'status warning';
+          document.getElementById('diagStatus').textContent = '⚠️ No survey data found in Firebase';
+        }
+        
+      } catch (error) {
+        document.getElementById('diagStatus').className = 'status error';
+        document.getElementById('diagStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    async function fixDatabase() {
+      if (!diagData || !currentUser) return;
+      
+      document.getElementById('fixBtn').disabled = true;
+      document.getElementById('fixStatus').className = 'status info';
+      document.getElementById('fixStatus').textContent = '🔄 Creating surveys collection entries...';
+      document.getElementById('progressBar').style.display = 'block';
+      document.getElementById('fixLog').textContent = '';
+      document.getElementById('fixLog').style.display = 'block';
+      
+      try {
+        const userId = currentUser.uid;
+        const surveysRef = db.collection('users').doc(userId).collection('surveys');
+        
+        let completed = 0;
+        const total = diagData.uniqueSurveyIds.length;
+        
+        for (const surveyId of diagData.uniqueSurveyIds) {
+          const details = diagData.surveyDetails.get(surveyId);
+          const sampleData = details.sampleData;
+          
+          // Get year from input field, default to 2025
+          const yearInput = document.getElementById('yearInput').value.trim();
+          const surveyYear = yearInput || '2025';
+          
+          const surveyDoc = {
+            id: surveyId,
+            name: sampleData.specialty ? `${sampleData.specialty} Survey` : `Survey ${surveyId.substring(0, 8)}`,
+            year: surveyYear,
+            type: 'COMPENSATION',
+            uploadDate: firebase.firestore.Timestamp.now(),
+            rowCount: details.rowCount,
+            specialtyCount: details.specialties.size,
+            dataPoints: details.rowCount,
+            colorAccent: '#6200ea',
+            providerType: sampleData.provider_type || 'PHYSICIAN',
+            source: sampleData.Variable || 'MIGRATED',
+            metadata: {
+              specialties: Array.from(details.specialties),
+              migratedAt: firebase.firestore.Timestamp.now(),
+              originalSample: sampleData
+            },
+            createdAt: sampleData.createdAt || firebase.firestore.Timestamp.now(),
+            updatedAt: firebase.firestore.Timestamp.now()
+          };
+          
+          await surveysRef.doc(surveyId).set(surveyDoc);
+          log(`Created survey: ${surveyDoc.name} (${details.rowCount} rows)`);
+          
+          completed++;
+          const progress = (completed / total) * 100;
+          document.getElementById('progressBarFill').style.width = progress + '%';
+        }
+        
+        log(`\n🎉 SUCCESS! Created ${total} survey entries`);
+        log('Refresh your app at http://localhost:3000/upload');
+        
+        document.getElementById('fixStatus').className = 'status success';
+        document.getElementById('fixStatus').textContent = `✅ Fixed! Created ${total} surveys. Refresh your app now!`;
+        
+        alert(`✅ SUCCESS!\n\nCreated ${total} survey entries in Firebase.\n\nGo back to http://localhost:3000/upload and refresh the page (Ctrl+R).`);
+        
+      } catch (error) {
+        log(`Error: ${error.message}`, true);
+        document.getElementById('fixStatus').className = 'status error';
+        document.getElementById('fixStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    async function deleteSurveys() {
+      if (!currentUser) return;
+      
+      const confirmation = confirm(
+        `⚠️ WARNING: This will delete ALL surveys from the surveys collection.\n\n` +
+        `✅ Your surveyData (raw data rows) will NOT be touched - they are 100% safe!\n\n` +
+        `This only removes the survey metadata entries, which can be recreated.\n\n` +
+        `Do you want to continue?`
+      );
+      
+      if (!confirmation) {
+        return;
+      }
+      
+      document.getElementById('deleteBtn').disabled = true;
+      document.getElementById('fixBtn').disabled = true;
+      document.getElementById('fixStatus').className = 'status info';
+      document.getElementById('fixStatus').textContent = '🔄 Deleting surveys...';
+      document.getElementById('fixLog').textContent = '';
+      document.getElementById('fixLog').style.display = 'block';
+      
+      try {
+        const userId = currentUser.uid;
+        const surveysRef = db.collection('users').doc(userId).collection('surveys');
+        
+        log('📋 Fetching all surveys to delete...');
+        const snapshot = await surveysRef.get();
+        
+        if (snapshot.empty) {
+          log('ℹ️ No surveys found to delete');
+          document.getElementById('fixStatus').className = 'status info';
+          document.getElementById('fixStatus').textContent = 'ℹ️ No surveys found to delete';
+          document.getElementById('deleteBtn').disabled = false;
+          return;
+        }
+        
+        log(`Found ${snapshot.size} surveys to delete`);
+        
+        // Delete in batches for better performance
+        const batch = db.batch();
+        snapshot.forEach(doc => {
+          batch.delete(doc.ref);
+          log(`Deleting: ${doc.data().name || doc.id}`);
+        });
+        
+        await batch.commit();
+        
+        log(`\n🎉 SUCCESS! Deleted ${snapshot.size} surveys`);
+        log('✅ Your surveyData (raw data) is still safe!');
+        log('Click "Check Database Structure" to verify, then "Create Missing Surveys" to recreate with correct year');
+        
+        document.getElementById('fixStatus').className = 'status success';
+        document.getElementById('fixStatus').textContent = `✅ Deleted ${snapshot.size} surveys. Click "Check Database Structure" to verify.`;
+        
+        // Clear diagData so user must re-diagnose
+        diagData = null;
+        document.getElementById('diagResults').style.display = 'none';
+        document.getElementById('diagnoseBtn').disabled = false;
+        
+        alert(`✅ SUCCESS!\n\nDeleted ${snapshot.size} surveys.\n\nYour surveyData (raw data) is 100% safe!\n\nNow:\n1. Click "Check Database Structure" again\n2. Set the year to 2025\n3. Click "Create Missing Surveys"`);
+        
+      } catch (error) {
+        log(`Error: ${error.message}`, true);
+        document.getElementById('fixStatus').className = 'status error';
+        document.getElementById('fixStatus').textContent = `❌ Error: ${error.message}`;
+        document.getElementById('deleteBtn').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

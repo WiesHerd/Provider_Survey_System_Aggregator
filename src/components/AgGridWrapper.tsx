@@ -220,7 +220,7 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
           
           // Typography - smaller and cleaner
           '--ag-font-size': '12px',
-          '--ag-font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          '--ag-font-family': '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           
           // Row colors - EXACTLY like the image
           '--ag-row-hover-color': '#f8fafc',

@@ -4,12 +4,46 @@
 
 export const clearStorage = {
   /**
-   * Clear all localStorage data
+   * Clear app-scoped localStorage data only
    */
   clearLocalStorage: () => {
     try {
-      localStorage.clear();
-      console.log('localStorage cleared successfully');
+      const exactKeys = new Set([
+        'customReports',
+        'enhancedCustomReports',
+        'uploadFormDefaults',
+        'upload_checkpoints',
+        'upload_metrics',
+        'auditLogs',
+        'errorLogs',
+        'errorAggregations',
+        'localUserId',
+        'welcomeBannerDismissed',
+        'app_specialty_mappings',
+        'year_configs',
+        'mapping.learnedInfoDismissed.v1'
+      ]);
+
+      const prefixKeys = [
+        'preference_',
+        'reportConfig_',
+        'year_data_'
+      ];
+
+      let removedCount = 0;
+
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        const shouldRemove = exactKeys.has(key) || prefixKeys.some(prefix => key.startsWith(prefix));
+        if (shouldRemove) {
+          localStorage.removeItem(key);
+          removedCount += 1;
+        }
+      }
+
+      console.log(`localStorage cleared successfully (${removedCount} app keys removed)`);
       return true;
     } catch (error) {
       console.error('Error clearing localStorage:', error);
@@ -67,6 +101,39 @@ export const clearStorage = {
       });
     } catch (error) {
       console.error('Error clearing IndexedDB:', error);
+      return false;
+    }
+  },
+  /**
+   * Clear Firebase Auth persistence only (safe for app data)
+   */
+  clearFirebaseAuthStorage: async () => {
+    try {
+      let removedCount = 0;
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (key.startsWith('firebase:') || key.startsWith('firebaseui::')) {
+          localStorage.removeItem(key);
+          removedCount += 1;
+        }
+      }
+
+      const dbName = 'firebaseLocalStorageDb';
+      const request = indexedDB.deleteDatabase(dbName);
+
+      return await new Promise<boolean>((resolve) => {
+        request.onerror = () => {
+          console.error('Error deleting Firebase Auth IndexedDB:', request.error);
+          resolve(false);
+        };
+        request.onsuccess = () => {
+          console.log(`Firebase Auth storage cleared (${removedCount} keys removed)`);
+          resolve(true);
+        };
+      });
+    } catch (error) {
+      console.error('Error clearing Firebase Auth storage:', error);
       return false;
     }
   },

@@ -1,0 +1,4 @@
+Provider Name,Specialty,Geographic Region,Base Salary - p25,Base Salary - p50,Base Salary - p75,Base Salary - p90,Net Collections - p25,Net Collections - p50,Net Collections - p75,Net Collections - p90,Total Encounters - p25,Total Encounters - p50,Total Encounters - p75,Total Encounters - p90
+Sample Provider,Cardiology,Northeast,350000,425000,500000,575000,750000,900000,1050000,1200000,3500,4200,5000,5800
+Sample Provider,Family Medicine,Midwest,200000,240000,280000,320000,450000,550000,650000,750000,5000,6000,7000,8000
+Sample Provider,Orthopedic Surgery,South,425000,525000,625000,725000,950000,1150000,1350000,1550000,2800,3400,4000,4600

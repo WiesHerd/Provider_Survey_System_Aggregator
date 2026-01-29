@@ -14,6 +14,7 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
   // UI state
   const [showHelp, setShowHelp] = useState(false);
   const [isBulkSelected, setIsBulkSelected] = useState(false);
+  const [isAutoMapping, setIsAutoMapping] = useState(false);
   
   // Enterprise-grade confirmation dialog system
   const { dialogState, showConfirmation, handleConfirm, handleCancel } = useConfirmationDialog();
@@ -132,6 +133,7 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
     );
   }, [showConfirmation, loadData]);
 
+
   // UI handlers
   const handleShowHelp = useCallback(() => setShowHelp(true), []);
   const handleCloseHelp = useCallback(() => setShowHelp(false), []);
@@ -141,6 +143,7 @@ export const useSpecialtyMappingLogic = (props: SpecialtyMappingProps) => {
     showHelp,
     isBulkSelected,
     allUnmappedCount,
+    isAutoMapping,
     
     // Cross-category mapping toggle (Call Pay, Physician, APP)
     showAllProviderTypes,

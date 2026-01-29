@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Survey Fix</title>
+    <script>
+        (async function() {
+            console.log('🔧 Starting direct survey fix...');
+            
+            try {
+                // Open IndexedDB
+                const db = await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('SurveyAggregatorDB', 7);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                // Get all surveys
+                const surveys = await new Promise((resolve, reject) => {
+                    const transaction = db.transaction(['surveys'], 'readonly');
+                    const store = transaction.objectStore('surveys');
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                // Find SullivanCotter surveys that are marked as APP
+                const sullivan = surveys.filter(s => {
+                    const name = (s.name || s.type || '').toLowerCase();
+                    const pt = (s.providerType || '').toUpperCase();
+                    return (name.includes('sullivancotter') || name.includes('sullivan cotter')) &&
+                           (pt === 'APP' || name.includes(' - app') || name.includes(' app '));
+                });
+
+                console.log(`Found ${sullivan.length} SullivanCotter survey(s) marked as APP`);
+
+                if (sullivan.length > 0) {
+                    const transaction = db.transaction(['surveys'], 'readwrite');
+                    const store = transaction.objectStore('surveys');
+                    
+                    for (const survey of sullivan) {
+                        console.log(`Fixing survey: ${survey.name || survey.id}`);
+                        console.log(`  Old providerType: ${survey.providerType}`);
+                        console.log(`  Old name: ${survey.name}`);
+                        
+                        survey.providerType = 'PHYSICIAN';
+                        survey.dataCategory = survey.dataCategory || 'COMPENSATION';
+                        
+                        if (survey.name) {
+                            survey.name = survey.name.replace(/ - APP /gi, ' Physician ').replace(/ APP$/gi, ' Physician');
+                        }
+                        if (survey.type) {
+                            survey.type = survey.type.replace(/ - APP /gi, ' Physician ').replace(/ APP$/gi, ' Physician');
+                        }
+                        
+                        await new Promise((resolve, reject) => {
+                            const request = store.put(survey);
+                            request.onsuccess = () => resolve();
+                            request.onerror = () => reject(request.error);
+                        });
+                        
+                        console.log(`  ✅ Fixed! New providerType: ${survey.providerType}`);
+                        console.log(`  ✅ New name: ${survey.name}`);
+                    }
+                    
+                    console.log(`✅ Fixed ${sullivan.length} survey(s)!`);
+                    console.log('🔄 Reloading page in 2 seconds...');
+                    
+                    // Clear cache
+                    localStorage.removeItem('providerTypeDetectionCache');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/upload';
+                    }, 2000);
+                } else {
+                    console.log('✅ No fixes needed. All surveys are correctly configured.');
+                    console.log('🔄 Reloading page in 2 seconds...');
+                    setTimeout(() => {
+                        window.location.href = '/upload';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('Error fixing surveys: ' + error.message);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <h1>Fixing Surveys...</h1>
+    <p>Please wait while we fix the provider type issues.</p>
+    <p>You will be redirected to the upload page shortly.</p>
+</body>
+</html>

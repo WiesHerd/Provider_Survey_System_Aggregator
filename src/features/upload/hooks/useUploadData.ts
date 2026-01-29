@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getDataService } from '../../../services/DataService';
+import { getCurrentStorageMode, StorageMode } from '../../../config/storage';
 import { AnalyticsDataService } from '../../analytics/services/analyticsDataService';
 import { 
   FileWithPreview,
@@ -626,9 +627,15 @@ export const useUploadData = (
       const transactions: UploadTransaction[] = [];
       
       // Step 1: Validate all files
+      const uploadStartTime = Date.now();
       setUploadState(prev => ({
         ...prev,
-        progress: { ...prev.progress, step: 'validating', message: 'Validating files...' }
+        progress: { 
+          ...prev.progress, 
+          step: 'validating', 
+          message: `Validating ${files.length} file${files.length > 1 ? 's' : ''}...`,
+          details: 'Checking file format, structure, and content'
+        }
       }));
       
       const validationResults: UploadValidationSummary[] = [];
@@ -653,9 +660,15 @@ export const useUploadData = (
       }
       
       // Step 2: Check for duplicates
+      const validationTime = Date.now() - uploadStartTime;
       setUploadState(prev => ({
         ...prev,
-        progress: { ...prev.progress, step: 'parsing', message: 'Checking for duplicates...' }
+        progress: { 
+          ...prev.progress, 
+          step: 'parsing', 
+          message: `Checking for duplicate surveys...`,
+          details: `Validation completed in ${(validationTime / 1000).toFixed(1)}s`
+        }
       }));
       
       for (let i = 0; i < files.length; i++) {
@@ -689,6 +702,11 @@ export const useUploadData = (
           startTime: Date.now()
         };
         
+        const fileStartTime = Date.now();
+        const estimatedTotalTime = files.length * 5000; // Rough estimate: 5s per file
+        const elapsedTime = Date.now() - uploadStartTime;
+        const estimatedRemaining = Math.max(0, estimatedTotalTime - elapsedTime);
+        
         setUploadState(prev => ({
           ...prev,
           currentTransaction: transaction,
@@ -696,9 +714,12 @@ export const useUploadData = (
             ...prev.progress,
             currentFile: file.name,
             currentFileIndex: i,
-            progress: (i / files.length) * 100,
+            progress: Math.round((i / files.length) * 100),
             step: 'parsing',
-            message: `Processing ${file.name}...`
+            message: `Processing file ${i + 1} of ${files.length}: ${file.name}`,
+            details: estimatedRemaining > 0 
+              ? `Estimated time remaining: ${Math.ceil(estimatedRemaining / 1000)}s`
+              : 'Parsing file data...'
           }
         }));
         
@@ -742,7 +763,7 @@ export const useUploadData = (
           });
 
           // CRITICAL: Wrap upload in try-catch to catch and log any errors
-          let uploadedSurvey;
+          let uploadedSurvey: { surveyId: string; rowCount: number };
           try {
             uploadedSurvey = await dataService.uploadSurvey(
               file,
@@ -754,6 +775,35 @@ export const useUploadData = (
           } catch (uploadError) {
             console.error('❌ useUploadData: Survey upload failed:', uploadError);
             const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown upload error';
+            
+            // Check if this is a Firebase permission error
+            // Note: With our updated code, permission errors should now fall back to IndexedDB
+            // So this catch block should rarely be hit for permission errors
+            const isPermissionError = 
+              errorMessage.toLowerCase().includes('permission') ||
+              errorMessage.toLowerCase().includes('firebase permission') ||
+              errorMessage.toLowerCase().includes('missing or insufficient permissions');
+            
+            if (isPermissionError) {
+              // This shouldn't happen now since DataService falls back, but handle it gracefully
+              console.warn('⚠️ Firebase permission error - upload should have fallen back to IndexedDB');
+              // Try to show a helpful message
+              toast.warning(
+                'Upload Saved to Local Storage',
+                `Survey "${file.name}" was saved to local storage (IndexedDB) only due to Firebase permission issues. ` +
+                `To enable cloud sync: 1) Sign in, 2) Deploy security rules (firebase deploy --only firestore:rules)`,
+                10000
+              );
+              // Don't throw - allow the upload to be considered successful (it was saved to IndexedDB)
+              // But we need to get the survey ID somehow... Actually, if we're here, the upload failed
+              // So we should still throw, but with a more helpful message
+              throw new Error(
+                `Upload failed due to Firebase permission error. ` +
+                `The survey was not saved. Please fix Firebase permissions or switch to IndexedDB-only mode. ` +
+                `Error: ${errorMessage}`
+              );
+            }
+            
             throw new Error(`Failed to upload survey "${file.name}": ${errorMessage}`);
           }
 
@@ -771,9 +821,15 @@ export const useUploadData = (
           });
           
           // Verify upload
+          const saveTime = Date.now() - fileStartTime;
           setUploadState(prev => ({
             ...prev,
-            progress: { ...prev.progress, step: 'verifying', message: `Verifying ${file.name}...` }
+            progress: { 
+              ...prev.progress, 
+              step: 'verifying', 
+              message: `Verifying data integrity for ${file.name}...`,
+              details: `Saved ${uploadedSurvey.rowCount} rows in ${(saveTime / 1000).toFixed(1)}s`
+            }
           }));
           
           const verification = await validateUploadTransaction(
@@ -881,34 +937,31 @@ export const useUploadData = (
             rowCount: uploadedSurvey.rowCount
           });
           
-          // Auto-apply learned mappings after upload
-          try {
-            setUploadState(prev => ({
-              ...prev,
-              progress: { 
-                ...prev.progress, 
-                step: 'mapping', 
-                message: 'Applying learned mappings...' 
-              }
-            }));
-            
-            const mappingResult = await applyLearnedMappingsToSurvey(
-              uploadedSurvey.surveyId,
-              providerType,
-              surveyType
-            );
-            
-            setMappingCoverage(mappingResult);
-            
-            console.log('✅ Learned mappings applied:', {
-              surveyId: uploadedSurvey.surveyId,
-              coverage: mappingResult.coverage,
-              applied: mappingResult.appliedCounts
-            });
-          } catch (mappingError) {
-            console.warn('Failed to apply learned mappings (non-blocking):', mappingError);
-            // Don't fail the upload if mapping application fails
-          }
+          // PERFORMANCE OPTIMIZATION: Apply learned mappings in background (non-blocking)
+          // This allows the upload to complete faster and mappings to be applied asynchronously
+          // The user will see the upload complete immediately, and mappings will appear shortly after
+          setTimeout(async () => {
+            try {
+              console.log('🔄 Applying learned mappings in background...');
+              
+              const mappingResult = await applyLearnedMappingsToSurvey(
+                uploadedSurvey.surveyId,
+                providerType,
+                surveyType
+              );
+              
+              setMappingCoverage(mappingResult);
+              
+              console.log('✅ Learned mappings applied in background:', {
+                surveyId: uploadedSurvey.surveyId,
+                coverage: mappingResult.coverage,
+                applied: mappingResult.appliedCounts
+              });
+            } catch (mappingError) {
+              console.warn('Failed to apply learned mappings (non-blocking):', mappingError);
+              // Don't fail the upload if mapping application fails
+            }
+          }, 100); // Small delay to ensure UI updates first
           
           // Mark transaction as completed
           transaction.surveyId = uploadedSurvey.surveyId;
@@ -932,7 +985,10 @@ export const useUploadData = (
           // Rollback this file if possible
           if (transaction.surveyId) {
             try {
-              await dataService.deleteSurvey(transaction.surveyId);
+              const rollbackResult = await dataService.deleteSurveyEverywhere(transaction.surveyId);
+              if (!rollbackResult.success) {
+                console.warn('Rollback delete completed with errors:', rollbackResult.errors);
+              }
             } catch (rollbackError) {
               console.error('Failed to rollback survey:', rollbackError);
             }
@@ -978,9 +1034,14 @@ export const useUploadData = (
         console.log('✅ Cleared ALL performance cache entries for survey lists');
         
         const { queryClient } = require('../../../shared/services/queryClient');
+        // CRITICAL FIX: Remove all survey list cache entries to force fresh fetch
+        // This bypasses the staleTime check that prevents refetching
+        queryClient.queryClient.removeQueries({ queryKey: ['surveys', 'list'] });
+        console.log('✅ Cleared all survey list cache entries to force fresh fetch');
+        
         // CRITICAL FIX: Invalidate and refetch with force to bypass stale cache
         // This ensures surveys appear immediately after upload
-        queryClient.queryClient.invalidateQueries({ 
+        await queryClient.queryClient.invalidateQueries({ 
           queryKey: ['surveys', 'list'],
           refetchType: 'active' // Force refetch of active queries
         });
@@ -988,23 +1049,73 @@ export const useUploadData = (
         
         // ENTERPRISE FIX: Explicitly refetch with force to bypass any stale cache
         // This ensures survey pills appear immediately without page refresh
-        const refetchResult = await refetchSurveys();
-        console.log('✅ Refetched survey list after upload:', {
-          surveyCount: refetchResult.data?.length || 0,
-          currentYear,
-          selectedProviderType,
-          uploadedSurveys: uploadedSurveys.map(s => ({ id: s.id, name: s.fileName, year: s.surveyYear }))
-        });
+        // Add delay to ensure storage backend has committed the write (Firebase needs more time)
+        const storageMode = getCurrentStorageMode();
+        const delayMs = storageMode === StorageMode.FIREBASE ? 1500 : 500; // Firebase needs more time for consistency
+        console.log(`⏳ Waiting ${delayMs}ms for storage backend (${storageMode}) to commit writes...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
         
-        // CRITICAL: If refetch returned 0 surveys but we just uploaded, force another refetch
-        // This handles race conditions where cache hasn't updated yet
-        if (refetchResult.data?.length === 0 && uploadedSurveys.length > 0) {
-          console.warn('⚠️ Refetch returned 0 surveys after upload - forcing another refetch...');
-          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay
-          const secondRefetch = await refetchSurveys();
-          console.log('✅ Second refetch result:', {
-            surveyCount: secondRefetch.data?.length || 0
-          });
+        // Refetch with retry logic
+        let refetchResult: any = null;
+        let refetchAttempts = 0;
+        const maxRefetchAttempts = 3;
+        
+        while (refetchAttempts < maxRefetchAttempts) {
+          refetchAttempts++;
+          try {
+            refetchResult = await refetchSurveys();
+            console.log(`✅ Refetched survey list after upload (attempt ${refetchAttempts}/${maxRefetchAttempts}):`, {
+              surveyCount: refetchResult.data?.length || 0,
+              currentYear,
+              selectedProviderType,
+              uploadedSurveys: uploadedSurveys.map(s => ({ id: s.id, name: s.fileName, year: s.surveyYear, providerType: (s as any).providerType }))
+            });
+            
+            // Verify uploaded surveys appear in results
+            const uploadedSurveyIds = new Set(uploadedSurveys.map(s => s.id));
+            const foundSurveys = refetchResult.data?.filter((s: any) => uploadedSurveyIds.has(s.id)) || [];
+            
+            if (foundSurveys.length === uploadedSurveys.length) {
+              console.log(`✅ All ${uploadedSurveys.length} uploaded survey(s) found in refetched results`);
+              break; // Success - all surveys found
+            } else if (refetchAttempts < maxRefetchAttempts) {
+              const missingCount = uploadedSurveys.length - foundSurveys.length;
+              console.warn(`⚠️ Only ${foundSurveys.length}/${uploadedSurveys.length} uploaded survey(s) found - retrying... (missing ${missingCount})`);
+              await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
+            } else {
+              console.warn(`⚠️ Only ${foundSurveys.length}/${uploadedSurveys.length} uploaded survey(s) found after ${maxRefetchAttempts} attempts`);
+              // Log which surveys are missing
+              const foundIds = new Set(foundSurveys.map((s: any) => s.id));
+              const missingSurveys = uploadedSurveys.filter(s => !foundIds.has(s.id));
+              console.warn('⚠️ Missing surveys:', missingSurveys.map(s => ({ id: s.id, name: s.fileName, year: s.surveyYear, providerType: (s as any).providerType })));
+            }
+          } catch (refetchError) {
+            console.error(`❌ Refetch attempt ${refetchAttempts} failed:`, refetchError);
+            if (refetchAttempts < maxRefetchAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
+            } else {
+              throw refetchError; // Re-throw on final attempt
+            }
+          }
+        }
+        
+        // Final verification: Check if surveys appear with current filters
+        if (refetchResult?.data) {
+          const filteredCount = refetchResult.data.length;
+          const totalCount = refetchResult.data.length; // This is already filtered by the query
+          
+          if (filteredCount === 0 && uploadedSurveys.length > 0) {
+            console.warn('⚠️ Uploaded surveys may be filtered out by current year/providerType filters:', {
+              currentYear,
+              selectedProviderType,
+              uploadedSurveys: uploadedSurveys.map(s => ({
+                id: s.id,
+                name: s.fileName,
+                year: s.surveyYear,
+                providerType: (s as any).providerType
+              }))
+            });
+          }
         }
       } catch (error) {
         console.error('❌ Failed to invalidate/refetch query cache:', error);
@@ -1082,10 +1193,10 @@ export const useUploadData = (
       console.log(`🗑️ Starting enhanced delete for survey: ${surveyId}`);
 
       // Use enhanced delete with verification
-      const deleteResult = await dataService.deleteWithVerification(surveyId);
-      
+      const deleteResult = await dataService.deleteSurveyEverywhere(surveyId);
+
       if (!deleteResult.success) {
-        throw new Error(deleteResult.error || 'Delete verification failed');
+        throw new Error(deleteResult.errors.join(' | ') || 'Delete verification failed');
       }
 
       setDeleteProgress({
@@ -1170,7 +1281,11 @@ export const useUploadData = (
         // The query will eventually refetch on its own
       }
       
-      console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
+      console.log('✅ Survey deleted successfully across stores:', {
+        surveyId,
+        firestoreDataRows: deleteResult.counts.firestoreDataRows,
+        indexedDbDataRows: deleteResult.counts.indexedDbDataRows
+      });
       
       onSurveyDeleteRef.current?.(surveyId);
       

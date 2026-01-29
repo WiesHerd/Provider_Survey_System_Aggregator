@@ -36,7 +36,7 @@ type ProviderContextAction =
 // Initial State - will be updated by auto-detection
 const initialState: ProviderContextState = {
   selectedProviderType: 'PHYSICIAN', // Default fallback, will be overridden by auto-detection
-  availableProviderTypes: ['PHYSICIAN', 'APP'],
+  availableProviderTypes: ['PHYSICIAN', 'APP', 'CALL'],
   isProviderDetectionEnabled: true,
   lastDetectionResult: null,
   providerTypeHistory: []
@@ -181,7 +181,7 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
                 
                 // Default to the provider type with most recent data
                 const firstProviderType = sortedTypes[0].type;
-                if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+                if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP' || firstProviderType === 'CALL') {
                   console.log(`🔍 Auto-detected provider type: ${firstProviderType} (${sortedTypes[0].surveyCount} surveys, last updated: ${sortedTypes[0].lastUpdated})`);
                   dispatch({
                     type: 'SET_PROVIDER_TYPE',
@@ -217,7 +217,7 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
                 return b.surveyCount - a.surveyCount;
               });
               const firstProviderType = sortedTypes[0].type;
-              if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+              if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP' || firstProviderType === 'CALL') {
                 dispatch({
                   type: 'SET_PROVIDER_TYPE',
                   payload: { 
@@ -319,7 +319,7 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
         
         // Switch to the provider type with most recent data
         const firstProviderType = sortedTypes[0].type;
-        if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP') {
+        if (firstProviderType === 'PHYSICIAN' || firstProviderType === 'APP' || firstProviderType === 'CALL') {
           console.log(`🔄 Auto-switching to provider type: ${firstProviderType} (${sortedTypes[0].surveyCount} surveys, last updated: ${sortedTypes[0].lastUpdated})`);
           dispatch({
             type: 'SET_PROVIDER_TYPE',

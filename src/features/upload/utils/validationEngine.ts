@@ -223,6 +223,7 @@ export function isVendorMarker(value: any): boolean {
 
 /**
  * Tier 1: Structural Validation (Critical - Blocks Processing)
+ * Format-aware: Only requires Variable/percentile columns for normalized format
  */
 export function validateTier1(
   headers: string[],
@@ -291,13 +292,22 @@ export function validateTier1(
     .map((h, i) => ({ header: h, index: i }))
     .filter(({ header }) => !header || header.trim() === '');
   
-  if (blankHeaders.length > 0) {
+  // Only block if blank headers have actual data in their columns
+  // Trailing empty columns with no data are common in CSV exports and should not block upload
+  const blankHeadersWithData = blankHeaders.filter(({ index }) =>
+    rows.some(row => {
+      const value = row[index];
+      return value !== null && value !== undefined && String(value).trim() !== '';
+    })
+  );
+  
+  if (blankHeadersWithData.length > 0) {
     errors.push({
       severity: 'critical',
       tier: ValidationTier.Tier1,
       category: 'structure',
-      message: `Header row contains ${blankHeaders.length} blank or empty column${blankHeaders.length > 1 ? 's' : ''}`,
-      affectedColumns: blankHeaders.map(h => `Column ${h.index + 1}`),
+      message: `Header row contains ${blankHeadersWithData.length} blank or empty column${blankHeadersWithData.length > 1 ? 's' : ''}`,
+      affectedColumns: blankHeadersWithData.map(h => `Column ${h.index + 1}`),
       fixInstructions: [
         'Add column names for all columns',
         'Remove empty columns if they are not needed'
@@ -305,19 +315,38 @@ export function validateTier1(
     });
   }
 
+  // Detect format to determine which columns are required
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  const hasVariableColumn = lowerHeaders.some(h => 
+    h === 'variable' || h === 'benchmark' || h.includes('variable')
+  );
+  const hasGenericPercentiles = lowerHeaders.some(h => 
+    h === 'p25' || h === 'p50' || h === 'p75' || h === 'p90' ||
+    h.includes('25th') || h.includes('50th') || h.includes('75th') || h.includes('90th')
+  );
+  const hasVariableSpecificPercentiles = lowerHeaders.some(h => 
+    h.includes('tcc_p') || h.includes('wrvu_p') || h.includes('cf_p')
+  );
+  
+  // We only support normalized format now
+  const isNormalizedFormat = true;
+
   // Check for required columns
   const foundColumns = {
     specialty: headers.some(h => matchesRequiredColumn(h, 'specialty')),
-    providerType: headers.some(h => matchesRequiredColumn(h, 'providerType')),
-    region: headers.some(h => matchesRequiredColumn(h, 'region')),
-    variable: headers.some(h => matchesRequiredColumn(h, 'variable'))
+    variable: hasVariableColumn
   };
 
   const missingColumns: string[] = [];
-  if (!foundColumns.specialty) missingColumns.push('Specialty');
-  if (!foundColumns.providerType) missingColumns.push('Provider_Type');
-  if (!foundColumns.region) missingColumns.push('Region');
-  if (!foundColumns.variable) missingColumns.push('Variable');
+  
+  // Required columns for normalized format
+  if (!foundColumns.specialty) {
+    missingColumns.push('specialty');
+  }
+  
+  if (!foundColumns.variable) {
+    missingColumns.push('variable');
+  }
 
   if (missingColumns.length > 0) {
     errors.push({
@@ -334,14 +363,14 @@ export function validateTier1(
     });
   }
 
-  // Check for at least one percentile column
+  // Check for percentile columns (required for normalized format)
   const hasPercentileColumn = headers.some(h => isPercentileColumn(h));
   if (!hasPercentileColumn) {
     errors.push({
       severity: 'critical',
       tier: ValidationTier.Tier1,
       category: 'structure',
-      message: 'No percentile columns found (need at least one of: 25th, 50th, 75th, 90th %tile)',
+      message: 'No percentile columns found (need at least one of: p25, p50, p75, p90)',
       fixInstructions: [
         'Add at least one percentile column (p25, p50, p75, or p90)',
         'Column names can be: "25th %tile", "p50", "median", "90th percentile", etc.'
@@ -499,6 +528,23 @@ export function validateTier2(
 
 /**
  * Tier 3: Content Quality Checks (Info - Visual Highlighting)
+ * 
+ * Simplified to Microsoft-style basic file checks - focuses on fundamental data quality
+ * without complex statistical analysis.
+ * 
+ * What we check (Microsoft-style):
+ * - Negative/zero values in numeric columns (basic data quality)
+ * - Duplicate rows (basic data quality)
+ * 
+ * What we removed (statistical analysis):
+ * - Percentile order validation (p50 > p90, p25 > p90) - too complex, can be legitimate
+ * - Statistical outlier detection (IQR method) - statistical analysis, not file validation
+ * - Data completeness metrics (specialty completeness %) - too complex for file validation
+ * - Cross-row consistency checks (high variability detection) - statistical analysis
+ * - Business rule validation (specialty-variable combinations) - too opinionated
+ * 
+ * Philosophy: Keep it simple like Excel - check file structure and basic data quality,
+ * not statistical distributions or business logic.
  */
 export function validateTier3(
   headers: string[],
@@ -511,46 +557,23 @@ export function validateTier3(
     .map((h, i) => ({ name: h, index: i }))
     .filter(({ name }) => isPercentileColumn(name));
 
-  // Find p50 and p90 columns for comparison
-  const p50Col = percentileColumns.find(({ name }) => /p50|50th|median/i.test(name));
-  const p90Col = percentileColumns.find(({ name }) => /p90|90th/i.test(name));
-
-  // Check if 50th percentile > 90th percentile
-  if (p50Col && p90Col) {
-    const invalidRows: number[] = [];
-    rows.forEach((row, rowIndex) => {
-      const p50Value = Number(row[p50Col.index]);
-      const p90Value = Number(row[p90Col.index]);
-      if (isValidNumber(p50Value) && isValidNumber(p90Value) && p50Value > p90Value) {
-        invalidRows.push(rowIndex + 1);
-      }
-    });
-
-    if (invalidRows.length > 0) {
-      const sampleRows = invalidRows.slice(0, 5);
-      info.push({
-        severity: 'info',
-        tier: ValidationTier.Tier3,
-        category: 'content',
-        message: `${invalidRows.length} row${invalidRows.length > 1 ? 's' : ''} have 50th percentile exceeding 90th percentile`,
-        affectedRows: sampleRows,
-        affectedColumns: [p50Col.name, p90Col.name],
-        fixInstructions: [
-          `Review rows: ${sampleRows.join(', ')}${invalidRows.length > 5 ? ` and ${invalidRows.length - 5} more` : ''}`,
-          '50th percentile should typically be less than 90th percentile',
-          'Verify data accuracy'
-        ]
-      });
-    }
-  }
-
-  // Check for negative or zero percentile values
+  // Basic Microsoft-style checks only:
+  
+  // 1. Check for negative or zero percentile values (basic data quality)
   percentileColumns.forEach(({ name, index }) => {
     const invalidRows: number[] = [];
     rows.forEach((row, rowIndex) => {
-      const value = Number(row[index]);
-      if (isValidNumber(value) && value <= 0) {
-        invalidRows.push(rowIndex + 1);
+      const rawValue = row[index];
+      // Only flag if it's a valid number that's negative or zero
+      // Skip empty values and vendor markers (handled in Tier 2)
+      if (rawValue != null && String(rawValue).trim() !== '') {
+        const stringValue = String(rawValue).trim();
+        if (!isVendorMarker(stringValue)) {
+          const parsed = parseFormattedNumber(rawValue);
+          if (!isNaN(parsed) && parsed <= 0) {
+            invalidRows.push(rowIndex + 1);
+          }
+        }
       }
     });
 
@@ -565,13 +588,13 @@ export function validateTier3(
         affectedColumns: [name],
         fixInstructions: [
           `Review rows: ${sampleRows.join(', ')}${invalidRows.length > 5 ? ` and ${invalidRows.length - 5} more` : ''}`,
-          'Percentile values should typically be positive numbers'
+          'Compensation values should typically be positive numbers'
         ]
       });
     }
   });
 
-  // Check for duplicate rows (exact duplicates)
+  // 2. Check for duplicate rows (exact duplicates) - basic Excel-style check
   const rowHashes = new Map<string, number[]>();
   rows.forEach((row, rowIndex) => {
     const hash = JSON.stringify(row);

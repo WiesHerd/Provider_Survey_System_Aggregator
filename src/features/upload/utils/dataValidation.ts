@@ -100,7 +100,7 @@ function normalizeNumericValue(value: any): { normalized: string; isNumeric: boo
 export function validateDataTypes(
   headers: string[],
   rows: Record<string, any>[],
-  format?: 'normalized' | 'wide' | 'wide_variable'
+  format?: 'normalized'
 ): DataValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationError[] = [];
@@ -114,25 +114,11 @@ export function validateDataTypes(
     const rowErrorsList: ValidationError[] = [];
     let rowIsValid = true;
 
-    // Validate based on format
-    if (format === 'normalized') {
-      const normalizedErrors = validateNormalizedRow(row, headers, rowNumber);
-      rowErrorsList.push(...normalizedErrors);
-      if (normalizedErrors.some(e => e.severity === 'critical')) {
-        rowIsValid = false;
-      }
-    } else if (format === 'wide_variable') {
-      const wideVariableErrors = validateWideVariableRow(row, headers, rowNumber);
-      rowErrorsList.push(...wideVariableErrors);
-      if (wideVariableErrors.some(e => e.severity === 'critical')) {
-        rowIsValid = false;
-      }
-    } else if (format === 'wide') {
-      const wideErrors = validateWideRow(row, headers, rowNumber);
-      rowErrorsList.push(...wideErrors);
-      if (wideErrors.some(e => e.severity === 'critical')) {
-        rowIsValid = false;
-      }
+    // Validate normalized format
+    const normalizedErrors = validateNormalizedRow(row, headers, rowNumber);
+    rowErrorsList.push(...normalizedErrors);
+    if (normalizedErrors.some(e => e.severity === 'critical')) {
+      rowIsValid = false;
     }
 
     if (rowErrorsList.length > 0) {

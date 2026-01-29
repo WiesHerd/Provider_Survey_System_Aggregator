@@ -174,15 +174,6 @@ export const VariableMapping: React.FC<VariableMappingProps> = ({
     }
   };
 
-  // Notify parent of changes
-  useEffect(() => {
-    onVariableMappingChange?.(variableMappings);
-  }, [variableMappings, onVariableMappingChange]);
-
-  useEffect(() => {
-    onUnmappedVariableChange?.(unmappedVariables);
-  }, [unmappedVariables, onUnmappedVariableChange]);
-
   // ENTERPRISE: Show cached data immediately, only show loading on first load
   // This enables stale-while-revalidate pattern for instant navigation
   const loading = isLoading && !variableMappings.length && !unmappedVariables.length;

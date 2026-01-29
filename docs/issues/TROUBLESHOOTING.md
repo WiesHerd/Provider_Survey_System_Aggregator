@@ -2,6 +2,25 @@
 
 ## Common Issues and Resolutions
 
+### 0.1 Firebase Hosting Blank Screen After Deploy
+
+#### Problem
+On `*.web.app` or `*.firebaseapp.com`, the page goes blank after a hard refresh and the console shows:
+- `Uncaught SyntaxError: Unexpected token '<'` (from `main.*.js`)
+- `WebSocket connection to 'ws://localhost:8081' failed`
+- `X-Frame-Options may only be set via an HTTP header`
+
+#### Root Cause
+The browser is serving a **stale cached bundle or service worker** from a previous build. The JS request returns `index.html` (HTML), which triggers `Unexpected token '<'`. The `localhost:8081` websocket indicates a cached dev bundle, not a production build.
+
+#### Solution
+1. **Disable service worker registration** in production and force unregister on startup in `src/index.tsx` (prevents stale bundle caching).
+2. **Disable the service worker** by replacing `public/sw.js` with a no-cache/unregistering version.
+3. **Redeploy** Firebase Hosting.
+4. **Clear site data** once in the browser (Application → Clear Storage → Clear site data).
+
+This ensures fresh bundles load after each deploy and eliminates the `Unexpected token '<'` and dev websocket errors.
+
 ### 0. Variables Not Showing in Benchmarking Screen
 
 #### Problem

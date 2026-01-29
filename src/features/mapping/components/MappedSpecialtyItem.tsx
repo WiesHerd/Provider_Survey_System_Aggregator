@@ -151,10 +151,10 @@ export const MappedSpecialtyItem: React.FC<MappedSpecialtyItemProps> = memo(({
       <div className="flex justify-between items-start mb-2">
         <div className="flex-1 pr-2">
           <Typography variant="subtitle1" className="font-medium text-gray-900 text-sm">
-            {mapping.standardizedName}
+            {formatSpecialtyForDisplay(mapping.standardizedName)}
           </Typography>
           <Typography variant="caption" className="text-gray-500 text-xs">
-            Last updated: {formattedDate}
+            Original specialties → Standardized specialty • Last updated: {formattedDate}
           </Typography>
         </div>
       </div>

@@ -18,6 +18,7 @@ import { WelcomeBanner, isWelcomeBannerDismissed } from '../shared/components/We
 import { useSurveyCount } from '../shared/hooks/useSurveyCount';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmationDialog, ButtonSpinner } from '../shared/components';
+import { useToast } from '../contexts/ToastContext';
 
 interface WelcomeCard {
   title: string;
@@ -40,6 +41,7 @@ const Dashboard: React.FC = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const { signOut } = useAuth();
+  const toast = useToast();
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -69,6 +71,8 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Sign out failed:', error);
       setIsSigningOut(false);
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      toast.error('Sign out failed', message);
       // Error will be handled by AuthContext
     }
   };

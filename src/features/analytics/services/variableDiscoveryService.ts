@@ -406,7 +406,11 @@ export class VariableDiscoveryService {
   private extractNumber(value: any): number {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
-      if (value === '***' || value === '' || value === 'null' || value === 'undefined') return 0;
+      const upper = value.trim().toUpperCase();
+      // Handle vendor markers (asterisks, ISD, N/A) as 0 (missing data)
+      if (upper === 'ISD' || upper === 'N/A' || upper === 'NA' || 
+          value === '***' || value === '*' || value === '**' || 
+          value === '' || value === 'null' || value === 'undefined') return 0;
       const parsed = parseFloat(value.replace(/[,$]/g, ''));
       return isNaN(parsed) ? 0 : parsed;
     }

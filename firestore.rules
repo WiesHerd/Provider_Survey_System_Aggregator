@@ -209,6 +209,19 @@ service cloud.firestore {
       match /cache/{cacheKey} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+      
+      /**
+       * Upload intents access rules
+       * 
+       * Pattern: users/{userId}/uploadIntents/{uploadId}
+       * 
+       * Security:
+       * - Only the owner can create/read/update their upload intents
+       * - Used for tracking upload progress and rollback
+       */
+      match /uploadIntents/{uploadId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     /**

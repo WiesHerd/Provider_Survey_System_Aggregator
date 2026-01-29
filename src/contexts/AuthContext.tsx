@@ -9,6 +9,9 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User } from 'firebase/auth';
 import { authService, IAuthService } from '../services/AuthService';
 import { logger } from '../shared/utils/logger';
+import { isFirebaseAvailable } from '../config/firebase';
+import { getCurrentStorageMode } from '../config/storage';
+import { StorageMode } from '../services/DataService';
 
 /**
  * Authentication state interface
@@ -27,6 +30,9 @@ interface AuthActions {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  refreshUser: () => Promise<User | null>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -72,11 +78,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     // Subscribe to authentication state changes
-    const unsubscribe = authService.onAuthStateChanged((user) => {
+    const unsubscribe = authService.onAuthStateChanged(async (user) => {
       logger.log('🔍 AuthProvider: Auth state changed:', user?.email || 'signed out');
       setUser(user);
       setLoading(false);
       setError(null); // Clear any previous errors on successful auth
+      
+      // Ensure user profile exists in Firestore if using Firebase
+      if (user && isFirebaseAvailable() && getCurrentStorageMode() === StorageMode.FIREBASE) {
+        try {
+          // Dynamically import FirestoreService to avoid issues if Firebase isn't available
+          const { FirestoreService } = await import('../services/FirestoreService');
+          const firestoreService = new FirestoreService();
+          await firestoreService.ensureUserProfile(user.email || undefined);
+        } catch (error) {
+          // Non-critical - log but don't block authentication
+          logger.warn('⚠️ AuthProvider: Could not ensure user profile:', error);
+        }
+      }
+    });
+
+    authService.handleRedirectResult().catch((err) => {
+      const errorMessage = err instanceof Error ? err.message : 'Sign in failed';
+      setError(errorMessage);
+      logger.error('❌ AuthProvider: Redirect sign-in failed:', err);
     });
 
     // Cleanup subscription on unmount
@@ -96,7 +121,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-      await authService.signUp(email, password);
+      const userCredential = await authService.signUp(email, password);
+      // Ensure user profile exists in Firestore if using Firebase
+      if (userCredential.user && isFirebaseAvailable() && getCurrentStorageMode() === StorageMode.FIREBASE) {
+        try {
+          const { FirestoreService } = await import('../services/FirestoreService');
+          const firestoreService = new FirestoreService();
+          await firestoreService.ensureUserProfile(userCredential.user.email || undefined);
+        } catch (error) {
+          // Non-critical - log but don't block signup
+          logger.warn('⚠️ AuthProvider: Could not ensure user profile after signup:', error);
+        }
+      }
       // Auth state change will be handled by onAuthStateChanged
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Sign up failed';
@@ -117,7 +153,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-      await authService.signIn(email, password);
+      const userCredential = await authService.signIn(email, password);
+      // Ensure user profile exists in Firestore if using Firebase
+      if (userCredential.user && isFirebaseAvailable() && getCurrentStorageMode() === StorageMode.FIREBASE) {
+        try {
+          const { FirestoreService } = await import('../services/FirestoreService');
+          const firestoreService = new FirestoreService();
+          await firestoreService.ensureUserProfile(userCredential.user.email || undefined);
+        } catch (error) {
+          // Non-critical - log but don't block signin
+          logger.warn('⚠️ AuthProvider: Could not ensure user profile after signin:', error);
+        }
+      }
       // Auth state change will be handled by onAuthStateChanged
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Sign in failed';
@@ -139,12 +186,77 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       setError(null);
       await authService.signInWithGoogle();
+      // Note: User profile will be ensured in onAuthStateChanged callback
       // Auth state change will be handled by onAuthStateChanged
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Google sign in failed';
       setError(errorMessage);
       setLoading(false);
       throw err;
+    }
+  };
+
+  /**
+   * Send verification email to current user
+   */
+  const sendVerificationEmail = async (): Promise<void> => {
+    if (!isAvailable) {
+      throw new Error('Authentication service is not available');
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.sendVerificationEmail();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send verification email';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Send password reset email
+   */
+  const resetPassword = async (email: string): Promise<void> => {
+    if (!isAvailable) {
+      throw new Error('Authentication service is not available');
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.resetPassword(email);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send password reset email';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Refresh current user state (used for email verification checks)
+   */
+  const refreshUser = async (): Promise<User | null> => {
+    if (!isAvailable) {
+      return null;
+    }
+
+    try {
+      setLoading(true);
+      const refreshedUser = await authService.reloadCurrentUser();
+      setUser(refreshedUser);
+      return refreshedUser;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh user';
+      setError(errorMessage);
+      return null;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -164,8 +276,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Sign out failed';
       setError(errorMessage);
-      setLoading(false);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -187,6 +300,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signIn,
     signInWithGoogle,
+    sendVerificationEmail,
+    resetPassword,
+    refreshUser,
     signOut,
     clearError,
   };
@@ -226,6 +342,7 @@ export const useAuthStatus = () => {
     isAuthenticated: !!user,
     isUnauthenticated: !user && !loading,
     isLoading: loading,
+    isEmailVerified: !!user?.emailVerified,
     user,
     isAvailable,
   };

@@ -14,7 +14,6 @@ import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoading
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useColumnSizing } from '../shared/hooks/useColumnSizing';
 import AgGridWrapper from './AgGridWrapper';
-import { sanitizeHtml } from '../shared/utils/sanitization';
 import { useDatabaseReady } from '../contexts/DatabaseContext';
 import { getUserId } from '../shared/utils/userScoping';
 
@@ -128,6 +127,17 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
   const [serverProviderTypes, setServerProviderTypes] = useState<string[]>([]);
   const [serverRegions, setServerRegions] = useState<string[]>([]);
   const [serverVariables, setServerVariables] = useState<string[]>([]);
+  
+  // ENTERPRISE: Cache survey data to prevent excessive Firebase reads
+  // Only refetch if filters changed AND data is stale (older than 5 minutes)
+  const surveyDataCacheRef = useRef<{
+    surveyId: string;
+    filters: string;
+    data: any[];
+    timestamp: number;
+  } | null>(null);
+  
+  const CACHE_TTL = 1000 * 60 * 5; // 5 minutes cache - industry standard for survey data
 
   const handleFilterChange = (
     event: React.ChangeEvent<{ name?: string; value: unknown }> | any
@@ -251,10 +261,16 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           return;
         }
         
-        // Pass current filters to server for server-side filtering
+        // ENTERPRISE FIX: Don't filter by providerType at row level in DataPreview
+        // The survey itself is already filtered by providerType in the survey list
+        // Row-level filtering by providerType causes issues when data has "Staff Physician" 
+        // but filter is "Physician" - it filters out all data
+        // Only filter by specialty, region, and variable (user-selected filters)
         const filters = {
           specialty: globalFilters.specialty || undefined,
-          providerType: globalFilters.providerType || undefined,
+          // CRITICAL: Don't filter by providerType - show ALL rows for the selected survey
+          // providerType filtering is handled at the survey level, not row level
+          providerType: undefined, // Always show all provider types for the selected survey
           region: globalFilters.region || undefined,
           variable: globalFilters.variable || undefined
         };
@@ -269,13 +285,50 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }
         
         // ENTERPRISE FIX: Check if survey still exists before trying to load data
-        let surveyExists = false;
+        let survey: any = null;
         try {
-          const survey = await dataService.getSurveyById(resolvedSurveyId);
-          surveyExists = !!survey;
+          console.log('🔍 DataPreview: Looking up survey with ID:', {
+            resolvedSurveyId,
+            originalFileId: file.id,
+            userId: getUserId(),
+            storageMode: dataService.getMode()
+          });
+          survey = await dataService.getSurveyById(resolvedSurveyId);
+          console.log('🔍 DataPreview: Survey lookup result:', {
+            found: !!survey,
+            surveyId: survey?.id,
+            surveyName: survey?.name,
+            rowCount: survey?.rowCount,
+            providerType: survey?.providerType,
+            uploadDate: survey?.uploadDate,
+            storageMode: dataService.getMode(),
+            hasUploadStatus: !!(survey as any)?._uploadStatus
+          });
+          
+          // ENTERPRISE DIAGNOSTIC: If survey found but no rowCount, check if data exists
+          if (survey && (!survey.rowCount || survey.rowCount === 0)) {
+            console.warn('⚠️ DataPreview: Survey found but rowCount is 0 or missing', {
+              surveyId: survey.id,
+              surveyName: survey.name,
+              note: 'This might indicate data is still uploading or upload failed'
+            });
+          }
         } catch (error) {
-          console.log('Survey not found, may have been deleted:', error);
-          surveyExists = false;
+          console.error('❌ DataPreview: Survey lookup failed:', error);
+          // ENTERPRISE FIX: Don't immediately give up - try with original file ID as fallback
+          if (file.id && file.id !== resolvedSurveyId) {
+            console.log('🔄 DataPreview: Retrying with original file ID:', file.id);
+            try {
+              survey = await dataService.getSurveyById(file.id);
+              console.log('🔍 DataPreview: Fallback lookup result:', {
+                found: !!survey,
+                surveyId: survey?.id,
+                surveyName: survey?.name
+              });
+            } catch (fallbackError) {
+              console.error('❌ DataPreview: Fallback lookup also failed:', fallbackError);
+            }
+          }
         }
         
         // ENTERPRISE FIX: Check if cancelled again after async operation
@@ -285,14 +338,55 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           return;
         }
         
-        if (!surveyExists) {
-          console.log('Survey no longer exists, clearing DataPreview');
+        if (!survey) {
+          console.warn('⚠️ DataPreview: Survey not found - this may be a timing issue or ID mismatch', {
+            resolvedSurveyId,
+            originalFileId: file.id,
+            userId: getUserId()
+          });
+          // ENTERPRISE FIX: Don't clear immediately - retry once more in case of timing issue
+          if (attempt < MAX_RETRIES && isMountedRef.current) {
+            console.log(`🔄 DataPreview: Retrying survey lookup (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+            setTimeout(() => {
+              if (!isCancelled && isMountedRef.current) {
+                loadSurveyData(attempt + 1);
+              }
+            }, RETRY_DELAY);
+            return;
+          }
+          console.log('❌ DataPreview: Survey no longer exists after retries, clearing DataPreview');
           setOriginalData([]);
           setPreviewData([]);
           setPreviewHeaders([]);
           setIsLoading(false);
           setIsRefreshing(false); // CRITICAL: Clear refreshing state
           return;
+        }
+        
+        // ENTERPRISE FIX: Check if survey is still uploading (has metadata but no data yet)
+        // Also check if rowCount is 0 but survey was just uploaded (might be timing issue)
+        const isUploading = (survey as any)?._uploadStatus === 'uploading';
+        const hasMetadataButNoData = survey && (survey.rowCount === 0 || !survey.rowCount);
+        const uploadDate = survey?.uploadDate ? new Date(survey.uploadDate) : null;
+        const isRecentUpload = uploadDate && (Date.now() - uploadDate.getTime()) < 30000; // Uploaded in last 30 seconds
+        
+        if (isUploading || (hasMetadataButNoData && isRecentUpload)) {
+          console.log('⏳ Survey is still uploading or data not yet available, waiting...', {
+            isUploading,
+            hasMetadataButNoData,
+            isRecentUpload,
+            uploadDate: uploadDate?.toISOString(),
+            rowCount: survey?.rowCount
+          });
+          // Retry after a delay to allow upload to complete
+          if (attempt < MAX_RETRIES * 3 && isMountedRef.current) { // More retries for upload completion
+            setTimeout(() => {
+              if (!isCancelled && isMountedRef.current) {
+                loadSurveyData(attempt + 1);
+              }
+            }, RETRY_DELAY * 2); // Wait longer for upload to complete
+            return;
+          }
         }
         
         // ENTERPRISE FIX: Check if cancelled before fetching data
@@ -302,11 +396,73 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           return;
         }
         
-        const { rows: surveyData } = await dataService.getSurveyData(
-          resolvedSurveyId,
-          filters,
-          { limit: 10000 } // Fetch all data (up to 10,000 rows)
-        );
+        // INDUSTRY STANDARD: Check cache before making Firebase read
+        // Google/Amazon/Apple all use stale-while-revalidate - show cached data immediately
+        const filtersKey = JSON.stringify(filters);
+        const cached = surveyDataCacheRef.current;
+        const now = Date.now();
+        let surveyData: any[] = [];
+        let fromCache = false;
+        
+        // Use cached data if it matches and is fresh (less than 5 minutes old)
+        if (cached && cached.surveyId === resolvedSurveyId && cached.filters === filtersKey) {
+          const cacheAge = now - cached.timestamp;
+          if (cacheAge < CACHE_TTL) {
+            console.log(`✅ Using cached survey data (age: ${Math.round(cacheAge / 1000)}s) - skipping Firebase read`);
+            surveyData = cached.data;
+            fromCache = true;
+          }
+        }
+        
+        // Cache miss or stale - fetch from database
+        if (!fromCache) {
+          console.log('📥 Fetching survey data from database (cache miss or stale)', {
+            surveyId: resolvedSurveyId,
+            originalFileId: file.id,
+            filters: filters,
+            storageMode: dataService.getMode()
+          });
+          // ENTERPRISE FIX: Try multiple ID formats to ensure we find the data
+          // The survey ID might be stored with or without user prefix
+          let result = await dataService.getSurveyData(
+            resolvedSurveyId,
+            filters,
+            { limit: 10000 } // Fetch all data (up to 10,000 rows)
+          );
+          
+          // If no data found, try with original file ID (might be different format)
+          if (result.rows.length === 0 && file.id && file.id !== resolvedSurveyId) {
+            console.log('🔄 No data found with resolvedSurveyId, trying original file ID:', file.id);
+            const fallbackResult = await dataService.getSurveyData(
+              file.id,
+              filters,
+              { limit: 10000 }
+            );
+            if (fallbackResult.rows.length > 0) {
+              console.log('✅ Found data using original file ID');
+              result = fallbackResult;
+            }
+          }
+          
+          surveyData = result.rows;
+          console.log('📥 Survey data fetch result:', {
+            rowCount: surveyData.length,
+            hasRows: surveyData.length > 0,
+            resolvedSurveyId,
+            originalFileId: file.id,
+            firstRowSample: surveyData[0] || null,
+            storageMode: dataService.getMode(),
+            firstRowKeys: surveyData.length > 0 ? Object.keys(surveyData[0]) : []
+          });
+          
+          // Update cache
+          surveyDataCacheRef.current = {
+            surveyId: resolvedSurveyId,
+            filters: filtersKey,
+            data: surveyData,
+            timestamp: now
+          };
+        }
         
         // ENTERPRISE FIX: Check if cancelled after async data fetch
         if (isCancelled) {
@@ -315,11 +471,34 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           return;
         }
         
-        console.log('Survey data returned:', {
+        console.log('✅ Survey data returned:', {
           rowCount: surveyData.length,
+          surveyId: resolvedSurveyId,
+          originalFileId: file.id,
+          fromCache,
+          expectedRowCount: survey?.rowCount || 0,
           sampleRows: surveyData.slice(0, 3),
-          sampleSpecialties: [...new Set(surveyData.map(row => row.specialty))].slice(0, 5)
+          sampleSpecialties: [...new Set(surveyData.map((row: any) => row.specialty))].slice(0, 5),
+          filters: filters,
+          storageMode: dataService.getMode(),
+          firstRowKeys: surveyData.length > 0 ? Object.keys(surveyData[0]) : [],
+          firstRowSample: surveyData.length > 0 ? Object.entries(surveyData[0]).slice(0, 5).map(([k, v]) => ({ key: k, value: String(v).substring(0, 50) })) : [],
+          warning: surveyData.length === 0 && survey?.rowCount > 0 ? `⚠️ CRITICAL: Survey metadata shows ${survey.rowCount} rows but getSurveyData returned 0 rows. This indicates a data retrieval issue.` : undefined
         });
+        
+        // ENTERPRISE DIAGNOSTIC: If survey has rowCount but no data returned, log detailed diagnostic
+        if (surveyData.length === 0 && survey && survey.rowCount > 0) {
+          console.error('❌ CRITICAL DATA RETRIEVAL ISSUE:', {
+            surveyId: resolvedSurveyId,
+            originalFileId: file.id,
+            surveyRowCount: survey.rowCount,
+            surveyName: survey.name,
+            surveyProviderType: survey.providerType,
+            storageMode: dataService.getMode(),
+            filters: filters,
+            note: 'Survey metadata indicates data exists, but getSurveyData returned 0 rows. This could indicate: 1) Data not yet saved to database, 2) ID mismatch, 3) Data in different storage location'
+          });
+        }
         
         // ENTERPRISE FIX: Check if cancelled or unmounted before processing
         if (isCancelled || !isMountedRef.current) {
@@ -330,26 +509,54 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         
         // Check if survey data is empty (survey might have been deleted or data not synced yet)
         if (surveyData.length === 0) {
-          // Retry if we got empty data on first attempt (IndexedDB may still be initializing)
-          if (attempt < MAX_RETRIES && !hasLoadedRef.current && isMountedRef.current) {
-            console.log(`No data returned, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
-            setTimeout(() => {
-              if (!isCancelled && isMountedRef.current) {
-                loadSurveyData(attempt + 1);
-              }
-            }, RETRY_DELAY);
-            return;
-          }
+          const expectedRowCount = survey?.rowCount || 0;
           
-          console.log('No survey data found - survey may have been deleted');
-          if (isMountedRef.current) {
-            setIsRefreshing(false); // CRITICAL: Stop modal FIRST
-            setIsLoading(false);
-            setOriginalData([]);
-            setPreviewData([]);
-            setPreviewHeaders([]);
-            hasLoadedRef.current = true;
-            onError('No survey data found for this upload. Please re-upload the file.');
+          // ENTERPRISE FIX: If survey has rowCount > 0, it means data should exist
+          // Retry more aggressively for surveys that should have data
+          if (expectedRowCount > 0) {
+            if (attempt < MAX_RETRIES * 2 && isMountedRef.current) {
+              console.log(`⚠️ Survey has ${expectedRowCount} rows but data not loaded yet. Retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES * 2})...`);
+              setTimeout(() => {
+                if (!isCancelled && isMountedRef.current) {
+                  loadSurveyData(attempt + 1);
+                }
+              }, RETRY_DELAY);
+              return;
+            }
+            
+            // After all retries, show error
+            console.error(`❌ Survey metadata indicates ${expectedRowCount} rows, but no data found after ${MAX_RETRIES * 2} attempts. Upload may have failed or data is in wrong storage.`);
+            if (isMountedRef.current) {
+              setIsRefreshing(false);
+              setIsLoading(false);
+              setOriginalData([]);
+              setPreviewData([]);
+              setPreviewHeaders([]);
+              hasLoadedRef.current = true;
+              onError(`Survey metadata exists (${expectedRowCount} rows expected) but data rows are missing. The upload may have failed or data may be in a different storage location. Please try refreshing the page or re-uploading the file.`);
+            }
+          } else {
+            // Survey has no expected rows - might be empty or still uploading
+            if (attempt < MAX_RETRIES && !hasLoadedRef.current && isMountedRef.current) {
+              console.log(`No data returned, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+              setTimeout(() => {
+                if (!isCancelled && isMountedRef.current) {
+                  loadSurveyData(attempt + 1);
+                }
+              }, RETRY_DELAY);
+              return;
+            }
+            
+            console.log('No survey data found - survey may have been deleted or upload incomplete');
+            if (isMountedRef.current) {
+              setIsRefreshing(false); // CRITICAL: Stop modal FIRST
+              setIsLoading(false);
+              setOriginalData([]);
+              setPreviewData([]);
+              setPreviewHeaders([]);
+              hasLoadedRef.current = true;
+              onError('No survey data found for this upload. The upload may still be in progress or may have failed. Please check the upload queue or re-upload the file.');
+            }
           }
           return;
         }
@@ -382,22 +589,134 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               h && h.trim() && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid'
             );
             
-            // Verify all stored headers exist in the data (in case of column mapping changes)
+            // ENTERPRISE FIX: Preserve original column order with case-insensitive matching
+            // CRITICAL: JavaScript objects don't guarantee key order, so we MUST use originalHeaders
+            // to reconstruct the correct column sequence from the uploaded file
             if (surveyData.length > 0) {
               const availableKeys = Object.keys(surveyData[0]);
-              // Use stored order, but only include headers that exist in the data
-              headers = storedHeaders.filter((h: string) => availableKeys.includes(h));
+              const availableKeysLower = new Map(availableKeys.map(k => [k.toLowerCase(), k]));
+              
+              // ENTERPRISE FIX: Build headers array preserving original order
+              // Match stored headers to available keys with multiple matching strategies
+              const orderedHeaders: string[] = [];
+              const matchedKeys = new Set<string>();
+              
+              // Helper to normalize strings for comparison
+              const normalizeForMatch = (s: string) => s.toLowerCase().trim().replace(/[\s_\-]/g, '');
+              
+              // CRITICAL: Process storedHeaders in their original order to preserve file sequence
+              for (const storedHeader of storedHeaders) {
+                const storedLower = storedHeader.toLowerCase().trim();
+                let matched = false;
+                
+                // Strategy 1: Try exact match first (preserves case)
+                if (availableKeys.includes(storedHeader)) {
+                  orderedHeaders.push(storedHeader);
+                  matchedKeys.add(storedHeader);
+                  matched = true;
+                } 
+                // Strategy 2: Try case-insensitive match
+                else if (availableKeysLower.has(storedLower)) {
+                  const actualKey = availableKeysLower.get(storedLower)!;
+                  orderedHeaders.push(actualKey);
+                  matchedKeys.add(actualKey);
+                  matched = true;
+                }
+                // Strategy 3: Try normalized match (handles "provider_type" vs "Provider Type" vs "providerType")
+                else {
+                  const storedNormalized = normalizeForMatch(storedHeader);
+                  
+                  const partialMatch = availableKeys.find(k => {
+                    if (matchedKeys.has(k)) return false; // Already matched
+                    const keyNormalized = normalizeForMatch(k);
+                    // Exact normalized match
+                    if (keyNormalized === storedNormalized) return true;
+                    // One contains the other (for partial matches)
+                    if (keyNormalized.length > 0 && storedNormalized.length > 0) {
+                      return keyNormalized.includes(storedNormalized) || storedNormalized.includes(keyNormalized);
+                    }
+                    return false;
+                  });
+                  
+                  if (partialMatch) {
+                    orderedHeaders.push(partialMatch);
+                    matchedKeys.add(partialMatch);
+                    matched = true;
+                  }
+                }
+                
+                // ENTERPRISE FIX: If still no match, try reverse mapping (mapped header -> original)
+                // The data might be saved with mapped headers, so we need to check if storedHeader
+                // is a mapped version of an available key
+                if (!matched) {
+                  // Check if any available key is a mapped version of storedHeader
+                  // This handles cases where data was saved with standardized column names
+                  const reverseMatch = availableKeys.find(k => {
+                    if (matchedKeys.has(k)) return false;
+                    // Try various normalization strategies
+                    const kNormalized = normalizeForMatch(k);
+                    const storedNormalized = normalizeForMatch(storedHeader);
+                    // Check if they're similar enough (fuzzy match)
+                    if (kNormalized === storedNormalized) return true;
+                    // Check if one is a substring of the other (handles abbreviations)
+                    if (kNormalized.length > 3 && storedNormalized.length > 3) {
+                      const longer = kNormalized.length > storedNormalized.length ? kNormalized : storedNormalized;
+                      const shorter = kNormalized.length > storedNormalized.length ? storedNormalized : kNormalized;
+                      if (longer.includes(shorter) || shorter.includes(longer)) return true;
+                    }
+                    return false;
+                  });
+                  
+                  if (reverseMatch) {
+                    orderedHeaders.push(reverseMatch);
+                    matchedKeys.add(reverseMatch);
+                    matched = true;
+                    console.log(`  ✅ Matched "${storedHeader}" to "${reverseMatch}" using reverse mapping`);
+                  }
+                }
+                
+                if (!matched) {
+                  console.warn(`  ⚠️ Could not match stored header "${storedHeader}" - will be skipped`);
+                }
+              }
+              
               // Add any missing headers from data (new columns added after upload)
               const missingHeaders = availableKeys.filter((k: string) => 
-                !storedHeaders.includes(k) && 
+                !matchedKeys.has(k) && 
                 k.toLowerCase() !== 'id' && 
                 k.toLowerCase() !== 'surveyid'
               );
-              headers = [...headers, ...missingHeaders];
+              headers = [...orderedHeaders, ...missingHeaders];
+              
+              // ENTERPRISE FIX: Log full order comparison to debug column ordering issues
+              const orderMatches = JSON.stringify(storedHeaders) === JSON.stringify(orderedHeaders);
+              console.log('✅ Using original column order from metadata:', {
+                storedHeadersCount: storedHeaders.length,
+                storedHeadersList: storedHeaders, // Show ALL headers for debugging
+                availableKeysCount: availableKeys.length,
+                availableKeysList: availableKeys, // Show ALL keys for debugging
+                matchedHeadersCount: orderedHeaders.length,
+                matchedHeadersList: orderedHeaders, // Show ALL matched headers
+                missingHeadersCount: missingHeaders.length,
+                missingHeadersList: missingHeaders,
+                finalOrderCount: headers.length,
+                finalOrder: headers, // Show ALL headers in final order
+                orderPreserved: orderMatches,
+                warning: !orderMatches ? '⚠️ Column order may have changed - some headers could not be matched' : undefined
+              });
+              
+              // ENTERPRISE FIX: If order doesn't match, log detailed mismatch
+              if (!orderMatches && storedHeaders.length > 0) {
+                console.warn('⚠️ Column order mismatch detected:', {
+                  expectedOrder: storedHeaders,
+                  actualOrder: orderedHeaders,
+                  unmatchedStored: storedHeaders.filter((h: string) => !orderedHeaders.includes(h)),
+                  unmatchedAvailable: availableKeys.filter((k: string) => !orderedHeaders.includes(k))
+                });
+              }
             } else {
               headers = storedHeaders;
             }
-            console.log('✅ Using original column order from metadata:', headers);
           } else {
             // Fallback: Extract from data (may not preserve order)
             if (surveyData.length > 0) {
@@ -413,6 +732,24 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           }
         }
         
+        // ENTERPRISE FIX: Final safety check - ensure headers array is populated
+        // If headers are still empty but we have data, use data keys as fallback
+        if (headers.length === 0 && surveyData.length > 0) {
+          console.warn('⚠️ Headers array is empty after all processing - using data keys as final fallback');
+          headers = Object.keys(surveyData[0]).filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+          console.log('✅ Final fallback headers from data keys:', headers.slice(0, 10));
+        }
+        
+        // ENTERPRISE FIX: Log final header state for debugging
+        if (headers.length === 0) {
+          console.error('❌ CRITICAL: Headers array is STILL empty after all fallbacks!', {
+            surveyDataLength: surveyData.length,
+            surveyId: resolvedSurveyId,
+            hasSurveyMetadata: !!survey,
+            surveyMetadataOriginalHeaders: survey?.metadata?.originalHeaders?.length || 0
+          });
+        }
+        
         // ENTERPRISE FIX: Check if cancelled or unmounted before setting state
         if (isCancelled || !isMountedRef.current) {
           setIsLoading(false);
@@ -422,7 +759,60 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         
         // Hide db identifiers from preview (if not already filtered)
         headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
-        const rows = surveyData.map(row => headers.map(header => String(row[header as keyof typeof row] || '')));
+        
+        // ENTERPRISE FIX: Ensure headers array is not empty - fallback to data keys if needed
+        if (headers.length === 0 && surveyData.length > 0) {
+          console.warn('⚠️ Headers array is empty after processing - falling back to data keys');
+          headers = Object.keys(surveyData[0]).filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+          console.log('✅ Using fallback headers from data keys:', headers);
+        }
+        
+        // ENTERPRISE FIX: Log header and data state for debugging
+        console.log('🔍 DataPreview: Building rows with headers:', {
+          headerCount: headers.length,
+          headers: headers.slice(0, 10), // Show first 10 headers
+          dataRowCount: surveyData.length,
+          firstDataRowKeys: surveyData.length > 0 ? Object.keys(surveyData[0]).slice(0, 10) : [],
+          headerMatchCheck: surveyData.length > 0 ? headers.map(h => ({
+            header: h,
+            hasExactMatch: surveyData[0][h as keyof typeof surveyData[0]] !== undefined,
+            hasCaseInsensitiveMatch: Object.keys(surveyData[0]).some(k => k.toLowerCase().trim() === h.toLowerCase().trim())
+          })).slice(0, 5) : []
+        });
+        
+        // ENTERPRISE FIX: Build rows using headers in correct order
+        // CRITICAL: Use case-insensitive matching to find values in data objects
+        // This handles cases where headers might be "Provider Type" but keys are "provider_type" or "providerType"
+        const rows = surveyData.map(row => {
+          return headers.map(header => {
+            // Try exact match first
+            if (row[header as keyof typeof row] !== undefined) {
+              return String(row[header as keyof typeof row] || '');
+            }
+            // Try case-insensitive match
+            const headerLower = header.toLowerCase().trim();
+            const matchingKey = Object.keys(row).find(k => k.toLowerCase().trim() === headerLower);
+            if (matchingKey) {
+              return String(row[matchingKey as keyof typeof row] || '');
+            }
+            // Try normalized match (handles spaces, underscores, hyphens)
+            const normalizedHeader = headerLower.replace(/[\s_\-]/g, '');
+            const normalizedMatch = Object.keys(row).find(k => 
+              k.toLowerCase().trim().replace(/[\s_\-]/g, '') === normalizedHeader
+            );
+            if (normalizedMatch) {
+              return String(row[normalizedMatch as keyof typeof row] || '');
+            }
+            // No match found - return empty string
+            return '';
+          });
+        });
+        
+        console.log('✅ DataPreview: Rows built successfully:', {
+          rowCount: rows.length,
+          headerCount: headers.length,
+          firstRowSample: rows.length > 0 ? rows[0].slice(0, 5) : []
+        });
 
         setPreviewHeaders(headers);
         setPreviewData(rows);
@@ -502,16 +892,28 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
       setIsLoading(false);
       setIsRefreshing(false);
     };
-  }, [file.id, resolvedSurveyId, globalFilters.specialty, globalFilters.providerType, globalFilters.region, globalFilters.variable, dataService, onError, isDatabaseReady]);
+  }, [file.id, resolvedSurveyId, globalFilters.specialty, globalFilters.region, globalFilters.variable, dataService, onError, isDatabaseReady]);
+  // NOTE: globalFilters.providerType removed from dependencies - we don't filter by providerType at row level
 
   // Load global filter options from server (not paginated)
+  // OPTIMIZED: Use cached data if available to avoid duplicate Firebase reads
   useEffect(() => {
     let cancelled = false;
     const loadFilters = async () => {
       try {
         console.log('Loading filter options for file:', file.id);
-        // For IndexedDB, we'll extract filter options from the data
-        const { rows } = await dataService.getSurveyData(resolvedSurveyId);
+        
+        // INDUSTRY STANDARD: Use cached data if available (avoid duplicate Firebase read)
+        let rows: any[] = [];
+        const cached = surveyDataCacheRef.current;
+        if (cached && cached.surveyId === resolvedSurveyId) {
+          console.log('✅ Using cached data for filter extraction (avoiding Firebase read)');
+          rows = cached.data;
+        } else {
+          // Cache miss - fetch from Firebase (no filters, just need data for filter options)
+          const { rows: fetchedRows } = await dataService.getSurveyData(resolvedSurveyId, {}, { limit: 1000 }); // Only need sample for filter extraction
+          rows = fetchedRows;
+        }
         if (cancelled) return;
         
         console.log('Raw data for filter extraction:', rows.slice(0, 3));
@@ -749,8 +1151,8 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           if (isCf) return formatCurrency(raw, 2);
           if (isWrvu || isCount) return formatNumber(raw, 0);
           
-          // Sanitize string values to prevent XSS attacks
-          return sanitizeHtml(String(raw));
+          // AG Grid automatically escapes text content for XSS protection
+          return String(raw);
         },
       } as any;
     });
@@ -1072,9 +1474,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
             />
           </div>
         )}
-        {previewHeaders.length === 0 ? (
+        {previewHeaders.length === 0 || previewData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-sm text-gray-500">
-            No rows available for this survey.
+            {isLoading ? 'Loading survey data...' : previewHeaders.length === 0 ? 'No columns found for this survey. Please check the browser console for details.' : 'No rows available for this survey.'}
           </div>
         ) : (
           <AgGridWrapper

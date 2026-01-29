@@ -10,6 +10,8 @@ import { useDatabase } from '../../../contexts/DatabaseContext';
 import { useSpecialtyMappingQuery } from './useSpecialtyMappingQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../shared/services/queryClient';
+import { stringSimilarity } from 'string-similarity-js';
+import { initialSpecialtyMappings } from '../../../data/initialSpecialtyMappings';
 import { 
   filterUnmappedSpecialties,
   groupSpecialtiesBySurvey,
@@ -509,6 +511,103 @@ export const useMappingData = (): UseMappingDataReturn => {
   const clearError = useCallback(() => {
     setError(null);
   }, []);
+
+
+  const getExistingMappingExamples = useCallback((
+    rawSpecialty: string,
+    surveySource: 'MGMA' | 'SullivanCotter' | 'Gallagher',
+    maxExamples: number
+  ): Array<{ source: string; standardized: string }> => {
+    const raw = rawSpecialty.trim().toLowerCase();
+    if (!raw) return [];
+
+    const scored = learnedMappingsWithSource
+      .filter((m) => m && m.surveySource === surveySource && m.original && m.corrected)
+      .map((m) => ({
+        source: m.original,
+        standardized: m.corrected,
+        score: stringSimilarity(raw, m.original.toLowerCase()),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxExamples);
+
+    // Deduplicate by source (case-insensitive)
+    const seen = new Set<string>();
+    const examples: Array<{ source: string; standardized: string }> = [];
+    for (const item of scored) {
+      const key = item.source.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      examples.push({ source: item.source, standardized: item.standardized });
+    }
+    return examples;
+  }, [learnedMappingsWithSource]);
+
+  const getLearnedMappingFor = useCallback((rawSpecialty: string): string | undefined => {
+    const raw = rawSpecialty.trim();
+    if (!raw) return undefined;
+    return learnedMappings[raw] || learnedMappings[raw.toLowerCase()];
+  }, [learnedMappings]);
+
+  const normalizeKey = useCallback((value: string): string => {
+    return value
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  }, []);
+
+  const isPediatric = useCallback((value: string): boolean => {
+    return /pediatr/i.test(value);
+  }, []);
+
+  const looksLikeAPP = useCallback((value: string): boolean => {
+    // APP markers: NP / PA, plus common expanded forms
+    return /\b(np|pa)\b/i.test(value) || /nurse\s+practitioner|physician\s+assistant|advanced\s+practice/i.test(value);
+  }, []);
+
+  const toPediatricsPrefixed = useCallback((standardized: string): string => {
+    const trimmed = standardized.trim();
+    const withoutPrefix = trimmed.replace(/^pediatric(s)?\s*[:\-]?\s*/i, '');
+    return `Pediatrics: ${withoutPrefix}`.trim();
+  }, []);
+
+  const buildMappedExamples = useCallback((
+    rawSpecialty: string,
+    surveySource: 'MGMA' | 'SullivanCotter' | 'Gallagher',
+    maxExamples: number
+  ): Array<{ source: string; standardized: string }> => {
+    const raw = rawSpecialty.trim().toLowerCase();
+    if (!raw) return [];
+
+    const candidates: Array<{ source: string; standardized: string; score: number }> = [];
+    for (const mapping of mappings) {
+      for (const src of mapping.sourceSpecialties || []) {
+        if (!src?.specialty || src.surveySource !== surveySource) continue;
+        candidates.push({
+          source: src.specialty,
+          standardized: mapping.standardizedName,
+          score: stringSimilarity(raw, src.specialty.toLowerCase()),
+        });
+      }
+    }
+
+    const scored = candidates
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxExamples * 2);
+
+    const seen = new Set<string>();
+    const out: Array<{ source: string; standardized: string }> = [];
+    for (const item of scored) {
+      const key = `${item.source.toLowerCase()}|${item.standardized.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ source: item.source, standardized: item.standardized });
+      if (out.length >= maxExamples) break;
+    }
+    return out;
+  }, [mappings]);
+
 
 
   // Select all specialties (filtered by current search)

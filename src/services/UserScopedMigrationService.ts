@@ -146,14 +146,18 @@ export class UserScopedMigrationService {
         return;
       }
 
-      const transaction = db.transaction(['surveys'], 'readwrite');
-      const store = transaction.objectStore('surveys');
-      const request = store.getAll();
+      // First, get all surveys and check which ones need migration
+      const readTransaction = db.transaction(['surveys'], 'readonly');
+      const readStore = readTransaction.objectStore('surveys');
+      const readRequest = readStore.getAll();
 
-      request.onsuccess = () => {
-        const surveys = request.result || [];
-        let migratedCount = 0;
+      readRequest.onsuccess = () => {
+        const surveys = readRequest.result || [];
         const userPrefix = `${userId}_`;
+        
+        // Filter surveys that need migration and check if target already exists
+        const surveysToMigrate: Array<{ legacy: any; userScopedId: string }> = [];
+        const checkPromises: Promise<void>[] = [];
 
         surveys.forEach((survey: any) => {
           // Only migrate surveys that don't have user-scoped IDs
@@ -161,45 +165,101 @@ export class UserScopedMigrationService {
             const legacyId = survey.id;
             const userScopedId = userScopedKey(legacyId);
             
+            // Check if user-scoped survey already exists
+            const checkRequest = readStore.get(userScopedId);
+            const checkPromise = new Promise<void>((resolveCheck) => {
+              checkRequest.onsuccess = () => {
+                const existingSurvey = checkRequest.result;
+                
+                if (!existingSurvey) {
+                  // Survey doesn't exist with user-scoped ID, needs migration
+                  surveysToMigrate.push({ legacy: survey, userScopedId });
+                } else {
+                  console.log(`⏭️ Survey ${legacyId} already migrated, skipping`);
+                }
+                resolveCheck();
+              };
+              
+              checkRequest.onerror = () => {
+                // If check fails, assume it doesn't exist and needs migration
+                surveysToMigrate.push({ legacy: survey, userScopedId });
+                resolveCheck();
+              };
+            });
+            
+            checkPromises.push(checkPromise);
+          }
+        });
+
+        // Wait for all checks to complete, then perform migration
+        Promise.all(checkPromises).then(() => {
+          if (surveysToMigrate.length === 0) {
+            console.log(`✅ No surveys need migration (all already migrated)`);
+            resolve({ count: 0 });
+            return;
+          }
+
+          // Now perform the migration in a write transaction
+          const writeTransaction = db.transaction(['surveys'], 'readwrite');
+          const writeStore = writeTransaction.objectStore('surveys');
+          let migratedCount = 0;
+          let errorCount = 0;
+
+          surveysToMigrate.forEach(({ legacy, userScopedId }) => {
+            const legacyId = legacy.id;
+            
             // Create new survey with user-scoped ID
             const migratedSurvey = {
-              ...survey,
+              ...legacy,
               id: userScopedId,
               migratedAt: new Date(),
               originalId: legacyId // Store original ID for reference
             };
             
-            // Add new survey with user-scoped ID
-            const addRequest = store.add(migratedSurvey);
-            addRequest.onsuccess = () => {
-              // Delete old survey with legacy ID
-              const deleteRequest = store.delete(legacyId);
-              deleteRequest.onsuccess = () => {
+            // Use put to handle both insert and update (won't throw if exists)
+            const putRequest = writeStore.put(migratedSurvey);
+            putRequest.onsuccess = () => {
+              // Delete old survey with legacy ID (only if different)
+              if (legacyId !== userScopedId) {
+                const deleteRequest = writeStore.delete(legacyId);
+                deleteRequest.onsuccess = () => {
+                  migratedCount++;
+                };
+                deleteRequest.onerror = () => {
+                  console.error(`❌ Failed to delete legacy survey ${legacyId}:`, deleteRequest.error);
+                  migratedCount++; // Still count as migrated even if delete fails
+                };
+              } else {
                 migratedCount++;
-              };
-              deleteRequest.onerror = () => {
-                console.error(`❌ Failed to delete legacy survey ${legacyId}:`, deleteRequest.error);
-              };
+              }
             };
-            addRequest.onerror = () => {
-              console.error(`❌ Failed to migrate survey ${legacyId}:`, addRequest.error);
+            putRequest.onerror = () => {
+              // Check if error is "key already exists" - this means it was migrated between check and write
+              const error = putRequest.error;
+              if (error && error.name === 'ConstraintError') {
+                console.log(`⏭️ Survey ${legacyId} was migrated concurrently, skipping`);
+                migratedCount++; // Count as migrated
+              } else {
+                console.error(`❌ Failed to migrate survey ${legacyId}:`, error);
+                errorCount++;
+              }
             };
-          }
+          });
+
+          writeTransaction.oncomplete = () => {
+            console.log(`✅ Migrated ${migratedCount} surveys to user-scoped storage`);
+            resolve({ count: migratedCount });
+          };
+
+          writeTransaction.onerror = () => {
+            console.error('❌ Survey migration transaction failed:', writeTransaction.error);
+            resolve({ count: migratedCount });
+          };
         });
-
-        transaction.oncomplete = () => {
-          console.log(`✅ Migrated ${migratedCount} surveys to user-scoped storage`);
-          resolve({ count: migratedCount });
-        };
-
-        transaction.onerror = () => {
-          console.error('❌ Survey migration transaction failed:', transaction.error);
-          resolve({ count: migratedCount });
-        };
       };
 
-      request.onerror = () => {
-        console.error('❌ Failed to get surveys for migration:', request.error);
+      readRequest.onerror = () => {
+        console.error('❌ Failed to get surveys for migration:', readRequest.error);
         resolve({ count: 0 });
       };
     });
@@ -272,14 +332,18 @@ export class UserScopedMigrationService {
         return;
       }
 
-      const transaction = db.transaction(['surveyData'], 'readwrite');
-      const store = transaction.objectStore('surveyData');
-      const request = store.getAll();
+      // First, get all survey data and check which ones need migration
+      const readTransaction = db.transaction(['surveyData'], 'readonly');
+      const readStore = readTransaction.objectStore('surveyData');
+      const readRequest = readStore.getAll();
 
-      request.onsuccess = () => {
-        const dataRows = request.result || [];
-        let migratedCount = 0;
+      readRequest.onsuccess = () => {
+        const dataRows = readRequest.result || [];
         const userPrefix = `${userId}_`;
+        
+        // Filter rows that need migration and check if target already exists
+        const rowsToMigrate: Array<{ legacy: any; userScopedId: string; userScopedSurveyId: string }> = [];
+        const checkPromises: Promise<void>[] = [];
 
         dataRows.forEach((row: any) => {
           // Migrate survey data to use user-scoped survey IDs
@@ -289,8 +353,52 @@ export class UserScopedMigrationService {
             const legacyId = row.id;
             const userScopedId = userScopedKey(legacyId);
             
+            // Check if user-scoped row already exists
+            const checkRequest = readStore.get(userScopedId);
+            const checkPromise = new Promise<void>((resolveCheck) => {
+              checkRequest.onsuccess = () => {
+                const existingRow = checkRequest.result;
+                
+                if (!existingRow) {
+                  // Row doesn't exist with user-scoped ID, needs migration
+                  rowsToMigrate.push({ legacy: row, userScopedId, userScopedSurveyId });
+                } else {
+                  console.log(`⏭️ Survey data row ${legacyId} already migrated, skipping`);
+                }
+                resolveCheck();
+              };
+              
+              checkRequest.onerror = () => {
+                // If check fails, assume it doesn't exist and needs migration
+                rowsToMigrate.push({ legacy: row, userScopedId, userScopedSurveyId });
+                resolveCheck();
+              };
+            });
+            
+            checkPromises.push(checkPromise);
+          }
+        });
+
+        // Wait for all checks to complete, then perform migration
+        Promise.all(checkPromises).then(() => {
+          if (rowsToMigrate.length === 0) {
+            console.log(`✅ No survey data rows need migration (all already migrated)`);
+            resolve({ count: 0 });
+            return;
+          }
+
+          // Now perform the migration in a write transaction
+          const writeTransaction = db.transaction(['surveyData'], 'readwrite');
+          const writeStore = writeTransaction.objectStore('surveyData');
+          let migratedCount = 0;
+          let errorCount = 0;
+
+          rowsToMigrate.forEach(({ legacy, userScopedId, userScopedSurveyId }) => {
+            const legacyId = legacy.id;
+            const legacySurveyId = legacy.surveyId;
+            
             const migratedRow = {
-              ...row,
+              ...legacy,
               id: userScopedId,
               surveyId: userScopedSurveyId,
               migratedAt: new Date(),
@@ -298,32 +406,48 @@ export class UserScopedMigrationService {
               originalSurveyId: legacySurveyId
             };
             
-            // Add new row with user-scoped IDs
-            const addRequest = store.add(migratedRow);
-            addRequest.onsuccess = () => {
-              // Delete old row
-              const deleteRequest = store.delete(legacyId);
-              deleteRequest.onsuccess = () => {
+            // Use put to handle both insert and update (won't throw if exists)
+            const putRequest = writeStore.put(migratedRow);
+            putRequest.onsuccess = () => {
+              // Delete old row (only if different)
+              if (legacyId !== userScopedId) {
+                const deleteRequest = writeStore.delete(legacyId);
+                deleteRequest.onsuccess = () => {
+                  migratedCount++;
+                };
+                deleteRequest.onerror = () => {
+                  console.error(`❌ Failed to delete legacy survey data row ${legacyId}:`, deleteRequest.error);
+                  migratedCount++; // Still count as migrated even if delete fails
+                };
+              } else {
                 migratedCount++;
-              };
+              }
             };
-            addRequest.onerror = () => {
-              console.error(`❌ Failed to migrate survey data row ${legacyId}:`, addRequest.error);
+            putRequest.onerror = () => {
+              // Check if error is "key already exists" - this means it was migrated between check and write
+              const error = putRequest.error;
+              if (error && error.name === 'ConstraintError') {
+                console.log(`⏭️ Survey data row ${legacyId} was migrated concurrently, skipping`);
+                migratedCount++; // Count as migrated
+              } else {
+                console.error(`❌ Failed to migrate survey data row ${legacyId}:`, error);
+                errorCount++;
+              }
             };
-          }
+          });
+
+          writeTransaction.oncomplete = () => {
+            console.log(`✅ Migrated ${migratedCount} survey data rows to user-scoped storage`);
+            resolve({ count: migratedCount });
+          };
+
+          writeTransaction.onerror = () => {
+            resolve({ count: migratedCount });
+          };
         });
-
-        transaction.oncomplete = () => {
-          console.log(`✅ Migrated ${migratedCount} survey data rows to user-scoped storage`);
-          resolve({ count: migratedCount });
-        };
-
-        transaction.onerror = () => {
-          resolve({ count: migratedCount });
-        };
       };
 
-      request.onerror = () => {
+      readRequest.onerror = () => {
         resolve({ count: 0 });
       };
     });

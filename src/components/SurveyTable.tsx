@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import { ISurveyRow } from '../types/survey';
 import { formatSpecialtyForDisplay } from '../shared/utils/formatters';
-import { sanitizeHtml } from '../shared/utils/sanitization';
 
 interface SurveyTableProps {
   data: ISurveyRow[];
@@ -131,9 +130,9 @@ export const SurveyTable: React.FC<SurveyTableProps> = ({ data }) => {
           <TableBody>
             {filteredData.map((row, index) => (
               <TableRow key={index}>
-                <TableCell>{sanitizeHtml(row.normalizedSpecialty)}</TableCell>
-                <TableCell>{sanitizeHtml(row.providerType)}</TableCell>
-                <TableCell>{sanitizeHtml(row.geographicRegion)}</TableCell>
+                <TableCell>{row.normalizedSpecialty}</TableCell>
+                <TableCell>{row.providerType}</TableCell>
+                <TableCell>{row.geographicRegion}</TableCell>
                 <TableCell>{row.tcc_p25}</TableCell>
                 <TableCell>{row.tcc_p50}</TableCell>
                 <TableCell>{row.tcc_p75}</TableCell>

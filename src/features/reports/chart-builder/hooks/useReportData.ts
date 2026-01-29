@@ -6,8 +6,11 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ISurveyRow } from '../../../../types/survey';
 import { getDataService } from '../../../../services/DataService';
+import { queryKeys } from '../../../../shared/services/queryClient';
+import { createQueryFn } from '../../../../shared/services/queryFetcher';
 import { ReportConfigInput, ChartDataItem, AvailableOptions } from '../types/reportBuilder';
 import { 
   getSpecialtyField, 
@@ -34,121 +37,134 @@ export const useReportData = (config: ReportConfigInput, specialtyMappings: Map<
 
   const dataService = useMemo(() => getDataService(), []);
 
+  interface ReportDataQueryResult {
+    surveyData: ISurveyRow[];
+    availableOptions: AvailableOptions;
+  }
+
+  const reportDataQuery = useQuery<ReportDataQueryResult>({
+    queryKey: queryKeys.reports('all-data'),
+    queryFn: createQueryFn(async () => {
+      const surveys = await dataService.getAllSurveys();
+      const allData: ISurveyRow[] = [];
+
+      for (const survey of surveys) {
+        try {
+          const surveyDataResponse = await dataService.getSurveyData(survey.id);
+          if (surveyDataResponse.rows && surveyDataResponse.rows.length > 0) {
+            const surveySource = (survey as any).type || 'Unknown';
+            const surveyYear = (survey as any).year || (survey as any).surveyYear || 'Unknown';
+            
+            const transformedRows = surveyDataResponse.rows.map((row: any) => {
+              const transformedRow: any = {
+                ...row,
+                surveySource,
+                surveyYear,
+                specialty: row.specialty || row.normalizedSpecialty || '',
+                geographicRegion: row.geographic_region || row.region || row.geographicRegion || '',
+                providerType: row.providerType || row.provider_type || '',
+                tcc_p25: 0, tcc_p50: 0, tcc_p75: 0, tcc_p90: 0,
+                cf_p25: 0, cf_p50: 0, cf_p75: 0, cf_p90: 0,
+                wrvu_p25: 0, wrvu_p50: 0, wrvu_p75: 0, wrvu_p90: 0,
+              };
+
+              if (row.variable) {
+                const variable = String(row.variable).toLowerCase();
+                const p25 = parseFloat(String(row.p25 || 0).replace(/[$,]/g, '')) || 0;
+                const p50 = parseFloat(String(row.p50 || 0).replace(/[$,]/g, '')) || 0;
+                const p75 = parseFloat(String(row.p75 || 0).replace(/[$,]/g, '')) || 0;
+                const p90 = parseFloat(String(row.p90 || 0).replace(/[$,]/g, '')) || 0;
+                
+                if (p50 < 1000) return transformedRow;
+                
+                if (variable.includes('conversion') || variable.includes('per') || variable.includes('/')) {
+                  transformedRow.cf_p25 = p25;
+                  transformedRow.cf_p50 = p50;
+                  transformedRow.cf_p75 = p75;
+                  transformedRow.cf_p90 = p90;
+                } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
+                  transformedRow.wrvu_p25 = p25;
+                  transformedRow.wrvu_p50 = p50;
+                  transformedRow.wrvu_p75 = p75;
+                  transformedRow.wrvu_p90 = p90;
+                } else if ((variable.includes('tcc') || variable.includes('total') || variable.includes('cash') || variable.includes('salary')) &&
+                           !variable.includes('per') && !variable.includes('/') && p50 > 1000) {
+                  transformedRow.tcc_p25 = p25;
+                  transformedRow.tcc_p50 = p50;
+                  transformedRow.tcc_p75 = p75;
+                  transformedRow.tcc_p90 = p90;
+                }
+              } else {
+                const tcc_p50 = Number(row.tcc_p50) || 0;
+                if (tcc_p50 > 1000) {
+                  transformedRow.tcc_p25 = row.tcc_p25 || 0;
+                  transformedRow.tcc_p50 = row.tcc_p50 || 0;
+                  transformedRow.tcc_p75 = row.tcc_p75 || 0;
+                  transformedRow.tcc_p90 = row.tcc_p90 || 0;
+                }
+                transformedRow.cf_p25 = row.cf_p25 || 0;
+                transformedRow.cf_p50 = row.cf_p50 || 0;
+                transformedRow.cf_p75 = row.cf_p75 || 0;
+                transformedRow.cf_p90 = row.cf_p90 || 0;
+                transformedRow.wrvu_p25 = row.wrvu_p25 || 0;
+                transformedRow.wrvu_p50 = row.wrvu_p50 || 0;
+                transformedRow.wrvu_p75 = row.wrvu_p75 || 0;
+                transformedRow.wrvu_p90 = row.wrvu_p90 || 0;
+              }
+
+              return transformedRow;
+            });
+            
+            const validRows = transformedRows.filter((row: any) => 
+              (row.tcc_p50 && row.tcc_p50 > 1000) || 
+              (row.cf_p50 && row.cf_p50 > 0) || 
+              (row.wrvu_p50 && row.wrvu_p50 > 0)
+            );
+            allData.push(...validRows);
+          }
+        } catch (error) {
+          console.error('Error loading survey data:', error);
+        }
+      }
+
+      const specialties = [...new Set(allData.map((row: any) => getSpecialtyField(row)).filter(Boolean))].sort();
+      const regions = [...new Set(allData.map((row: any) => getRegionField(row)).filter(Boolean))].sort();
+      const surveySources = [...new Set(surveys.map((s: any) => s.type || '').filter((v: any) => Boolean(v)))].sort() as string[];
+      const providerTypes = [...new Set(allData.map((row: any) => getProviderTypeField(row)).filter(Boolean))].sort();
+      const years = [...new Set(allData.map((row: any) => getYearField(row)).filter(Boolean))].sort();
+
+      return {
+        surveyData: allData,
+        availableOptions: {
+          dimensions: ['specialty', 'region', 'providerType', 'surveySource'],
+          metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
+          specialties,
+          regions,
+          surveySources,
+          providerTypes,
+          years
+        }
+      };
+    }),
+    staleTime: 1000 * 60 * 60 * 24, // 24 hours
+    gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    placeholderData: (previous) => previous
+  });
+
   // Load data
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const surveys = await dataService.getAllSurveys();
-        const allData: ISurveyRow[] = [];
+    setLoading(reportDataQuery.isLoading || reportDataQuery.isFetching);
 
-        for (const survey of surveys) {
-          try {
-            const surveyData = await dataService.getSurveyData(survey.id);
-            if (surveyData.rows && surveyData.rows.length > 0) {
-              const surveySource = (survey as any).type || 'Unknown';
-              const surveyYear = (survey as any).year || (survey as any).surveyYear || 'Unknown';
-              
-              const transformedRows = surveyData.rows.map((row: any) => {
-                const transformedRow: any = {
-                  ...row,
-                  surveySource,
-                  surveyYear,
-                  specialty: row.specialty || row.normalizedSpecialty || '',
-                  geographicRegion: row.geographic_region || row.region || row.geographicRegion || '',
-                  providerType: row.providerType || row.provider_type || '',
-                  tcc_p25: 0, tcc_p50: 0, tcc_p75: 0, tcc_p90: 0,
-                  cf_p25: 0, cf_p50: 0, cf_p75: 0, cf_p90: 0,
-                  wrvu_p25: 0, wrvu_p50: 0, wrvu_p75: 0, wrvu_p90: 0,
-                };
-
-                if (row.variable) {
-                  const variable = String(row.variable).toLowerCase();
-                  const p25 = parseFloat(String(row.p25 || 0).replace(/[$,]/g, '')) || 0;
-                  const p50 = parseFloat(String(row.p50 || 0).replace(/[$,]/g, '')) || 0;
-                  const p75 = parseFloat(String(row.p75 || 0).replace(/[$,]/g, '')) || 0;
-                  const p90 = parseFloat(String(row.p90 || 0).replace(/[$,]/g, '')) || 0;
-                  
-                  if (p50 < 1000) return transformedRow;
-                  
-                  if (variable.includes('conversion') || variable.includes('per') || variable.includes('/')) {
-                    transformedRow.cf_p25 = p25;
-                    transformedRow.cf_p50 = p50;
-                    transformedRow.cf_p75 = p75;
-                    transformedRow.cf_p90 = p90;
-                  } else if (variable.includes('wrvu') || variable.includes('rvu') || variable.includes('work')) {
-                    transformedRow.wrvu_p25 = p25;
-                    transformedRow.wrvu_p50 = p50;
-                    transformedRow.wrvu_p75 = p75;
-                    transformedRow.wrvu_p90 = p90;
-                  } else if ((variable.includes('tcc') || variable.includes('total') || variable.includes('cash') || variable.includes('salary')) &&
-                             !variable.includes('per') && !variable.includes('/') && p50 > 1000) {
-                    transformedRow.tcc_p25 = p25;
-                    transformedRow.tcc_p50 = p50;
-                    transformedRow.tcc_p75 = p75;
-                    transformedRow.tcc_p90 = p90;
-                  }
-                } else {
-                  const tcc_p50 = Number(row.tcc_p50) || 0;
-                  if (tcc_p50 > 1000) {
-                    transformedRow.tcc_p25 = row.tcc_p25 || 0;
-                    transformedRow.tcc_p50 = row.tcc_p50 || 0;
-                    transformedRow.tcc_p75 = row.tcc_p75 || 0;
-                    transformedRow.tcc_p90 = row.tcc_p90 || 0;
-                  }
-                  transformedRow.cf_p25 = row.cf_p25 || 0;
-                  transformedRow.cf_p50 = row.cf_p50 || 0;
-                  transformedRow.cf_p75 = row.cf_p75 || 0;
-                  transformedRow.cf_p90 = row.cf_p90 || 0;
-                  transformedRow.wrvu_p25 = row.wrvu_p25 || 0;
-                  transformedRow.wrvu_p50 = row.wrvu_p50 || 0;
-                  transformedRow.wrvu_p75 = row.wrvu_p75 || 0;
-                  transformedRow.wrvu_p90 = row.wrvu_p90 || 0;
-                }
-
-                return transformedRow;
-              });
-              
-              const validRows = transformedRows.filter((row: any) => 
-                (row.tcc_p50 && row.tcc_p50 > 1000) || 
-                (row.cf_p50 && row.cf_p50 > 0) || 
-                (row.wrvu_p50 && row.wrvu_p50 > 0)
-              );
-              allData.push(...validRows);
-            }
-          } catch (error) {
-            console.error('Error loading survey data:', error);
-          }
-        }
-        
-        if (allData.length > 0) {
-          setSurveyData(allData);
-          
-          const specialties = [...new Set(allData.map((row: any) => getSpecialtyField(row)).filter(Boolean))].sort();
-          const regions = [...new Set(allData.map((row: any) => getRegionField(row)).filter(Boolean))].sort();
-          const surveySources = [...new Set(surveys.map((s: any) => s.type || '').filter((v: any) => Boolean(v)))].sort() as string[];
-          const providerTypes = [...new Set(allData.map((row: any) => getProviderTypeField(row)).filter(Boolean))].sort();
-          const years = [...new Set(allData.map((row: any) => getYearField(row)).filter(Boolean))].sort();
-          
-          setAvailableOptions({
-            dimensions: ['specialty', 'region', 'providerType', 'surveySource'],
-            metrics: ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'],
-            specialties,
-            regions,
-            surveySources,
-            providerTypes,
-            years
-          });
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [dataService]);
+    if (reportDataQuery.data?.surveyData) {
+      setSurveyData(reportDataQuery.data.surveyData);
+    }
+    if (reportDataQuery.data?.availableOptions) {
+      setAvailableOptions(reportDataQuery.data.availableOptions);
+    }
+  }, [reportDataQuery.data, reportDataQuery.isFetching, reportDataQuery.isLoading]);
 
   // Calculate filter impacts (how many records each filter affects)
   const filterImpacts = useMemo(() => {

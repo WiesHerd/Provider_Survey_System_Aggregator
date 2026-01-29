@@ -70,8 +70,8 @@ export const useSurveyDataQuery = (
     queryKey,
     queryFn: createQueryFn((signal) => fetchSurveyData({ surveyId, filters, limit }, signal)),
     enabled: enabled && !!surveyId,
-    staleTime: 1000 * 60 * 5, // 5 minutes - survey data doesn't change often
-    gcTime: 1000 * 60 * 60, // 1 hour - keep in cache for 1 hour
+    staleTime: 1000 * 60 * 60 * 24, // 24 hours - surveys update on explicit sync/upload
+    gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days - keep in cache for a week
     refetchOnWindowFocus: false, // Don't refetch on focus (data rarely changes)
     refetchOnMount: false, // Use cached data if available
     placeholderData: (previousData) => previousData, // Keep previous data while fetching

@@ -31,6 +31,9 @@ export { SpecialtyAutocomplete } from './SpecialtyAutocomplete';
 // Confirmation Dialog - ENTERPRISE-GRADE confirmation system
 export { ConfirmationDialog } from './ConfirmationDialog';
 
+// Standard Dialog Chrome - single source of truth for modal shell
+export { StandardDialog } from './StandardDialog';
+
 // Provider Type Components
 export {
   default as ProviderTypeSelector,

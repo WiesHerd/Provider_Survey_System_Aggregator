@@ -1,5 +1,14 @@
 # Issue History and Solutions
 
+## Critical Issue: Benchmarking Asterisks for Sullivan Cotter APP / WIDE Format (Jan 2025)
+
+- **Problem**: Total Cash Compensation (and other variables) showed as `***` for Sullivan Cotter APP on the benchmarking screen; other surveys showed numeric data.
+- **Root cause**: (1) WIDE-format variables were only stored when `p50 > 0`; (2) column pattern was too strict (e.g. no spaces or alternate percentile labels).
+- **Fix**: Store variables when any percentile (p25/p50/p75/p90) is defined (including 0); relaxed WIDE column pattern for naming variations.
+- **Prevention**: See **docs/issues/BENCHMARKING_WIDE_FORMAT_ASTERISK_FIX.md** for design rules (never require p50 > 0 for storage; handle missing/zero in display only; tolerate column naming variations).
+
+---
+
 ## Critical Issue: SurveyAnalytics vs RegionalAnalytics Data Filtering Inconsistency
 
 ### **Issue Description**

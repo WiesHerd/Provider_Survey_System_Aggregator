@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { SpecialtyMappingProps } from '../types/mapping';
 import { useSpecialtyMappingLogic } from '../hooks/useSpecialtyMappingLogic';
-import { SpecialtyMappingHeader } from './SpecialtyMappingHeader';
 import { SpecialtyMappingContent } from './SpecialtyMappingContent';
 import { SpecialtyMappingHelp } from './SpecialtyMappingHelp';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
 import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
 import { ConfirmationDialog } from '../../../shared';
+import { BaseMappingHeader } from './shared';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 /**
  * SpecialtyMapping component - Main orchestrator for specialty mapping functionality
@@ -137,7 +138,8 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
           {/* Main Mapping Section */}
           <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             {/* Header Component - Tabs and Actions */}
-            <SpecialtyMappingHeader
+            <BaseMappingHeader
+              entityName="Specialty"
               activeTab={activeTab}
               onTabChange={setActiveTab}
               unmappedCount={unmappedSpecialties.length}
@@ -146,17 +148,23 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
               selectedCount={selectedSpecialties.length}
               isBulkSelected={isBulkSelected}
               allUnmappedCount={allUnmappedCount}
-              showAllProviderTypes={showAllProviderTypes}
-              onToggleProviderTypeFilter={() => setShowAllProviderTypes(!showAllProviderTypes)}
               onShowHelp={handleShowHelp}
               onToggleSelectAll={handleToggleSelectAll}
               onCreateMapping={createMapping}
               onCreateIndividualMappings={createIndividualMappings}
               onCreateGroupedMapping={createGroupedMapping}
-              onClearAllMappings={handleClearAllMappings}
               onApplyAllLearnedMappings={applyAllLearnedMappings}
               onClearAllLearnedMappings={handleClearAllLearnedMappings}
-            />
+            >
+              <button
+                onClick={handleClearAllMappings}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 border border-red-300 hover:border-red-400"
+                title="Delete all mapped specialties (this action cannot be undone)"
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                Clear all mappings ({mappings.length})
+              </button>
+            </BaseMappingHeader>
 
             {/* Error Display */}
             {error && (
@@ -225,3 +233,4 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
     </AdvancedErrorBoundary>
   );
 };
+

@@ -39,6 +39,14 @@ export interface UploadedSurvey extends UploadedSurveyMetadata {
   fileContent: string;
   rows: any[];
   columnMappings?: Record<string, string>;
+  isDuplicate?: boolean; // Flag to indicate if this survey is a potential duplicate
+  duplicateKey?: string; // Key used to identify duplicate groups
+  isOrphaned?: boolean; // Flag to indicate if this survey has metadata but no data rows
+  orphanedInfo?: {
+    expectedRowCount: number;
+    actualRowCount: number;
+  };
+  _uploadStatus?: 'uploading' | 'completed' | 'failed'; // Internal status for background uploads
 }
 
 /**

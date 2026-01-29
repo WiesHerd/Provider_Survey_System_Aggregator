@@ -167,3 +167,16 @@ input, select, textarea, button {
     animation: none !important;
   }
 }
+
+/* Hide scrollbars for horizontal pill rows while preserving scroll */
+.scrollbar-hidden {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+  overscroll-behavior-x: contain;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none;
+}

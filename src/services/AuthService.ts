@@ -9,14 +9,19 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   User,
   UserCredential,
   AuthError,
 } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseAvailable } from '../config/firebase';
+import { clearStorage } from '../utils/clearStorage';
 import { logger } from '../shared/utils/logger';
 
 /**
@@ -25,7 +30,11 @@ import { logger } from '../shared/utils/logger';
 export interface IAuthService {
   signUp(email: string, password: string): Promise<UserCredential>;
   signIn(email: string, password: string): Promise<UserCredential>;
-  signInWithGoogle(): Promise<UserCredential>;
+  signInWithGoogle(): Promise<void>;
+  handleRedirectResult(): Promise<UserCredential | null>;
+  sendVerificationEmail(): Promise<void>;
+  resetPassword(email: string): Promise<void>;
+  reloadCurrentUser(): Promise<User | null>;
   signOut(): Promise<void>;
   getCurrentUser(): User | null;
   onAuthStateChanged(callback: (user: User | null) => void): () => void;
@@ -79,6 +88,7 @@ export class AuthService implements IAuthService {
     try {
       const auth = getFirebaseAuth();
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(userCredential.user);
       logger.log('✅ User signed up successfully:', userCredential.user.email);
       return userCredential;
     } catch (error) {
@@ -112,31 +122,29 @@ export class AuthService implements IAuthService {
   /**
    * Sign in with Google
    * 
-   * @returns UserCredential with user information
+   * Uses popup by default with a redirect fallback for managed environments.
    * @throws Error with user-friendly message
    */
-  public async signInWithGoogle(): Promise<UserCredential> {
+  public async signInWithGoogle(): Promise<void> {
     if (!this.isAvailable()) {
       throw new Error('Firebase is not configured. Please restart your dev server after setting up .env.local file.');
     }
 
     try {
       const auth = getFirebaseAuth();
-      const provider = new GoogleAuthProvider();
-      // Request additional scopes if needed
-      provider.addScope('email');
-      provider.addScope('profile');
-      
-      // Set custom parameters for better UX
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-      
+      const provider = this.buildGoogleProvider();
       const userCredential = await signInWithPopup(auth, provider);
       logger.log('✅ User signed in with Google successfully:', userCredential.user.email);
-      return userCredential;
     } catch (error) {
       const authError = error as AuthError;
+
+      if (this.shouldUseRedirectFallback(authError)) {
+        const auth = getFirebaseAuth();
+        const provider = this.buildGoogleProvider();
+        logger.warn('⚠️ Google sign-in popup unavailable. Falling back to redirect.');
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       
       // Handle specific Google sign-in errors first
       if (authError.code === 'auth/popup-closed-by-user') {
@@ -166,6 +174,80 @@ export class AuthService implements IAuthService {
   }
 
   /**
+   * Handle redirect sign-in results after returning from Google.
+   * 
+   * @returns UserCredential or null if no redirect result exists
+   */
+  public async handleRedirectResult(): Promise<UserCredential | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    try {
+      const auth = getFirebaseAuth();
+      const result = await getRedirectResult(auth);
+      if (result?.user?.email) {
+        logger.log('✅ User signed in with Google (redirect):', result.user.email);
+      }
+      return result;
+    } catch (error) {
+      throw this.handleAuthError(error as AuthError);
+    }
+  }
+
+  /**
+   * Send verification email to current user
+   */
+  public async sendVerificationEmail(): Promise<void> {
+    if (!this.isAvailable()) {
+      throw new Error('Authentication service is not available.');
+    }
+
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('No authenticated user. Please sign in first.');
+    }
+
+    await sendEmailVerification(user);
+    logger.log('✅ Verification email sent');
+  }
+
+  /**
+   * Send password reset email
+   */
+  public async resetPassword(email: string): Promise<void> {
+    if (!this.isAvailable()) {
+      throw new Error('Authentication service is not available.');
+    }
+
+    try {
+      const auth = getFirebaseAuth();
+      await sendPasswordResetEmail(auth, email);
+      logger.log('✅ Password reset email sent:', email);
+    } catch (error) {
+      throw this.handleAuthError(error as AuthError);
+    }
+  }
+
+  /**
+   * Reload current user to refresh email verification status
+   */
+  public async reloadCurrentUser(): Promise<User | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    const auth = getFirebaseAuth();
+    if (!auth.currentUser) {
+      return null;
+    }
+
+    await auth.currentUser.reload();
+    return auth.currentUser;
+  }
+
+  /**
    * Sign out current user
    * 
    * @throws Error if sign out fails
@@ -178,6 +260,16 @@ export class AuthService implements IAuthService {
     try {
       const auth = getFirebaseAuth();
       await signOut(auth);
+      const signedOut = await this.waitForSignedOut(auth);
+      if (!signedOut) {
+        logger.warn('⚠️ Sign out did not clear auth state. Running cleanup.');
+        await this.forceSignOutCleanup(auth);
+      }
+
+      if (auth.currentUser) {
+        throw new Error('Sign out did not complete. Please refresh and try again.');
+      }
+
       logger.log('✅ User signed out successfully');
     } catch (error) {
       logger.error('❌ Sign out failed:', error);
@@ -223,6 +315,47 @@ export class AuthService implements IAuthService {
       logger.error('❌ Failed to subscribe to auth state changes:', error);
       return () => {};
     }
+  }
+
+  private buildGoogleProvider(): GoogleAuthProvider {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    return provider;
+  }
+
+  private shouldUseRedirectFallback(authError: AuthError): boolean {
+    return [
+      'auth/popup-blocked',
+      'auth/operation-not-supported-in-this-environment',
+      'auth/cancelled-popup-request',
+      'auth/popup-closed-by-user',
+    ].includes(authError.code);
+  }
+
+  private async waitForSignedOut(auth: ReturnType<typeof getFirebaseAuth>): Promise<boolean> {
+    const attempts = 5;
+    const delayMs = 150;
+    for (let i = 0; i < attempts; i += 1) {
+      if (!auth.currentUser) {
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    return !auth.currentUser;
+  }
+
+  private async forceSignOutCleanup(auth: ReturnType<typeof getFirebaseAuth>): Promise<void> {
+    await clearStorage.clearFirebaseAuthStorage();
+    try {
+      await signOut(auth);
+    } catch (cleanupError) {
+      logger.warn('⚠️ Cleanup sign-out attempt failed:', cleanupError);
+    }
+    await this.waitForSignedOut(auth);
   }
 
   /**

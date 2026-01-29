@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DataService } from '../../../services/DataService';
+import { getDataService } from '../../../services/DataService';
 import { useProviderContext } from '../../../contexts/ProviderContext';
 import { queryKeys } from '../../../shared/services/queryClient';
 
@@ -18,7 +18,7 @@ interface RegionMappingData {
 export const useRegionMappingQuery = () => {
   const { selectedProviderType } = useProviderContext();
   const queryClient = useQueryClient();
-  const dataService = new DataService();
+  const dataService = getDataService();
   
   const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
   const cacheKey = [...queryKeys.mappings.region(), dataProviderType || 'all'] as const;

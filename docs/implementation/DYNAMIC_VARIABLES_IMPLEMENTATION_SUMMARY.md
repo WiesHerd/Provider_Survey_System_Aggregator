@@ -88,6 +88,11 @@ Survey Data → Variable Discovery → User Selection → Dynamic Fetching → T
 - **Error handling** - Graceful degradation
 - **Performance optimization** - Batch processing, caching
 
+### Design Rules (WIDE format / benchmarking)
+- **Store if any percentile present** – In WIDE format, store a variable when any of p25/p50/p75/p90 is defined (including 0). Do **not** require `p50 > 0` for storage; otherwise some surveys (e.g. Sullivan Cotter APP) show `***` instead of data. See **docs/issues/BENCHMARKING_WIDE_FORMAT_ASTERISK_FIX.md**.
+- **Missing/zero = display only** – The decision to show `***` belongs in formatting; normalization must not drop variables because a percentile is 0 or missing.
+- **Flexible column pattern** – WIDE column names may use spaces, underscores, or labels like `50th%`; the parser must tolerate these.
+
 ### UI Components
 - **Enterprise styling** - Matches existing design system
 - **Responsive design** - Works on all screen sizes

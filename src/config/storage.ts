@@ -25,15 +25,16 @@ export const STORAGE_CONFIG = {
 };
 
 /**
- * Get current storage mode using hybrid detection
+ * Get current storage mode using cloud-first detection
  * 
- * Hybrid Mode Behavior:
+ * Cloud-First Behavior (Enterprise Mode):
  * - If REACT_APP_STORAGE_MODE is explicitly set, use that mode
- * - Otherwise, automatically use Firebase if available and configured
- * - Fallback to IndexedDB if Firebase is not available
+ * - Otherwise, default to Firebase (cloud) when available
+ * - If Firebase is not available, fall back to IndexedDB automatically
+ * - IndexedDB is always initialized as a backup/cache layer
  * 
- * This ensures the app works on Vercel (IndexedDB) while optionally
- * leveraging Firebase cloud storage when credentials are provided.
+ * This ensures data is primarily stored in the cloud with automatic
+ * local backup for offline access and resilience.
  */
 export const getCurrentStorageMode = (): StorageMode => {
   // Check for explicit override first (allows forcing a specific mode)
@@ -43,24 +44,22 @@ export const getCurrentStorageMode = (): StorageMode => {
     
     // Validate Firebase mode if explicitly requested
     if (envMode === StorageMode.FIREBASE && !isFirebaseAvailable()) {
-      throw new Error('Firebase storage mode is required but Firebase is not configured.');
-    }
-
-    // Firebase-only mode: block IndexedDB to avoid cross-user data bleed
-    if (envMode === StorageMode.INDEXED_DB) {
-      throw new Error('IndexedDB storage mode is disabled. Configure Firebase for storage.');
+      console.warn('⚠️ Firebase mode requested but Firebase not available - falling back to IndexedDB');
+      return StorageMode.INDEXED_DB;
     }
     
     return envMode;
   }
 
-  // Firebase-only default: require Firebase to be available
+  // CLOUD-FIRST: Default to Firebase when available
   if (isFirebaseAvailable()) {
-    console.log('💾 Firebase-only mode: Using Firebase (cloud storage)');
+    console.log('☁️ Cloud-first mode: Using Firebase (cloud storage with local backup)');
     return StorageMode.FIREBASE;
   }
 
-  throw new Error('Firebase is required for storage but is not configured.');
+  // Fallback to IndexedDB if Firebase is not configured
+  console.log('💾 Fallback mode: Using IndexedDB (Firebase not configured)');
+  return StorageMode.INDEXED_DB;
 };
 
 // Helper function to check if Firebase backend is available

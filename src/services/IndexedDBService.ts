@@ -14,6 +14,11 @@ import { safeValidateSurvey, safeValidateSpecialtyMapping, validateColumnMapping
 import { duplicateDetectionService } from './DuplicateDetectionService';
 import { getUserId, userScopedKey } from '../shared/utils/userScoping';
 
+const isUploadDebugEnabled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('bp_upload_debug') === 'true';
+};
+
 interface Survey {
   id: string;
   name: string;
@@ -118,22 +123,44 @@ export class IndexedDBService {
     console.log('🔧 Initializing IndexedDB...');
 
     // ENTERPRISE FIX: Add timeout to prevent indefinite hangs
-    const INIT_TIMEOUT = 15000; // 15 seconds max for initialization
+    // Increased timeout to 30 seconds for slow systems or large databases
+    const INIT_TIMEOUT = 30000; // 30 seconds max for initialization
+    
+    // Add progress logging to identify where it's hanging
+    const progressLog = (step: string) => {
+      console.log(`🔧 IndexedDB init step: ${step}`);
+    };
     
     try {
       const initPromise = (async () => {
+        progressLog('Starting database open...');
         await this._openDatabase();
+        progressLog('Database opened, verifying object stores...');
         await this._verifyObjectStores();
+        progressLog('Object stores verified, marking as ready...');
         this.isReady = true;
         this.healthCheckCache = { status: 'healthy', timestamp: Date.now() };
         console.log('✅ IndexedDB fully initialized and ready');
       })();
 
-      // Race initialization against timeout
+      // Race initialization against timeout with better error message
       await Promise.race([
         initPromise,
         new Promise<void>((_, reject) => 
-          setTimeout(() => reject(new Error('IndexedDB initialization timed out after 15 seconds. Please refresh the page.')), INIT_TIMEOUT)
+          setTimeout(() => {
+            const errorMsg = 
+              'IndexedDB initialization timed out after 30 seconds.\n\n' +
+              'This usually means:\n' +
+              '1. Database is blocked by another tab/window - close other tabs and refresh\n' +
+              '2. Browser storage quota exceeded - clear browser storage\n' +
+              '3. Database is corrupted - try clearing IndexedDB in browser DevTools\n\n' +
+              'SOLUTION: Refresh the page. If problem persists, clear IndexedDB:\n' +
+              '1. Open DevTools (F12)\n' +
+              '2. Application tab → Storage → IndexedDB\n' +
+              '3. Delete "SurveyAggregatorDB"\n' +
+              '4. Refresh page';
+            reject(new Error(errorMsg));
+          }, INIT_TIMEOUT)
         )
       ]);
       
@@ -276,6 +303,14 @@ export class IndexedDBService {
       ? indexedDB.open(this.DB_NAME, targetVersion)
       : indexedDB.open(this.DB_NAME);
     
+    // ENTERPRISE FIX: Handle blocked event - database is open in another tab
+    openRequest.onblocked = () => {
+      console.warn('⚠️ IndexedDB is blocked by another tab/window. Waiting for other tab to close...');
+      console.warn('💡 SOLUTION: Close other tabs with this app open, then refresh this page.');
+      // Don't reject immediately - wait a bit, but this will likely cause timeout
+      // The timeout handler will provide better error message
+    };
+    
     openRequest.onsuccess = () => {
       this.db = openRequest.result;
       const actualVersion = this.db.version;
@@ -332,6 +367,13 @@ export class IndexedDBService {
     openRequest.onupgradeneeded = (event) => {
       console.log(`🔧 Database upgrade needed: ${event.oldVersion} -> ${event.newVersion}`);
       this._handleUpgrade(event);
+    };
+    
+    // ENTERPRISE FIX: Handle upgrade blocked event
+    openRequest.onblocked = () => {
+      console.warn('⚠️ Database upgrade is blocked by another tab/window.');
+      console.warn('💡 SOLUTION: Close other tabs with this app open, then refresh this page.');
+      // The upgrade will proceed once other tabs close, but this may cause timeout
     };
   }
 
@@ -1070,9 +1112,17 @@ export class IndexedDBService {
    * Handles backward compatibility for surveys created before the dataCategory architecture
    */
   private migrateSurveyStructure(survey: Survey): Survey {
-    // If already migrated (has dataCategory), return as-is
+    // If already migrated (has dataCategory), still normalize providerType if needed
     if ((survey as any).dataCategory) {
-      return survey;
+      const migratedSurvey = { ...survey } as any;
+      // CRITICAL: Normalize "Staff Physician" to "PHYSICIAN" even for already-migrated surveys
+      if (migratedSurvey.providerType) {
+        const providerTypeUpper = (migratedSurvey.providerType as string).toUpperCase();
+        if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN') {
+          migratedSurvey.providerType = 'PHYSICIAN';
+        }
+      }
+      return migratedSurvey as Survey;
     }
 
     const migratedSurvey = { ...survey } as any;
@@ -1090,13 +1140,16 @@ export class IndexedDBService {
       // But we keep providerType='CALL' to maintain existing logic that checks for it
       // In the future, providerType should be PHYSICIAN/APP (who), not CALL (what)
       migratedSurvey.providerType = 'CALL'; // Keep original for backward compatibility
-      console.log('🔍 Migrated CALL survey:', {
-        id: survey.id,
-        oldType: surveyType,
-        newSource: migratedSurvey.source,
-        newDataCategory: migratedSurvey.dataCategory,
-        preservedProviderType: 'CALL'
-      });
+      // Reduced logging - only log in debug mode to prevent console spam
+      if (isUploadDebugEnabled()) {
+        console.log('🔍 Migrated CALL survey:', {
+          id: survey.id,
+          oldType: surveyType,
+          newSource: migratedSurvey.source,
+          newDataCategory: migratedSurvey.dataCategory,
+          preservedProviderType: 'CALL'
+        });
+      }
     }
     // Case 2: Type contains "Call Pay" (even if providerType isn't CALL)
     else if (surveyType.toLowerCase().includes('call pay')) {
@@ -1108,12 +1161,15 @@ export class IndexedDBService {
       if (!migratedSurvey.providerType) {
         migratedSurvey.providerType = 'PHYSICIAN'; // Default fallback
       }
-      console.log('🔍 Migrated Call Pay survey (from type):', {
-        id: survey.id,
-        oldType: surveyType,
-        newSource: migratedSurvey.source,
-        newDataCategory: migratedSurvey.dataCategory
-      });
+      // Reduced logging - only log in debug mode to prevent console spam
+      if (isUploadDebugEnabled()) {
+        console.log('🔍 Migrated Call Pay survey (from type):', {
+          id: survey.id,
+          oldType: surveyType,
+          newSource: migratedSurvey.source,
+          newDataCategory: migratedSurvey.dataCategory
+        });
+      }
     }
     // Case 3: Type contains "Moonlighting"
     else if (surveyType.toLowerCase().includes('moonlighting')) {
@@ -1123,12 +1179,15 @@ export class IndexedDBService {
       if (!migratedSurvey.providerType) {
         migratedSurvey.providerType = 'PHYSICIAN'; // Default fallback
       }
-      console.log('🔍 Migrated Moonlighting survey:', {
-        id: survey.id,
-        oldType: surveyType,
-        newSource: migratedSurvey.source,
-        newDataCategory: migratedSurvey.dataCategory
-      });
+      // Reduced logging - only log in debug mode to prevent console spam
+      if (isUploadDebugEnabled()) {
+        console.log('🔍 Migrated Moonlighting survey:', {
+          id: survey.id,
+          oldType: surveyType,
+          newSource: migratedSurvey.source,
+          newDataCategory: migratedSurvey.dataCategory
+        });
+      }
     }
     // Case 4: Standard compensation surveys (e.g., "MGMA Physician", "SullivanCotter APP")
     else {
@@ -1145,13 +1204,25 @@ export class IndexedDBService {
           migratedSurvey.providerType = 'PHYSICIAN'; // Default fallback
         }
       }
-      console.log('🔍 Migrated Compensation survey:', {
-        id: survey.id,
-        oldType: surveyType,
-        newSource: migratedSurvey.source,
-        newDataCategory: migratedSurvey.dataCategory,
-        newProviderType: migratedSurvey.providerType
-      });
+      // CRITICAL: Normalize "Staff Physician" to "PHYSICIAN" during migration
+      // This ensures surveys with "Staff Physician" are treated as "PHYSICIAN"
+      if (migratedSurvey.providerType) {
+        const providerTypeUpper = (migratedSurvey.providerType as string).toUpperCase();
+        if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN') {
+          migratedSurvey.providerType = 'PHYSICIAN';
+        }
+      }
+      
+      // Reduced logging - only log in debug mode to prevent console spam
+      if (isUploadDebugEnabled()) {
+        console.log('🔍 Migrated Compensation survey:', {
+          id: survey.id,
+          oldType: surveyType,
+          newSource: migratedSurvey.source,
+          newDataCategory: migratedSurvey.dataCategory,
+          newProviderType: migratedSurvey.providerType
+        });
+      }
     }
 
     return migratedSurvey as Survey;
@@ -1202,6 +1273,7 @@ export class IndexedDBService {
         };
         request.onsuccess = () => {
           const allSurveys = request.result || [];
+          console.log(`🔍 IndexedDB: Found ${allSurveys.length} total surveys in database`);
           
           // Filter to only return surveys for the current user
           // Support both user-scoped keys (userId_surveyId) and legacy keys (surveyId)
@@ -1217,9 +1289,19 @@ export class IndexedDBService {
             return !hasUserScopedSurveys;
           });
           
+          console.log(`🔍 IndexedDB: Filtered to ${userSurveys.length} surveys for user ${userId}`);
+          console.log(`🔍 IndexedDB: Survey details:`, userSurveys.map((s: any) => ({
+            id: s.id,
+            name: s.name || s.type,
+            providerType: s.providerType,
+            dataCategory: s.dataCategory,
+            year: s.year || s.surveyYear
+          })));
+          
           // Apply migration on-the-fly for backward compatibility
           const migratedSurveys = userSurveys.map(survey => this.migrateSurveyStructure(survey));
           
+          console.log(`✅ IndexedDB: Returning ${migratedSurveys.length} migrated surveys`);
           resolve(migratedSurveys);
         };
       } catch (error) {
@@ -1320,12 +1402,25 @@ export class IndexedDBService {
             const userId = getUserId();
             const userScopedId = userScopedKey(validatedSurvey.id);
             
+            // CRITICAL: Normalize provider type at write time - ensure "Staff Physician" → "PHYSICIAN"
+            // This ensures consistent provider type values in the database
+            let normalizedProviderType: ProviderType | undefined = validatedSurvey.providerType as ProviderType | undefined;
+            if (normalizedProviderType) {
+              const providerTypeUpper = String(normalizedProviderType).toUpperCase().trim();
+              if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN' || providerTypeUpper === 'PHYS') {
+                normalizedProviderType = 'PHYSICIAN';
+                console.log(`🔧 IndexedDBService: Normalized providerType "${validatedSurvey.providerType}" → "PHYSICIAN"`);
+              } else if (providerTypeUpper === 'PHYSICIAN') {
+                normalizedProviderType = 'PHYSICIAN'; // Ensure uppercase consistency
+              }
+            }
+            
             const surveyToStore: Survey = {
               ...validatedSurvey,
               id: userScopedId, // User-scoped ID
               uploadDate: validatedSurvey.uploadDate instanceof Date ? validatedSurvey.uploadDate : new Date(validatedSurvey.uploadDate),
               metadata: validatedSurvey.metadata || {},
-              providerType: validatedSurvey.providerType as ProviderType | undefined,
+              providerType: normalizedProviderType, // Use normalized provider type
               dataCategory: validatedSurvey.dataCategory as DataCategory | undefined,
               compositeKey: compositeKey, // Store composite key for fast duplicate lookups
               createdAt: validatedSurvey.createdAt instanceof Date ? validatedSurvey.createdAt : validatedSurvey.createdAt ? new Date(validatedSurvey.createdAt) : undefined,
@@ -1403,9 +1498,11 @@ export class IndexedDBService {
         // Delete associated data - need to handle both user-scoped and legacy survey IDs
         const dataStore = transaction.objectStore('surveyData');
         const dataIndex = dataStore.index('surveyId');
-        // Try both user-scoped and legacy IDs
+        // CRITICAL FIX: Try both the actual survey ID and user-scoped version
+        // The survey might be stored with user prefix, but we're trying to delete with clean ID
         const userId = getUserId();
         const userScopedSurveyId = userScopedKey(id);
+        // Try to delete with actual survey ID first (which may already be user-scoped)
         const dataRequest = dataIndex.openCursor(IDBKeyRange.only(actualSurveyId));
         
         // Clear analytics cache since data has changed
@@ -1447,9 +1544,31 @@ export class IndexedDBService {
             };
             cursor.continue();
           } else {
-            // No more data to delete - cursor finished
-            dataDeletionStarted = true;
-            console.log(`✅ IndexedDBService: Cursor finished - ${dataDeletedCount} data rows queued for deletion`);
+            // No more data found with actualSurveyId - try user-scoped ID if different
+            if (actualSurveyId !== userScopedSurveyId && dataDeletedCount === 0) {
+              console.log(`🔍 IndexedDBService: No data found with ${actualSurveyId}, trying user-scoped ID ${userScopedSurveyId}`);
+              const altDataRequest = dataIndex.openCursor(IDBKeyRange.only(userScopedSurveyId));
+              altDataRequest.onsuccess = (altEvent) => {
+                const altCursor = (altEvent.target as IDBRequest).result;
+                if (altCursor) {
+                  const altDeleteRequest = dataStore.delete(altCursor.primaryKey);
+                  altDeleteRequest.onsuccess = () => {
+                    dataDeletedCount++;
+                    altCursor.continue();
+                  };
+                  altDeleteRequest.onerror = () => {
+                    console.error('❌ IndexedDBService: Failed to delete data row (alt):', altDeleteRequest.error);
+                  };
+                } else {
+                  dataDeletionStarted = true;
+                  console.log(`✅ IndexedDBService: Cursor finished - ${dataDeletedCount} data rows queued for deletion`);
+                }
+              };
+            } else {
+              // No more data to delete - cursor finished
+              dataDeletionStarted = true;
+              console.log(`✅ IndexedDBService: Cursor finished - ${dataDeletedCount} data rows queued for deletion`);
+            }
           }
         };
         
@@ -2004,7 +2123,7 @@ export class IndexedDBService {
         sampleData: rows.length > 0 ? rows[0] : null
       });
 
-      // Extract provider types from data for better detection
+      // Extract provider types from data for logging/debugging only
       const uniqueProviderTypes = new Set(
         rows
           .map(row => row.providerType || row['Provider Type'] || row.provider_type)
@@ -2013,11 +2132,23 @@ export class IndexedDBService {
       
       const detectedProviderTypes = Array.from(uniqueProviderTypes);
       console.log('🔍 IndexedDBService: Detected provider types in data:', detectedProviderTypes);
+      console.log('🔍 IndexedDBService: Form selected provider type:', providerType);
       
-      // Use detected provider type if available, otherwise fall back to form selection
-      const effectiveProviderType = detectedProviderTypes.length > 0 
-        ? detectedProviderTypes[0] // Use first detected type as primary
-        : providerType; // Fall back to form selection
+      // CRITICAL FIX: Always use the form selection for providerType, not the detected type from data
+      // The form selection is what the user explicitly chose and should be trusted
+      // Data might contain "Staff Physician" but user selected "Physician" - use "Physician"
+      let effectiveProviderType = providerType;
+      
+      // Normalize to uppercase for consistency
+      if (effectiveProviderType) {
+        effectiveProviderType = effectiveProviderType.toUpperCase();
+        // Normalize common variations
+        if (effectiveProviderType === 'STAFF PHYSICIAN' || effectiveProviderType === 'STAFFPHYSICIAN') {
+          effectiveProviderType = 'PHYSICIAN';
+        }
+      }
+      
+      console.log('🔍 IndexedDBService: Using provider type:', effectiveProviderType, '(from form selection)');
 
       // Create survey record
       const surveyId = crypto.randomUUID();
@@ -2026,7 +2157,7 @@ export class IndexedDBService {
         name: surveyName,
         year: surveyYear.toString(),
         type: surveyType,
-        providerType: effectiveProviderType, // Use detected provider type
+        providerType: effectiveProviderType, // Use form selection, normalized
         uploadDate: new Date(),
         rowCount: rows.length,
         specialtyCount: 0, // Will be calculated
@@ -2053,10 +2184,24 @@ export class IndexedDBService {
         providerType: survey.providerType
       });
       
-      // Save survey data
+      // Save survey data with error handling
+      // CRITICAL: If data save fails, delete the survey to prevent orphaned metadata
       console.log('💾 IndexedDBService: Saving survey data...');
-      await this.saveSurveyData(surveyId, rows);
-      console.log('✅ IndexedDBService: Survey data saved successfully');
+      try {
+        await this.saveSurveyData(surveyId, rows, onProgress);
+        console.log('✅ IndexedDBService: Survey data saved successfully');
+      } catch (dataSaveError) {
+        console.error('❌ IndexedDBService: Failed to save survey data, cleaning up survey metadata:', dataSaveError);
+        // Delete the survey metadata since data save failed
+        try {
+          await this.deleteSurvey(surveyId);
+          console.log('✅ IndexedDBService: Cleaned up orphaned survey metadata');
+        } catch (deleteError) {
+          console.error('❌ IndexedDBService: Failed to clean up survey metadata:', deleteError);
+        }
+        // Re-throw the original error
+        throw new Error(`Failed to save survey data: ${dataSaveError instanceof Error ? dataSaveError.message : 'Unknown error'}`);
+      }
       
       // Calculate specialty count
       const uniqueSpecialties = new Set<string>();
@@ -2209,7 +2354,7 @@ export class IndexedDBService {
             
             // Filter by variable - EXACT MATCH ONLY
             if (filters.variable && filters.variable.trim() !== '') {
-              const itemVariable = item.variable || item.data?.variable || '';
+              const itemVariable = item.variable || item.data?.variable || item.data?.Variable || item.data?.['Variable Name'] || item.data?.Benchmark || '';
                 // Variable filter logging removed for performance
               if (itemVariable.toLowerCase() !== filters.variable.toLowerCase()) {
                 return false;
@@ -2327,6 +2472,7 @@ export class IndexedDBService {
                 specialty: row.specialty || row.Specialty || row['Provider Type'],
                 providerType: row.providerType || row['Provider Type'] || row.provider_type,
                 region: row.region || row.Region || row.geographic_region,
+                variable: row.variable || row.Variable || row['Variable Name'] || row.Benchmark,
                 tcc: row.tcc || row.TCC,
                 cf: row.cf || row.CF,
                 wrvu: row.wrvu || row.wRVU,

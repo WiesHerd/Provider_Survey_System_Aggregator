@@ -104,6 +104,46 @@ export const StandardDropdown: React.FC<StandardDropdownProps> = memo(({
         getOptionLabel={getOptionLabel}
         loading={loading}
         disabled={disabled}
+        componentsProps={{
+          popper: {
+            sx: {
+              zIndex: 1300,
+              '& .MuiAutocomplete-paper': {
+                marginTop: '4px !important',
+                backgroundColor: 'white !important',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
+                overflow: 'hidden',
+                padding: 0
+              }
+            }
+          }
+        }}
+        sx={{
+          '& .MuiAutocomplete-paper': {
+            backgroundColor: 'white !important',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
+            overflow: 'hidden',
+            marginTop: '4px',
+            padding: 0
+          },
+          '& .MuiAutocomplete-listbox': {
+            padding: '0 !important',
+            margin: 0,
+            backgroundColor: 'white !important',
+            '& .MuiAutocomplete-option': {
+              padding: '8px 16px',
+              margin: 0,
+              backgroundColor: 'white !important',
+              '&:hover': {
+                backgroundColor: '#f3f4f6 !important'
+              }
+            }
+          }
+        }}
         renderInput={(params: any) => (
           <TextField
             {...params}

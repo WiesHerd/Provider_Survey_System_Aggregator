@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Survey Diagnostic & Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .survey-item { margin: 10px 0; padding: 10px; background: #f9f9f9; border-left: 3px solid #6366F1; }
+    </style>
+</head>
+<body>
+    <h1>Survey Diagnostic & Fix Tool</h1>
+    
+    <div class="section">
+        <h2>Step 1: Check Surveys in IndexedDB</h2>
+        <button onclick="checkSurveys()">Check All Surveys</button>
+        <div id="surveyResults"></div>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Fix SullivanCotter Surveys</h2>
+        <button onclick="fixSurveys()">Fix Provider Type Issues</button>
+        <div id="fixResults"></div>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Clear Cache</h2>
+        <button onclick="clearCache()">Clear Provider Type Detection Cache</button>
+        <div id="cacheResults"></div>
+    </div>
+
+    <script>
+        async function checkSurveys() {
+            const resultsDiv = document.getElementById('surveyResults');
+            resultsDiv.innerHTML = '<p>Checking IndexedDB...</p>';
+
+            try {
+                const db = await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('SurveyAggregatorDB', 7);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                const surveys = await new Promise((resolve, reject) => {
+                    const transaction = db.transaction(['surveys'], 'readonly');
+                    const store = transaction.objectStore('surveys');
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                const sullivan = surveys.filter(s => {
+                    const name = (s.name || s.type || '').toLowerCase();
+                    return name.includes('sullivancotter') || name.includes('sullivan cotter');
+                });
+
+                let html = `<h3>Found ${surveys.length} total surveys, ${sullivan.length} SullivanCotter survey(s)</h3>`;
+                
+                sullivan.forEach((s, i) => {
+                    const pt = (s.providerType || '').toUpperCase();
+                    const dc = s.dataCategory;
+                    const shouldShow = pt === 'PHYSICIAN' && 
+                                      dc !== 'CALL_PAY' && 
+                                      dc !== 'MOONLIGHTING' &&
+                                      (dc === 'COMPENSATION' || !dc);
+                    
+                    html += `<div class="survey-item">
+                        <strong>Survey ${i + 1}:</strong> ${s.name || s.id}<br>
+                        <strong>ID:</strong> ${s.id}<br>
+                        <strong>Provider Type:</strong> <span class="${pt === 'PHYSICIAN' ? 'success' : 'error'}">${s.providerType || 'MISSING'}</span><br>
+                        <strong>Data Category:</strong> ${s.dataCategory || 'MISSING'}<br>
+                        <strong>Type:</strong> ${s.type || 'N/A'}<br>
+                        <strong>Year:</strong> ${s.year || 'N/A'}<br>
+                        <strong>Should show in Physician view:</strong> <span class="${shouldShow ? 'success' : 'error'}">${shouldShow ? 'YES ✅' : 'NO ❌'}</span>
+                    </div>`;
+                });
+
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function fixSurveys() {
+            const resultsDiv = document.getElementById('fixResults');
+            resultsDiv.innerHTML = '<p>Fixing surveys...</p>';
+
+            try {
+                const db = await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('SurveyAggregatorDB', 7);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                const surveys = await new Promise((resolve, reject) => {
+                    const transaction = db.transaction(['surveys'], 'readonly');
+                    const store = transaction.objectStore('surveys');
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                const sullivan = surveys.filter(s => {
+                    const name = (s.name || s.type || '').toLowerCase();
+                    return name.includes('sullivancotter') || name.includes('sullivan cotter');
+                });
+
+                const fixes = [];
+                for (const survey of sullivan) {
+                    const pt = (survey.providerType || '').toUpperCase();
+                    const name = (survey.name || '').toLowerCase();
+                    const type = (survey.type || '').toLowerCase();
+                    
+                    const needsFix = pt === 'APP' || name.includes(' - app') || name.includes(' app ') || 
+                                   type.includes(' - app') || type.includes(' app ');
+                    
+                    if (needsFix) {
+                        fixes.push({
+                            survey,
+                            oldPT: survey.providerType,
+                            oldName: survey.name,
+                            oldType: survey.type
+                        });
+                    }
+                }
+
+                if (fixes.length === 0) {
+                    resultsDiv.innerHTML = '<p class="success">✅ No fixes needed. All surveys are correctly configured.</p>';
+                    return;
+                }
+
+                const transaction = db.transaction(['surveys'], 'readwrite');
+                const store = transaction.objectStore('surveys');
+                let fixed = 0;
+
+                for (const fix of fixes) {
+                    fix.survey.providerType = 'PHYSICIAN';
+                    fix.survey.dataCategory = fix.survey.dataCategory || 'COMPENSATION';
+                    
+                    if (fix.survey.name) {
+                        fix.survey.name = fix.survey.name.replace(/ - APP /gi, ' Physician ').replace(/ APP$/gi, ' Physician');
+                    }
+                    if (fix.survey.type) {
+                        fix.survey.type = fix.survey.type.replace(/ - APP /gi, ' Physician ').replace(/ APP$/gi, ' Physician');
+                    }
+
+                    await new Promise((resolve, reject) => {
+                        const request = store.put(fix.survey);
+                        request.onsuccess = () => {
+                            fixed++;
+                            resolve();
+                        };
+                        request.onerror = () => reject(request.error);
+                    });
+                }
+
+                resultsDiv.innerHTML = `<p class="success">✅ Fixed ${fixed} survey(s)!</p>
+                    <p><strong>Next steps:</strong></p>
+                    <ol>
+                        <li>Go back to <a href="/upload">the upload page</a></li>
+                        <li>Change the DATA VIEW dropdown from "APP" to "Physician"</li>
+                        <li>Refresh the page</li>
+                        <li>Your survey should now appear in the Physician data view</li>
+                    </ol>`;
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        function clearCache() {
+            const resultsDiv = document.getElementById('cacheResults');
+            try {
+                localStorage.removeItem('providerTypeDetectionCache');
+                sessionStorage.clear();
+                resultsDiv.innerHTML = '<p class="success">✅ Cache cleared! Refresh the main page to see changes.</p>';
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-run check on load
+        window.addEventListener('load', () => {
+            checkSurveys();
+        });
+    </script>
+</body>
+</html>

@@ -46,7 +46,8 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const yearService = new YearManagementService();
+  // Create service instance once - it's stable across renders
+  const yearService = React.useMemo(() => new YearManagementService(), []);
 
   const initializeYears = useCallback(async () => {
     try {
@@ -88,7 +89,7 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [yearService]);
 
   // Initialize year data
   useEffect(() => {

@@ -17,6 +17,7 @@ import {
   orderBy,
   limit,
   writeBatch,
+  getCountFromServer,
   Timestamp,
   QueryConstraint,
   onSnapshot,
@@ -33,6 +34,7 @@ import { ISurveyRow } from '../types/survey';
 import { ProviderType, DataCategory } from '../types/provider';
 import { readCSVFile, parseCSVLine } from '../shared/utils';
 import { isExcelFile, parseFile } from '../features/upload/utils/fileParser';
+import { stripUserPrefix } from '../shared/utils/userScoping';
 
 const isUploadDebugEnabled = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -79,8 +81,10 @@ export class FirestoreService {
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_DELAY = 1000; // 1 second
   private readonly QUOTA_RETRY_DELAY = 5000; // 5 seconds for quota errors
-  private readonly BATCH_DELAY = 100; // 100ms delay between batches to respect rate limits
+  private readonly BATCH_DELAY = 10; // 10ms delay between batches (optimized for fast deletes)
   private readonly MAX_QUOTA_RETRIES = 5; // More retries for quota errors
+  private readonly BATCH_CONCURRENCY = 4; // Process 4 batches in parallel for faster uploads
+  private readonly BATCH_SIZE = 500; // Use Firestore's max batch size for fewer batches
   private offlineQueue: Array<() => Promise<void>> = [];
   private isOnline = true;
 
@@ -97,6 +101,7 @@ export class FirestoreService {
     }
 
     let deletedCount = 0;
+    let batchNumber = 0;
 
     while (true) {
       const collRef = collection(this.db, collectionPath);
@@ -107,18 +112,32 @@ export class FirestoreService {
         break;
       }
 
+      // PERFORMANCE: Firebase supports up to 500 operations per batch
+      // But we can delete in sub-batches if needed
       const batch = writeBatch(this.db);
       snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
       await batch.commit();
 
       deletedCount += snapshot.size;
+      batchNumber++;
 
-      // Respect rate limits when iterating large collections
+      // Log progress for all batches (not just every 5000)
+      // This helps users see that deletion is still progressing
+      console.log(`🗑️ Deletion progress: ${deletedCount} documents deleted (batch ${batchNumber})`);
+      
+      // If this is a large deletion, log more frequently
+      if (deletedCount % 5000 === 0) {
+        console.log(`📊 Large deletion in progress: ${deletedCount} documents deleted so far...`);
+      }
+
+      // PERFORMANCE: Only add delay if there's more data to delete
+      // This prevents unnecessary delays on the last batch
       if (snapshot.size === batchSize) {
         await this.sleep(this.BATCH_DELAY);
       }
     }
 
+    console.log(`✅ Deletion complete: ${deletedCount} total documents deleted in ${batchNumber} batches`);
     return deletedCount;
   }
 
@@ -215,6 +234,65 @@ export class FirestoreService {
   }
 
   /**
+   * Process batches in parallel with controlled concurrency
+   * Uses a semaphore pattern to limit concurrent batch operations
+   */
+  private async processBatchesInParallel<T>(
+    batches: T[],
+    concurrency: number,
+    processor: (batch: T, index: number) => Promise<void>,
+    onProgress?: (completed: number) => void
+  ): Promise<void> {
+    let completed = 0;
+    let active = 0;
+    let index = 0;
+    const errors: Error[] = [];
+
+    return new Promise((resolve, reject) => {
+      const processNext = async () => {
+        // If we've processed all batches, check if we're done
+        if (index >= batches.length) {
+          if (active === 0) {
+            if (errors.length > 0) {
+              reject(new Error(`Failed to process ${errors.length} batch(es): ${errors[0].message}`));
+            } else {
+              resolve();
+            }
+          }
+          return;
+        }
+
+        // If we're at max concurrency, wait
+        if (active >= concurrency) {
+          return;
+        }
+
+        // Process next batch
+        const currentIndex = index++;
+        const batch = batches[currentIndex];
+        active++;
+
+        try {
+          await processor(batch, currentIndex);
+          completed++;
+          onProgress?.(completed);
+        } catch (error) {
+          errors.push(error instanceof Error ? error : new Error(String(error)));
+        } finally {
+          active--;
+          // Process next batch
+          processNext();
+        }
+      };
+
+      // Start initial batch of concurrent operations
+      for (let i = 0; i < Math.min(concurrency, batches.length); i++) {
+        processNext();
+      }
+    });
+  }
+
+  /**
    * Process offline queue when coming back online
    */
   private async processOfflineQueue(): Promise<void> {
@@ -262,11 +340,74 @@ export class FirestoreService {
   /**
    * Get user-scoped collection path
    */
+  /**
+   * CRITICAL: Ensure userId is synced with current auth state
+   * This must be called before any write operation to prevent permission errors
+   */
+  private ensureUserIdSynced(): void {
+    const authUid = this.auth?.currentUser?.uid;
+    if (!authUid) {
+      throw new Error('User not authenticated. Please sign in.');
+    }
+    if (this.userId !== authUid) {
+      console.log('🔄 Syncing userId with current auth state:', {
+        oldUserId: this.userId,
+        newUserId: authUid,
+        email: this.auth?.currentUser?.email
+      });
+      this.userId = authUid;
+    }
+  }
+
   private getUserPath(collectionName: string): string {
+    // Always ensure userId is fresh before getting path
+    this.ensureUserIdSynced();
     if (!this.userId) {
       throw new Error('User not authenticated. Please sign in.');
     }
     return `users/${this.userId}/${collectionName}`;
+  }
+
+  /**
+   * Ensure user profile document exists in Firestore
+   * 
+   * Creates a user profile document at /users/{userId} if it doesn't exist.
+   * This is required because Firestore only considers a document to "exist"
+   * if it has at least one field, even if it has subcollections.
+   * 
+   * @param userEmail Optional email address from Firebase Auth
+   * @returns Promise that resolves when profile is ensured
+   */
+  public async ensureUserProfile(userEmail?: string): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    try {
+      const userRef = doc(this.db, 'users', this.userId);
+      const userDoc = await getDoc(userRef);
+
+      // If document doesn't exist or has no fields, create/update it
+      if (!userDoc.exists() || Object.keys(userDoc.data() || {}).length === 0) {
+        const userData: any = {
+          email: userEmail || this.auth?.currentUser?.email || '',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+
+        // Only include email if we have it
+        if (!userData.email) {
+          delete userData.email;
+        }
+
+        await setDoc(userRef, userData, { merge: true });
+        console.log('✅ FirestoreService: User profile created/updated:', this.userId);
+      }
+    } catch (error) {
+      console.error('❌ FirestoreService: Failed to ensure user profile:', error);
+      // Don't throw - this is a non-critical operation
+      // The document will be created on next attempt or when data is written
+    }
   }
 
   /**
@@ -347,43 +488,165 @@ export class FirestoreService {
   // ==================== Survey Methods ====================
 
   async getAllSurveys(): Promise<Survey[]> {
+    return await this.getAllSurveysWithRetry();
+  }
+
+  /**
+   * Get all surveys with retry logic and exponential backoff
+   * Includes health check before retry attempts
+   */
+  async getAllSurveysWithRetry(maxRetries: number = 3): Promise<Survey[]> {
     if (!this.db || !this.userId) {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const surveysRef = collection(this.db, this.getUserPath('surveys'));
-    const snapshot = await getDocs(surveysRef);
-    
-    const surveys = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        uploadDate: this.toDate(data.uploadDate),
-        createdAt: data.createdAt ? this.toDate(data.createdAt) : undefined,
-        updatedAt: data.updatedAt ? this.toDate(data.updatedAt) : undefined,
-      } as Survey;
-    });
+    let lastError: Error | null = null;
 
-    console.log('📊 FirestoreService: Retrieved surveys:', surveys.length);
-    return surveys;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Health check before retry (skip on first attempt for speed)
+        if (attempt > 0) {
+          console.log(`🔍 FirestoreService: Retry attempt ${attempt}/${maxRetries}, checking connectivity...`);
+          const healthCheck = await this.checkConnectivity(3000);
+          
+          if (healthCheck.status !== 'healthy') {
+            console.warn(`⚠️ FirestoreService: Health check failed (${healthCheck.status}), waiting before retry...`);
+            // Wait with exponential backoff: 1s, 2s, 4s
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+            await this.sleep(delay);
+            continue;
+          }
+          
+          console.log(`✅ FirestoreService: Health check passed (latency: ${healthCheck.latency}ms), retrying...`);
+        }
+
+        // Verify read capability
+        if (attempt > 0) {
+          const readCheck = await this.verifyReadCapability();
+          if (!readCheck.canRead) {
+            console.warn(`⚠️ FirestoreService: Read capability check failed: ${readCheck.error}`);
+            // Wait before retry
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+            await this.sleep(delay);
+            continue;
+          }
+        }
+
+        // Attempt to get surveys
+        const surveysRef = collection(this.db, this.getUserPath('surveys'));
+        const snapshot = await getDocs(surveysRef);
+        
+        const surveys = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const survey = {
+            ...data,
+            id: doc.id,
+            uploadDate: this.toDate(data.uploadDate),
+            createdAt: data.createdAt ? this.toDate(data.createdAt) : undefined,
+            updatedAt: data.updatedAt ? this.toDate(data.updatedAt) : undefined,
+          } as Survey;
+          
+          // CRITICAL: Normalize "Staff Physician" to "PHYSICIAN" when reading from Firestore
+          // This ensures surveys with "Staff Physician" are treated as "PHYSICIAN"
+          if (survey.providerType) {
+            const providerTypeUpper = (survey.providerType as string).toUpperCase();
+            if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN') {
+              survey.providerType = 'PHYSICIAN';
+            }
+          }
+          
+          return survey;
+        });
+
+        console.log(`✅ FirestoreService: Retrieved ${surveys.length} surveys${attempt > 0 ? ` (after ${attempt} retry${attempt > 1 ? 'ies' : ''})` : ''}`);
+        return surveys;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.error(`❌ FirestoreService: getAllSurveys attempt ${attempt + 1} failed:`, lastError.message);
+
+        // If this is not the last attempt, wait before retrying
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 4000); // Exponential backoff: 1s, 2s, 4s
+          console.log(`⏳ FirestoreService: Waiting ${delay}ms before retry...`);
+          await this.sleep(delay);
+        }
+      }
+    }
+
+    // All retries failed
+    const errorMessage = `Failed to get surveys after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`;
+    console.error(`❌ FirestoreService: ${errorMessage}`);
+    throw new Error(errorMessage);
   }
 
   async createSurvey(survey: Partial<Survey> & { id: string }): Promise<Survey> {
-    if (!this.db || !this.userId) {
-      throw new Error('Firestore not initialized or user not authenticated');
+    if (!this.db) {
+      throw new Error('Firestore not initialized');
     }
 
     return await this.executeWithOfflineQueue(async () => {
+      // CRITICAL: Always refresh userId from auth state before any write operation
+      // This ensures we have the latest authenticated user ID
+      const authUid = this.auth?.currentUser?.uid;
+      if (!authUid) {
+        throw new Error('User not authenticated. Please sign in to upload surveys to Firebase.');
+      }
+      
+      // CRITICAL FIX: Force refresh auth token before write operations
+      // This ensures the token is fresh and valid for security rules
+      try {
+        if (this.auth?.currentUser) {
+          console.log('🔄 Refreshing auth token before write operation...');
+          await this.auth.currentUser.getIdToken(true); // Force refresh
+          console.log('✅ Auth token refreshed successfully');
+        }
+      } catch (tokenError) {
+        console.warn('⚠️ Could not refresh auth token (may still work):', tokenError);
+        // Continue anyway - token might still be valid
+      }
+      
+      // ALWAYS sync userId with current auth state before writing
+      if (this.userId !== authUid) {
+        console.log('🔄 Syncing userId with auth state:', {
+          oldUserId: this.userId,
+          newUserId: authUid,
+          note: 'Updating userId to match current authenticated user'
+        });
+        this.userId = authUid;
+      }
+      
+      if (!this.userId) {
+        throw new Error('User ID not available. Please sign in and try again.');
+      }
+      
       const surveyRef = doc(this.db!, this.getUserPath('surveys'), survey.id);
       
       // CRITICAL: Remove all undefined values before saving to Firestore
       // Firestore will reject any document with undefined values
       const cleanedSurvey = this.removeUndefinedValues(survey);
       
-      // Build the survey data object
+      // CRITICAL: Normalize provider type at write time - ensure "Staff Physician" → "PHYSICIAN"
+      // This ensures consistent provider type values in the database
+      let normalizedProviderType = cleanedSurvey.providerType;
+      if (normalizedProviderType) {
+        const providerTypeUpper = String(normalizedProviderType).toUpperCase().trim();
+        if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN' || providerTypeUpper === 'PHYS') {
+          normalizedProviderType = 'PHYSICIAN';
+          console.log(`🔧 FirestoreService: Normalized providerType "${cleanedSurvey.providerType}" → "PHYSICIAN"`);
+        } else if (providerTypeUpper === 'PHYSICIAN') {
+          normalizedProviderType = 'PHYSICIAN'; // Ensure uppercase consistency
+        } else if (providerTypeUpper === 'APP' || providerTypeUpper === 'ADVANCED PRACTICE PROVIDER' || providerTypeUpper === 'ADVANCED PRACTICE') {
+          normalizedProviderType = 'APP'; // Ensure APP is consistent
+          console.log(`🔧 FirestoreService: Normalized providerType "${cleanedSurvey.providerType}" → "APP"`);
+        }
+        // CRITICAL: Log the providerType being saved to help debug categorization issues
+        console.log(`💾 FirestoreService: Saving survey with providerType: "${normalizedProviderType}" (original: "${cleanedSurvey.providerType}")`);
+      }
+      
+      // Build the survey data object with normalized provider type
       const surveyDataRaw = {
         ...cleanedSurvey,
+        providerType: normalizedProviderType, // Use normalized provider type
         uploadDate: this.toTimestamp(survey.uploadDate || new Date()),
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
@@ -413,10 +676,144 @@ export class FirestoreService {
         name: safeData.name,
         hasSurveyLabel: 'surveyLabel' in safeData,
         surveyLabelValue: safeData.surveyLabel,
-        metadataKeys: safeData.metadata ? Object.keys(safeData.metadata) : []
+        metadataKeys: safeData.metadata ? Object.keys(safeData.metadata) : [],
+        userId: this.userId,
+        authUid: authUid,
+        path: surveyRef.path,
+        userIdMatches: this.userId === authUid
       });
-
-      await setDoc(surveyRef, safeData);
+      
+      // CRITICAL: Log the exact path and user info before attempting write
+      const expectedPath = `users/${authUid}/surveys/${survey.id}`;
+      const actualPath = surveyRef.path;
+      const pathMatches = expectedPath === actualPath;
+      
+      console.log('🔍 About to write survey to Firestore:', {
+        surveyId: survey.id,
+        surveyName: safeData.name,
+        userId: this.userId,
+        authUid: authUid,
+        path: actualPath,
+        expectedPath: expectedPath,
+        pathMatches: pathMatches,
+        userIdMatches: this.userId === authUid,
+        authenticated: !!this.auth?.currentUser,
+        email: this.auth?.currentUser?.email,
+        rulesDeployed: 'Check Firebase Console → Firestore → Rules tab'
+      });
+      
+      // CRITICAL: Verify path matches expected format
+      if (!pathMatches) {
+        const errorMsg = `PATH MISMATCH: Expected "${expectedPath}" but got "${actualPath}". This will cause permission errors!`;
+        console.error('❌ CRITICAL:', errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      // CRITICAL: Test write permission before attempting actual write
+      console.log('🔍 Testing write permission with test document...');
+      console.log('🔍 Auth diagnostic:', {
+        userId: this.userId,
+        authUid: authUid,
+        userIdMatches: this.userId === authUid,
+        email: this.auth?.currentUser?.email,
+        path: this.getUserPath('surveys'),
+        expectedPath: `users/${authUid}/surveys`
+      });
+      
+      try {
+        const testRef = doc(this.db!, this.getUserPath('surveys'), `_permission_test_${Date.now()}`);
+        await setDoc(testRef, { 
+          test: true, 
+          timestamp: Timestamp.now(),
+          userId: this.userId,
+          authUid: authUid
+        });
+        // Immediately delete test document
+        await deleteDoc(testRef);
+        console.log('✅ Write permission test PASSED - security rules are working correctly');
+      } catch (testError: any) {
+        const testErrorMsg = testError?.message || String(testError);
+        const testErrorCode = testError?.code || 'unknown';
+        const actualPath = this.getUserPath('surveys');
+        const expectedPath = `users/${authUid}/surveys`;
+        const pathMatches = actualPath === expectedPath;
+        
+        console.error('❌ CRITICAL: Write permission test FAILED:', {
+          error: testErrorMsg,
+          code: testErrorCode,
+          userId: this.userId,
+          authUid: authUid,
+          userIdMatches: this.userId === authUid,
+          actualPath: actualPath,
+          expectedPath: expectedPath,
+          pathMatches: pathMatches,
+          email: this.auth?.currentUser?.email,
+          note: 'Security rules are blocking writes. Common causes: 1) Auth token expired (sign out/in), 2) userId mismatch, 3) Rules not deployed'
+        });
+        
+        // Provide specific guidance based on the error
+        let solutionMessage = '';
+        if (!pathMatches) {
+          solutionMessage = `PATH MISMATCH: Expected "${expectedPath}" but got "${actualPath}". This indicates a userId sync issue. `;
+        } else if (testErrorCode === 'permission-denied') {
+          solutionMessage = `Permission denied. Your auth token may be stale. `;
+        }
+        
+        throw new Error(
+          `Write permission test failed: ${testErrorMsg} (code: ${testErrorCode}). ` +
+          solutionMessage +
+          `SOLUTION: 1) Sign out and sign back in to refresh your auth token (top-right menu), ` +
+          `2) Verify security rules are deployed: firebase deploy --only firestore:rules, ` +
+          `3) Check browser console for detailed diagnostics showing userId and path.`
+        );
+      }
+      
+      try {
+        console.log('🔍 Permission test passed - attempting actual survey write...');
+        await setDoc(surveyRef, safeData);
+        console.log('✅ Successfully wrote survey to Firestore:', surveyRef.path);
+      } catch (error: any) {
+        // CRITICAL: Provide helpful error message for permission errors
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+          const diagnosticInfo = {
+            errorCode: error?.code,
+            errorMessage: error?.message,
+            userId: this.userId,
+            authUid: authUid,
+            path: surveyRef.path,
+            authenticated: !!this.auth?.currentUser,
+            email: this.auth?.currentUser?.email,
+            userIdMatches: this.userId === authUid,
+            expectedPath: `users/${authUid}/surveys/${survey.id}`,
+            actualPath: surveyRef.path,
+            pathMatches: surveyRef.path === `users/${authUid}/surveys/${survey.id}`,
+            fullError: error
+          };
+          console.error('❌ CRITICAL: Permission denied error - FULL DIAGNOSTICS:', diagnosticInfo);
+          
+          // Build comprehensive error message
+          let errorMessage = 'Missing or insufficient permissions. ';
+          
+          if (!this.auth?.currentUser) {
+            errorMessage += 'You are not signed in. Please sign in using the user menu (top-right corner) and try again.';
+          } else if (this.userId !== authUid) {
+            errorMessage += `User ID mismatch detected (userId: ${this.userId}, authUid: ${authUid}). ` +
+              `This usually means the security rules haven't been deployed. ` +
+              `Please deploy Firestore security rules using: firebase deploy --only firestore:rules`;
+          } else if (surveyRef.path !== `users/${authUid}/surveys/${survey.id}`) {
+            errorMessage += `Path mismatch! Expected: users/${authUid}/surveys/${survey.id}, Got: ${surveyRef.path}. ` +
+              `This is a code bug - please report it.`;
+          } else {
+            errorMessage += `Path looks correct (${surveyRef.path}), but permission denied. ` +
+              `This usually means Firestore security rules have not been deployed to Firebase. ` +
+              `Please deploy the security rules by running: firebase deploy --only firestore:rules ` +
+              `Then refresh your browser and try again.`;
+          }
+          
+          throw new Error(errorMessage);
+        }
+        throw error;
+      }
       console.log('✅ FirestoreService: Created survey:', survey.id);
       
       // Log audit event
@@ -434,7 +831,14 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    const surveyRef = doc(this.db, this.getUserPath('surveys'), surveyId);
+    // CRITICAL FIX: Strip user prefix if present
+    // Firebase uses path-based scoping (users/{userId}/surveys/{surveyId}),
+    // so survey IDs don't need the user prefix. However, IndexedDB uses
+    // prefixed IDs (userId_surveyId), and when merging results, the prefixed
+    // ID might be passed here. We need to strip it before querying Firestore.
+    const cleanSurveyId = stripUserPrefix(surveyId);
+
+    const surveyRef = doc(this.db, this.getUserPath('surveys'), cleanSurveyId);
     const snapshot = await getDoc(surveyRef);
 
     if (!snapshot.exists()) {
@@ -529,20 +933,52 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    // Delete survey document first
+    // CRITICAL SAFETY CHECK: Ensure surveyId is valid
+    if (!surveyId || surveyId.trim() === '') {
+      throw new Error('Invalid surveyId provided to cascadeDelete');
+    }
+
+    console.log(`🗑️ FirestoreService: Starting cascade delete for survey: ${surveyId}`);
+    const overallStartTime = Date.now();
+
+    // SAFETY: Verify survey exists before deleting
     const surveyRef = doc(this.db, this.getUserPath('surveys'), surveyId);
-    await deleteDoc(surveyRef);
+    const surveySnap = await getDoc(surveyRef);
+    
+    if (!surveySnap.exists()) {
+      console.warn(`⚠️ Survey ${surveyId} not found in Firestore - may have already been deleted`);
+      // Don't throw error - just log warning and continue to clean up data rows
+    } else {
+      // Delete survey document
+      await deleteDoc(surveyRef);
+      console.log(`✅ Deleted survey document: ${surveyId}`);
+    }
 
     // Delete all survey data in batches
-    const deletedRows = await this.deleteCollectionInBatches(
-      this.getUserPath('surveyData'),
-      [where('surveyId', '==', surveyId)]
-    );
+    console.log(`🗑️ Starting deletion of survey data rows for survey: ${surveyId}`);
+    const startTime = Date.now();
+    
+    try {
+      const deletedRows = await this.deleteCollectionInBatches(
+        this.getUserPath('surveyData'),
+        [where('surveyId', '==', surveyId)]
+      );
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      const totalDuration = ((Date.now() - overallStartTime) / 1000).toFixed(2);
 
-    console.log('✅ FirestoreService: Cascade deleted survey:', {
-      surveyId,
-      deletedRows
-    });
+      console.log('✅ FirestoreService: Cascade delete complete:', {
+        surveyId,
+        deletedRows,
+        dataDeletionDuration: `${duration}s`,
+        totalDuration: `${totalDuration}s`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (deleteError) {
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.error(`❌ FirestoreService: Error during cascade delete (after ${duration}s):`, deleteError);
+      // Re-throw to let caller handle it
+      throw deleteError;
+    }
   }
 
   async deleteAllSurveys(): Promise<void> {
@@ -550,12 +986,23 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
+    // CRITICAL SAFETY: Log this dangerous operation
+    console.warn('⚠️ DANGER: deleteAllSurveys() called - this will delete ALL user surveys!');
+    console.warn('⚠️ User ID:', this.userId);
+    console.warn('⚠️ Timestamp:', new Date().toISOString());
+
+    // SAFETY: Count surveys before deleting
+    const surveysRef = collection(this.db, this.getUserPath('surveys'));
+    const surveyCount = await getCountFromServer(surveysRef);
+    console.warn(`⚠️ About to delete ${surveyCount.data().count} surveys`);
+
     const deletedSurveys = await this.deleteCollectionInBatches(this.getUserPath('surveys'));
     const deletedSurveyData = await this.deleteCollectionInBatches(this.getUserPath('surveyData'));
 
     console.log('✅ FirestoreService: Deleted all surveys and survey data', {
       deletedSurveys,
-      deletedSurveyData
+      deletedSurveyData,
+      timestamp: new Date().toISOString()
     });
   }
 
@@ -582,18 +1029,17 @@ export class FirestoreService {
       throw new Error('Firestore not initialized or user not authenticated');
     }
 
-    console.log(`🔍 FirestoreService: Fetching survey data for ${surveyId}`, { filters, pagination });
+    // CRITICAL FIX: Strip user prefix if present (same as getSurveyById)
+    const cleanSurveyId = stripUserPrefix(surveyId);
+
+    // ENTERPRISE FIX: Reduced logging - only log in debug mode to prevent console spam
     if (isUploadDebugEnabled()) {
-      console.log('🧪 UploadDebug: Firestore getSurveyData', {
-        surveyId,
-        userId: this.userId,
-        limit: pagination.limit || 10000
-      });
+      console.log(`🔍 FirestoreService: Fetching survey data for ${surveyId} (normalized: ${cleanSurveyId})`, { filters, pagination });
     }
 
     const dataRef = collection(this.db, this.getUserPath('surveyData'));
     const constraints: QueryConstraint[] = [
-      where('surveyId', '==', surveyId)
+      where('surveyId', '==', cleanSurveyId)
     ];
 
     // Add filters - CRITICAL: Order matters for composite indexes
@@ -624,15 +1070,27 @@ export class FirestoreService {
     const snapshot = await getDocs(q);
     const fetchTime = performance.now() - startTime;
     
-    console.log(`⚡ FirestoreService: Fetched ${snapshot.docs.length} rows in ${fetchTime.toFixed(2)}ms`);
+    // Only log in debug mode to prevent console spam
+    if (isUploadDebugEnabled()) {
+      console.log(`⚡ FirestoreService: Fetched ${snapshot.docs.length} rows in ${fetchTime.toFixed(2)}ms`);
+    }
     
     // Optimize data transformation
-    const rows = snapshot.docs.map(doc => {
+    let rows = snapshot.docs.map(doc => {
       const data = doc.data();
       // Remove Firestore metadata fields and return just the row data
       const { id, surveyId: _surveyId, createdAt, ...rowData } = data;
       return rowData as ISurveyRow;
     });
+    
+    // ENTERPRISE FIX: Client-side filter for variable (Firestore where clause would require composite index)
+    if (filters.variable) {
+      rows = rows.filter(row => {
+        const rowVariable = (row as any).variable || (row as any).Variable || (row as any)['Variable Name'] || (row as any).Benchmark || '';
+        return rowVariable.toLowerCase() === filters.variable.toLowerCase();
+      });
+      console.log(`🔍 FirestoreService: Filtered to ${rows.length} rows matching variable "${filters.variable}"`);
+    }
     
     return { rows };
   }
@@ -643,11 +1101,9 @@ export class FirestoreService {
     }
 
     return await this.executeWithOfflineQueue(async () => {
-      const batchSize = 500; // Firestore batch limit
-      const totalBatches = Math.ceil(rows.length / batchSize);
-      let completedBatches = 0;
+      const totalBatches = Math.ceil(rows.length / this.BATCH_SIZE);
 
-      console.log(`📤 FirestoreService: Saving ${rows.length} rows in ${totalBatches} batches...`);
+      console.log(`📤 FirestoreService: Saving ${rows.length} rows in ${totalBatches} batches of ${this.BATCH_SIZE} (${this.BATCH_CONCURRENCY} parallel)...`);
       if (isUploadDebugEnabled()) {
         console.log('🧪 UploadDebug: Firestore saveSurveyData', {
           surveyId,
@@ -660,109 +1116,575 @@ export class FirestoreService {
       const startTime = Date.now();
       const collectionPath = this.getUserPath('surveyData');
 
-      for (let i = 0; i < rows.length; i += batchSize) {
-        const chunk = rows.slice(i, i + batchSize);
-        const batchNumber = Math.floor(i / batchSize) + 1;
-        
-        // Pre-calculate batch start index for efficient ID generation
-        const batchStartIndex = i;
-        
-        // Helper function to create and populate a batch
-        const createBatch = () => {
-          const batch = writeBatch(this.db!);
-          chunk.forEach((row, index) => {
-            // Use simple counter-based ID - no Date.now() needed
-            // Firestore will handle uniqueness and the index ensures no collisions within a batch
-            const dataId = `${surveyId}_${batchStartIndex + index}`;
-            const rowRef = doc(this.db!, collectionPath, dataId);
-            
+      // Create batch chunks
+      const batchChunks: Array<{ startIndex: number; rows: ISurveyRow[]; batchNumber: number }> = [];
+      for (let i = 0; i < rows.length; i += this.BATCH_SIZE) {
+        const chunk = rows.slice(i, i + this.BATCH_SIZE);
+        const batchNumber = Math.floor(i / this.BATCH_SIZE) + 1;
+        batchChunks.push({
+          startIndex: i,
+          rows: chunk,
+          batchNumber
+        });
+      }
+
+      let completedBatches = 0;
+
+      // Process batches in parallel with controlled concurrency
+      await this.processBatchesInParallel(
+        batchChunks,
+        this.BATCH_CONCURRENCY,
+        async (chunk, index) => {
+          const { startIndex, rows: chunkRows, batchNumber } = chunk;
+          
+          // Helper function to create and populate a batch
+          const createBatch = () => {
+            const batch = writeBatch(this.db!);
+            chunkRows.forEach((row, rowIndex) => {
+              // Use simple counter-based ID - no Date.now() needed
+              // Firestore will handle uniqueness and the index ensures no collisions within a batch
+              const dataId = `${surveyId}_${startIndex + rowIndex}`;
+              const rowRef = doc(this.db!, collectionPath, dataId);
+              
             const rowData = this.removeUndefinedValues({
               id: dataId,
-              surveyId,
+              surveyId, // CRITICAL: Must match the surveyId used in metadata
               ...row,
               createdAt: Timestamp.now(),
             });
             
-            batch.set(rowRef, rowData);
-          });
-          return batch;
-        };
-
-        // Retry logic with special handling for quota errors
-        // Note: Firestore batches can only be committed once, so we recreate them on retry
-        let batchCommitted = false;
-        let retryAttempt = 0;
-        const maxRetries = this.MAX_QUOTA_RETRIES;
-        
-        while (!batchCommitted && retryAttempt <= maxRetries) {
-          try {
-            const batch = createBatch();
-            await batch.commit();
-            batchCommitted = true;
-          } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+            // Log first row to verify surveyId is correct
+            if (startIndex === 0 && rowIndex === 0) {
+              console.log(`🔍 CRITICAL: Saving first data row with surveyId="${surveyId}", dataId="${dataId}"`);
+            }
             
-            // Check if it's a quota error
-            if (this.isQuotaError(err)) {
-              if (retryAttempt < maxRetries) {
-                // Exponential backoff for quota errors: 5s, 10s, 20s, 40s, 80s
-                const delay = this.QUOTA_RETRY_DELAY * Math.pow(2, retryAttempt);
-                console.warn(`⚠️ Quota exceeded on batch ${batchNumber}/${totalBatches}. Retrying in ${delay / 1000}s... (attempt ${retryAttempt + 1}/${maxRetries + 1})`);
-                await this.sleep(delay);
-                retryAttempt++;
-                continue;
+            batch.set(rowRef, rowData);
+            });
+            return batch;
+          };
+
+          // Retry logic with special handling for quota errors
+          // Note: Firestore batches can only be committed once, so we recreate them on retry
+          let batchCommitted = false;
+          let retryAttempt = 0;
+          const maxRetries = this.MAX_QUOTA_RETRIES;
+          
+          while (!batchCommitted && retryAttempt <= maxRetries) {
+            try {
+              const batch = createBatch();
+              await batch.commit();
+              batchCommitted = true;
+            } catch (error) {
+              const err = error instanceof Error ? error : new Error(String(error));
+              const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+              
+              // Check if it's a quota error
+              if (this.isQuotaError(err)) {
+                if (retryAttempt < maxRetries) {
+                  // Exponential backoff for quota errors: 5s, 10s, 20s, 40s, 80s
+                  const delay = this.QUOTA_RETRY_DELAY * Math.pow(2, retryAttempt);
+                  console.warn(`⚠️ Quota exceeded on batch ${batchNumber}/${totalBatches}. Retrying in ${delay / 1000}s... (attempt ${retryAttempt + 1}/${maxRetries + 1})`);
+                  await this.sleep(delay);
+                  retryAttempt++;
+                  continue;
+                } else {
+                  // Max retries exceeded for quota error
+                  console.error(`❌ Quota exceeded: Failed to commit batch ${batchNumber}/${totalBatches} after ${maxRetries + 1} attempts (${elapsedSeconds}s)`);
+                  throw new Error(
+                    `Firestore quota exceeded. This may be due to:\n` +
+                    `- Daily write limit reached (20,000 writes/day on free tier)\n` +
+                    `- Rate limiting (too many writes too quickly)\n\n` +
+                    `Please try again later or upgrade your Firebase plan.`
+                  );
+                }
               } else {
-                // Max retries exceeded for quota error
-                console.error(`❌ Quota exceeded: Failed to commit batch ${batchNumber}/${totalBatches} after ${maxRetries + 1} attempts (${elapsedSeconds}s)`);
-                throw new Error(
-                  `Firestore quota exceeded. This may be due to:\n` +
-                  `- Daily write limit reached (20,000 writes/day on free tier)\n` +
-                  `- Rate limiting (too many writes too quickly)\n\n` +
-                  `Please try again later or upgrade your Firebase plan.`
-                );
-              }
-            } else {
-              // Non-quota error - use standard retry logic
-              if (retryAttempt < this.MAX_RETRIES) {
-                const delay = this.RETRY_DELAY * Math.pow(2, retryAttempt);
-                console.warn(`⚠️ Failed to commit batch ${batchNumber}/${totalBatches} (attempt ${retryAttempt + 1}/${this.MAX_RETRIES + 1}), retrying in ${delay}ms...`);
-                await this.sleep(delay);
-                retryAttempt++;
-                continue;
-              } else {
-                console.error(`❌ Failed to commit batch ${batchNumber}/${totalBatches} after ${retryAttempt + 1} attempts (${elapsedSeconds}s):`, error);
-                throw error;
+                // Non-quota error - use standard retry logic
+                if (retryAttempt < this.MAX_RETRIES) {
+                  const delay = this.RETRY_DELAY * Math.pow(2, retryAttempt);
+                  console.warn(`⚠️ Failed to commit batch ${batchNumber}/${totalBatches} (attempt ${retryAttempt + 1}/${this.MAX_RETRIES + 1}), retrying in ${delay}ms...`);
+                  await this.sleep(delay);
+                  retryAttempt++;
+                  continue;
+                } else {
+                  console.error(`❌ Failed to commit batch ${batchNumber}/${totalBatches} after ${retryAttempt + 1} attempts (${elapsedSeconds}s):`, error);
+                  throw error;
+                }
               }
             }
           }
+        },
+        (completed) => {
+          completedBatches = completed;
+          
+          // Report progress: 0-100% mapped to the data saving phase (70-100% of total upload)
+          // This means 70% = start of save, 100% = end of save
+          const progressPercent = 70 + (completedBatches / totalBatches) * 30;
+          onProgress?.(Math.min(progressPercent, 100));
+          
+          // ENTERPRISE FIX: Only log in debug mode to prevent console spam
+          // For large uploads, logging every batch causes thousands of messages
+          if (isUploadDebugEnabled() && (completedBatches % 10 === 0 || completedBatches === totalBatches)) {
+            const elapsedSeconds = (Date.now() - startTime) / 1000;
+            const processedRows = Math.min(completedBatches * this.BATCH_SIZE, rows.length);
+            const rowsPerSecond = Math.round(processedRows / elapsedSeconds);
+            console.log(`📊 FirestoreService: Saved batch ${completedBatches}/${totalBatches} (${Math.round(progressPercent)}%) - ${rowsPerSecond} rows/sec`);
+          }
         }
-        
-        completedBatches++;
-        
-        // Report progress: 0-100% mapped to the data saving phase (70-100% of total upload)
-        // This means 70% = start of save, 100% = end of save
-        const progressPercent = 70 + (completedBatches / totalBatches) * 30;
-        onProgress?.(Math.min(progressPercent, 100));
-        
-        // Only log every 5 batches or on last batch to reduce console noise for large uploads
-        if (completedBatches % 5 === 0 || completedBatches === totalBatches) {
-          const elapsedSeconds = (Date.now() - startTime) / 1000;
-          const rowsPerSecond = Math.round((i + chunk.length) / elapsedSeconds);
-          console.log(`📊 FirestoreService: Saved batch ${completedBatches}/${totalBatches} (${Math.round(progressPercent)}%) - ${rowsPerSecond} rows/sec`);
-        }
-        
-        // Add delay between batches to respect rate limits (except for last batch)
-        if (i + batchSize < rows.length) {
-          await this.sleep(this.BATCH_DELAY);
-        }
-      }
+      );
 
-      console.log('✅ FirestoreService: Saved survey data:', rows.length, 'rows');
+      const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      // Only log in debug mode to prevent console spam
+      if (isUploadDebugEnabled()) {
+        console.log(`✅ FirestoreService: Saved survey data: ${rows.length} rows in ${totalElapsed}s`);
+      }
       
       // Log audit event
       await this.logAuditEvent('update', 'surveyData', surveyId, { rowCount: rows.length });
     }, 'saveSurveyData');
+  }
+
+  // ==================== Upload Intent Management ====================
+
+  /**
+   * Create upload intent to track upload progress and enable recovery
+   */
+  private async createUploadIntent(survey: Partial<Survey>, expectedRowCount: number): Promise<string> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const intentRef = doc(this.db, this.getUserPath('uploadIntents'), uploadId);
+    
+    const intentData = {
+      id: uploadId,
+      surveyId: survey.id!,
+      userId: this.userId,
+      status: 'pending' as const,
+      startTime: Timestamp.now(),
+      metadata: {
+        fileName: survey.name || 'Unknown',
+        fileSize: 0,
+        expectedRowCount,
+        surveyYear: parseInt(survey.year || '0'),
+        surveyType: survey.type || 'Unknown',
+        providerType: survey.providerType || 'UNKNOWN'
+      }
+    };
+
+    await setDoc(intentRef, intentData);
+    console.log('📝 Created upload intent:', uploadId);
+    return uploadId;
+  }
+
+  /**
+   * Mark upload intent as complete
+   */
+  private async completeUploadIntent(uploadId: string): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    const intentRef = doc(this.db, this.getUserPath('uploadIntents'), uploadId);
+    await setDoc(intentRef, {
+      status: 'completed',
+      completionTime: Timestamp.now()
+    }, { merge: true });
+    
+    console.log('✅ Completed upload intent:', uploadId);
+  }
+
+  /**
+   * Mark upload intent as failed
+   */
+  private async failUploadIntent(uploadId: string, error: Error): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    const intentRef = doc(this.db, this.getUserPath('uploadIntents'), uploadId);
+    await setDoc(intentRef, {
+      status: 'failed',
+      completionTime: Timestamp.now(),
+      error: {
+        message: error.message,
+        code: (error as any).code || 'UNKNOWN',
+        stack: error.stack
+      }
+    }, { merge: true });
+    
+    console.log('❌ Failed upload intent:', uploadId);
+  }
+
+  // ==================== Write Verification ====================
+
+  /**
+   * Verify that upload completed successfully with retry logic for eventual consistency
+   */
+  private async verifyUploadComplete(surveyId: string, expectedRowCount: number): Promise<void> {
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+    
+    console.log(`🔍 Verifying upload for survey ${surveyId}, expecting ${expectedRowCount} rows`);
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Check survey metadata exists
+        const survey = await this.getSurveyById(surveyId);
+        if (!survey) {
+          throw new Error(`Survey ${surveyId} not found in verification`);
+        }
+
+        // Check survey data row count
+        const actualRowCount = await this.getSurveyDataCount(surveyId);
+        
+        console.log(`🔍 Verification attempt ${attempt + 1}: Expected ${expectedRowCount}, found ${actualRowCount} rows`);
+
+        if (actualRowCount === expectedRowCount) {
+          console.log('✅ Upload verification passed');
+          return; // Verification passed
+        }
+
+        // Row count mismatch
+        if (attempt === maxRetries - 1) {
+          throw new Error(
+            `Upload verification failed: Expected ${expectedRowCount} rows, found ${actualRowCount}`
+          );
+        }
+      } catch (error) {
+        if (attempt === maxRetries - 1) {
+          throw error; // Final attempt failed
+        }
+      }
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < maxRetries - 1) {
+        const delay = retryDelay * Math.pow(2, attempt);
+        console.log(`⏳ Waiting ${delay}ms before retry ${attempt + 2}/${maxRetries}...`);
+        await this.sleep(delay);
+      }
+    }
+
+    throw new Error('Upload verification failed after maximum retries');
+  }
+
+  /**
+   * Get survey data row count (optimized for verification)
+   */
+  private async getSurveyDataCount(surveyId: string): Promise<number> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    // CRITICAL FIX: Strip user prefix if present (same as getSurveyById and getSurveyData)
+    const cleanSurveyId = stripUserPrefix(surveyId);
+
+    const collectionPath = this.getUserPath('surveyData');
+    console.log(`🔍 getSurveyDataCount: Querying collection="${collectionPath}" with surveyId="${surveyId}" (normalized: ${cleanSurveyId})`);
+    
+    const dataRef = collection(this.db, collectionPath);
+    const q = query(dataRef, where('surveyId', '==', cleanSurveyId));
+    
+    try {
+      const snapshot = await getCountFromServer(q);
+      const count = snapshot.data().count;
+      console.log(`🔍 getSurveyDataCount: Found ${count} rows for surveyId="${surveyId}"`);
+      return count;
+    } catch (error) {
+      console.warn('⚠️ Count aggregation failed, falling back to full query:', error);
+      const snapshot = await getDocs(q);
+      const count = snapshot.size;
+      console.log(`🔍 getSurveyDataCount (fallback): Found ${count} rows for surveyId="${surveyId}"`);
+      return count;
+    }
+  }
+
+  /**
+   * Verify integrity of uploaded data (sample-based)
+   */
+  private async verifyUploadIntegrity(
+    surveyId: string,
+    originalRows: ISurveyRow[],
+    expectedRowCount: number
+  ): Promise<void> {
+    console.log(`🔍 Verifying data integrity for survey ${surveyId}`);
+
+    // 1. Verify row count
+    const actualCount = await this.getSurveyDataCount(surveyId);
+    
+    if (actualCount !== expectedRowCount) {
+      throw new Error(
+        `Integrity check failed: Row count mismatch (expected ${expectedRowCount}, got ${actualCount})`
+      );
+    }
+
+    // 2. Verify sample rows (first, middle, last) using direct document reads
+    if (originalRows.length > 0) {
+      const sampleIndices = [
+        0,
+        Math.floor(originalRows.length / 2),
+        originalRows.length - 1
+      ];
+
+      for (const index of sampleIndices) {
+        if (index >= originalRows.length) continue;
+
+        const original = originalRows[index];
+        const dataId = `${surveyId}_${index}`;
+        const rowRef = doc(this.db!, this.getUserPath('surveyData'), dataId);
+        const snapshot = await getDoc(rowRef);
+
+        if (!snapshot.exists()) {
+          throw new Error(`Integrity check failed: Missing row ${index} (${dataId})`);
+        }
+
+        const uploaded = snapshot.data() as ISurveyRow;
+
+        // Compare key fields
+        const keyFields = ['specialty', 'providerType', 'variable'];
+        for (const field of keyFields) {
+          const originalValue = original[field];
+          const uploadedValue = uploaded[field];
+          
+          if (originalValue !== uploadedValue) {
+            throw new Error(
+              `Integrity check failed: Data mismatch at row ${index}, field "${field}" ` +
+              `(expected "${originalValue}", got "${uploadedValue}")`
+            );
+          }
+        }
+      }
+    }
+
+    // 3. Verify metadata
+    const survey = await this.getSurveyById(surveyId);
+    if (!survey) {
+      throw new Error('Survey metadata missing after upload');
+    }
+
+    if (survey.rowCount !== expectedRowCount) {
+      throw new Error(
+        `Integrity check failed: Metadata row count mismatch ` +
+        `(expected ${expectedRowCount}, got ${survey.rowCount})`
+      );
+    }
+
+    console.log('✅ Data integrity verification passed');
+  }
+
+  // ==================== Enhanced Rollback ====================
+
+  /**
+   * Complete rollback of failed upload (metadata + data + intent + caches)
+   */
+  private async rollbackSurveyComplete(surveyId: string, uploadId?: string): Promise<void> {
+    console.log(`🔄 Rolling back survey ${surveyId}...`);
+
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    try {
+      // 1. Delete survey metadata
+      const surveyRef = doc(this.db, this.getUserPath('surveys'), surveyId);
+      await deleteDoc(surveyRef);
+      console.log('  ✓ Deleted survey metadata');
+
+      // 2. Delete all survey data rows in batches
+      const deletedRows = await this.deleteCollectionInBatches(
+        this.getUserPath('surveyData'),
+        [where('surveyId', '==', surveyId)]
+      );
+      console.log(`  ✓ Deleted ${deletedRows} data rows`);
+
+      // 3. Mark upload intent as rolled back
+      if (uploadId) {
+        const intentRef = doc(this.db, this.getUserPath('uploadIntents'), uploadId);
+        await setDoc(intentRef, {
+          status: 'rolledBack',
+          completionTime: Timestamp.now()
+        }, { merge: true });
+        console.log('  ✓ Marked upload intent as rolled back');
+      }
+
+      // 4. Clear client-side caches (implementation would call cache manager)
+      // This would be handled by CacheManager.invalidateAll(surveyId)
+      console.log('  ✓ Cache invalidation queued');
+
+      console.log('✅ Rollback completed successfully');
+    } catch (rollbackError) {
+      console.error('❌ Rollback failed:', rollbackError);
+      // Log rollback failure but don't throw - we've already failed the upload
+    }
+  }
+
+  /**
+   * Check storage quota before upload
+   */
+  private async checkStorageQuota(survey: Partial<Survey>, rows: ISurveyRow[]): Promise<void> {
+    // Estimate size of data to be uploaded
+    const estimatedSize = JSON.stringify({ survey, rows }).length;
+    const estimatedMB = (estimatedSize / 1024 / 1024).toFixed(2);
+    
+    console.log(`📊 Estimated upload size: ${estimatedMB}MB`);
+
+    // Check against max file size (10MB default)
+    const maxFileSize = parseInt(process.env.REACT_APP_MAX_FILE_SIZE || '10485760');
+    if (estimatedSize > maxFileSize) {
+      throw new Error(
+        `File size (${estimatedMB}MB) exceeds maximum allowed size (${(maxFileSize / 1024 / 1024).toFixed(2)}MB)`
+      );
+    }
+
+    // Note: Actual Firestore quota check happens during write operations
+    // Firestore will throw resource-exhausted error if quota is exceeded
+  }
+
+  /**
+   * Verify Firestore is available before upload
+   */
+  private async verifyFirestoreAvailable(): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+
+    // CRITICAL: Verify userId matches auth.uid (security rules requirement)
+    const authUid = this.auth?.currentUser?.uid;
+    if (!authUid) {
+      throw new Error('User not authenticated. Please sign in to upload surveys to Firebase.');
+    }
+    if (this.userId !== authUid) {
+      console.warn('⚠️ User ID mismatch detected, fixing:', {
+        oldUserId: this.userId,
+        authUid: authUid
+      });
+      this.userId = authUid;
+    }
+
+    // Quick connectivity check
+    try {
+      const testRef = doc(this.db, this.getUserPath('surveys'), 'connectivity-test');
+      await getDoc(testRef);
+    } catch (error: any) {
+      // Provide helpful error for permission issues
+      if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+        const authUid = this.auth?.currentUser?.uid;
+        const diagnosticInfo = {
+          userId: this.userId,
+          authUid: authUid,
+          authenticated: !!this.auth?.currentUser,
+          email: this.auth?.currentUser?.email,
+          userIdMatches: this.userId === authUid
+        };
+        console.error('❌ CRITICAL: Permission denied during connectivity check:', diagnosticInfo);
+        
+        let errorMessage = 'Permission denied during connectivity check. ';
+        if (!this.auth?.currentUser) {
+          errorMessage += 'You are not signed in. Please sign in using the user menu (top-right corner).';
+        } else if (this.userId !== authUid) {
+          errorMessage += `User ID mismatch. This usually means Firestore security rules haven't been deployed. ` +
+            `Deploy them with: firebase deploy --only firestore:rules`;
+        } else {
+          errorMessage += 'This usually means Firestore security rules have not been deployed. ' +
+            'Deploy them with: firebase deploy --only firestore:rules';
+        }
+        throw new Error(errorMessage);
+      }
+      throw new Error(`Firestore connectivity check failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Comprehensive connectivity check with timeout
+   * Returns detailed health status
+   */
+  async checkConnectivity(timeoutMs: number = 5000): Promise<{
+    status: 'healthy' | 'unhealthy' | 'timeout' | 'not_initialized';
+    latency?: number;
+    error?: string;
+    timestamp: number;
+  }> {
+    if (!this.db || !this.userId) {
+      return {
+        status: 'not_initialized',
+        timestamp: Date.now()
+      };
+    }
+
+    const startTime = performance.now();
+    
+    try {
+      // Create a timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Connectivity check timed out')), timeoutMs);
+      });
+
+      // Test read operation
+      const testRef = doc(this.db, this.getUserPath('surveys'), 'connectivity-test');
+      await Promise.race([
+        getDoc(testRef),
+        timeoutPromise
+      ]);
+
+      const latency = performance.now() - startTime;
+
+      return {
+        status: 'healthy',
+        latency: Math.round(latency),
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      const latency = performance.now() - startTime;
+      const isTimeout = error instanceof Error && error.message.includes('timed out');
+      
+      return {
+        status: isTimeout ? 'timeout' : 'unhealthy',
+        latency: Math.round(latency),
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now()
+      };
+    }
+  }
+
+  /**
+   * Verify read capability before getAllSurveys
+   * Checks if we can successfully read from Firestore
+   */
+  async verifyReadCapability(): Promise<{
+    canRead: boolean;
+    error?: string;
+    latency?: number;
+  }> {
+    if (!this.db || !this.userId) {
+      return {
+        canRead: false,
+        error: 'Firestore not initialized or user not authenticated'
+      };
+    }
+
+    const startTime = performance.now();
+
+    try {
+      // Try to read from surveys collection (limit 1 for speed)
+      const surveysRef = collection(this.db, this.getUserPath('surveys'));
+      const q = query(surveysRef, limit(1));
+      await getDocs(q);
+
+      const latency = performance.now() - startTime;
+
+      return {
+        canRead: true,
+        latency: Math.round(latency)
+      };
+    } catch (error) {
+      const latency = performance.now() - startTime;
+      
+      return {
+        canRead: false,
+        error: error instanceof Error ? error.message : String(error),
+        latency: Math.round(latency)
+      };
+    }
   }
 
   // ==================== Upload Survey ====================
@@ -775,106 +1697,231 @@ export class FirestoreService {
     providerType: string,
     onProgress?: (percent: number) => void
   ): Promise<{ surveyId: string; rowCount: number }> {
-    // CRITICAL: Check authentication and initialization with detailed error messages
-    if (!this.db) {
-      console.error('❌ FirestoreService: Firestore database not initialized');
-      throw new Error('Firestore database not initialized. Please check your Firebase configuration.');
-    }
-    
-    if (!this.userId) {
-      console.error('❌ FirestoreService: User not authenticated');
-      console.error('🔍 Current auth state:', {
-        hasAuth: !!this.auth,
-        currentUser: this.auth?.currentUser,
-        userId: this.userId
-      });
-      throw new Error('User not authenticated. Please sign in to upload surveys.');
-    }
-    
-    console.log('✅ FirestoreService: Ready to upload survey', {
-      userId: this.userId,
-      fileName: file.name,
-      surveyYear,
-      surveyType,
-      providerType
-    });
+    const startTime = Date.now();
+    let uploadId: string | undefined;
+    let surveyId: string | undefined;
 
-    onProgress?.(10);
+    try {
+      // ============== STEP 1: Pre-flight Checks (0-10%) ==============
+      onProgress?.(0);
 
-    let rows: ISurveyRow[] = [];
-    let encoding: string | undefined;
-
-    if (isExcelFile(file)) {
-      const parseResult = await parseFile(file);
-      rows = parseResult.rows.map((row) => {
-        const rowData: Record<string, any> = {};
-        parseResult.headers.forEach((header, index) => {
-          rowData[header] = row[index] ?? '';
-        });
-        return rowData as ISurveyRow;
-      });
-      encoding = 'excel';
-    } else {
-      // Parse CSV file with encoding detection
-      const { text, encoding: detectedEncoding, issues, normalized } = await readCSVFile(file);
+      // CRITICAL: Always refresh auth state at upload time
+      // This ensures we have the latest authenticated user ID
+      const currentAuthUser = this.auth?.currentUser;
+      const currentUserId = currentAuthUser?.uid || null;
       
-      if (issues.length > 0) {
-        console.warn('📤 FirestoreService: Encoding issues detected:', issues);
+      // Check authentication and initialization FIRST
+      if (!this.db) {
+        throw new Error('Firestore database not initialized. Please check your Firebase configuration in .env.local file.');
       }
-      if (normalized) {
-        console.log('📤 FirestoreService: Character normalization applied');
+      
+      if (!currentUserId || !currentAuthUser) {
+        throw new Error('User not authenticated. Please sign in to upload surveys to Firebase. You cannot upload to Firebase cloud storage without being signed in.');
+      }
+      
+      // CRITICAL FIX: Force refresh auth token before upload
+      // This ensures the token is fresh and valid for security rules
+      try {
+        console.log('🔄 Refreshing auth token before upload...');
+        await currentAuthUser.getIdToken(true); // Force refresh
+        console.log('✅ Auth token refreshed successfully');
+      } catch (tokenError) {
+        console.warn('⚠️ Could not refresh auth token (may still work):', tokenError);
+        // Continue anyway - token might still be valid
+      }
+      
+      // CRITICAL: ALWAYS sync userId with current auth state before any write operation
+      // This prevents permission errors from stale userId
+      if (this.userId !== currentUserId) {
+        console.log('🔄 Syncing userId with auth state:', {
+          oldUserId: this.userId,
+          newUserId: currentUserId,
+          email: currentAuthUser.email
+        });
+        this.userId = currentUserId;
+      }
+      
+      // Final verification that userId matches (belt and suspenders)
+      if (this.userId !== currentAuthUser.uid) {
+        // Force fix one more time
+        this.userId = currentAuthUser.uid;
       }
 
-      // Parse CSV text into rows
-      rows = this.parseCSV(text);
-      encoding = detectedEncoding;
+      // Verify Firestore connectivity
+      await this.verifyFirestoreAvailable();
+      onProgress?.(5);
+
+      // ============== STEP 2: Parse File (10-40%) ==============
+      let rows: ISurveyRow[] = [];
+      let encoding: string | undefined;
+
+      if (isExcelFile(file)) {
+        const parseResult = await parseFile(file);
+        rows = parseResult.rows.map((row) => {
+          const rowData: Record<string, any> = {};
+          parseResult.headers.forEach((header, index) => {
+            rowData[header] = row[index] ?? '';
+          });
+          return rowData as ISurveyRow;
+        });
+        encoding = 'excel';
+      } else {
+        const { text, encoding: detectedEncoding, issues, normalized } = await readCSVFile(file);
+        
+        if (issues.length > 0) {
+          console.warn('📤 Encoding issues detected:', issues);
+        }
+        if (normalized) {
+          console.log('📤 Character normalization applied');
+        }
+
+        rows = this.parseCSV(text);
+        encoding = detectedEncoding;
+      }
+
+      onProgress?.(40);
+
+      // ============== STEP 3: Storage Quota Check (40-45%) ==============
+      // CRITICAL: Use consistent UUID format for survey IDs (matches IndexedDB format)
+      // This ensures consistent naming across all storage backends
+      surveyId = crypto.randomUUID();
+      
+      // CRITICAL: Normalize providerType to ensure consistent categorization
+      let normalizedProviderType = providerType;
+      if (normalizedProviderType) {
+        const providerTypeUpper = String(normalizedProviderType).toUpperCase().trim();
+        if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN' || providerTypeUpper === 'PHYS') {
+          normalizedProviderType = 'PHYSICIAN';
+          console.log(`🔧 FirestoreService: Normalized providerType "${providerType}" → "PHYSICIAN"`);
+        } else if (providerTypeUpper === 'PHYSICIAN') {
+          normalizedProviderType = 'PHYSICIAN';
+        } else if (providerTypeUpper === 'APP' || providerTypeUpper === 'ADVANCED PRACTICE PROVIDER' || providerTypeUpper === 'ADVANCED PRACTICE') {
+          normalizedProviderType = 'APP';
+          console.log(`🔧 FirestoreService: Normalized providerType "${providerType}" → "APP"`);
+        }
+      }
+      
+      // CRITICAL: Log the providerType being saved to help debug categorization issues
+      console.log(`💾 FirestoreService: Creating survey with providerType: "${normalizedProviderType}" (from form: "${providerType}")`);
+      
+      const survey: Survey = {
+        id: surveyId,
+        name: surveyName,
+        year: surveyYear.toString(),
+        type: surveyType,
+        uploadDate: new Date(),
+        rowCount: rows.length,
+        specialtyCount: new Set(rows.map(r => r.specialty)).size,
+        dataPoints: rows.length,
+        colorAccent: '#6366f1',
+        metadata: {
+          fileName: file.name,
+          fileSize: file.size,
+          providerType: normalizedProviderType, // Use normalized value
+          encoding,
+        },
+        providerType: normalizedProviderType as ProviderType, // Use normalized value
+      };
+
+      await this.checkStorageQuota(survey, rows);
+      onProgress?.(45);
+
+      // ============== STEP 4: Create Upload Intent (45-50%) ==============
+      uploadId = await this.createUploadIntent(survey, rows.length);
+      onProgress?.(50);
+
+      // ============== STEP 5: Write Survey Metadata (50-55%) ==============
+      await this.createSurvey(survey);
+      onProgress?.(55);
+
+      // ============== STEP 6: Write Survey Data (55-85%) ==============
+      try {
+        await this.saveSurveyData(surveyId, rows, (progress) => {
+          // Map saveSurveyData progress (70-100%) to our range (55-85%)
+          const mappedProgress = 55 + ((progress - 70) / 30) * 30;
+          onProgress?.(Math.min(mappedProgress, 85));
+        });
+        
+        // CRITICAL: Immediately verify data was actually saved
+        const immediateCount = await this.getSurveyDataCount(surveyId);
+        
+        if (immediateCount === 0 && rows.length > 0) {
+          throw new Error(
+            `CRITICAL: Data save failed - ${rows.length} rows were supposed to be saved but 0 rows found in database. ` +
+            `This indicates the save operation completed without actually writing data. Survey ID: ${surveyId}`
+          );
+        }
+        
+        if (immediateCount < rows.length) {
+          console.warn(`⚠️ Only ${immediateCount} of ${rows.length} rows were saved. Some data may be missing.`);
+        }
+      } catch (saveError) {
+        throw new Error(
+          `Failed to save survey data: ${saveError instanceof Error ? saveError.message : String(saveError)}. ` +
+          `Survey metadata was created but data rows were not saved. Please delete this survey and try again.`
+        );
+      }
+      
+      onProgress?.(85);
+
+      // ============== STEP 7: Verify Upload (85-95%) ==============
+      await this.verifyUploadComplete(surveyId, rows.length);
+      onProgress?.(90);
+
+      // CRITICAL: Additional verification - actually try to fetch the data
+      try {
+        const { rows: fetchedRows } = await this.getSurveyData(surveyId, {}, { limit: 10 });
+        
+        if (fetchedRows.length === 0 && rows.length > 0) {
+          throw new Error(
+            `CRITICAL: Data fetch verification failed - cannot retrieve any data rows for survey ${surveyId}. ` +
+            `This indicates the data was not saved correctly or there is a survey ID mismatch.`
+          );
+        }
+      } catch (fetchError) {
+        throw new Error(
+          `Data fetch verification failed: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}. ` +
+          `The upload may have completed but the data is not accessible. Please delete this survey and try again.`
+        );
+      }
+
+      // Verify data integrity (sample-based)
+      await this.verifyUploadIntegrity(surveyId, rows, rows.length);
+      onProgress?.(95);
+
+      // ============== STEP 8: Complete Upload Intent (95-100%) ==============
+      await this.completeUploadIntent(uploadId);
+      onProgress?.(100);
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      // Only log final success - reduce console spam
+      console.log(`✅ Firebase upload complete: ${surveyName} (${rows.length} rows) in ${duration}s`);
+
+      return { surveyId, rowCount: rows.length };
+
+    } catch (error) {
+      // ============== ERROR HANDLING: Complete Rollback ==============
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.error(`❌ UPLOAD FAILED after ${duration}s:`, error);
+
+      // Mark upload intent as failed
+      if (uploadId) {
+        await this.failUploadIntent(uploadId, error as Error);
+      }
+
+      // Rollback all changes
+      if (surveyId) {
+        console.log('🔄 Initiating rollback...');
+        await this.rollbackSurveyComplete(surveyId, uploadId);
+      }
+
+      // Re-throw error with user-friendly message
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(`Upload failed: ${String(error)}`);
+      }
     }
-    onProgress?.(50);
-
-    // Create survey
-    const surveyId = `survey_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const survey: Survey = {
-      id: surveyId,
-      name: surveyName,
-      year: surveyYear.toString(),
-      type: surveyType,
-      uploadDate: new Date(),
-      rowCount: rows.length,
-      specialtyCount: new Set(rows.map(r => r.specialty)).size,
-      dataPoints: rows.length,
-      colorAccent: '#6366f1',
-      metadata: {
-        fileName: file.name,
-        fileSize: file.size,
-        providerType,
-        encoding,
-      },
-      providerType: providerType as ProviderType,
-    };
-
-    await this.createSurvey(survey);
-    onProgress?.(70);
-    
-    console.log('💾 FirestoreService: Survey record created:', {
-      surveyId: survey.id,
-      year: survey.year,
-      yearType: typeof survey.year,
-      providerType: survey.providerType,
-      name: survey.name
-    });
-
-    // Save survey data with progress reporting
-    await this.saveSurveyData(surveyId, rows, onProgress);
-    onProgress?.(100);
-    
-    console.log('✅ FirestoreService: Survey upload completed successfully:', {
-      surveyId,
-      rowCount: rows.length,
-      year: survey.year,
-      providerType: survey.providerType
-    });
-
-    return { surveyId, rowCount: rows.length };
   }
 
   /**

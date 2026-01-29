@@ -15,7 +15,6 @@ import {
 import { AnalyticsFiltersProps } from '../types/analytics';
 import { formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { StandardDropdown, SpecialtyDropdown } from '../../../shared/components';
-import { SpecialtyOption } from '../../../shared/types/specialtyOptions';
 import { 
   formatVariableDisplayName, 
   getVariableColor,
@@ -173,7 +172,7 @@ const AnalyticsFiltersComponent: React.FC<AnalyticsFiltersProps> = ({
           size="small"
         />
 
-        {/* Specialty Filter */}
+        {/* Specialty Filter - SpecialtyDropdown shows mapping (Mapped/Unmapped) and link to details */}
         {availableSpecialtyOptions && availableSpecialtyOptions.length > 0 ? (
           <SpecialtyDropdown
             value={filters.specialty}

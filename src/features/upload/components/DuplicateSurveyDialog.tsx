@@ -1,23 +1,23 @@
 /**
  * Duplicate Survey Dialog Component
  *
- * Clean, minimal dialog for handling duplicate survey detection.
- * Designed for a lightweight, Apple-like experience with clear choices.
+ * Enterprise-grade implementation following Material Design 3 and Fluent UI patterns
+ * - Simple, focused content
+ * - Clear action hierarchy
+ * - Minimal decoration
+ * - Standard spacing (16px/24px)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Button,
   Typography,
   Box,
-  Alert,
   TextField,
-  Paper,
-  Divider,
-  Collapse,
+  Radio,
   RadioGroup,
   FormControlLabel,
-  Radio
+  Divider
 } from '@mui/material';
 import {
   ExclamationTriangleIcon,
@@ -61,17 +61,27 @@ export const DuplicateSurveyDialog: React.FC<DuplicateSurveyDialogProps> = ({
   newSurveyMetadata
 }) => {
   const [renameLabel, setRenameLabel] = useState(newSurveyMetadata.surveyLabel || '');
-  const [selectedAction, setSelectedAction] = useState<'keep' | 'replace'>('keep');
+  const [selectedAction, setSelectedAction] = useState<'replace' | 'keep'>('replace');
   const [showDetails, setShowDetails] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const existingSurvey = duplicateResult.exactMatch?.survey || duplicateResult.contentMatch?.survey || duplicateResult.similarSurveys[0]?.survey;
+
+  // Focus management: Material Design 3 pattern - focus first focusable element
+  useEffect(() => {
+    if (open && selectedAction === 'keep' && renameInputRef.current) {
+      setTimeout(() => renameInputRef.current?.focus(), 100);
+    }
+  }, [open, selectedAction]);
 
   if (!existingSurvey) {
     return null;
   }
 
-  const handleRename = () => {
-    if (renameLabel.trim()) {
+  const handleConfirm = () => {
+    if (selectedAction === 'replace') {
+      onResolve('replace');
+    } else if (renameLabel.trim()) {
       onResolve('rename', renameLabel.trim());
     }
   };
@@ -82,280 +92,278 @@ export const DuplicateSurveyDialog: React.FC<DuplicateSurveyDialogProps> = ({
     return d.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
-  };
-
-  const getMatchTypeDescription = (): string => {
-    switch (duplicateResult.matchType) {
-      case 'exact':
-        return 'An exact duplicate survey already exists with the same source, category, provider type, year, and label.';
-      case 'content':
-        return 'A survey with identical file content already exists.';
-      case 'similar':
-        return 'Similar surveys were found that may be duplicates.';
-      default:
-        return 'A potential duplicate survey was detected.';
-    }
   };
 
   return (
     <StandardDialog
       open={open}
       onClose={onClose}
-      maxWidth="md"
+      maxWidth="sm"
       title="Duplicate survey detected"
-      subtitle={getMatchTypeDescription()}
+      subtitle="A survey with matching information already exists in your database."
       icon={
         <ExclamationTriangleIcon
-          className="h-6 w-6"
-          style={{ color: '#d97706' }} // amber-600
+          className="h-5 w-5"
+          style={{ color: '#f59e0b' }}
         />
       }
-      contentClassName="p-6 bg-white"
+      contentClassName="p-6"
       actions={
         <>
           <Button
             onClick={onClose}
-            variant="outlined"
+            variant="text"
             sx={{
-              borderRadius: '10px',
               textTransform: 'none',
               fontWeight: 500,
-              borderColor: '#d1d5db',
-              color: '#374151',
-              backgroundColor: 'white',
-              '&:hover': {
-                borderColor: '#9ca3af',
-                backgroundColor: '#f9fafb'
-              }
+              color: '#5f6368',
+              px: 2,
+              minWidth: 'auto'
             }}
           >
             Cancel
           </Button>
-
           <Button
-            onClick={() => {
-              if (selectedAction === 'replace') {
-                onResolve('replace');
-                return;
-              }
-              handleRename();
-            }}
+            onClick={handleConfirm}
             variant="contained"
-            color="primary"
             disabled={selectedAction === 'keep' && !renameLabel.trim()}
             sx={{
-              borderRadius: '10px',
               textTransform: 'none',
-              fontWeight: 600,
-              minWidth: 160,
+              fontWeight: 500,
+              px: 3,
+              minWidth: 'auto',
+              boxShadow: 'none',
+              '&:hover': {
+                boxShadow: 'none'
+              }
             }}
           >
-            {selectedAction === 'replace' ? 'Replace existing' : 'Keep both'}
+            Continue
           </Button>
         </>
       }
     >
-      <Paper
-        variant="outlined"
-        sx={{
-          mb: 3,
-          borderRadius: '14px',
-          borderColor: '#e5e7eb',
-          backgroundColor: '#f7f7f8',
-          p: 2.25,
-        }}
-      >
-        <Typography variant="body2" sx={{ color: '#111827', fontWeight: 500 }}>
-          This file matches an existing survey. Choose how you want to proceed.
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* Main content - Material Design 3: Simple, focused */}
+        <Typography 
+          variant="body1" 
+          sx={{ 
+            color: '#202124',
+            fontSize: '0.9375rem',
+            lineHeight: 1.5
+          }}
+        >
+          Choose how to proceed with this duplicate survey.
         </Typography>
-        {onShowExisting && (
-          <Button
-            onClick={() => onShowExisting({
-              year: String(existingSurvey.year || existingSurvey.surveyYear || ''),
-              providerType: existingSurvey.providerType,
-              dataCategory: existingSurvey.dataCategory,
-              name: existingSurvey.name,
-              type: existingSurvey.type
-            })}
-            size="small"
-            variant="text"
+
+        {/* Options - Fluent UI: Simple radio group, minimal decoration */}
+        <RadioGroup
+          value={selectedAction}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedAction(e.target.value as 'replace' | 'keep')}
+          sx={{ gap: 0 }}
+        >
+          {/* Replace option */}
+          <FormControlLabel
+            value="replace"
+            control={
+              <Radio 
+                sx={{
+                  color: '#5f6368',
+                  '&.Mui-checked': {
+                    color: '#1976d2'
+                  }
+                }}
+              />
+            }
+            label={
+              <Box>
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    fontWeight: 400,
+                    color: '#202124',
+                    fontSize: '0.9375rem',
+                    mb: 0.5
+                  }}
+                >
+                  Replace existing survey
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: '#5f6368',
+                    fontSize: '0.8125rem',
+                    lineHeight: 1.4
+                  }}
+                >
+                  Permanently replace the existing survey with this upload.
+                </Typography>
+              </Box>
+            }
             sx={{
-              mt: 1,
-              textTransform: 'none',
+              alignItems: 'flex-start',
+              m: 0,
+              py: 1.5,
               px: 0,
-              fontWeight: 600,
-              color: '#4b5563',
-              '&:hover': { backgroundColor: 'transparent', color: '#111827' }
-            }}
-          >
-            Show me this survey
-          </Button>
-        )}
-      </Paper>
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            borderRadius: '14px',
-            borderColor: selectedAction === 'keep' ? '#6366f1' : '#e5e7eb',
-            backgroundColor: selectedAction === 'keep' ? '#f5f3ff' : 'white',
-            boxShadow: selectedAction === 'keep' ? '0 6px 16px rgba(17, 24, 39, 0.08)' : 'none',
-            transition: 'all 120ms ease'
-          }}
-        >
-          <RadioGroup
-            value={selectedAction}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-              setSelectedAction(event.target.value as 'keep' | 'replace')
-            }
-          >
-            <FormControlLabel
-              value="keep"
-              control={
-                <Radio
-                  sx={{
-                    color: '#9ca3af',
-                    '&.Mui-checked': { color: '#6366f1' }
-                  }}
-                />
+              '&:hover': {
+                backgroundColor: 'transparent'
               }
-              label={
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#111827' }}>
-                    Keep both
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Add a label so you can tell the surveys apart.
-                  </Typography>
-                </Box>
-              }
-            />
-          </RadioGroup>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Enter label (e.g., Pediatrics, Q1 2025)"
-            value={renameLabel}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenameLabel(e.target.value)}
-            sx={{
-              mt: 1.5,
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '10px',
-                backgroundColor: '#ffffff',
-              },
             }}
-            disabled={selectedAction !== 'keep'}
           />
-        </Paper>
 
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            borderRadius: '14px',
-            borderColor: selectedAction === 'replace' ? '#6366f1' : '#e5e7eb',
-            backgroundColor: selectedAction === 'replace' ? '#f5f3ff' : 'white',
-            boxShadow: selectedAction === 'replace' ? '0 6px 16px rgba(17, 24, 39, 0.08)' : 'none',
-            transition: 'all 120ms ease'
-          }}
-        >
-          <RadioGroup
-            value={selectedAction}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-              setSelectedAction(event.target.value as 'keep' | 'replace')
+          {/* Keep both option */}
+          <FormControlLabel
+            value="keep"
+            control={
+              <Radio 
+                sx={{
+                  color: '#5f6368',
+                  '&.Mui-checked': {
+                    color: '#1976d2'
+                  }
+                }}
+              />
             }
-          >
-            <FormControlLabel
-              value="replace"
-              control={
-                <Radio
+            label={
+              <Box sx={{ width: '100%' }}>
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    fontWeight: 400,
+                    color: '#202124',
+                    fontSize: '0.9375rem',
+                    mb: 1
+                  }}
+                >
+                  Keep both surveys
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: '#5f6368',
+                    fontSize: '0.8125rem',
+                    mb: 1.5,
+                    lineHeight: 1.4
+                  }}
+                >
+                  Add a label to distinguish this survey from the existing one.
+                </Typography>
+                <TextField
+                  inputRef={renameInputRef}
+                  fullWidth
+                  size="small"
+                  placeholder="Enter label (optional)"
+                  value={renameLabel}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenameLabel(e.target.value)}
+                  disabled={selectedAction !== 'keep'}
                   sx={{
-                    color: '#9ca3af',
-                    '&.Mui-checked': { color: '#6366f1' }
+                    '& .MuiOutlinedInput-root': {
+                      fontSize: '0.875rem',
+                      '& fieldset': {
+                        borderColor: '#dadce0'
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#dadce0'
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#1976d2'
+                      },
+                      '&.Mui-disabled': {
+                        backgroundColor: '#f5f5f5'
+                      }
+                    }
                   }}
                 />
+              </Box>
+            }
+            sx={{
+              alignItems: 'flex-start',
+              m: 0,
+              py: 1.5,
+              px: 0,
+              '&:hover': {
+                backgroundColor: 'transparent'
               }
-              label={
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#111827' }}>
-                    Replace existing
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    The old survey will be overwritten with this upload.
-                  </Typography>
-                </Box>
-              }
-            />
-          </RadioGroup>
-        </Paper>
+            }}
+          />
+        </RadioGroup>
+
+        {/* Details section - Material Design 3: Progressive disclosure */}
+        {showDetails && (
+          <Box sx={{ pt: 2, borderTop: '1px solid #e8eaed' }}>
+            <Box sx={{ mb: 2 }}>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: '#5f6368',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  mb: 1,
+                  display: 'block'
+                }}
+              >
+                Existing survey
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#202124', mb: 0.5, fontSize: '0.875rem' }}>
+                {existingSurvey.name || 'N/A'}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#5f6368', fontSize: '0.75rem' }}>
+                Uploaded {formatDate(existingSurvey.uploadDate)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: '#5f6368',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  mb: 1,
+                  display: 'block'
+                }}
+              >
+                New upload
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#202124', mb: 0.5, fontSize: '0.875rem' }}>
+                {newSurveyMetadata.name}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#5f6368', fontSize: '0.75rem' }}>
+                {newSurveyMetadata.source} • {newSurveyMetadata.year}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
+        {/* Toggle details - Material Design 3: Text button pattern */}
+        <Button
+          onClick={() => setShowDetails(!showDetails)}
+          variant="text"
+          size="small"
+          sx={{ 
+            textTransform: 'none', 
+            px: 0, 
+            alignSelf: 'flex-start',
+            color: '#1976d2',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            minHeight: 'auto',
+            py: 0.5,
+            '&:hover': {
+              backgroundColor: 'transparent',
+              textDecoration: 'underline'
+            }
+          }}
+          endIcon={showDetails ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+        >
+          {showDetails ? 'Hide details' : 'Show details'}
+        </Button>
       </Box>
-
-      <Divider sx={{ my: 3, borderColor: '#f3f4f6' }} />
-
-      <Button
-        onClick={() => setShowDetails(!showDetails)}
-        variant="text"
-        color="inherit"
-        sx={{ textTransform: 'none', px: 0, color: '#4b5563', fontWeight: 600 }}
-        endIcon={showDetails ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
-      >
-        {showDetails ? 'Hide details' : 'Show details'}
-      </Button>
-
-      <Collapse in={showDetails}>
-        <Box sx={{ mt: 2 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2,
-              borderRadius: '14px',
-              borderColor: '#e5e7eb',
-              backgroundColor: '#fafafa',
-            }}
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-              Existing survey
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {existingSurvey.name || 'N/A'} • {existingSurvey.source || existingSurvey.type || 'N/A'} • {existingSurvey.dataCategory || 'N/A'} • {existingSurvey.providerType || 'N/A'} • {existingSurvey.year || 'N/A'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Uploaded {formatDate(existingSurvey.uploadDate)} • Rows: {existingSurvey.rowCount || existingSurvey.metadata?.totalRows || 'N/A'}
-            </Typography>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-              New upload
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {newSurveyMetadata.name} • {newSurveyMetadata.source} • {newSurveyMetadata.dataCategory} • {newSurveyMetadata.providerType} • {newSurveyMetadata.year}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Rows: {newSurveyMetadata.rowCount || 'N/A'}
-            </Typography>
-          </Paper>
-
-          <Alert
-            severity="info"
-            sx={{
-              mt: 2,
-              borderRadius: '12px',
-              border: '1px solid',
-              borderColor: 'info.light',
-              backgroundColor: '#f8fafc'
-            }}
-          >
-            <Typography variant="body2">
-              If you don’t see the existing survey in your list, check your filters (year, provider type, or data category).
-            </Typography>
-          </Alert>
-        </Box>
-      </Collapse>
     </StandardDialog>
   );
 };

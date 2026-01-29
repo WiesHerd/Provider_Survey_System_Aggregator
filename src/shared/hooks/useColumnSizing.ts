@@ -78,7 +78,16 @@ export const useColumnSizing = ({
           }
 
           const containerWidth = gridElement.clientWidth;
-          const displayedColumns = gridApi.getDisplayedColumns();
+          const columnApi = typeof gridApi.getColumnApi === 'function'
+            ? gridApi.getColumnApi()
+            : gridApi.columnApi;
+          const displayedColumns = typeof gridApi.getDisplayedColumns === 'function'
+            ? gridApi.getDisplayedColumns()
+            : (typeof columnApi?.getAllDisplayedColumns === 'function'
+              ? columnApi.getAllDisplayedColumns()
+              : (typeof columnApi?.getAllColumns === 'function'
+                ? columnApi.getAllColumns()
+                : []));
           
           if (!displayedColumns || displayedColumns.length === 0) {
             isSizingRef.current = false;

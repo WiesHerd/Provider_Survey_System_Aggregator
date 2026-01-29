@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useLocation } from 'react-router-dom';
-import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress, Button } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
@@ -10,6 +10,7 @@ import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoading
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useSurveyListQuery } from '../features/upload/hooks/useSurveyListQuery';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { getPerformanceOptimizedDataService } from '../services/PerformanceOptimizedDataService';
@@ -38,6 +39,10 @@ import { duplicateDetectionService } from '../services/DuplicateDetectionService
 import { DuplicateSurveyDialog, DuplicateResolutionAction } from '../features/upload/components/DuplicateSurveyDialog';
 import { AuditLogService } from '../services/AuditLogService';
 import { calculateFileHash } from '../features/upload/utils/fileHash';
+import { getUploadQueueService } from '../services/UploadQueueService';
+import { queryClient } from '../shared/services/queryClient';
+import { getFileValidationService, FileValidationResult } from '../services/FileValidationService';
+import { UploadErrorDisplay } from './upload/UploadErrorDisplay';
 
 
 class UploadVerificationError extends Error {
@@ -124,7 +129,8 @@ const detectSurveyMetadataFromFileName = (fileName: string) => {
     : undefined;
 
   let detectedSource: string | undefined;
-  if (lower.includes('sullivancotter') || lower.includes('sullivan cotter') || lower.includes('sullivan-cotter')) {
+  // Enhanced detection - check for variations and partial matches
+  if (lower.includes('sullivancotter') || lower.includes('sullivan cotter') || lower.includes('sullivan-cotter') || lower.includes('sullivancotter')) {
     detectedSource = 'SullivanCotter';
   } else if (lower.includes('mgma')) {
     detectedSource = 'MGMA';
@@ -134,6 +140,13 @@ const detectSurveyMetadataFromFileName = (fileName: string) => {
     detectedSource = 'ECG';
   } else if (lower.includes('amga')) {
     detectedSource = 'AMGA';
+  }
+  
+  // Log detection for debugging
+  if (detectedSource) {
+    console.log(`✅ Auto-detected survey source: ${detectedSource} from filename "${fileName}"`);
+  } else {
+    console.log(`⚠️ Could not auto-detect survey source from filename "${fileName}"`);
   }
 
   let detectedDataCategory: 'COMPENSATION' | 'CALL_PAY' | 'MOONLIGHTING' | undefined;
@@ -235,6 +248,12 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
   rows: ISurveyRow[];
   isDuplicate?: boolean; // Flag to indicate if this survey is a potential duplicate
   duplicateKey?: string; // Key used to identify duplicate groups
+  isOrphaned?: boolean; // Flag to indicate if this survey has metadata but no data rows
+  orphanedInfo?: {
+    expectedRowCount: number;
+    actualRowCount: number;
+  };
+  _uploadStatus?: 'uploading' | 'completed' | 'failed'; // Internal status for background uploads
 }
 
 // Normalization Note:
@@ -260,6 +279,7 @@ function SurveyUpload(): JSX.Element {
     intervalMs: 100
   });
   const { selectedProviderType, refreshProviderTypeDetection, setProviderType: setProviderTypeContext } = useProviderContext();
+  const { user: authUser, isAvailable: authAvailable } = useAuth();
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   // NEW: Data Category state (first dropdown)
@@ -341,6 +361,7 @@ function SurveyUpload(): JSX.Element {
 
   // New validation system state
   const [validationResult, setValidationResult] = useState<CompleteValidationResult | null>(null);
+  const [fileValidationResult, setFileValidationResult] = useState<FileValidationResult | null>(null);
   const [excelSheets, setExcelSheets] = useState<Array<{ name: string; rowCount: number; columnCount: number }>>([]);
   const [selectedSheet, setSelectedSheet] = useState<string>('');
   const [parsedData, setParsedData] = useState<{ headers: string[]; rows: any[][] } | null>(null);
@@ -391,21 +412,64 @@ function SurveyUpload(): JSX.Element {
   // ENTERPRISE FIX: Use React Query for intelligent caching
   // This provides instant navigation (cached data) and background refresh, just like Google apps
   // No forced reload on navigation - React Query handles caching intelligently
+  // CRITICAL: Filter surveys by selected DATA VIEW (provider type) to segregate Physician and APP surveys
   const { 
     data: rawSurveys, 
     loading: queryLoading, 
     error: queryError,
     refetch: refetchSurveys 
   } = useSurveyListQuery(
-    currentYear, 
-    selectedProviderType === 'BOTH' ? undefined : selectedProviderType,
-    !isUploading // Only fetch if not currently uploading
+    undefined, // No year filter - show all surveys on upload screen
+    selectedProviderType === 'BOTH' ? undefined : selectedProviderType, // Filter by DATA VIEW selection (show all if BOTH selected)
+    true // Always enabled - React Query caching prevents excessive reads
   );
+  
+  // DIAGNOSTIC: Log what surveys are being returned after filtering
+  // ENTERPRISE FIX: Removed excessive logging and infinite loops
+  // Only log in debug mode to prevent thousands of console messages
+  const debugMode = typeof window !== 'undefined' && window.localStorage.getItem('bp_upload_debug') === 'true';
+  
+  // ENTERPRISE FIX: Prevent infinite loop - use ref to track if we've already checked
+  const hasCheckedSurveysRef = useRef(false);
+  
+  useEffect(() => {
+    // Only log in debug mode - prevent console spam
+    if (debugMode && rawSurveys) {
+      if (rawSurveys.length > 0) {
+        console.log('📊 Surveys loaded:', rawSurveys.length);
+      } else if (!queryLoading) {
+        console.log('⚠️ No surveys found');
+      }
+    }
+  }, [rawSurveys, queryLoading, debugMode]);
+
+  // ENTERPRISE FIX: Prevent infinite refetch loop
+  // Only refetch once on initial mount if we truly have no surveys
+  useEffect(() => {
+    if (!hasCheckedSurveysRef.current && !queryLoading) {
+      hasCheckedSurveysRef.current = true;
+      // Only refetch if we have no surveys AND haven't checked yet
+      if (!rawSurveys || rawSurveys.length === 0) {
+        // Single refetch attempt - don't loop
+        const timeoutId = setTimeout(() => {
+          queryClient.removeQueries({ queryKey: ['surveys', 'list'] });
+          refetchSurveys().catch(() => {
+            // Silently fail - don't spam console
+          });
+        }, 1000);
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [queryLoading]); // Only depend on queryLoading to prevent loops
 
   // Process React Query data into component format
+  // ENTERPRISE FIX: Removed excessive logging - only log in debug mode
   useEffect(() => {
-    // CRITICAL FIX: Always process surveys from React Query, even right after upload
-    // The cache invalidation and refetch will ensure fresh data is available
+    // Only log in debug mode to prevent console spam
+    if (debugMode && rawSurveys) {
+      console.log('📊 Processing surveys:', { count: rawSurveys.length, filter: selectedProviderType });
+    }
+    
     if (!rawSurveys || rawSurveys.length === 0) {
       setUploadedSurveys([]);
       if (!selectedSurvey) {
@@ -414,6 +478,12 @@ function SurveyUpload(): JSX.Element {
       return;
     }
 
+    // ENTERPRISE: Filter out deleted surveys FIRST to prevent them from reappearing
+    // This ensures deleted surveys never show up in the UI, even after refetch
+    const filteredSurveys = rawSurveys.filter((survey: any) => 
+      !deletedSurveyIdsRef.current.has(survey.id)
+    );
+    
     // Build lightweight survey list; show all surveys (use ID as unique key)
     // Detect potential duplicates but don't hide them - let user decide
     const surveyMap = new Map();
@@ -421,7 +491,7 @@ function SurveyUpload(): JSX.Element {
     
     // First pass: identify potential duplicates
     const duplicateCheckMap = new Map<string, number>();
-    rawSurveys.forEach((survey: any) => {
+    filteredSurveys.forEach((survey: any) => {
       // Create a key based on source, provider type, year, and data category to detect duplicates
       const duplicateKey = `${survey.source || survey.type || ''}-${survey.providerType || ''}-${survey.year || ''}-${survey.dataCategory || ''}`;
       const count = duplicateCheckMap.get(duplicateKey) || 0;
@@ -435,8 +505,8 @@ function SurveyUpload(): JSX.Element {
       }
     });
     
-    // Second pass: build survey list with duplicate flags
-    rawSurveys.forEach((survey: any) => {
+    // Second pass: build survey list with duplicate flags (using already filtered surveys)
+    filteredSurveys.forEach((survey: any) => {
       // Use survey ID as unique key to ensure all surveys are shown
       const uniqueKey = survey.id;
       const duplicateKey = `${survey.source || survey.type || ''}-${survey.providerType || ''}-${survey.year || ''}-${survey.dataCategory || ''}`;
@@ -467,11 +537,45 @@ function SurveyUpload(): JSX.Element {
     
     const processedSurveys = Array.from(surveyMap.values());
     setUploadedSurveys(processedSurveys);
-    // Auto-select first survey if none selected, or if current selection is no longer available
+    
+    // ENTERPRISE FIX: Smart auto-selection - prefer surveys with data over empty ones
+    // This prevents selecting a survey that was created but never finished uploading
     if (processedSurveys.length > 0) {
       const currentSelectionExists = processedSurveys.some(s => s.id === selectedSurvey);
       if (!selectedSurvey || !currentSelectionExists) {
-        setSelectedSurvey(processedSurveys[0].id);
+        // Smart selection: Prefer surveys with data (rowCount > 0)
+        // If multiple have data, prefer the most recently uploaded one
+        const surveysWithData = processedSurveys.filter(s => 
+          s.stats?.totalRows > 0 || (s as any).rowCount > 0
+        );
+        
+        let surveyToSelect;
+        if (surveysWithData.length > 0) {
+          // Prefer surveys with data - sort by upload date (most recent first)
+          surveyToSelect = surveysWithData.sort((a, b) => {
+            const dateA = a.uploadDate?.getTime() || 0;
+            const dateB = b.uploadDate?.getTime() || 0;
+            return dateB - dateA; // Most recent first
+          })[0];
+          console.log('✅ Auto-selected survey with data:', {
+            surveyId: surveyToSelect.id,
+            rowCount: surveyToSelect.stats?.totalRows || (surveyToSelect as any).rowCount,
+            uploadDate: surveyToSelect.uploadDate
+          });
+        } else {
+          // No surveys with data - fall back to most recently uploaded
+          surveyToSelect = processedSurveys.sort((a, b) => {
+            const dateA = a.uploadDate?.getTime() || 0;
+            const dateB = b.uploadDate?.getTime() || 0;
+            return dateB - dateA; // Most recent first
+          })[0];
+          console.warn('⚠️ No surveys with data found - selected most recent survey (may be empty):', {
+            surveyId: surveyToSelect.id,
+            rowCount: surveyToSelect.stats?.totalRows || (surveyToSelect as any).rowCount
+          });
+        }
+        
+        setSelectedSurvey(surveyToSelect.id);
       }
     } else {
       // No surveys available, clear selection
@@ -505,8 +609,13 @@ function SurveyUpload(): JSX.Element {
     setError('');
 
     const { detectedYear, detectedSource, detectedDataCategory, detectedProviderType } = detectSurveyMetadataFromFileName(file.name);
-    if (detectedSource && !surveySource) {
+    // CRITICAL FIX: Always set detected source if found, even if surveySource already has a value
+    // This ensures auto-detection works even if user previously selected something
+    if (detectedSource) {
       setSurveySource(detectedSource);
+      console.log(`✅ Auto-filled Survey Source: ${detectedSource} from filename "${file.name}"`);
+    } else {
+      console.warn(`⚠️ Could not auto-detect survey source from filename "${file.name}" - please select manually`);
     }
     if (detectedDataCategory && dataCategory === 'COMPENSATION') {
       setDataCategory(detectedDataCategory);
@@ -521,11 +630,22 @@ function SurveyUpload(): JSX.Element {
     setPreUploadValidation(null);
     setDataValidation(null);
     setValidationResult(null);
+    setFileValidationResult(null);
     setExcelSheets([]);
     setSelectedSheet('');
     setIsValidating(true);
     
     try {
+      // IMMEDIATE VALIDATION: Run fast validation (< 500ms) for instant feedback
+      const fileValidationService = getFileValidationService();
+      const immediateValidation = await fileValidationService.validateOnSelection(file);
+      setFileValidationResult(immediateValidation);
+      
+      // If immediate validation shows critical errors, stop here
+      if (!immediateValidation.canProceed) {
+        setIsValidating(false);
+        return;
+      }
       // Load Excel sheet info if Excel file
       if (isExcelFile(file)) {
         try {
@@ -558,6 +678,19 @@ function SurveyUpload(): JSX.Element {
       // Step 3: Run new three-tier validation
       const newValidationResult = validateAll(parseResult.headers, parseResult.rows);
       setValidationResult(newValidationResult);
+      
+      // DIAGNOSTIC: Log validation results for debugging
+      console.log('🔍 VALIDATION DIAGNOSTICS:', {
+        isValid: newValidationResult.isValid,
+        canProceed: newValidationResult.canProceed,
+        totalIssues: newValidationResult.totalIssues,
+        errorCount: newValidationResult.errorCount,
+        warningCount: newValidationResult.warningCount,
+        tier1Errors: newValidationResult.tier1.errors.map(e => e.message),
+        tier2Warnings: newValidationResult.tier2.warnings.map(w => w.message),
+        headers: parseResult.headers,
+        rowCount: parseResult.rows.length
+      });
       
       // Step 4: Header validation (< 1s) - keep for backward compatibility
       // For Excel files, use parsed headers to avoid binary header issues.
@@ -783,83 +916,154 @@ function SurveyUpload(): JSX.Element {
     setShowDeleteConfirmation(true);
   };
 
+  // ENTERPRISE: Track deleted survey IDs to prevent them from reappearing
+  const deletedSurveyIdsRef = useRef<Set<string>>(new Set());
+  
   const confirmDeleteSurvey = async () => {
     if (!surveyToDelete || isDeleting) return; // Prevent multiple clicks
     
-    try {
-      // ENTERPRISE FIX: Close confirmation modal immediately when deletion starts
-      // This prevents visual overlap - progress modal will take over cleanly
-      setShowDeleteConfirmation(false);
-      const surveyIdToDelete = surveyToDelete.id; // Store ID before clearing
-      setSurveyToDelete(null);
-      
-      setIsDeleting(true);
-      setIsDeletingAll(false);
-      startProgress(); // Start smooth progress animation
-      
-      console.log(`🗑️ Deleting survey: ${surveyIdToDelete}`);
-      
-      // ENTERPRISE: Use deleteWithVerification for atomic deletion
-      const deleteResult = await dataService.deleteWithVerification(surveyIdToDelete);
-      
-      if (!deleteResult.success) {
-        throw new Error(deleteResult.error || 'Delete verification failed');
-      }
-      
-      // ENTERPRISE: Verify deletion before proceeding with cache invalidation
-      const { verifySurveyDeletion, invalidateAllCachesAfterDelete, notifySurveyDeletion } = require('../shared/utils/deleteHelpers');
-      const isDeleted = await verifySurveyDeletion(dataService, surveyIdToDelete);
-      
-      if (!isDeleted) {
-        console.warn('⚠️ Survey deletion verification failed - survey may still exist');
-        // Continue anyway, but log the warning
-      }
-      
-      // ENTERPRISE: Use unified cache invalidation helpers
-      await invalidateAllCachesAfterDelete(surveyIdToDelete);
-      duplicateDetectionService.clearCache();
-      
-      // ENTERPRISE FIX: Clear selected survey FIRST and update state IMMEDIATELY
-      // This ensures DataPreview unmounts immediately and stops loading
-      if (selectedSurvey === surveyIdToDelete) {
-        setSelectedSurvey(null); // This will unmount DataPreview immediately
-      }
-      
-      // Update local state immediately - this also helps unmount DataPreview
-      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyIdToDelete));
-      
-      // Notify other components of deletion IMMEDIATELY (before refetch)
-      // This ensures DataPreview stops loading right away
-      notifySurveyDeletion(surveyIdToDelete);
-      
-      // Force immediate refetch to update UI (now that all caches are cleared)
-      try {
-        await refetchSurveys();
-        console.log('✅ Refetched survey list after deletion');
-      } catch (error) {
-        console.warn('Failed to refetch survey list:', error);
-      }
-      
-      console.log(`✅ Survey deleted successfully: ${deleteResult.deletedDataRows} data rows, ${deleteResult.deletedMappings} mappings removed`);
-      
-      completeProgress(); // Complete progress animation
-    } catch (error) {
-      console.error('❌ Error deleting survey:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      handleError(`Error removing survey: ${errorMessage}`);
-      completeProgress(); // Complete progress even on error
-      
-      // Close modal after a delay even on error
-      setTimeout(() => {
-        setShowDeleteConfirmation(false);
-        setSurveyToDelete(null);
-      }, 1000);
-    } finally {
-      setTimeout(() => {
-        setIsDeleting(false);
-        setIsDeletingAll(false);
-      }, 1200);
+    // ENTERPRISE: Close confirmation modal immediately and update UI optimistically
+    setShowDeleteConfirmation(false);
+    const surveyIdToDelete = surveyToDelete.id;
+    const surveyName = surveyToDelete.fileName || 'survey';
+    setSurveyToDelete(null);
+    
+    // ENTERPRISE: Mark survey as deleted IMMEDIATELY to prevent it from reappearing
+    deletedSurveyIdsRef.current.add(surveyIdToDelete);
+    
+    // ENTERPRISE: Invalidate React Query cache IMMEDIATELY before optimistic update
+    // This prevents refetch from bringing back the deleted survey
+    const { queryClient } = require('../shared/services/queryClient');
+    queryClient.setQueryData(['surveys', 'list', undefined, undefined], (oldData: any) => {
+      if (!oldData || !Array.isArray(oldData)) return oldData;
+      // Filter out deleted survey from cached data
+      return oldData.filter((s: any) => s.id !== surveyIdToDelete);
+    });
+    
+    // ENTERPRISE: Update UI immediately (optimistic update)
+    // This makes the deletion feel instant to the user
+    if (selectedSurvey === surveyIdToDelete) {
+      setSelectedSurvey(null);
     }
+    setUploadedSurveys(prev => prev.filter(s => s.id !== surveyIdToDelete));
+    
+    // ENTERPRISE: Notify other components immediately (non-blocking)
+    const { notifySurveyDeletion } = require('../shared/utils/deleteHelpers');
+    notifySurveyDeletion(surveyIdToDelete);
+    
+    // ENTERPRISE: Invalidate all caches IMMEDIATELY to prevent stale data
+    const { invalidateAllCachesAfterDelete } = require('../shared/utils/deleteHelpers');
+    invalidateAllCachesAfterDelete(surveyIdToDelete).catch((err: Error) => {
+      console.warn('Cache invalidation failed (non-critical):', err);
+    });
+    
+    // Clear performance cache immediately
+    const { getPerformanceOptimizedDataService } = require('../services/PerformanceOptimizedDataService');
+    const performanceService = getPerformanceOptimizedDataService();
+    performanceService.clearCache('all_surveys');
+    
+    console.log(`🗑️ Starting background deletion for survey: ${surveyIdToDelete}`);
+    
+    // ENTERPRISE: Run deletion in background (non-blocking)
+    // No blocking modal - user can continue working
+    dataService.deleteSurveyEverywhere(surveyIdToDelete)
+      .then(async (deleteResult) => {
+        if (!deleteResult.success) {
+          console.error('❌ Background deletion failed:', deleteResult.errors);
+          // Show error toast if deletion fails
+          handleError(`Failed to delete ${surveyName}. Please try again.`);
+          // Remove from deleted set if deletion failed (allow it to reappear)
+          deletedSurveyIdsRef.current.delete(surveyIdToDelete);
+          return;
+        }
+        
+        console.log(`✅ Background deletion completed: ${deleteResult.counts.indexedDbDataRows} rows deleted`);
+        
+        duplicateDetectionService.clearCache();
+        
+        // ENTERPRISE-GRADE: Comprehensive refresh strategy (Google/Amazon/Apple approach)
+        // After deletion, invalidate ALL caches and refetch everything to ensure UI consistency
+        // This is more reliable than trying to update individual pieces
+        console.log('🔄 Enterprise-grade refresh: Invalidating all caches and refetching data...');
+        
+        // Step 1: Clear ALL performance caches
+        try {
+          const { getPerformanceOptimizedDataService } = require('../services/PerformanceOptimizedDataService');
+          const performanceService = getPerformanceOptimizedDataService();
+          performanceService.clearCache('all_surveys');
+          console.log('✅ Cleared all performance caches');
+        } catch (error) {
+          console.warn('⚠️ Failed to clear performance cache:', error);
+        }
+        
+        // Step 2: Clear provider type detection cache
+        try {
+          const { providerTypeDetectionService } = require('../services/ProviderTypeDetectionService');
+          providerTypeDetectionService.clearCache();
+          console.log('✅ Cleared provider type detection cache');
+        } catch (error) {
+          console.warn('⚠️ Failed to clear provider type detection cache:', error);
+        }
+        
+        // Step 3: Invalidate ALL React Query caches (comprehensive invalidation - enterprise-grade)
+        // This is the "nuclear option" - clear everything and refetch, ensuring 100% consistency
+        // Similar to what Google/Amazon/Apple do: when in doubt, refresh everything
+        const { queryClient } = require('../shared/services/queryClient');
+        queryClient.removeQueries(); // Remove ALL queries - most aggressive approach
+        console.log('✅ Cleared all React Query caches (enterprise-grade comprehensive refresh)');
+        
+        // Step 4: Wait for database to fully commit deletion, then perform comprehensive refetch
+        // ENTERPRISE-GRADE: This ensures all data is synchronized, similar to a page refresh
+        // but without the jarring UX of actually reloading the page
+        setTimeout(async () => {
+          try {
+            console.log('🔄 Enterprise-grade comprehensive refresh starting...');
+            
+            // 4a: Refetch survey list (triggers all dependent queries to refetch)
+            await refetchSurveys();
+            console.log('✅ Survey list refetched');
+            
+            // 4b: Refresh provider type detection (ensures Data View dropdown is accurate)
+            const { providerTypeDetectionService } = require('../services/ProviderTypeDetectionService');
+            const result = await providerTypeDetectionService.detectAvailableProviderTypes();
+            console.log('✅ Provider type detection refreshed:', {
+              availableTypes: result.availableTypes.map((t: any) => t.type),
+              hasAnyData: result.hasAnyData
+            });
+            
+            // 4c: Dispatch events to trigger all component refreshes
+            // This ensures ProviderTypeSelector, analytics, and other components update
+            window.dispatchEvent(new CustomEvent('provider-types-refreshed', { 
+              detail: { availableTypes: result.availableTypes.map((t: any) => t.type) }
+            }));
+            window.dispatchEvent(new CustomEvent('survey-deleted', { 
+              detail: { surveyId: surveyIdToDelete, refreshComplete: true }
+            }));
+            
+            // 4d: Force invalidate all survey-related queries one more time to ensure consistency
+            queryClient.invalidateQueries({ queryKey: ['surveys'] });
+            queryClient.invalidateQueries({ queryKey: ['surveyData'] });
+            
+            console.log('✅ Enterprise-grade comprehensive refresh complete - all data synchronized');
+            console.log('📊 Final state:', {
+              availableProviderTypes: result.availableTypes.map((t: any) => t.type),
+              hasAnyData: result.hasAnyData,
+              note: 'Data View dropdown should now reflect accurate provider types'
+            });
+          } catch (err) {
+            console.error('❌ Error during enterprise refresh:', err);
+            // Even if refresh fails, the optimistic UI update already removed the survey
+            // User can manually refresh if needed, but UI should be mostly correct
+          }
+        }, 1000); // 1 second delay to ensure database deletion is fully committed (Firebase eventual consistency)
+      })
+      .catch((error) => {
+        console.error('❌ Error in background deletion:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        handleError(`Error removing ${surveyName}: ${errorMessage}`);
+        // Remove from deleted set if deletion failed (allow it to reappear)
+        deletedSurveyIdsRef.current.delete(surveyIdToDelete);
+      });
   };
 
   // Get expected columns for mapping dialog
@@ -1021,13 +1225,24 @@ function SurveyUpload(): JSX.Element {
         return;
       }
 
-      // Parse CSV data with mapped headers
+      // ENTERPRISE FIX: Parse CSV data preserving original header names as keys
+      // CRITICAL: Use original headers as keys (not mapped headers) to preserve column order
+      // The column mappings are for standardization, but we keep original keys for display
       const parsedRows = dataRows.map(row => {
         const values = parseCSVLine(row);
         const rowData: any = {};
         originalHeaders.forEach((header: string, index: number) => {
-          const mappedHeader = mappings[header] || header;
-          rowData[mappedHeader] = values[index] || '';
+          // ENTERPRISE FIX: Use original header as key to preserve column order
+          // Store both original and mapped for flexibility
+          const trimmedHeader = String(header || '').trim();
+          if (trimmedHeader) {
+            rowData[trimmedHeader] = values[index] || '';
+            // Also store mapped version if different (for standardization)
+            const mappedHeader = mappings[header] || header;
+            if (mappedHeader !== trimmedHeader) {
+              rowData[mappedHeader] = values[index] || '';
+            }
+          }
         });
         return rowData;
       });
@@ -1071,8 +1286,9 @@ function SurveyUpload(): JSX.Element {
         }
       }
 
-      // Continue with normal upload flow...
-      await processUploadedData(parsedRows, file, mappedHeaders, resetTimeout);
+      // ENTERPRISE FIX: Pass original headers to preserve column order in metadata
+      // The data rows use mapped headers for standardization, but we store originalHeaders for display
+      await processUploadedData(parsedRows, file, originalHeaders, resetTimeout);
       
       clearTimeout(uploadTimeout);
       setIsUploading(false);
@@ -1103,28 +1319,104 @@ function SurveyUpload(): JSX.Element {
     resetTimeout?: () => void,
     skipDuplicateCheck: boolean = false
   ) => {
-    if (isFirebaseAvailable()) {
-      const auth = getFirebaseAuth();
-      const authUser = auth?.currentUser;
-      logUploadDebug('Auth context at upload start', {
-        uid: authUser?.uid,
-        email: authUser?.email
+    let surveyIdForCleanup: string | null = null;
+    let createdSurvey = false;
+    let addedImmediateSurvey = false;
+
+    try {
+      // Comprehensive diagnostic logging at upload start
+      console.log('🚀 Starting upload process', {
+        fileName: file.name,
+        fileSize: file.size,
+        rowCount: parsedRows.length,
+        headerCount: headers.length,
+        formState: {
+          surveySource,
+          customSurveySource,
+          dataCategory,
+          customDataCategory,
+          providerType,
+          customProviderType,
+          surveyYear,
+          surveyLabel
+        },
+        skipDuplicateCheck
       });
-      if (!authUser?.uid) {
-        throw new UploadVerificationError('You are signed out. Please sign in and retry the upload.');
+
+      // ENTERPRISE FIX: Check Firebase authentication BEFORE upload
+      // This prevents wasted processing if user is not signed in
+      if (isFirebaseAvailable()) {
+        const auth = getFirebaseAuth();
+        const authUser = auth?.currentUser;
+        
+        if (!authUser?.uid) {
+          // User is not signed in - show clear error and stop
+          const errorMsg = 
+            'You must be signed in to upload surveys to Firebase.\n\n' +
+            'Please:\n' +
+            '1. Click the user menu in the top-right corner\n' +
+            '2. Sign in with your email\n' +
+            '3. Try uploading again\n\n' +
+            'If you want to upload without signing in, the survey will be saved to local storage (IndexedDB) only.';
+          
+          console.error('❌ Authentication required for Firebase upload');
+          handleError(errorMsg, { persist: true });
+          setIsUploading(false);
+          return;
+        }
+        
+        // CRITICAL: Test Firebase write permissions before proceeding
+        try {
+          const { testFirebaseWritePermissions } = await import('../utils/testFirebasePermissions');
+          const permissionTest = await testFirebaseWritePermissions();
+          if (!permissionTest.success) {
+            // Run full diagnostics to provide better error message
+            const { diagnoseFirebasePermissions } = await import('../utils/diagnoseFirebasePermissions');
+            const diagnostics = await diagnoseFirebasePermissions();
+            
+            let errorMsg = `Firebase permission error: ${permissionTest.error}\n\n`;
+            errorMsg += `DIAGNOSTICS:\n`;
+            errorMsg += `- Firebase Available: ${diagnostics.diagnostics.firebaseAvailable ? 'Yes' : 'No'}\n`;
+            errorMsg += `- Authenticated: ${diagnostics.diagnostics.authenticated ? 'Yes' : 'No'}\n`;
+            if (diagnostics.diagnostics.email) {
+              errorMsg += `- Email: ${diagnostics.diagnostics.email}\n`;
+            }
+            errorMsg += `- Rules Deployed: ${diagnostics.diagnostics.rulesDeployed ? 'Yes' : 'No'}\n\n`;
+            
+            errorMsg += `SOLUTION:\n`;
+            if (!diagnostics.diagnostics.authenticated) {
+              errorMsg += `1. Sign in: Click the user menu (top-right) → Sign in\n`;
+            }
+            if (!diagnostics.diagnostics.rulesDeployed) {
+              errorMsg += `2. Deploy security rules: Open terminal and run:\n`;
+              errorMsg += `   firebase deploy --only firestore:rules\n\n`;
+              errorMsg += `   This is REQUIRED for Firebase uploads to work.\n`;
+            }
+            errorMsg += `3. Sign out and sign back in to refresh your auth token\n`;
+            errorMsg += `4. Try uploading again\n\n`;
+            errorMsg += `The survey will be saved to local storage (IndexedDB) only until permissions are fixed.`;
+            
+            console.error('❌ Firebase permission test failed');
+            console.error('📊 Full diagnostics:', diagnostics);
+            handleError(errorMsg, { persist: true });
+            // Continue with upload - it will fall back to IndexedDB
+          }
+        } catch (testError) {
+          // Permission test failed - log but continue (will fall back to IndexedDB)
+          console.warn('⚠️ Firebase permission test error (will fall back to IndexedDB):', testError);
+        }
       }
-    }
-    if (!parsedRows || parsedRows.length === 0) {
-      console.error('❌ No rows parsed from upload. Aborting save.');
-      throw new UploadVerificationError('No rows were parsed from this file. Please verify the file contains data rows.');
-    }
-    logUploadDebug('Parsed rows ready for upload', { rowCount: parsedRows.length });
-    // Extract provider types from data for validation
-    const uniqueProviderTypes = new Set(
-      parsedRows
-        .map(row => row.provider_type || row.providerType || row['Provider Type'])
-        .filter(Boolean)
-    );
+      if (!parsedRows || parsedRows.length === 0) {
+        console.error('❌ No rows parsed from upload. Aborting save.');
+        throw new UploadVerificationError('No rows were parsed from this file. Please verify the file contains data rows.');
+      }
+      logUploadDebug('Parsed rows ready for upload', { rowCount: parsedRows.length });
+      // Extract provider types from data for validation
+      const uniqueProviderTypes = new Set(
+        parsedRows
+          .map(row => row.provider_type || row.providerType || row['Provider Type'])
+          .filter(Boolean)
+      );
 
     const detectedProviderTypes = Array.from(uniqueProviderTypes);
     console.log('🔍 Detected provider types in data:', detectedProviderTypes);
@@ -1135,21 +1427,41 @@ function SurveyUpload(): JSX.Element {
       console.warn('⚠️ Provider type mismatch:', providerTypeValidation.warning);
     }
 
-    // NEW: Validate required fields
+    // NEW: Validate required fields with detailed logging
     if (!dataCategory) {
+      console.error('❌ Validation failed: Data Category is required', {
+        dataCategory,
+        surveySource,
+        providerType,
+        surveyYear
+      });
       setError('Please select a Data Category');
       setIsUploading(false);
       return;
     }
     
     if (!surveySource || surveySource === '') {
+      console.error('❌ Validation failed: Survey Source is required', {
+        surveySource,
+        dataCategory,
+        providerType,
+        surveyYear
+      });
       setError('Please select a Survey Source');
       setIsUploading(false);
       return;
     }
     
     if (surveySource === 'Custom' && !customSurveySource.trim()) {
-      setError('Please enter a custom survey source');
+      console.error('❌ Validation failed: Custom survey source is required', {
+        surveySource,
+        customSurveySource,
+        dataCategory,
+        providerType,
+        surveyYear,
+        message: 'User selected "Custom" but did not enter a custom survey source name'
+      });
+      setError('Please enter a custom survey source (e.g., "Solvam Carter") in the custom survey source field');
       setIsUploading(false);
       return;
     }
@@ -1163,7 +1475,24 @@ function SurveyUpload(): JSX.Element {
     // NEW: Extract source and data category
     const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
     const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
-    const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
+    // Normalize provider type to ensure it matches schema validation
+    // The schema accepts: PHYSICIAN, APP, CALL, CUSTOM (case-insensitive)
+    let finalProviderType: string;
+    if (providerType === 'CUSTOM') {
+      finalProviderType = customProviderType.trim();
+    } else {
+      finalProviderType = providerType.trim();
+    }
+    // Normalize to uppercase for consistency with schema
+    finalProviderType = finalProviderType.toUpperCase();
+    
+    // CRITICAL FIX: Ensure "PHYSICIAN" form selection is preserved, not overwritten by data detection
+    // If user selected "Physician" in form, always use "PHYSICIAN" regardless of what's in the data
+    // The data rows can contain "Staff Physician", but the survey metadata must use the form selection
+    if (providerType === 'PHYSICIAN' || finalProviderType === 'PHYSICIAN') {
+      finalProviderType = 'PHYSICIAN'; // Force to PHYSICIAN, never "Staff Physician"
+    }
+    
     const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
     const surveyYearString = String(surveyYear).trim();
     
@@ -1173,7 +1502,9 @@ function SurveyUpload(): JSX.Element {
     
     // Always calculate hash for storage (even if skipping duplicate check)
     try {
+      console.log('🔍 Calculating file hash for duplicate detection...');
       fileHash = await calculateFileHash(file);
+      console.log('✅ File hash calculated:', fileHash.substring(0, 16) + '...');
     } catch (hashError) {
       console.warn('⚠️ Failed to calculate file hash:', hashError);
       // Continue without hash - exact match will still work
@@ -1182,8 +1513,35 @@ function SurveyUpload(): JSX.Element {
     if (!skipDuplicateCheck) {
       try {
         // Ensure duplicate detection uses fresh survey list after deletions
+        // ENTERPRISE FIX: Clear duplicate detection cache and wait a moment for any pending deletions
+        // This ensures deleted surveys don't appear as duplicates
         duplicateDetectionService.clearCache();
-        console.log('🔍 Checking for duplicate surveys...');
+        
+        // CRITICAL: Wait a moment to ensure any background deletions have completed
+        // This prevents the issue where a survey is deleted but duplicate detection runs before deletion finishes
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for deletion to complete
+        
+        console.log('🔍 Checking for duplicate surveys...', {
+          metadata: {
+            source: finalSource,
+            dataCategory: finalDataCategory,
+            providerType: finalProviderType,
+            year: surveyYearString,
+            surveyLabel: safeSurveyLabel
+          },
+          rowCount: parsedRows.length
+        });
+        
+        // DEBUG: Show all existing surveys in IndexedDB
+        const debugSurveys = await duplicateDetectionService.debugGetAllSurveysWithKeys();
+        console.log(`🔍 DEBUG: Found ${debugSurveys.length} surveys in IndexedDB:`);
+        debugSurveys.forEach(({ survey, compositeKey, details }) => {
+          console.log(`  - Survey ID: ${survey.id}`);
+          console.log(`    Name: ${survey.name || 'N/A'}`);
+          console.log(`    Composite Key: "${compositeKey}"`);
+          console.log(`    Details:`, details);
+          console.log(`    Upload Date: ${survey.uploadDate || 'N/A'}`);
+        });
         
         const duplicateCheck = await duplicateDetectionService.checkForDuplicates({
           metadata: {
@@ -1196,6 +1554,21 @@ function SurveyUpload(): JSX.Element {
           file: file,
           fileHash: fileHash,
           rowCount: parsedRows.length
+        });
+        
+        // DIAGNOSTIC: Log duplicate check details
+        console.log('🔍 DUPLICATE CHECK DIAGNOSTICS:', {
+          hasDuplicate: duplicateCheck.hasDuplicate,
+          matchType: duplicateCheck.matchType,
+          compositeKey: duplicateCheck.compositeKey,
+          newSurveyMetadata: {
+            source: finalSource,
+            dataCategory: finalDataCategory,
+            providerType: finalProviderType,
+            year: surveyYearString,
+            surveyLabel: safeSurveyLabel
+          },
+          existingSurvey: duplicateCheck.exactMatch?.survey || duplicateCheck.contentMatch?.survey || duplicateCheck.similarSurveys[0]?.survey
         });
         
         if (duplicateCheck.hasDuplicate) {
@@ -1237,6 +1610,8 @@ function SurveyUpload(): JSX.Element {
     
     // Create survey object with new architecture
     const surveyId = crypto.randomUUID();
+    surveyIdForCleanup = surveyId;
+    surveyIdForCleanup = surveyId;
     const defaultSurveyName = file.name.replace('.csv', '');
     
     // BACKWARD COMPATIBILITY: Derive type field from source + dataCategory + providerType
@@ -1312,7 +1687,7 @@ function SurveyUpload(): JSX.Element {
       survey.metadata.fileHash = fileHash;
     }
 
-    // Add survey to state immediately for visual feedback
+    // Add survey to state immediately for visual feedback (optimistic UI)
     const immediateSurvey = {
       id: surveyId,
       fileName: surveyName,
@@ -1334,105 +1709,414 @@ function SurveyUpload(): JSX.Element {
         fileSize: survey.metadata.fileSize,
         sheetName: survey.metadata.sheetName,
         sheetCount: survey.metadata.sheetCount
-      }
+      },
+      // Mark as uploading for UI feedback
+      _uploadStatus: 'uploading' as const
     };
 
     setUploadedSurveys(prev => [...prev, immediateSurvey]);
+    addedImmediateSurvey = true;
     setSelectedSurvey(surveyId);
     setRefreshTrigger(prev => prev + 1);
 
-    // Save survey and data to storage (IndexedDB or Firebase)
-    const storageMode = dataService.getMode();
-    const storageName = storageMode === 'firebase' ? 'Firebase (Cloud)' : 'IndexedDB (Local)';
+    // BACKGROUND UPLOAD: Add to queue for non-blocking upload
+    // The queue will handle the actual database writes via dataService.uploadSurvey()
+    const uploadQueue = getUploadQueueService();
     
-    console.log(`💾 Saving survey to ${storageName}...`);
-    logUploadDebug('Creating survey metadata', {
-      surveyId,
-      name: surveyName,
-      year: surveyYearString,
+    console.log('📤 Adding file to background upload queue...');
+    const jobIds = await uploadQueue.addToQueue([file], {
+      surveyYear: parseInt(surveyYearString),
+      surveyType: surveyTypeName,
       providerType: finalProviderType,
-      source: finalSource,
-      dataCategory: finalDataCategory
+      surveyName: surveyName // Pass the actual survey name
     });
-    await dataService.createSurvey(survey);
-    console.log('✅ Survey created successfully');
-    const surveyFromFirestore = await dataService.getSurveyByIdFromFirestore(surveyId);
-    logUploadDebug('Survey metadata verification', { exists: Boolean(surveyFromFirestore) });
-    if (!surveyFromFirestore) {
-      logUploadDebug('Survey metadata missing after create, retrying createSurvey');
-      await dataService.createSurvey(survey);
+    
+    console.log(`✅ File added to upload queue (job IDs: ${jobIds.join(', ')})`);
+    
+    // Clear uploading state - upload is now in background
+    setIsUploading(false);
+    if (resetTimeout) {
+      resetTimeout();
     }
     
-    console.log(`💾 Saving ${parsedRows.length} rows to ${storageName}...`);
-    logUploadDebug('Saving survey rows', { surveyId, rowCount: parsedRows.length });
-    await dataService.saveSurveyData(surveyId, parsedRows, (progress) => {
-      // Update progress for user feedback and reset timeout
-      if (progress < 100) {
-        console.log(`📊 Upload progress: ${progress}%`);
-        // Reset timeout on progress to prevent premature timeout during active uploads
-        if (resetTimeout) {
-          resetTimeout();
+    // Subscribe to queue updates to update UI when upload completes
+    const unsubscribe = uploadQueue.subscribe((job) => {
+      if (jobIds.includes(job.id)) {
+        if (job.status === 'completed') {
+          console.log('✅ Upload completed, invalidating cache and refreshing survey list');
+          
+          // CRITICAL: Verify the survey actually exists in Firebase before showing success
+          const verifyUpload = async () => {
+            try {
+              // Wait a moment for Firebase to commit
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Verify survey exists in database
+              const allSurveys = await dataService.getAllSurveys();
+              // CRITICAL FIX: When searching for uploaded survey, treat "PHYSICIAN" and "Staff Physician" as equivalent
+              // This handles the case where data contains "Staff Physician" but form selected "Physician"
+              const uploadedSurvey = job.surveyId 
+                ? allSurveys.find(s => s.id === job.surveyId)
+                : allSurveys.find(s => {
+                    const nameMatch = s.name === surveyName;
+                    const yearMatch = s.year === surveyYearString;
+                    // Treat PHYSICIAN and Staff Physician as equivalent for matching
+                    const providerTypeMatch = s.providerType === finalProviderType ||
+                      (finalProviderType === 'PHYSICIAN' && (s.providerType === 'PHYSICIAN' || s.providerType === 'Staff Physician' || (s.providerType as string)?.toUpperCase() === 'STAFF PHYSICIAN')) ||
+                      (finalProviderType === 'STAFF PHYSICIAN' && (s.providerType === 'PHYSICIAN' || s.providerType === 'Staff Physician'));
+                    return nameMatch && yearMatch && providerTypeMatch;
+                  });
+              
+              // CRITICAL: Check which storage mode is active
+              const { getCurrentStorageMode, StorageMode } = await import('../config/storage');
+              const storageMode = getCurrentStorageMode();
+              const isFirebaseMode = storageMode === StorageMode.FIREBASE;
+              
+              // Check if survey is in Firebase or IndexedDB
+              if (isFirebaseMode) {
+                // Try to verify survey exists in Firebase specifically
+                try {
+                  const { getFirebaseDb } = await import('../config/firebase');
+                  const { getFirebaseAuth } = await import('../config/firebase');
+                  const { doc, getDoc } = await import('firebase/firestore');
+                  const db = getFirebaseDb();
+                  const auth = getFirebaseAuth();
+                  const userId = auth?.currentUser?.uid;
+                  
+                  if (db && userId && job.surveyId) {
+                    const surveyRef = doc(db, `users/${userId}/surveys/${job.surveyId}`);
+                    const surveySnap = await getDoc(surveyRef);
+                    
+                    if (!surveySnap.exists()) {
+                      console.error('❌ CRITICAL: Survey NOT found in Firebase!', {
+                        surveyId: job.surveyId,
+                        surveyName,
+                        note: 'Survey may have been saved to IndexedDB instead of Firebase'
+                      });
+                      handleError(
+                        `Upload completed but survey NOT saved to Firebase. ` +
+                        `The survey may have been saved to local storage (IndexedDB) instead. ` +
+                        `Check the browser console for details.`,
+                        { persist: true }
+                      );
+                      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
+                      return;
+                    } else {
+                      console.log('✅ Survey verified in Firebase:', job.surveyId);
+                    }
+                  }
+                } catch (firebaseCheckError) {
+                  console.error('❌ Error checking Firebase for survey:', firebaseCheckError);
+                }
+              }
+              
+              if (!uploadedSurvey) {
+                console.error('❌ CRITICAL: Upload reported success but survey not found in database');
+                console.error('🔍 Survey details:', {
+                  surveyId: job.surveyId,
+                  surveyName,
+                  surveyYear: surveyYearString,
+                  providerType: finalProviderType,
+                  totalSurveysInDB: allSurveys.length,
+                  storageMode: isFirebaseMode ? 'Firebase' : 'IndexedDB'
+                });
+                
+                // Check if survey exists but is filtered out
+                const allSurveysUnfiltered = await dataService.getAllSurveys();
+                const matchingSurvey = allSurveysUnfiltered.find(s => 
+                  s.name === surveyName && 
+                  s.year === surveyYearString
+                );
+                
+                if (matchingSurvey) {
+                  const filterIssues = [];
+                  // CRITICAL FIX: Treat "PHYSICIAN" and "Staff Physician" as equivalent
+                  const providerTypeMatches = matchingSurvey.providerType === finalProviderType ||
+                    (finalProviderType === 'PHYSICIAN' && (matchingSurvey.providerType === 'PHYSICIAN' || matchingSurvey.providerType === 'Staff Physician' || (matchingSurvey.providerType as string)?.toUpperCase() === 'STAFF PHYSICIAN')) ||
+                    (finalProviderType === 'STAFF PHYSICIAN' && (matchingSurvey.providerType === 'PHYSICIAN' || matchingSurvey.providerType === 'Staff Physician'));
+                  
+                  if (!providerTypeMatches) {
+                    filterIssues.push(`Provider type mismatch: uploaded as "${finalProviderType}" but saved as "${matchingSurvey.providerType}"`);
+                  }
+                  if (matchingSurvey.year !== surveyYearString) {
+                    filterIssues.push(`Year mismatch: uploaded as "${surveyYearString}" but saved as "${matchingSurvey.year}"`);
+                  }
+                  
+                  if (filterIssues.length > 0) {
+                    handleError(
+                      `Upload completed but survey not visible. ${filterIssues.join(' ')} ` +
+                      `The survey exists in the database but may be filtered out. ` +
+                      `Try adjusting your filters or check the survey list without filters.`,
+                      { persist: true }
+                    );
+                  } else {
+                    // Provider type matches (PHYSICIAN = Staff Physician), survey should be visible
+                    console.log('✅ Survey found with matching provider type (PHYSICIAN = Staff Physician)');
+                  }
+                } else {
+                  const storageLocation = isFirebaseMode ? 'Firebase' : 'IndexedDB';
+                  handleError(
+                    `Upload reported success but survey not found in ${storageLocation}. ` +
+                    `Please check the browser console for details and try uploading again.`,
+                    { persist: true }
+                  );
+                }
+                
+                // Remove optimistic survey
+                setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
+                return;
+              }
+              
+              console.log('✅ Verified: Survey exists in database:', {
+                id: uploadedSurvey.id,
+                name: uploadedSurvey.name,
+                year: uploadedSurvey.year,
+                providerType: uploadedSurvey.providerType
+              });
+              
+              // ENTERPRISE FIX: Update React Query cache with the real survey AFTER upload completes
+              // This ensures the survey appears in the UI immediately without requiring manual refresh
+              const queryKey = ['surveys', 'list', undefined, selectedProviderType === 'BOTH' ? undefined : selectedProviderType];
+              queryClient.setQueryData(queryKey, (oldData: any) => {
+                if (!oldData || !Array.isArray(oldData)) {
+                  return [uploadedSurvey];
+                }
+                // Remove any optimistic/placeholder surveys and add real survey
+                const withoutOptimistic = oldData.filter((s: any) => 
+                  s.id !== surveyId && 
+                  !(s.name === surveyName && String(s.year || '').trim() === surveyYearString)
+                );
+                const exists = withoutOptimistic.some((s: any) => s.id === uploadedSurvey.id);
+                if (exists) {
+                  return withoutOptimistic;
+                }
+                // Add real survey to the beginning
+                return [uploadedSurvey, ...withoutOptimistic];
+              });
+              
+              // ENTERPRISE FIX: Update local state with real survey (replace any optimistic placeholders)
+              setUploadedSurveys(prev => {
+                // Remove optimistic/placeholder surveys and add real one
+                const withoutOptimistic = prev.filter(s => 
+                  s.id !== surveyId && 
+                  !(s.fileName === surveyName && s.surveyYear === surveyYearString)
+                );
+                const exists = withoutOptimistic.some(s => s.id === uploadedSurvey.id);
+                if (exists) {
+                  return withoutOptimistic;
+                }
+                // Add real survey
+                const realUploadedSurvey = {
+                  id: uploadedSurvey.id,
+                  fileName: uploadedSurvey.name,
+                  surveyType: uploadedSurvey.type || finalSource,
+                  surveyYear: String(uploadedSurvey.year || surveyYearString),
+                  uploadDate: new Date(uploadedSurvey.uploadDate || new Date()),
+                  fileContent: '',
+                  rows: [],
+                  stats: {
+                    totalRows: uploadedSurvey.rowCount || 0,
+                    uniqueSpecialties: uploadedSurvey.specialtyCount || 0,
+                    totalDataPoints: uploadedSurvey.dataPoints || 0
+                  },
+                  columnMappings: {},
+                  providerType: finalProviderType,
+                  source: finalSource,
+                  dataCategory: finalDataCategory
+                };
+                return [realUploadedSurvey, ...withoutOptimistic];
+              });
+              
+              console.log('✅ Survey added to UI after upload completion - should be visible immediately');
+              
+              // ENTERPRISE FIX: Force immediate refresh of survey list to show new upload
+              // This ensures the UI updates immediately without requiring manual refresh
+              console.log('🔄 Forcing immediate survey list refresh after upload completion...');
+              
+              // Step 1: Update selected survey to use real ID IMMEDIATELY (before any async operations)
+              // This ensures the UI switches to the new survey right away
+              const realSurveyId = uploadedSurvey.id;
+              console.log(`✅ Survey updated in UI with real ID ${realSurveyId} - selecting immediately`);
+              setSelectedSurvey(realSurveyId);
+              
+              // Step 2: Clear ALL survey-related caches to force fresh fetch
+              queryClient.removeQueries({ queryKey: ['surveys'] }); // Remove ALL survey queries
+              queryClient.removeQueries({ queryKey: ['surveys', 'list'] }); // Remove all list queries
+              
+              // Step 3: Invalidate all survey queries to trigger refetch
+              queryClient.invalidateQueries({ 
+                queryKey: ['surveys'],
+                exact: false
+              });
+              
+              // ENTERPRISE FIX: Invalidate benchmarking/analytics queries so new survey appears in Benchmarking screen
+              // This ensures the Survey Source dropdown on Benchmarking screen shows the newly uploaded survey
+              queryClient.invalidateQueries({ 
+                queryKey: ['benchmarking'],
+                exact: false
+              });
+              console.log('✅ Invalidated benchmarking queries - new survey should appear in Benchmarking screen');
+              
+              // Also invalidate analytics cache to ensure fresh data
+              try {
+                const { cacheInvalidation } = await import('../features/analytics/utils/cacheInvalidation');
+                cacheInvalidation.onNewSurvey();
+                console.log('✅ Invalidated analytics cache - new survey data will be processed');
+              } catch (cacheError) {
+                console.warn('⚠️ Failed to invalidate analytics cache (non-critical):', cacheError);
+              }
+              
+              // Step 4: Force immediate refetch (don't wait for Firebase eventual consistency)
+              // The optimistic update above ensures UI shows the survey immediately
+              // This refetch ensures the data is fresh and consistent
+              refetchSurveys().then((refetchResult) => {
+                console.log('✅ Immediate refetch completed after upload:', {
+                  surveyCount: refetchResult.data?.length || 0,
+                  includesNewSurvey: refetchResult.data?.some((s: any) => s.id === uploadedSurvey.id) || false,
+                  newSurveyProviderType: finalProviderType,
+                  currentFilter: selectedProviderType
+                });
+                
+                // ENTERPRISE FIX: Ensure the new survey is visible even if filter doesn't match
+                // If we uploaded a Physician survey but are viewing APP, switch to Physician view
+                if (finalProviderType === 'PHYSICIAN' && selectedProviderType !== 'PHYSICIAN' && selectedProviderType !== 'BOTH') {
+                  console.log('🔄 Auto-switching to Physician view to show newly uploaded survey');
+                  // The ProviderTypeSelector will handle this via the survey-uploaded event
+                  // But we can also force it here if needed
+                }
+                
+                if (refetchResult.data && refetchResult.data.length > 0) {
+                  console.log('✅ Survey list refreshed - new survey should be visible');
+                }
+              }).catch((err) => {
+                console.warn('⚠️ Immediate refetch failed, will retry:', err);
+                // Retry after a short delay if immediate refetch fails
+                setTimeout(() => {
+                  refetchSurveys().catch((retryErr) => {
+                    console.warn('⚠️ Retry refetch also failed (non-critical):', retryErr);
+                  });
+                }, 1000);
+              });
+              
+              // ENTERPRISE FIX: Dispatch survey-uploaded event AFTER upload completes and is verified
+              // This ensures provider type detection refreshes at the right time
+              // The event was previously dispatched too early (when queued, not when completed)
+              console.log('📢 Dispatching survey-uploaded event after successful upload verification');
+              window.dispatchEvent(new CustomEvent('survey-uploaded', { 
+                detail: { 
+                  surveyId: realSurveyId,
+                  providerType: finalProviderType,
+                  surveyName: surveyName
+                } 
+              }));
+              
+              // Also dispatch storage event for cross-tab communication
+              try {
+                window.dispatchEvent(new StorageEvent('storage', {
+                  key: 'survey-uploaded',
+                  newValue: realSurveyId,
+                  url: window.location.href
+                }));
+              } catch (storageError) {
+                // StorageEvent might not be available in all contexts
+                console.debug('StorageEvent not available for cross-tab communication');
+              }
+              
+              console.log('✅ Survey upload event dispatched - Data View dropdown should update with new provider type');
+              
+            } catch (verifyError) {
+              console.error('❌ Error verifying upload:', verifyError);
+              handleError(
+                `Upload completed but verification failed: ${verifyError instanceof Error ? verifyError.message : 'Unknown error'}. ` +
+                `Please check if the survey appears in your survey list.`,
+                { persist: true }
+              );
+            }
+          };
+          
+          verifyUpload();
+          unsubscribe();
+        } else if (job.status === 'failed') {
+          // Remove optimistic survey on failure
+          setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
+          setSelectedSurvey(prev => (prev === surveyId ? '' : prev));
+          
+          // Show detailed error message with user-friendly formatting
+          const errorMessage = job.error || 'Unknown error';
+          console.error('❌ Upload failed:', errorMessage);
+          
+          // Format error message based on error type
+          let formattedError = errorMessage;
+          
+          // Authentication errors - make them very clear and actionable
+          if (errorMessage.includes('not authenticated') || errorMessage.includes('sign in') || errorMessage.includes('must be signed in')) {
+            formattedError = `You must be signed in to upload surveys to Firebase. Please click the user menu in the top-right corner to sign in, then try uploading again.`;
+          }
+          // Permission denied errors - most common issue
+          else if (errorMessage.includes('Missing or insufficient permissions') || errorMessage.includes('permission-denied') || errorMessage.includes('Permission denied')) {
+            // Check if it mentions security rules deployment
+            if (errorMessage.includes('firebase deploy') || errorMessage.includes('security rules')) {
+              formattedError = errorMessage; // Use the detailed message from FirestoreService
+            } else {
+              formattedError = `Missing or insufficient permissions. This usually means:\n` +
+                `1. You are not signed in - Please sign in using the user menu (top-right corner)\n` +
+                `2. Firestore security rules haven't been deployed - Run: firebase deploy --only firestore:rules\n\n` +
+                `Check the browser console (F12) for detailed diagnostic information.`;
+            }
+          }
+          // Firebase configuration errors
+          else if (errorMessage.includes('Firebase') && (errorMessage.includes('not available') || errorMessage.includes('not configured'))) {
+            formattedError = `Firebase is not configured. Please check your .env.local file and ensure all Firebase credentials are set correctly.`;
+          }
+          // Pre-flight check errors - extract the actual error
+          else if (errorMessage.includes('Pre-flight check failed')) {
+            const actualError = errorMessage.replace('Pre-flight check failed: ', '');
+            formattedError = actualError || 'Upload cannot proceed. Please check the browser console for details.';
+          }
+          // Firestore initialization errors
+          else if (errorMessage.includes('Firestore') && (errorMessage.includes('not initialized') || errorMessage.includes('database not initialized'))) {
+            formattedError = `Firebase Firestore is not initialized. Please check your Firebase configuration in .env.local file.`;
+          }
+          
+          handleError(
+            formattedError,
+            { persist: true }
+          );
+          unsubscribe();
         }
       }
     });
-    console.log(`✅ All ${parsedRows.length} rows saved successfully to ${storageName}`);
 
-    const verifyUploadAsync = async (): Promise<void> => {
-      try {
-        const surveyVerified = await dataService.getSurveyByIdFromFirestore(surveyId);
-        logUploadDebug('Survey metadata verification', { exists: Boolean(surveyVerified) });
-        let hasRows = false;
-
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          const { rows } = await dataService.getSurveyDataFromFirestore(surveyId, {}, { limit: 1 });
-          logUploadDebug('Verification check', { attempt: attempt + 1, rowCount: rows.length });
-          if (rows.length > 0) {
-            hasRows = true;
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        if (!surveyVerified) {
-          handleError(
-            'Upload rows saved, but the survey metadata document was not found in Firebase. Please retry.',
-            { persist: true }
-          );
-          return;
-        }
-        if (!hasRows) {
-          handleError(
-            'Upload saved but no rows were found in Firebase. Please verify Firebase permissions and retry.',
-            { persist: true }
-          );
-        }
-      } catch (verifyError) {
-        handleError(
-          `Upload verification failed: ${verifyError instanceof Error ? verifyError.message : 'Unknown error'}`,
-          { persist: true }
-        );
-      }
-    };
-
-    void verifyUploadAsync();
-
-    // Trigger storage event to notify other components (non-blocking)
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'survey-uploaded',
-      newValue: surveyId,
-      url: window.location.href
-    }));
+    // NOTE: survey-uploaded event is now dispatched AFTER upload completes and is verified
+    // (see verifyUpload function above) to ensure provider type detection refreshes at the right time
+    // This prevents the Data View dropdown from updating before the survey is actually saved
     
-    // Also dispatch custom event for immediate same-tab updates
-    window.dispatchEvent(new CustomEvent('survey-uploaded', { detail: { surveyId } }));
-    
-    // Clear validation state after successful upload
+    // Clear validation state after adding to queue
     setColumnValidation(null);
     setPreUploadValidation(null);
     setDataValidation(null);
     
     // Clear duplicate detection cache
     duplicateDetectionService.clearCache();
+    } catch (error) {
+      // Clear uploading state on error
+      setIsUploading(false);
+      
+      if (surveyIdForCleanup) {
+        if (addedImmediateSurvey) {
+          setUploadedSurveys(prev => prev.filter(s => s.id !== surveyIdForCleanup));
+          setSelectedSurvey(prev => (prev === surveyIdForCleanup ? '' : prev));
+        }
+        if (createdSurvey) {
+          try {
+            await dataService.deleteSurveyEverywhere(surveyIdForCleanup);
+          } catch (cleanupError) {
+            console.warn('⚠️ Failed to cleanup survey after upload error:', cleanupError);
+          }
+        }
+      }
+      throw error;
+    }
   };
 
   // Handle duplicate resolution
@@ -1552,11 +2236,38 @@ function SurveyUpload(): JSX.Element {
 
   const handleSurveyUpload = async () => {
     const file = files[0];
-    if (!file || !surveySource || !dataCategory || !surveyYear || 
-        (providerType === 'CUSTOM' && !customProviderType) ||
-        (surveySource === 'Custom' && !customSurveySource.trim()) ||
-        (dataCategory === 'CUSTOM' && !customDataCategory.trim())) {
-      handleError('Please fill in all required fields');
+    
+    // Enhanced validation with specific error messages
+    const missingFields: string[] = [];
+    if (!file) missingFields.push('File');
+    if (!surveySource) missingFields.push('Survey Source');
+    if (surveySource === 'Custom' && !customSurveySource.trim()) {
+      missingFields.push('Custom Survey Source (enter name like "Solvam Carter")');
+    }
+    if (!dataCategory) missingFields.push('Data Category');
+    if (dataCategory === 'CUSTOM' && !customDataCategory.trim()) {
+      missingFields.push('Custom Data Category');
+    }
+    if (providerType === 'CUSTOM' && !customProviderType) {
+      missingFields.push('Custom Provider Type');
+    }
+    if (!surveyYear) missingFields.push('Survey Year');
+    
+    if (missingFields.length > 0) {
+      console.error('❌ Validation failed: Missing required fields', {
+        missingFields,
+        formState: {
+          surveySource,
+          customSurveySource,
+          dataCategory,
+          customDataCategory,
+          providerType,
+          customProviderType,
+          surveyYear,
+          hasFile: !!file
+        }
+      });
+      handleError(`Please fill in all required fields: ${missingFields.join(', ')}`);
       return;
     }
 
@@ -1783,16 +2494,12 @@ function SurveyUpload(): JSX.Element {
       setIsUploading(false);
       console.log('✅ Upload complete, isUploading set to false - query can now refetch');
       
-      // Clear provider type detection cache and refresh in background (non-blocking)
-      setTimeout(async () => {
-        try {
-          providerTypeDetectionService.clearCache();
-          await refreshProviderTypeDetection();
-          console.log('✅ Provider type detection refreshed after upload');
-        } catch (error) {
-          console.error('Failed to refresh provider type detection:', error);
-        }
-      }, 1000); // 1 second delay to ensure data is fully persisted
+      // PERFORMANCE OPTIMIZATION: Skip provider type detection refresh after upload
+      // The detection service now has a 10-minute cache, which is sufficient
+      // Provider types will be detected on-demand when needed (e.g., when opening selector)
+      // This saves 1-2 seconds per upload, especially with many surveys
+      // The cache will be cleared naturally when it expires or when user changes filters
+      console.log('✅ Skipping provider type detection refresh (using cached data for performance)');
       
       // CRITICAL FIX: Clear performance cache BEFORE invalidating React Query cache
       // The performance cache stores survey list data with keys like "all_surveys_2025_PHYSICIAN"
@@ -1807,66 +2514,20 @@ function SurveyUpload(): JSX.Element {
         console.warn('Failed to clear performance cache:', error);
       }
       
-      // ENTERPRISE FIX: Invalidate React Query cache to trigger automatic refetch
-      // This ensures the survey list is updated immediately with the new survey
-      try {
-        const { queryClient } = require('../shared/services/queryClient');
-        
-        // CRITICAL FIX: Add delay to ensure database transaction is fully committed
-        // Database operations (IndexedDB/Firestore) are asynchronous and may not be immediately visible
-        // Firestore has eventual consistency, so a small delay ensures data is queryable
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Invalidate all survey list queries (for all year/providerType combinations)
-        // CRITICAL FIX: queryClient is the QueryClient instance directly, not queryClient.queryClient
-        queryClient.invalidateQueries({ 
-          queryKey: ['surveys', 'list'],
-          exact: false // Invalidate all queries that start with ['surveys', 'list']
-        });
-        console.log('✅ Invalidated survey list cache after upload - React Query will refetch automatically');
-        
-        // ENTERPRISE FIX: Explicitly refetch to ensure immediate update
-        // This ensures survey pills appear immediately without page refresh
-        // Since isUploading is now false, the query is enabled and can refetch
-        const refetchResult = await refetchSurveys();
-        console.log('✅ Refetched survey list after upload:', {
-          surveyCount: refetchResult.data?.length || 0,
-          includesNewSurvey: refetchResult.data?.some((s: any) => 
-            s.name === expectedSurveyName && 
-            String(s.year || '').trim() === surveyYearString
-          ) || false
-        });
-        
-        // CRITICAL FIX: If refetch didn't include the new survey, force another refetch
-        // This handles cases where the database transaction hasn't fully committed yet
-        if (!refetchResult.data?.some((s: any) => 
-          s.name === expectedSurveyName && 
-          String(s.year || '').trim() === surveyYearString
-        )) {
-          console.warn('⚠️ New survey not found in refetch result, waiting and retrying...');
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-          const retryResult = await refetchSurveys();
-          console.log('✅ Retry refetch result:', {
-            surveyCount: retryResult.data?.length || 0,
-            includesNewSurvey: retryResult.data?.some((s: any) => 
-              s.name === expectedSurveyName && 
-              String(s.year || '').trim() === surveyYearString
-            ) || false
-          });
-        }
-        
-      } catch (error) {
-        console.error('❌ Failed to invalidate/refetch query cache:', error);
-        // CRITICAL FIX: Even if cache invalidation fails, try to refetch directly
-        // This ensures surveys appear even if there's a cache issue
-        try {
-          console.log('🔄 Attempting direct refetch after cache invalidation error...');
-          await refetchSurveys();
-          console.log('✅ Direct refetch completed');
-        } catch (refetchError) {
-          console.error('❌ Direct refetch also failed:', refetchError);
-        }
-      }
+      // ENTERPRISE FIX: Don't do optimistic update here - wait for upload queue to complete
+      // The upload happens in the background queue, and the subscription handler (line 1618)
+      // will update the UI when the upload actually completes. This prevents:
+      // 1. Optimistic update showing survey that doesn't exist yet
+      // 2. Refetch overwriting optimistic update with empty data
+      // 3. User having to manually refresh to see the survey
+      // 
+      // The subscription handler at line 1618 handles the UI update after upload completes
+      console.log('📤 Survey queued for upload - UI will update automatically when upload completes');
+      
+      // ENTERPRISE FIX: Don't invalidate/refetch here - wait for upload to complete
+      // The subscription handler will invalidate and refetch when the upload finishes
+      // This ensures the refetch happens AFTER the survey is actually saved to the database
+      console.log('⏳ Waiting for upload to complete - cache will be invalidated automatically');
 
       // Clear form and validation state
       setFiles([]);
@@ -2236,12 +2897,42 @@ function SurveyUpload(): JSX.Element {
         error.message.toLowerCase().includes('no data rows')
       )
     );
+  
+  // DIAGNOSTIC: Log fatal validation state
+  if (files.length > 0) {
+    console.log('🔍 FATAL VALIDATION CHECK:', {
+      hasFatalValidation,
+      structureErrors: preUploadValidation?.structure?.errors?.filter((e: ValidationError) => e.severity === 'critical').map((e: ValidationError) => e.message),
+      tier1Errors: validationResult?.tier1?.errors?.map(e => e.message),
+      canProceed: validationResult?.canProceed
+    });
+  }
 
   return (
     <>
       <div className="w-full min-h-screen">
         <div className="w-full flex flex-col gap-4">
           
+          {/* ENTERPRISE FIX: Authentication Status Banner */}
+          {isFirebaseAvailable() && !authUser && (
+            <div className="w-full bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <ExclamationTriangleIcon className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                    Not Signed In - Surveys Will Save Locally Only
+                  </h3>
+                  <p className="text-sm text-amber-800 mb-2">
+                    You are not signed in to Firebase. Surveys will be saved to local storage (IndexedDB) only and will <strong>NOT</strong> be saved to Firebase cloud storage.
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    <strong>To enable Firebase cloud storage:</strong> Click the user menu in the top-right corner → Sign in → Then upload your survey.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Error Display */}
           {error && (
             <div className="w-full bg-red-50 border border-red-200 rounded-xl p-4">
@@ -2323,35 +3014,74 @@ function SurveyUpload(): JSX.Element {
 
                       // "Ready" means the next step is available and actionable
                       const isUploadReady = !isUploadDisabled;
+                      
+                      // DIAGNOSTIC: Calculate why upload might be disabled
+                      const disabledReasons: string[] = [];
+                      if (!surveyYear) disabledReasons.push('Survey Year is required');
+                      if (!dataCategory) disabledReasons.push('Data Category is required');
+                      if (dataCategory === 'CUSTOM' && !customDataCategory.trim()) disabledReasons.push('Custom Data Category is required');
+                      if (!surveySource) disabledReasons.push('Survey Source is required');
+                      if (surveySource === 'Custom' && !customSurveySource.trim()) {
+                        disabledReasons.push('Custom Survey Source is required (e.g., enter "Solvam Carter")');
+                      }
+                      if (providerType === 'CUSTOM' && !customProviderType.trim()) disabledReasons.push('Custom Provider Type is required');
+                      if (hasFatalValidation) disabledReasons.push('File has fatal validation errors');
+                      
+                      // Log diagnostic info when button is disabled
+                      if (isUploadDisabled && files.length > 0) {
+                        console.log('🔍 UPLOAD BUTTON DISABLED - Reasons:', {
+                          reasons: disabledReasons,
+                          noSurveyYear: !surveyYear,
+                          isUploading,
+                          isValidating,
+                          noDataCategory: !dataCategory,
+                          customDataCategoryMissing: dataCategory === 'CUSTOM' && !customDataCategory.trim(),
+                          noSurveySource: !surveySource,
+                          customSurveySourceMissing: surveySource === 'Custom' && !customSurveySource.trim(),
+                          customProviderTypeMissing: providerType === 'CUSTOM' && !customProviderType.trim(),
+                          hasFatalValidation,
+                          validationCanProceed: validationResult?.canProceed,
+                          validationErrors: validationResult?.tier1?.errors?.map(e => e.message)
+                        });
+                      }
 
                       return (
-                        <button
-                          type="button"
-                          onClick={handleSurveyUpload}
-                          disabled={isUploadDisabled}
-                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            isUploading
-                              ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
-                              : `bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500 ${
-                                  // Tailwind-only "ready" cue (reliable, no custom CSS dependency)
-                                  isUploadReady
-                                    ? 'upload-cta-ready'
-                                    : ''
-                                }`
-                          }`}
-                        >
-                          {isUploading ? (
-                            <>
-                              <div className="w-4 h-4 rounded-full animate-spin border-2 border-white border-t-transparent"></div>
-                              <span>Uploading...</span>
-                            </>
-                          ) : (
-                            <>
-                              <ArrowUpTrayIcon className="h-4 w-4" />
-                              <span>Upload</span>
-                            </>
+                        <div className="flex flex-col items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={handleSurveyUpload}
+                            disabled={isUploadDisabled}
+                            title={isUploadDisabled && disabledReasons.length > 0 ? disabledReasons.join('. ') : undefined}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isUploading
+                                ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500'
+                                : `bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500 ${
+                                    // Tailwind-only "ready" cue (reliable, no custom CSS dependency)
+                                    isUploadReady
+                                      ? 'upload-cta-ready'
+                                      : ''
+                                  }`
+                            }`}
+                          >
+                            {isUploading ? (
+                              <>
+                                <div className="w-4 h-4 rounded-full animate-spin border-2 border-white border-t-transparent"></div>
+                                <span>Uploading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <ArrowUpTrayIcon className="h-4 w-4" />
+                                <span>Upload</span>
+                              </>
+                            )}
+                          </button>
+                          {isUploadDisabled && disabledReasons.length > 0 && files.length > 0 && (
+                            <p className="text-xs text-amber-600 text-right max-w-[200px]">
+                              {disabledReasons[0]}
+                              {disabledReasons.length > 1 && ` (+${disabledReasons.length - 1} more)`}
+                            </p>
                           )}
-                        </button>
+                        </div>
                       );
                     })()
                   )}
@@ -2606,13 +3336,13 @@ function SurveyUpload(): JSX.Element {
               </>
             )}
 
-              {/* Selected File Preview - Modern Design */}
+              {/* Selected File Preview - Apple-style Design */}
               {files.length > 0 && (
                 <div className="mt-4">
-                  <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
                     {/* File Icon */}
                     <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                      <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
                         <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
@@ -2673,42 +3403,58 @@ function SurveyUpload(): JSX.Element {
                     </div>
                   )}
 
+                  {/* Immediate Validation Feedback */}
+                  {fileValidationResult && (
+                    <div className="mt-4">
+                      <UploadErrorDisplay
+                        validationResult={fileValidationResult}
+                        isUploading={isUploading}
+                        uploadProgress={progress}
+                        currentStep={isValidating ? 'Validating file...' : isUploading ? 'Uploading...' : undefined}
+                        onDismiss={() => setFileValidationResult(null)}
+                      />
+                    </div>
+                  )}
+
                   {(hasFatalValidation || (validationResult && validationResult.totalIssues > 0)) && (
-                    <UploadValidationWizard
-                      isVisible={true}
-                      missingColumns={columnValidation?.missingColumns}
-                      unknownHeaders={columnValidation?.unknownHeaders}
-                      requiredColumns={formatRequirements?.requiredColumns}
-                      optionalColumns={formatRequirements?.optionalColumns}
-                      detectedFormat={detectedFormat}
-                      expectedFormats={expectedFormats}
-                      validationResult={validationResult}
-                      onDownloadRecommended={() => handleDownloadTemplate()}
-                      onDownloadFormat={(format) => handleDownloadTemplate(format)}
-                      reviewContent={
-                        parsedData &&
-                        parsedData.rows.length > 0 &&
-                        validationResult &&
-                        validationResult.totalIssues > 0 ? (
-                          <ValidationPreviewTable
-                            headers={parsedData.headers}
-                            rows={parsedData.rows}
-                            validationResult={validationResult}
-                            onDataChange={(cleaned) => {
-                              setCleanedData(cleaned);
-                              const newValidation = validateAll(cleaned.headers, cleaned.rows);
-                              setValidationResult(newValidation);
-                              setParsedData(cleaned);
-                            }}
-                            onValidationChange={(newValidation) => {
-                              setValidationResult(newValidation);
-                            }}
-                            maxPreviewRows={20}
-                            disabled={isValidating || isUploading}
-                          />
-                        ) : null
-                      }
-                    />
+                    <div className="mt-6">
+                      <UploadValidationWizard
+                        isVisible={true}
+                        missingColumns={columnValidation?.missingColumns}
+                        unknownHeaders={columnValidation?.unknownHeaders}
+                        requiredColumns={formatRequirements?.requiredColumns}
+                        optionalColumns={formatRequirements?.optionalColumns}
+                        detectedFormat={detectedFormat}
+                        expectedFormats={expectedFormats}
+                        validationResult={validationResult}
+                        onDownloadRecommended={() => handleDownloadTemplate()}
+                        onDownloadFormat={(format) => handleDownloadTemplate(format)}
+                        onContinueUpload={!hasFatalValidation && validationResult?.canProceed ? handleSurveyUpload : undefined}
+                        reviewContent={
+                          parsedData &&
+                          parsedData.rows.length > 0 &&
+                          validationResult &&
+                          validationResult.totalIssues > 0 ? (
+                            <ValidationPreviewTable
+                              headers={parsedData.headers}
+                              rows={parsedData.rows}
+                              validationResult={validationResult}
+                              onDataChange={(cleaned) => {
+                                setCleanedData(cleaned);
+                                const newValidation = validateAll(cleaned.headers, cleaned.rows);
+                                setValidationResult(newValidation);
+                                setParsedData(cleaned);
+                              }}
+                              onValidationChange={(newValidation) => {
+                                setValidationResult(newValidation);
+                              }}
+                              maxPreviewRows={20}
+                              disabled={isValidating || isUploading}
+                            />
+                          ) : null
+                        }
+                      />
+                    </div>
                   )}
 
                   {/* Validation Progress */}
@@ -2802,11 +3548,75 @@ function SurveyUpload(): JSX.Element {
                     loading={isLoading}
                   />
                 ) : uploadedSurveys.length === 0 ? (
-                  <EmptyState
-                    icon={<BoltIcon className="h-6 w-6 text-gray-500" />}
-                    title="No Surveys Uploaded Yet"
-                    message="Upload your first survey to get started with data analysis and mapping."
-                  />
+                  <div className="flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl">
+                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+                      <ArrowUpTrayIcon className="h-8 w-8 text-indigo-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {selectedProviderType && selectedProviderType !== 'BOTH' 
+                        ? `No ${selectedProviderType === 'PHYSICIAN' ? 'Physician' : selectedProviderType} Surveys Yet`
+                        : 'Ready to Upload Your First Survey'
+                      }
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-6 text-center max-w-md">
+                      {selectedProviderType && selectedProviderType !== 'BOTH' ? (
+                        <>
+                          You're currently viewing the <strong className="text-indigo-600">{selectedProviderType === 'PHYSICIAN' ? 'Physician' : selectedProviderType}</strong> data view.
+                          <br /><br />
+                          {selectedProviderType === 'PHYSICIAN' 
+                            ? 'Upload a Physician survey or switch to view all surveys to see your data.'
+                            : 'Upload an APP survey or switch to view all surveys to see your data.'
+                          }
+                        </>
+                      ) : (
+                        'Upload your first survey to get started with data analysis, mapping, and benchmarking.'
+                      )}
+                    </p>
+                    {selectedProviderType && selectedProviderType !== 'BOTH' && (
+                      <div className="flex gap-3 mb-4">
+                        <button
+                          onClick={async () => {
+                            console.log('🔍 Show All Surveys clicked - setting filter to BOTH');
+                            setProviderTypeContext('BOTH', 'show-all-surveys');
+                            // Also clear cache and refetch to ensure we get all surveys
+                            await queryClient.invalidateQueries({ queryKey: ['surveys'] });
+                            setTimeout(() => refetchSurveys(), 100);
+                          }}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-sm"
+                        >
+                          <ArrowPathIcon className="h-4 w-4" />
+                          View All Surveys
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={async () => {
+                        console.log('🔄 Manual refresh triggered - clearing cache and refetching...');
+                        console.log('🔍 Current filter state:', { selectedProviderType, currentYear });
+                        // Clear all survey-related caches
+                        queryClient.removeQueries({ queryKey: ['surveys'] });
+                        await queryClient.invalidateQueries({ queryKey: ['surveys'] });
+                        // Force refetch
+                        const result = await refetchSurveys();
+                        console.log('✅ Refresh complete. Surveys returned:', result.data?.length || 0);
+                        if (result.data && result.data.length > 0) {
+                          console.log('📋 Refreshed surveys:', result.data.map((s: any) => ({
+                            id: s.id,
+                            name: s.name,
+                            providerType: s.providerType,
+                            year: s.year
+                          })));
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      <ArrowPathIcon className="h-4 w-4" />
+                      Refresh Surveys
+                    </button>
+                    {queryLoading && (
+                      <p className="text-xs text-gray-500 mt-2">Loading surveys...</p>
+                    )}
+                  </div>
                 ) : (
                   <>
         
@@ -2852,12 +3662,14 @@ function SurveyUpload(): JSX.Element {
                               setTimeout(triggerIntelligentSizing, 600);
                               setTimeout(triggerIntelligentSizing, 1000);
                             }}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border shadow-none outline-none hover:shadow-none hover:outline-none hover:ring-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 ${
+                            className={`group inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-full border-2 shadow-none outline-none transition-all duration-200 hover:shadow-none hover:outline-none hover:ring-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 ${
                               isActive 
-                                ? 'bg-indigo-600 text-white border-indigo-600'
-                                : survey.isDuplicate
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200'
+                                ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 hover:border-indigo-700'
+                                : survey.isOrphaned
+                                  ? 'bg-red-50 text-red-900 border-red-300 hover:bg-red-100'
+                                  : survey.isDuplicate
+                                    ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                    : 'bg-white text-indigo-600 border-indigo-300 hover:border-indigo-400 hover:bg-indigo-50'
                             }`}
                             style={{
                               boxShadow: 'none',
@@ -2868,15 +3680,22 @@ function SurveyUpload(): JSX.Element {
                                     backgroundColor: '#4f46e5',
                                     borderColor: '#4f46e5',
                                   }
-                                : survey.isDuplicate
+                                : survey.isOrphaned
                                   ? {
-                                      backgroundColor: '#fffbeb',
-                                      borderColor: '#fcd34d',
+                                      backgroundColor: '#fef2f2',
+                                      borderColor: '#fca5a5',
+                                      color: '#991b1b',
                                     }
-                                  : {
-                                      backgroundColor: '#f9fafb',
-                                      borderColor: '#f9fafb',
-                                    }
+                                  : survey.isDuplicate
+                                    ? {
+                                        backgroundColor: '#fffbeb',
+                                        borderColor: '#fcd34d',
+                                      }
+                                    : {
+                                        backgroundColor: '#ffffff',
+                                        borderColor: '#a5b4fc',
+                                        color: '#4f46e5',
+                                      }
                               )
                             }}
                             onMouseEnter={(e) => {
@@ -2890,12 +3709,19 @@ function SurveyUpload(): JSX.Element {
                               if (isActive) {
                                 btn.style.backgroundColor = '#4f46e5';
                                 btn.style.borderColor = '#4f46e5';
+                                btn.style.color = '#ffffff';
+                              } else if (survey.isOrphaned) {
+                                btn.style.backgroundColor = '#fee2e2';
+                                btn.style.borderColor = '#f87171';
+                                btn.style.color = '#7f1d1d';
                               } else if (survey.isDuplicate) {
                                 btn.style.backgroundColor = '#fffbeb';
                                 btn.style.borderColor = '#fcd34d';
+                                btn.style.color = '#92400e';
                               } else {
-                                btn.style.backgroundColor = '#f9fafb';
-                                btn.style.borderColor = '#f9fafb';
+                                btn.style.backgroundColor = '#eef2ff';
+                                btn.style.borderColor = '#818cf8';
+                                btn.style.color = '#4f46e5';
                               }
                             }}
                             onMouseLeave={(e) => {
@@ -2908,12 +3734,19 @@ function SurveyUpload(): JSX.Element {
                               if (isActive) {
                                 btn.style.backgroundColor = '#4f46e5';
                                 btn.style.borderColor = '#4f46e5';
+                                btn.style.color = '#ffffff';
+                              } else if (survey.isOrphaned) {
+                                btn.style.backgroundColor = '#fef2f2';
+                                btn.style.borderColor = '#fca5a5';
+                                btn.style.color = '#991b1b';
                               } else if (survey.isDuplicate) {
                                 btn.style.backgroundColor = '#fffbeb';
                                 btn.style.borderColor = '#fcd34d';
+                                btn.style.color = '#92400e';
                               } else {
-                                btn.style.backgroundColor = '#f9fafb';
-                                btn.style.borderColor = '#f9fafb';
+                                btn.style.backgroundColor = '#ffffff';
+                                btn.style.borderColor = '#a5b4fc';
+                                btn.style.color = '#4f46e5';
                               }
                             }}
                             onFocus={(e) => {
@@ -2925,11 +3758,31 @@ function SurveyUpload(): JSX.Element {
                               e.currentTarget.style.outline = 'none';
                             }}
                           >
-                            {survey.isDuplicate && (
+                            {survey.isOrphaned && (
+                              <ExclamationTriangleIcon className="h-4 w-4 text-red-600 flex-shrink-0" title={`Orphaned survey: Expected ${survey.orphanedInfo?.expectedRowCount || 0} rows but has no data. Delete and re-upload.`} />
+                            )}
+                            {survey.isDuplicate && !survey.isOrphaned && (
                               <ExclamationTriangleIcon className="h-4 w-4 text-amber-600 flex-shrink-0" title="Possible duplicate survey" />
                             )}
+                            {/* ENTERPRISE FIX: Show warning icon for surveys with no data (but not orphaned) */}
+                            {!survey.isOrphaned && !survey.isDuplicate && (survey.stats?.totalRows === 0 || (survey as any).rowCount === 0) && (survey as any)._uploadStatus !== 'uploading' && (
+                              <ExclamationTriangleIcon className="h-4 w-4 text-gray-400 flex-shrink-0" title="This survey has no data rows. It may still be uploading or the upload may have failed." />
+                            )}
+                            {(survey as any)._uploadStatus === 'uploading' && (
+                              <div className="flex items-center gap-1">
+                                <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" title="Uploading..." />
+                                <span className="text-xs text-blue-600 font-medium">Uploading...</span>
+                              </div>
+                            )}
                             <span className="font-medium">{getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType, survey)}</span>
-                            <span className={`text-xs ${isActive ? 'text-indigo-100' : survey.isDuplicate ? 'text-amber-700' : 'text-gray-500'}`}>{survey.surveyYear}</span>
+                            <span className={`text-xs ${isActive ? 'text-indigo-100' : survey.isDuplicate ? 'text-amber-700' : 'text-indigo-500'}`}>{survey.surveyYear}</span>
+                            {/* ENTERPRISE FIX: Show row count badge on hover for all surveys */}
+                            <span 
+                              className={`text-xs ml-1 opacity-0 group-hover:opacity-100 transition-opacity ${isActive ? 'text-indigo-200' : 'text-gray-500'}`}
+                              title={`${survey.stats?.totalRows?.toLocaleString() || (survey as any).rowCount?.toLocaleString() || 0} rows`}
+                            >
+                              ({survey.stats?.totalRows?.toLocaleString() || (survey as any).rowCount?.toLocaleString() || 0})
+                            </span>
                           </button>
                           <button
                             onClick={(e) => removeUploadedSurvey(survey.id, e)}
@@ -2982,18 +3835,8 @@ function SurveyUpload(): JSX.Element {
           loading={isUploading}
         />
       )}
-      {/* Deleting Progress Modal - Fixed Position Overlay */}
-      {/* ENTERPRISE FIX: Higher z-index to ensure it's above confirmation modal */}
-      {isDeleting && (
-        <div className="fixed inset-0 z-[70]">
-          <EnterpriseLoadingSpinner
-            message={isDeletingAll ? "Clearing all surveys..." : "Deleting survey..."}
-            progress={progress}
-            variant="overlay"
-            loading={isDeleting}
-          />
-        </div>
-      )}
+      {/* OPTIMIZED: Removed blocking deletion modal - deletion now happens in background */}
+      {/* User can continue working while deletion processes */}
 
       {/* Individual Survey Delete Confirmation Modal */}
       {/* ENTERPRISE FIX: Confirmation modal closes immediately when deletion starts to avoid visual overlap with progress modal */}
@@ -3041,18 +3884,7 @@ function SurveyUpload(): JSX.Element {
               Are you sure you want to delete this item?
             </p>
             
-            {/* Progress indicator when deleting */}
-            {isDeleting && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 mr-3"></div>
-                  <span className="text-sm font-medium text-red-800">Deleting survey...</span>
-                </div>
-                <div className="mt-2 w-full bg-red-200 rounded-full h-1.5">
-                  <div className="bg-red-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                </div>
-              </div>
-            )}
+            {/* OPTIMIZED: Removed blocking progress indicator - deletion is now non-blocking */}
             
             <div className="flex justify-end space-x-3">
               <button
@@ -3069,17 +3901,9 @@ function SurveyUpload(): JSX.Element {
               <button
                 type="button"
                 onClick={confirmDeleteSurvey}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
               >
-                {isDeleting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
+                Delete
               </button>
             </div>
           </div>

@@ -50,30 +50,44 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
     );
   }
 
-  // Firebase-only tenant isolation: always require authentication
-  const shouldRequireAuth = true;
+  // Check if authentication should be required
+  // Allow bypassing auth requirement via environment variable for IndexedDB-only mode
+  const envRequireAuth = process.env.REACT_APP_REQUIRE_AUTH;
+  const shouldRequireAuth = envRequireAuth === undefined 
+    ? (process.env.NODE_ENV === 'production') // Default: require in production, optional in development
+    : envRequireAuth === 'true';
   
-  // If Firebase is not available
+  // If Firebase is not available and auth is required, show error
+  // If Firebase is not available and auth is not required, allow IndexedDB-only mode
   if (!isAvailable) {
-    return (
-      <Box 
-        display="flex" 
-        flexDirection="column"
-        alignItems="center" 
-        justifyContent="center"
-        minHeight="100vh"
-        gap={2}
-        bgcolor="grey.50"
-        p={3}
-      >
-        <Typography variant="h5" color="error" sx={{ mb: 2 }}>
-          Authentication Required
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
-          Firebase authentication is required. Please configure Firebase environment variables.
-        </Typography>
-      </Box>
-    );
+    if (shouldRequireAuth) {
+      return (
+        <Box 
+          display="flex" 
+          flexDirection="column"
+          alignItems="center" 
+          justifyContent="center"
+          minHeight="100vh"
+          gap={2}
+          bgcolor="grey.50"
+          p={3}
+        >
+          <Typography variant="h5" color="error" sx={{ mb: 2 }}>
+            Authentication Required
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center', maxWidth: 500 }}>
+            Firebase authentication is required. Please configure Firebase environment variables.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 500 }}>
+            To use IndexedDB-only mode (no authentication), set REACT_APP_REQUIRE_AUTH=false in your .env.local file.
+          </Typography>
+        </Box>
+      );
+    }
+    
+    // Firebase not available but auth not required - allow IndexedDB-only mode
+    console.log('🔍 AuthGuard: Firebase unavailable, running in IndexedDB-only mode (no authentication)');
+    return <>{children}</>;
   }
 
   // If authentication is required but user is not authenticated

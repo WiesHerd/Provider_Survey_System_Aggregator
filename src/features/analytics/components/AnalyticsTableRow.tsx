@@ -178,11 +178,22 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
           metrics = dynamicRow.variables[normalizedVarName];
           
           // CRITICAL DEBUG: Log data lookup for base_salary and other variables that are failing
-          if (index < 3 && (varName === 'base_salary' || normalizedVarName === 'base_salary' || !metrics)) {
+          // ENHANCED: Also log for SullivanCotter APP data to diagnose TCC issue
+          const isSullivanCotterAPP = legacyRow.surveySource?.toLowerCase().includes('sullivan') && 
+                                      (legacyRow.providerType === 'APP' || legacyRow.providerType === 'Nurse Practitioner');
+          const shouldLog = index < 3 && (
+            varName === 'base_salary' || 
+            normalizedVarName === 'base_salary' || 
+            !metrics || 
+            (isSullivanCotterAPP && (varName.toLowerCase().includes('tcc') || varName.toLowerCase().includes('total cash')))
+          );
+          
+          if (shouldLog) {
             logger.debug('🔍 AnalyticsTableRow: Variable Data Lookup:', {
               rowIndex: index,
               surveySource: legacyRow.surveySource,
               specialty: legacyRow.standardizedName || legacyRow.surveySpecialty,
+              providerType: legacyRow.providerType,
               varName,
               normalizedVarName,
               isDisplayName,
@@ -200,7 +211,15 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
                 p90: metrics.p90
               } : null,
               allVariableKeys: dynamicRow.variables ? Object.keys(dynamicRow.variables).join(', ') : 'none',
-              exactMatchFound: dynamicRow.variables ? dynamicRow.variables.hasOwnProperty(normalizedVarName) : false
+              exactMatchFound: dynamicRow.variables ? dynamicRow.variables.hasOwnProperty(normalizedVarName) : false,
+              isSullivanCotterAPP,
+              // CRITICAL: Show all variable keys and their p50 values for SullivanCotter APP
+              allVariablesWithValues: isSullivanCotterAPP && dynamicRow.variables ? 
+                Object.entries(dynamicRow.variables).map(([key, val]: [string, any]) => ({
+                  key,
+                  p50: val?.p50 || 0,
+                  hasData: val?.p50 > 0
+                })) : []
             });
           }
           
@@ -221,6 +240,70 @@ export const AnalyticsTableRow: React.FC<AnalyticsTableRowProps> = memo(({
                 metrics = dynamicRow.variables[altKey];
                 logger.debug(`✅ Found Call Pay variable with alternative key: ${altKey} (was looking for ${normalizedVarName})`);
                 break;
+              }
+            }
+          }
+          
+          // CRITICAL FIX: If lookup failed for TCC, try alternative key variations
+          // This handles cases where variable names don't normalize correctly (e.g., SullivanCotter APP)
+          if (!metrics && (normalizedVarName === 'tcc' || varName.toLowerCase().includes('tcc') || varName.toLowerCase().includes('total cash'))) {
+            // Try alternative key variations for TCC
+            const tccAlternativeKeys = [
+              'total_cash_compensation',
+              'total_compensation',
+              'total_cash_comp',
+              'cash_compensation',
+              'total_comp',
+              'tcc', // Try exact match again
+              'compensation' // Last resort
+            ];
+            
+            for (const altKey of tccAlternativeKeys) {
+              if (dynamicRow.variables[altKey] && dynamicRow.variables[altKey].p50 > 0) {
+                metrics = dynamicRow.variables[altKey];
+                logger.debug(`✅ Found TCC variable with alternative key: ${altKey} (was looking for ${normalizedVarName})`, {
+                  surveySource: legacyRow.surveySource,
+                  metrics: {
+                    p50: metrics.p50,
+                    p25: metrics.p25,
+                    p75: metrics.p75,
+                    p90: metrics.p90
+                  }
+                });
+                break;
+              }
+            }
+            
+            // ENTERPRISE FIX: If still no match, try fuzzy matching on all available variables
+            // This handles cases where variable names are completely different (e.g., "Compensation" instead of "TCC")
+            if (!metrics && dynamicRow.variables) {
+              const allVariableKeys = Object.keys(dynamicRow.variables);
+              // Look for any variable that might be TCC based on name similarity
+              for (const key of allVariableKeys) {
+                const keyLower = key.toLowerCase();
+                const varMetrics = dynamicRow.variables[key];
+                // Check if this variable name suggests it's TCC and has data
+                if (varMetrics && varMetrics.p50 > 0 && (
+                  keyLower.includes('tcc') ||
+                  keyLower.includes('total') && (keyLower.includes('cash') || keyLower.includes('comp')) ||
+                  keyLower === 'compensation' ||
+                  (keyLower.includes('comp') && !keyLower.includes('per') && !keyLower.includes('rvu'))
+                )) {
+                  metrics = varMetrics;
+                  logger.debug(`✅ Found TCC variable via fuzzy match: ${key} (was looking for ${normalizedVarName})`, {
+                    surveySource: legacyRow.surveySource,
+                    specialty: legacyRow.standardizedName || legacyRow.surveySpecialty,
+                    allAvailableKeys: allVariableKeys,
+                    selectedKey: key,
+                    metrics: {
+                      p50: metrics.p50,
+                      p25: metrics.p25,
+                      p75: metrics.p75,
+                      p90: metrics.p90
+                    }
+                  });
+                  break;
+                }
               }
             }
           }

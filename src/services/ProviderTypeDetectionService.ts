@@ -32,7 +32,7 @@ export interface ProviderTypeDetectionResult {
  */
 export class ProviderTypeDetectionService {
   private cache: ProviderTypeDetectionResult | null = null;
-  private cacheExpiry: number = 2 * 60 * 1000; // 2 minutes
+  private cacheExpiry: number = 10 * 60 * 1000; // 10 minutes (increased from 2 for better performance)
 
   constructor() {
     // DataService is accessed via getDataService() which handles both IndexedDB and Firebase
@@ -55,7 +55,16 @@ export class ProviderTypeDetectionService {
       console.log(`🔍 Detecting provider types from ${storageMode}...`);
       
       const allSurveys = await dataService.getAllSurveys();
-      console.log(`📊 Found ${allSurveys.length} surveys to analyze`);
+      console.log(`📊 Found ${allSurveys.length} surveys to analyze for provider types`);
+      
+      // DIAGNOSTIC: Log all surveys with their provider types
+      console.log('🔍 DIAGNOSTIC: All surveys found:', allSurveys.map((s: any) => ({
+        id: s.id,
+        name: s.name || s.type,
+        providerType: s.providerType,
+        dataCategory: s.dataCategory,
+        year: s.year || s.surveyYear
+      })));
       
       const providerTypeMap = new Map<string, ProviderTypeInfo>();
 
@@ -67,13 +76,33 @@ export class ProviderTypeDetectionService {
         const surveyType = (survey as any).type || '';
         const surveyName = (survey as any).name || '';
         
-        // CRITICAL FIX: Also check dataCategory for Call Pay surveys
-        // If survey has dataCategory === 'CALL_PAY', treat it as CALL type
-        // This handles cases where Call Pay surveys might have providerType !== 'CALL'
+        console.log(`🔍 Processing survey ${index + 1}/${allSurveys.length}:`, {
+          name: surveyName,
+          providerType: providerType,
+          dataCategory: dataCategory,
+          type: surveyType
+        });
+        
+        // CRITICAL FIX: Always treat Call Pay surveys as CALL type
+        // This must override providerType to ensure Call Pay appears in Data View.
         let effectiveProviderType: ProviderType | 'OTHER' | undefined = providerType;
         
-        // If no providerType, try to infer from dataCategory
-        if (!effectiveProviderType && dataCategory === 'CALL_PAY') {
+        // CRITICAL: Normalize providerType first - handle all variations
+        if (effectiveProviderType) {
+          const normalized = (effectiveProviderType as string).toUpperCase().trim();
+          if (normalized === 'STAFF PHYSICIAN' || normalized === 'STAFFPHYSICIAN' || 
+              normalized === 'PHYSICIAN' || normalized === 'PHYS') {
+            effectiveProviderType = 'PHYSICIAN';
+            console.log(`  🔧 Normalized providerType: "${providerType}" → "PHYSICIAN"`);
+          } else if (normalized === 'APP' || normalized === 'ADVANCED PRACTICE PROVIDER' || 
+                     normalized === 'ADVANCED PRACTICE') {
+            effectiveProviderType = 'APP';
+          } else if (normalized === 'CALL' || normalized === 'CALL PAY') {
+            effectiveProviderType = 'CALL';
+          }
+        }
+        
+        if (dataCategory === 'CALL_PAY') {
           effectiveProviderType = 'CALL';
         }
         
@@ -88,8 +117,12 @@ export class ProviderTypeDetectionService {
                      lowerType.includes('advanced practice') || lowerName.includes('advanced practice')) {
             effectiveProviderType = 'APP';
           } else if (lowerType.includes('physician') || lowerName.includes('physician') ||
-                     lowerType.includes('phys') || lowerName.includes('phys')) {
+                     lowerType.includes('phys') || lowerName.includes('phys') ||
+                     lowerName.includes('mgma') || lowerName.includes('gallagher') ||
+                     lowerName.includes('sullivancotter') || lowerName.includes('sullivan cotter')) {
+            // If name contains physician-related terms or common survey sources (usually physician)
             effectiveProviderType = 'PHYSICIAN';
+            console.log(`  🔍 Inferred PHYSICIAN from name/type: "${surveyName}"`);
           } else {
             // Default to PHYSICIAN if we can't determine (most surveys are physician)
             effectiveProviderType = 'PHYSICIAN';
@@ -100,6 +133,8 @@ export class ProviderTypeDetectionService {
         if (effectiveProviderType) {
           const key = effectiveProviderType === 'OTHER' ? `OTHER_${customDescription || 'Unknown'}` : effectiveProviderType;
           
+          console.log(`  ✅ Classified as: ${effectiveProviderType} (key: ${key})`);
+          
           if (!providerTypeMap.has(key)) {
             providerTypeMap.set(key, {
               type: effectiveProviderType,
@@ -109,6 +144,7 @@ export class ProviderTypeDetectionService {
               lastUpdated: null,
               customDescription: customDescription
             });
+            console.log(`  📝 Created new provider type entry: ${effectiveProviderType}`);
           }
 
           const info = providerTypeMap.get(key)!;
@@ -119,8 +155,15 @@ export class ProviderTypeDetectionService {
           if (!info.lastUpdated || surveyDate > info.lastUpdated) {
             info.lastUpdated = surveyDate;
           }
+          
+          console.log(`  📊 Updated count for ${effectiveProviderType}: ${info.surveyCount} surveys`);
         } else {
-          console.warn(`⚠️ Could not determine provider type for survey: ${surveyName || survey.id}`);
+          console.warn(`⚠️ Could not determine provider type for survey: ${surveyName || survey.id}`, {
+            providerType,
+            dataCategory,
+            surveyType,
+            surveyName
+          });
         }
       });
 

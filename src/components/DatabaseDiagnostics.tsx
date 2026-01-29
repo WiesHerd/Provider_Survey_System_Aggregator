@@ -107,7 +107,7 @@ export const DatabaseDiagnostics: React.FC = () => {
     const isCorporate = userAgent.includes('microsoft') || 
                        userAgent.includes('internet explorer') ||
                        userAgent.includes('edge/legacy') ||
-                       userAgent.includes('chrome') && userAgent.includes('edg/');
+                       (userAgent.includes('chrome') && userAgent.includes('edg/'));
 
     newResults.push({
       test: 'Corporate Environment',

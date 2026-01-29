@@ -1,382 +1,264 @@
 /**
- * Format Detection System
+ * Format Detection System - Normalized Format Only
  * 
- * Detects CSV format with confidence scoring and maps to survey sources
+ * Enterprise Approach: One standard format for all survey data
+ * Users convert their data to our format (like Salesforce, QuickBooks, SAP)
+ * 
+ * Benefits:
+ * - Simple, predictable validation
+ * - Zero edge cases from format conversion
+ * - Consistent data structure
+ * - Easy to maintain and debug
  */
 
-export type CSVFormat = 'normalized' | 'wide' | 'wide_variable';
+export type CSVFormat = 'normalized';
 
 export interface FormatDetectionResult {
   format: CSVFormat | undefined;
   confidence: number; // 0-100
   detectedColumns: string[];
-  expectedFormat?: CSVFormat;
-  formatMismatch?: boolean;
+  missingRequired: string[];
   suggestions: string[];
 }
 
 /**
- * Survey source to format mapping
+ * Required columns for normalized format
+ * These are the core columns needed for all survey data
  */
-export const SURVEY_FORMAT_MAP: Record<string, CSVFormat> = {
-  'MGMA': 'wide_variable',
-  'SullivanCotter': 'wide_variable',
-  'Sullivan Cotter': 'wide_variable',
-  'Gallagher': 'normalized',
-  'ECG': 'wide',
-  'AMGA': 'normalized'
+export const REQUIRED_COLUMNS = [
+  'specialty',
+  'variable',
+  'p25',
+  'p50',
+  'p75',
+  'p90'
+];
+
+/**
+ * Optional columns that enhance data quality
+ */
+export const OPTIONAL_COLUMNS = [
+  'provider_type',
+  'geographic_region',
+  'n_orgs',
+  'n_incumbents'
+];
+
+/**
+ * All supported columns (required + optional)
+ */
+export const ALL_COLUMNS = [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS];
+
+/**
+ * Column aliases - alternative names we accept
+ * Enhanced with SullivanCotter and MGMA wide format patterns
+ */
+const COLUMN_ALIASES: Record<string, string[]> = {
+  'specialty': ['specialty', 'speciality', 'specialty name', 'medical specialty'],
+  'variable': ['variable', 'benchmark', 'metric', 'measure', 'compensation type'],
+  'provider_type': ['provider_type', 'provider type', 'type', 'role', 'provider category'],
+  'geographic_region': ['geographic_region', 'geographic region', 'region', 'location', 'geography', 'market'],
+  'n_orgs': ['n_orgs', 'n_org', 'orgs', 'organizations', 'group_count', 'group count', 'number of organizations', '# orgs'],
+  'n_incumbents': ['n_incumbents', 'n_incumbent', 'incumbents', 'indv_count', 'individual_count', 'individual count', 'number of incumbents', '# incumbents'],
+  'p25': ['p25', '25th', '25th%', '25th percentile', '25%tile', '25th %ile'],
+  'p50': ['p50', '50th', '50th%', '50th percentile', 'median', '50%tile', '50th %ile'],
+  'p75': ['p75', '75th', '75th%', '75th percentile', '75%tile', '75th %ile'],
+  'p90': ['p90', '90th', '90th%', '90th percentile', '90%tile', '90th %ile']
 };
 
 /**
- * Detect CSV format from headers with confidence scoring
+ * Detect SullivanCotter/MGMA wide format patterns
+ * These files have columns like: tcc_p25, tcc_p50, wrvu_p25, etc.
+ */
+function detectWideVariableFormat(headers: string[]): {
+  isWideFormat: boolean;
+  detectedVariables: string[];
+  suggestions: string[];
+} {
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  
+  // Pattern: variable_p25, variable_p50, variable_p75, variable_p90
+  const widePattern = /^(\w+)_(p25|p50|p75|p90|25th|50th|75th|90th)$/i;
+  const variablePatterns = new Set<string>();
+  
+  lowerHeaders.forEach(header => {
+    const match = header.match(widePattern);
+    if (match) {
+      const variable = match[1].toLowerCase();
+      // Common variables in wide format
+      if (['tcc', 'wrvu', 'wrvus', 'cf', 'cfs', 'conversion', 'compensation', 'salary', 'bonus'].some(v => variable.includes(v))) {
+        variablePatterns.add(variable);
+      }
+    }
+  });
+  
+  const isWideFormat = variablePatterns.size > 0;
+  const suggestions: string[] = [];
+  
+  if (isWideFormat) {
+    suggestions.push('Your file appears to be in "wide variable" format (SullivanCotter/MGMA style)');
+    suggestions.push('This format has separate columns for each variable (e.g., tcc_p25, wrvu_p25)');
+    suggestions.push('You need to convert it to "normalized" format where each row represents one variable');
+    suggestions.push('Download our template to see the correct format');
+    suggestions.push('Or use our data transformation tool to convert automatically');
+  }
+  
+  return {
+    isWideFormat,
+    detectedVariables: Array.from(variablePatterns),
+    suggestions
+  };
+}
+
+/**
+ * Detect if CSV matches normalized format
+ * Returns confidence score and missing columns
+ * Enhanced with SullivanCotter/MGMA wide format detection
  */
 export function detectFormat(headers: string[]): FormatDetectionResult {
   const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-  const detectedColumns = headers;
   
-  // Check for wide_variable format (tcc_p25, wrvu_p25, cf_p25, etc.) - highest priority
-  const wideVariableResult = detectWideVariableFormat(lowerHeaders);
-  if (wideVariableResult.confidence > 50) {
-    return {
-      ...wideVariableResult,
-      detectedColumns
-    };
-  }
-
-  // Check for wide format SECOND (before normalized) to catch files with wide format columns
-  // This prevents misclassification of wide format files that happen to have a "variable" column
-  const wideResult = detectWideFormat(lowerHeaders);
-  if (wideResult.confidence > 50) {
-    return {
-      ...wideResult,
-      detectedColumns
-    };
-  }
-
-  // Check for normalized format LAST (variable, p25, p50, p75, p90, n_orgs, n_incumbents)
-  // Only if it doesn't match wide format patterns
-  const normalizedResult = detectNormalizedFormat(lowerHeaders);
-  if (normalizedResult.confidence > 50) {
-    return {
-      ...normalizedResult,
-      detectedColumns
-    };
-  }
-
-  // No format detected with sufficient confidence
-  return {
-    format: undefined,
-    confidence: 0,
-    detectedColumns,
-    suggestions: [
-      'Could not detect file format',
-      'Ensure file has required columns for one of the supported formats',
-      'Check sample files for correct format examples'
-    ]
-  };
-}
-
-/**
- * Detect wide_variable format (Sullivan Cotter, MGMA style)
- */
-function detectWideVariableFormat(lowerHeaders: string[]): FormatDetectionResult {
-  const requiredBase = ['specialty', 'provider_type'];
-  const hasBaseColumns = requiredBase.every(col => 
-    lowerHeaders.some(h => h === col || h.includes(col))
-  );
-
-  if (!hasBaseColumns) {
-    return { format: undefined, confidence: 0, detectedColumns: [], suggestions: [] };
-  }
-
-  // Check for variable-specific percentile columns
-  const variablePatterns = [
-    { prefix: 'tcc_p', name: 'TCC' },
-    { prefix: 'wrvu_p', name: 'wRVU' },
-    { prefix: 'cf_p', name: 'CF' }
-  ];
-
-  const foundVariables: string[] = [];
-  const percentileColumns = ['p25', 'p50', 'p75', 'p90'];
+  // First, check if this is a wide variable format (SullivanCotter/MGMA)
+  const wideFormatCheck = detectWideVariableFormat(headers);
   
-  variablePatterns.forEach(({ prefix, name }) => {
-    const foundPercentiles = percentileColumns.filter(p => 
-      lowerHeaders.some(h => h === `${prefix}${p}` || h.includes(`${prefix}${p}`))
-    );
-    if (foundPercentiles.length > 0) {
-      foundVariables.push(name);
-    }
-  });
-
-  if (foundVariables.length === 0) {
-    return { format: undefined, confidence: 0, detectedColumns: [], suggestions: [] };
-  }
-
-  // Calculate confidence based on how many variable columns are found
-  const expectedVariableColumns = variablePatterns.length * percentileColumns.length; // 12 total
-  const foundVariableColumns = foundVariables.length * percentileColumns.length;
-  const confidence = Math.min(100, (foundVariableColumns / expectedVariableColumns) * 100);
-
-  // Check for n_orgs and n_incumbents (optional but common)
-  const hasCounts = lowerHeaders.some(h => 
-    h === 'n_orgs' || h.includes('n_org') || h.includes('group count')
-  ) && lowerHeaders.some(h => 
-    h === 'n_incumbents' || h.includes('n_incumbent') || h.includes('indv count')
-  );
-
-  const suggestions: string[] = [];
-  if (!hasCounts) {
-    suggestions.push('Consider adding n_orgs and n_incumbents columns for better data quality');
-  }
-
-  return {
-    format: 'wide_variable',
-    confidence: Math.round(confidence),
-    detectedColumns: [],
-    suggestions
-  };
-}
-
-/**
- * Detect normalized format (Gallagher, AMGA style)
- */
-function detectNormalizedFormat(lowerHeaders: string[]): FormatDetectionResult {
-  const requiredColumns = [
-    { name: 'variable', aliases: ['variable', 'benchmark'] },
-    { name: 'specialty', aliases: ['specialty'] },
-    { name: 'n_orgs', aliases: ['n_orgs', 'n_org', 'group count', 'organizations'] },
-    { name: 'n_incumbents', aliases: ['n_incumbents', 'n_incumbent', 'indv count', 'incumbents'] },
-    { name: 'p25', aliases: ['p25', '25th%', '25th'] },
-    { name: 'p50', aliases: ['p50', '50th%', '50th'] },
-    { name: 'p75', aliases: ['p75', '75th%', '75th'] },
-    { name: 'p90', aliases: ['p90', '90th%', '90th'] }
-  ];
-
-  const foundColumns: string[] = [];
-  const missingColumns: string[] = [];
-
-  requiredColumns.forEach(({ name, aliases }) => {
-    const found = aliases.some(alias => 
-      lowerHeaders.some(h => h === alias || h.includes(alias))
+  // Map detected columns to standard names
+  const mappedColumns = new Map<string, string>();
+  
+  // Check each standard column against aliases
+  for (const [standardName, aliases] of Object.entries(COLUMN_ALIASES)) {
+    const found = aliases.find(alias => 
+      lowerHeaders.some(h => h === alias.toLowerCase())
     );
     if (found) {
-      foundColumns.push(name);
-    } else {
-      missingColumns.push(name);
+      mappedColumns.set(standardName, found);
     }
-  });
-
-  if (foundColumns.length === 0) {
-    return { format: undefined, confidence: 0, detectedColumns: [], suggestions: [] };
   }
-
-  const confidence = (foundColumns.length / requiredColumns.length) * 100;
-
+  
+  // Check required columns
+  const foundRequired = REQUIRED_COLUMNS.filter(col => mappedColumns.has(col));
+  const missingRequired = REQUIRED_COLUMNS.filter(col => !mappedColumns.has(col));
+  
+  // Calculate confidence based on required columns found
+  let confidence = Math.round((foundRequired.length / REQUIRED_COLUMNS.length) * 100);
+  
+  // Build suggestions
   const suggestions: string[] = [];
-  if (missingColumns.length > 0) {
-    suggestions.push(`Missing columns: ${missingColumns.join(', ')}`);
-    suggestions.push('Ensure all required columns are present for normalized format');
+  
+  // If wide format detected, prioritize that message
+  if (wideFormatCheck.isWideFormat) {
+    suggestions.push(...wideFormatCheck.suggestions);
+    // Lower confidence if wide format detected (needs conversion)
+    confidence = Math.max(0, confidence - 30);
   }
-
+  
+  if (missingRequired.length > 0) {
+    suggestions.push(`Add missing columns: ${missingRequired.join(', ')}`);
+    suggestions.push('Download our template to see the correct format');
+  }
+  
+  // Check for optional columns
+  const foundOptional = OPTIONAL_COLUMNS.filter(col => mappedColumns.has(col));
+  if (foundOptional.length === 0 && !wideFormatCheck.isWideFormat) {
+    suggestions.push('Consider adding optional columns for better data quality: provider_type, geographic_region, n_orgs, n_incumbents');
+  }
+  
+  // Determine if format is valid
+  const isValid = missingRequired.length === 0 && !wideFormatCheck.isWideFormat;
+  
   return {
-    format: 'normalized',
-    confidence: Math.round(confidence),
-    detectedColumns: [],
+    format: isValid ? 'normalized' : undefined,
+    confidence,
+    detectedColumns: headers,
+    missingRequired: wideFormatCheck.isWideFormat 
+      ? [...missingRequired, 'format_conversion_required']
+      : missingRequired,
     suggestions
   };
 }
 
 /**
- * Detect wide format (ECG style)
+ * Get column mapping from detected headers to standard names
+ * Returns map of standardName -> detectedName
  */
-function detectWideFormat(lowerHeaders: string[]): FormatDetectionResult {
-  // Check for specific wide format column patterns first (high confidence indicators)
-  const wideFormatIndicators = [
-    'base salary', 'net collections', 'total encounters', 'panel size',
-    'total cost of benefits', 'total compensation', 'bonus', 'incentive'
-  ];
+export function getColumnMapping(headers: string[]): Map<string, string> {
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  const mapping = new Map<string, string>();
   
-  const hasWideFormatIndicators = wideFormatIndicators.some(indicator =>
-    lowerHeaders.some(h => h.includes(indicator))
-  );
-  
-  // If we have these specific columns, it's definitely wide format
-  if (hasWideFormatIndicators) {
-    return {
-      format: 'wide',
-      confidence: 95,
-      detectedColumns: [],
-      suggestions: []
-    };
-  }
-  
-  // Otherwise, check for standard wide format columns
-  const requiredColumns = [
-    { name: 'Provider Name', aliases: ['provider name', 'physician name', 'name', 'provider'] },
-    { name: 'Specialty', aliases: ['specialty'] },
-    { name: 'Geographic Region', aliases: ['geographic region', 'region', 'location'] },
-    { name: 'Provider Type', aliases: ['provider type', 'type', 'role'] },
-    { name: 'Compensation', aliases: ['compensation', 'salary', 'pay', 'tcc', 'wrvu', 'cf'] }
-  ];
-
-  const foundColumns: string[] = [];
-  const missingColumns: string[] = [];
-
-  requiredColumns.forEach(({ name, aliases }) => {
-    const found = aliases.some(alias => 
-      lowerHeaders.some(h => h === alias || h.includes(alias))
-    );
-    if (found) {
-      foundColumns.push(name);
-    } else {
-      missingColumns.push(name);
+  for (const [standardName, aliases] of Object.entries(COLUMN_ALIASES)) {
+    for (let i = 0; i < headers.length; i++) {
+      const lower = lowerHeaders[i];
+      if (aliases.some(alias => alias.toLowerCase() === lower)) {
+        mapping.set(standardName, headers[i]);
+        break;
+      }
     }
-  });
-
-  if (foundColumns.length === 0) {
-    return { format: undefined, confidence: 0, detectedColumns: [], suggestions: [] };
   }
-
-  const confidence = (foundColumns.length / requiredColumns.length) * 100;
-
-  const suggestions: string[] = [];
-  if (missingColumns.length > 0) {
-    suggestions.push(`Missing columns: ${missingColumns.join(', ')}`);
-    suggestions.push('Ensure all required columns are present for wide format');
-  }
-
-  return {
-    format: 'wide',
-    confidence: Math.round(confidence),
-    detectedColumns: [],
-    suggestions
-  };
+  
+  return mapping;
 }
 
 /**
- * Get expected format for a survey source
+ * Validate that all required columns are present
  */
-export function getExpectedFormat(surveySource: string): CSVFormat | undefined {
-  return SURVEY_FORMAT_MAP[surveySource] || SURVEY_FORMAT_MAP[surveySource.replace(/\s+/g, '')];
-}
-
-/**
- * Compare detected format with expected format
- */
-export function compareFormats(
-  detected: FormatDetectionResult,
-  expectedFormat?: CSVFormat
-): {
-  matches: boolean;
-  mismatchMessage?: string;
-  suggestions: string[];
+export function validateRequiredColumns(headers: string[]): {
+  isValid: boolean;
+  missingColumns: string[];
+  foundColumns: string[];
 } {
-  if (!expectedFormat) {
-    return {
-      matches: true,
-      suggestions: []
-    };
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  const foundColumns: string[] = [];
+  const missingColumns: string[] = [];
+  
+  for (const requiredCol of REQUIRED_COLUMNS) {
+    const aliases = COLUMN_ALIASES[requiredCol] || [requiredCol];
+    const found = aliases.some(alias => 
+      lowerHeaders.includes(alias.toLowerCase())
+    );
+    
+    if (found) {
+      foundColumns.push(requiredCol);
+    } else {
+      missingColumns.push(requiredCol);
+    }
   }
-
-  if (!detected.format) {
-    return {
-      matches: false,
-      mismatchMessage: `Expected ${expectedFormat} format but could not detect format`,
-      suggestions: [
-        `Ensure file matches ${expectedFormat} format`,
-        `Download sample file for ${expectedFormat} format`,
-        'Check required columns for the expected format'
-      ]
-    };
-  }
-
-  if (detected.format !== expectedFormat) {
-    return {
-      matches: false,
-      mismatchMessage: `Detected ${detected.format} format but expected ${expectedFormat} format`,
-      suggestions: [
-        `Convert file to ${expectedFormat} format`,
-        `Download sample file for ${expectedFormat} format`,
-        `Or change survey source to match ${detected.format} format`
-      ]
-    };
-  }
-
+  
   return {
-    matches: true,
-    suggestions: []
+    isValid: missingColumns.length === 0,
+    missingColumns,
+    foundColumns
   };
 }
 
 /**
- * Get format requirements for display
+ * Get format requirements for documentation/display
+ * @deprecated Use getFormatRequirements() without parameters
  */
-export function getFormatRequirements(format: CSVFormat): {
+export function getFormatRequirements(format?: 'normalized'): {
   requiredColumns: string[];
   optionalColumns: string[];
   description: string;
   example: string;
 } {
-  switch (format) {
-    case 'normalized':
-      return {
-        requiredColumns: [
-          'specialty',
-          'variable',
-          'n_orgs',
-          'n_incumbents',
-          'p25',
-          'p50',
-          'p75',
-          'p90'
-        ],
-        optionalColumns: [
-          'geographic_region',
-          'provider_type'
-        ],
-        description: 'Each variable (TCC, wRVU, CF) gets its own row with percentile values',
-        example: 'specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90'
-      };
-    
-    case 'wide_variable':
-      return {
-        requiredColumns: [
-          'specialty',
-          'provider_type',
-          'geographic_region',
-          'n_orgs',
-          'n_incumbents'
-        ],
-        optionalColumns: [
-          'tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90',
-          'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90',
-          'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'
-        ],
-        description: 'All variables in one row with variable-specific percentile columns',
-        example: 'specialty,provider_type,geographic_region,n_orgs,n_incumbents,tcc_p25,tcc_p50,tcc_p75,tcc_p90,wrvu_p25,wrvu_p50,wrvu_p75,wrvu_p90,cf_p25,cf_p50,cf_p75,cf_p90'
-      };
-    
-    case 'wide':
-      return {
-        requiredColumns: [
-          'Provider Name',
-          'Specialty',
-          'Geographic Region',
-          'Provider Type',
-          'Compensation'
-        ],
-        optionalColumns: [],
-        description: 'Simple wide format with one compensation value per row',
-        example: 'Provider Name,Specialty,Geographic Region,Provider Type,Compensation'
-      };
-    
-    default:
-      return {
-        requiredColumns: [],
-        optionalColumns: [],
-        description: 'Unknown format',
-        example: ''
-      };
-  }
+  return {
+    requiredColumns: REQUIRED_COLUMNS,
+    optionalColumns: OPTIONAL_COLUMNS,
+    description: 'Normalized format: One row per variable per specialty. Each row contains percentile values for a single metric (TCC, wRVU, CF, etc.)',
+    example: 'specialty,provider_type,geographic_region,variable,n_orgs,n_incumbents,p25,p50,p75,p90\nFamily Medicine,Advanced Practice,National,TCC,120,950,120000,135000,150000,165000'
+  };
 }
 
+/**
+ * Get expected format (always normalized now)
+ * @deprecated Only normalized format is supported
+ */
+export function getExpectedFormat(_surveySource?: string): 'normalized' {
+  return 'normalized';
+}
+
+/**
+ * Get expected formats (always returns normalized only)
+ * @deprecated Only normalized format is supported
+ */
+export function getExpectedFormats(_surveySource?: string): ('normalized')[] {
+  return ['normalized'];
+}

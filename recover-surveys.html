@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Survey Recovery Tool</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #4f46e5;
+      margin-bottom: 10px;
+    }
+    .warning {
+      background: #fef3c7;
+      border: 1px solid #fbbf24;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #d1fae5;
+      border: 1px solid #10b981;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    button {
+      background: #4f46e5;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #4338ca;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    #output {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .step {
+      margin: 15px 0;
+      padding: 15px;
+      background: #f9fafb;
+      border-left: 4px solid #4f46e5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Survey Recovery Tool</h1>
+    <p>This tool will reconstruct your surveys collection from surveyData.</p>
+    
+    <div class="warning">
+      <strong>⚠️ Important:</strong> This tool will analyze your surveyData and recreate the surveys collection.
+      Make sure you're signed in to Firebase first.
+    </div>
+
+    <div class="step">
+      <strong>Step 1:</strong> Open your app (localhost:3000) and make sure you're signed in.
+    </div>
+
+    <div class="step">
+      <strong>Step 2:</strong> Open browser console (F12) on your app tab.
+    </div>
+
+    <div class="step">
+      <strong>Step 3:</strong> Copy and paste this script into the console:
+    </div>
+
+    <div id="output">// Survey Recovery Script
+(async () => {
+  console.log('🔧 Starting survey recovery...');
+  
+  // Get Firebase instances
+  const { getFirebaseDb, getFirebaseAuth } = await import('./config/firebase');
+  const db = getFirebaseDb();
+  const auth = getFirebaseAuth();
+  
+  if (!auth.currentUser) {
+    console.error('❌ Not authenticated. Please sign in first.');
+    return;
+  }
+  
+  const userId = auth.currentUser.uid;
+  console.log('👤 User ID:', userId);
+  
+  // Import Firestore functions
+  const { collection, query, getDocs, doc, setDoc, where, Timestamp } = await import('firebase/firestore');
+  
+  try {
+    // 1. Check if surveys collection exists
+    console.log('\n📊 Step 1: Checking surveys collection...');
+    const surveysRef = collection(db, `users/${userId}/surveys`);
+    const surveysSnapshot = await getDocs(surveysRef);
+    
+    console.log(`Found ${surveysSnapshot.size} existing surveys`);
+    
+    if (surveysSnapshot.size > 0) {
+      console.log('✅ Surveys collection exists! Your surveys are still there.');
+      console.log('The issue might be a loading problem. Try refreshing the page.');
+      return;
+    }
+    
+    // 2. Get all surveyData to reconstruct surveys
+    console.log('\n📊 Step 2: Analyzing surveyData...');
+    const surveyDataRef = collection(db, `users/${userId}/surveyData`);
+    const surveyDataSnapshot = await getDocs(surveyDataRef);
+    
+    console.log(`Found ${surveyDataSnapshot.size} data rows`);
+    
+    if (surveyDataSnapshot.size === 0) {
+      console.log('❌ No surveyData found. Nothing to recover.');
+      return;
+    }
+    
+    // 3. Group data by surveyId and extract metadata
+    console.log('\n📊 Step 3: Reconstructing survey metadata...');
+    const surveyMap = new Map();
+    
+    surveyDataSnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const surveyId = data.surveyId;
+      
+      if (!surveyId) {
+        console.warn('⚠️ Found data row without surveyId:', docSnap.id);
+        return;
+      }
+      
+      if (!surveyMap.has(surveyId)) {
+        surveyMap.set(surveyId, {
+          id: surveyId,
+          rows: [],
+          metadata: data
+        });
+      }
+      
+      surveyMap.get(surveyId).rows.push(data);
+    });
+    
+    console.log(`Found ${surveyMap.size} unique surveys to recover`);
+    
+    // 4. Create survey documents
+    console.log('\n📊 Step 4: Creating survey documents...');
+    let recovered = 0;
+    
+    for (const [surveyId, surveyInfo] of surveyMap.entries()) {
+      const firstRow = surveyInfo.rows[0];
+      
+      // Extract metadata from first row
+      const surveyDoc = {
+        id: surveyId,
+        name: firstRow.surveyName || firstRow.source || 'Recovered Survey',
+        year: firstRow.year || firstRow.surveyYear || '2025',
+        type: firstRow.surveyType || firstRow.type || 'Unknown',
+        source: firstRow.source || 'Unknown',
+        providerType: firstRow.providerType || 'PHYSICIAN',
+        dataCategory: firstRow.dataCategory || 'COMPENSATION',
+        uploadDate: Timestamp.now(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        rowCount: surveyInfo.rows.length,
+        specialtyCount: new Set(surveyInfo.rows.map(r => r.specialty).filter(Boolean)).size,
+        metadata: {
+          recoveredFrom: 'surveyData',
+          recoveryDate: new Date().toISOString(),
+          originalRowCount: surveyInfo.rows.length
+        }
+      };
+      
+      // Create survey document
+      const surveyDocRef = doc(db, `users/${userId}/surveys`, surveyId);
+      await setDoc(surveyDocRef, surveyDoc);
+      
+      recovered++;
+      console.log(`✅ Recovered survey ${recovered}/${surveyMap.size}: ${surveyDoc.name}`);
+    }
+    
+    console.log(`\n✅ SUCCESS! Recovered ${recovered} surveys`);
+    console.log('🔄 Refresh your app page (F5) to see your surveys!');
+    
+  } catch (error) {
+    console.error('❌ Recovery failed:', error);
+  }
+})();</div>
+
+    <button onclick="copyScript()">Copy Recovery Script</button>
+    
+    <div class="success" style="display: none;" id="successMessage">
+      ✅ Script copied! Now paste it into your browser console (F12) on the app tab.
+    </div>
+  </div>
+
+  <script>
+    function copyScript() {
+      const script = document.getElementById('output').textContent;
+      navigator.clipboard.writeText(script).then(() => {
+        document.getElementById('successMessage').style.display = 'block';
+        setTimeout(() => {
+          document.getElementById('successMessage').style.display = 'none';
+        }, 5000);
+      });
+    }
+  </script>
+</body>
+</html>

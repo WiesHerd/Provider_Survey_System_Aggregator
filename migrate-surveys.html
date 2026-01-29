@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Migrate Survey Data - Create Missing Surveys Collection</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .status {
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      background: #f0f0f0;
+    }
+    .error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    button {
+      background: #6200ea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #4a00b8;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔧 Firebase Survey Migration Tool</h1>
+  <p>This tool will scan your <code>surveyData</code> collection and create missing entries in the <code>surveys</code> collection.</p>
+  
+  <div id="status" class="status"></div>
+  
+  <button id="loginBtn" onclick="signIn()">1. Sign In with Firebase</button>
+  <button id="migrateBtn" onclick="migrate()" disabled>2. Migrate Survey Data</button>
+  
+  <h3>Log:</h3>
+  <pre id="log"></pre>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAV0l05MZGknZ0i39ETqOT04A06plbcEH4",
+      authDomain: "provider-survey-aggregator.firebaseapp.com",
+      projectId: "provider-survey-aggregator",
+      storageBucket: "provider-survey-aggregator.firebasestorage.app",
+      messagingSenderId: "59362936288",
+      appId: "1:59362936288:web:b1bd80877ae4ffadc09785"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUser = null;
+
+    function log(message) {
+      const logEl = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      logEl.textContent += `[${timestamp}] ${message}\n`;
+      console.log(message);
+    }
+
+    function setStatus(message, type = 'info') {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.className = 'status ' + type;
+    }
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUser = user;
+        log(`✅ Signed in as: ${user.email} (${user.uid})`);
+        setStatus(`Signed in as: ${user.email}`, 'success');
+        document.getElementById('loginBtn').disabled = true;
+        document.getElementById('migrateBtn').disabled = false;
+      } else {
+        currentUser = null;
+        setStatus('Not signed in - Click "Sign In" to authenticate', 'error');
+        document.getElementById('loginBtn').disabled = false;
+        document.getElementById('migrateBtn').disabled = true;
+      }
+    });
+
+    async function signIn() {
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider);
+      } catch (error) {
+        log(`❌ Sign in failed: ${error.message}`);
+        setStatus(`Sign in failed: ${error.message}`, 'error');
+      }
+    }
+
+    async function migrate() {
+      if (!currentUser) {
+        alert('Please sign in first!');
+        return;
+      }
+
+      document.getElementById('migrateBtn').disabled = true;
+      setStatus('🔄 Migration in progress...', 'info');
+      log('🚀 Starting migration...');
+
+      try {
+        const userId = currentUser.uid;
+        log(`👤 User ID: ${userId}`);
+
+        // Step 1: Get all surveyData documents
+        log('📥 Fetching surveyData...');
+        const surveyDataRef = db.collection('users').doc(userId).collection('surveyData');
+        const surveyDataSnapshot = await surveyDataRef.get();
+        
+        log(`📊 Found ${surveyDataSnapshot.size} surveyData documents`);
+
+        // Step 2: Group by surveyId and extract metadata
+        const surveyMap = new Map();
+        
+        surveyDataSnapshot.forEach(doc => {
+          const data = doc.data();
+          const surveyId = data.surveyId;
+          
+          if (!surveyId) {
+            log(`⚠️ Skipping document ${doc.id} - no surveyId`);
+            return;
+          }
+
+          if (!surveyMap.has(surveyId)) {
+            surveyMap.set(surveyId, {
+              id: surveyId,
+              rows: [],
+              specialties: new Set(),
+              providerTypes: new Set()
+            });
+          }
+
+          const survey = surveyMap.get(surveyId);
+          survey.rows.push(data);
+          if (data.specialty) survey.specialties.add(data.specialty);
+          if (data.provider_type) survey.providerTypes.add(data.provider_type);
+        });
+
+        log(`🔍 Found ${surveyMap.size} unique survey IDs`);
+
+        // Step 3: Check which surveys already exist
+        const surveysRef = db.collection('users').doc(userId).collection('surveys');
+        const existingSurveysSnapshot = await surveysRef.get();
+        const existingSurveyIds = new Set(existingSurveysSnapshot.docs.map(doc => doc.id));
+        
+        log(`📋 Found ${existingSurveyIds.size} existing surveys in surveys collection`);
+
+        // Step 4: Create missing survey documents
+        let created = 0;
+        let skipped = 0;
+
+        for (const [surveyId, surveyInfo] of surveyMap.entries()) {
+          if (existingSurveyIds.has(surveyId)) {
+            log(`⏭️ Skipping ${surveyId} - already exists`);
+            skipped++;
+            continue;
+          }
+
+          // Create survey metadata document
+          const surveyDoc = {
+            id: surveyId,
+            name: `Survey ${surveyId.substring(0, 8)}`, // Default name
+            year: new Date().getFullYear().toString(), // Default to current year
+            type: 'COMPENSATION',
+            uploadDate: firebase.firestore.Timestamp.now(),
+            rowCount: surveyInfo.rows.length,
+            specialtyCount: surveyInfo.specialties.size,
+            dataPoints: surveyInfo.rows.length,
+            colorAccent: '#6200ea',
+            providerType: Array.from(surveyInfo.providerTypes)[0] || 'PHYSICIAN',
+            source: 'MIGRATED',
+            metadata: {
+              specialties: Array.from(surveyInfo.specialties),
+              providerTypes: Array.from(surveyInfo.providerTypes),
+              migratedAt: firebase.firestore.Timestamp.now()
+            },
+            createdAt: firebase.firestore.Timestamp.now(),
+            updatedAt: firebase.firestore.Timestamp.now()
+          };
+
+          await surveysRef.doc(surveyId).set(surveyDoc);
+          log(`✅ Created survey: ${surveyId} (${surveyInfo.rows.length} rows, ${surveyInfo.specialties.size} specialties)`);
+          created++;
+        }
+
+        log('');
+        log('🎉 Migration complete!');
+        log(`   Created: ${created} surveys`);
+        log(`   Skipped: ${skipped} surveys (already existed)`);
+        log(`   Total: ${surveyMap.size} surveys`);
+        log('');
+        log('✅ Your app should now show the surveys!');
+        log('💡 You can rename surveys in the app after migration.');
+
+        setStatus(`✅ Migration complete! Created ${created} surveys, skipped ${skipped}`, 'success');
+        
+        alert(`Migration complete!\n\nCreated: ${created} surveys\nSkipped: ${skipped} surveys\n\nRefresh your app to see the surveys.`);
+
+      } catch (error) {
+        log(`❌ Migration failed: ${error.message}`);
+        console.error('Migration error:', error);
+        setStatus(`Migration failed: ${error.message}`, 'error');
+        alert(`Migration failed: ${error.message}`);
+      } finally {
+        document.getElementById('migrateBtn').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

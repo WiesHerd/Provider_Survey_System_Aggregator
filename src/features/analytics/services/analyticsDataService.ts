@@ -18,7 +18,7 @@ import {
   DynamicNormalizedRow, 
   VariableMetrics 
 } from '../types/variables';
-import { normalizeVariableName } from '../utils/variableFormatters';
+import { normalizeVariableName, mapVariableNameToStandard } from '../utils/variableFormatters';
 
 export interface RawSurveyRow {
   [key: string]: any;
@@ -500,18 +500,20 @@ export class AnalyticsDataService {
     );
     
     // Handle both WIDE format (separate columns) and LONG format (variable field)
-    const hasVariableField = actualRowData.variable !== undefined;
-    
+    // CRITICAL: Support case-insensitive variable column - CSV/Excel often use "Variable" (capital V)
+    const variableFieldKey = Object.keys(actualRowData).find(k => k.toLowerCase() === 'variable' || k.toLowerCase() === 'benchmark');
+    const hasVariableField = variableFieldKey !== undefined;
+
     // Initialize all metrics to 0
     const normalizedMetrics = {
       tcc_p25: 0, tcc_p50: 0, tcc_p75: 0, tcc_p90: 0,
       wrvu_p25: 0, wrvu_p50: 0, wrvu_p75: 0, wrvu_p90: 0,
       cf_p25: 0, cf_p50: 0, cf_p75: 0, cf_p90: 0
     };
-    
-    if (hasVariableField) {
-      // LONG FORMAT: Data has a 'variable' field (TCC, Work RVUs, TCC per Work RVU)
-      const variable = String(actualRowData.variable).toLowerCase();
+
+    if (hasVariableField && variableFieldKey) {
+      // LONG FORMAT: Data has a variable/benchmark field (variable, Variable, Benchmark, etc.)
+      const variable = String(actualRowData[variableFieldKey] ?? '').toLowerCase();
       const p25 = this.extractNumber(actualRowData.p25);
       const p50 = this.extractNumber(actualRowData.p50);
       const p75 = this.extractNumber(actualRowData.p75);
@@ -955,12 +957,16 @@ export class AnalyticsDataService {
   
   /**
    * Extract number from various formats
+   * Handles vendor markers (asterisks, ISD, N/A) as 0 (missing data)
    */
   private extractNumber(value: any): number {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
-      // Handle suppressed values (single or multiple asterisks) as 0
-      if (value === '***' || value === '*' || value === '**' || value === '' || value === 'null' || value === 'undefined') return 0;
+      const upper = value.trim().toUpperCase();
+      // Handle vendor markers (asterisks, ISD, N/A) as 0
+      if (upper === 'ISD' || upper === 'N/A' || upper === 'NA' || 
+          value === '***' || value === '*' || value === '**' || 
+          value === '' || value === 'null' || value === 'undefined') return 0;
       const parsed = parseFloat(value.replace(/[,$]/g, ''));
       return isNaN(parsed) ? 0 : parsed;
     }
@@ -1327,6 +1333,38 @@ export class AnalyticsDataService {
     const actualRowData = row.data || row;
     const variables: Record<string, VariableMetrics> = {};
     
+    // CRITICAL DEBUG: Log first few SullivanCotter APP rows to see structure
+    const isSullivanCotterAPP = (survey.name && survey.name.toLowerCase().includes('sullivan') && survey.providerType === 'APP') ||
+                                 ((survey as any).source === 'SullivanCotter' && survey.providerType === 'APP');
+    if (isSullivanCotterAPP && Object.keys(variables).length === 0) {
+      // Only log first row to avoid spam
+      const shouldLog = !(globalThis as any).__sullivancotter_app_logged;
+      if (shouldLog) {
+        (globalThis as any).__sullivancotter_app_logged = true;
+        console.log('🔍 SullivanCotter APP Row Structure (first row):', {
+          surveyId: survey.id,
+          surveyName: survey.name,
+          surveyType: survey.type,
+          providerType: survey.providerType,
+          source: (survey as any).source,
+          dataCategory: (survey as any).dataCategory,
+          rowKeys: Object.keys(actualRowData),
+          hasVariable: actualRowData.variable !== undefined,
+          hasVariableCapital: actualRowData.Variable !== undefined,
+          hasBenchmark: actualRowData.benchmark !== undefined,
+          variableValue: actualRowData.variable || actualRowData.Variable || actualRowData.benchmark || 'NOT FOUND',
+          sampleData: {
+            specialty: actualRowData.specialty || actualRowData.Specialty,
+            region: actualRowData.region || actualRowData.Region || actualRowData.geographic_region,
+            p25: actualRowData.p25 || actualRowData.P25 || actualRowData['25th%'],
+            p50: actualRowData.p50 || actualRowData.P50 || actualRowData['50th%'] || actualRowData.Median,
+            p75: actualRowData.p75 || actualRowData.P75 || actualRowData['75th%'],
+            p90: actualRowData.p90 || actualRowData.P90 || actualRowData['90th%']
+          }
+        });
+      }
+    }
+    
     // Extract specialty, provider type, region (same as existing logic)
     const rawSpecialty = actualRowData.specialty || actualRowData.Specialty || 
                         actualRowData.normalizedSpecialty || actualRowData['Provider Type'] ||
@@ -1404,13 +1442,15 @@ export class AnalyticsDataService {
     );
     
     // Handle both LONG format (variable field) and WIDE format (separate columns)
-    const hasVariableField = actualRowData.variable !== undefined;
-    
+    // CRITICAL: Support case-insensitive variable column - CSV/Excel often use "Variable" (capital V)
+    const variableFieldKey = Object.keys(actualRowData).find(k => k.toLowerCase() === 'variable' || k.toLowerCase() === 'benchmark');
+    const hasVariableField = variableFieldKey !== undefined;
+
     // Note: We handle both LONG format (variable field) and WIDE format (separate columns) below
-    
-    if (hasVariableField) {
-      // LONG FORMAT: Data has a 'variable' field
-      let variable = String(actualRowData.variable).trim();
+
+    if (hasVariableField && variableFieldKey) {
+      // LONG FORMAT: Data has a variable/benchmark field (variable, Variable, Benchmark, etc.)
+      let variable = String(actualRowData[variableFieldKey] ?? '').trim();
       const originalVariable = variable;
       
       // CRITICAL STEP 1: Check user-created variable mappings FIRST (from mapping screen)
@@ -1505,6 +1545,37 @@ export class AnalyticsDataService {
         });
       }
       
+      // CRITICAL DEBUG: Enhanced logging for SullivanCotter APP
+      const isSullivanCotterAPP = (survey.name && survey.name.toLowerCase().includes('sullivan') && survey.providerType === 'APP') ||
+                                   (surveySource && surveySource.toLowerCase().includes('sullivancotter app'));
+      if (isSullivanCotterAPP) {
+        console.log('🔍 SullivanCotter APP Dynamic Processing:', {
+          surveyId: survey.id,
+          surveyName: survey.name,
+          surveyType: survey.type,
+          surveySource: surveySource,
+          providerType: survey.providerType,
+          dataCategory: (survey as any).dataCategory,
+          source: (survey as any).source,
+          hasVariableField,
+          variableFieldKey,
+          originalVariable,
+          mappedVariable: variable,
+          hasUserMapping: !!standardizedNameFromMapping,
+          hasLearnedMapping: !!mappings.learnedVariableMappings?.[originalVariable],
+          exactKey: exactMappingKey,
+          flexibleKey: flexibleMappingKey,
+          normalizedVarName: normalizeVariableName(variable),
+          p25: actualRowData.p25 || actualRowData['P25'] || actualRowData['25th%'] || 'NOT FOUND',
+          p50: actualRowData.p50 || actualRowData['P50'] || actualRowData['50th%'] || actualRowData['Median'] || 'NOT FOUND',
+          p75: actualRowData.p75 || actualRowData['P75'] || actualRowData['75th%'] || 'NOT FOUND',
+          p90: actualRowData.p90 || actualRowData['P90'] || actualRowData['90th%'] || 'NOT FOUND',
+          allKeys: Object.keys(actualRowData).slice(0, 20),
+          n_orgs,
+          n_incumbents
+        });
+      }
+      
       const normalizedVarName = normalizeVariableName(variable);
       
       // CRITICAL FIX: Always process ALL variables during normalization
@@ -1541,6 +1612,24 @@ export class AnalyticsDataService {
           p75,
           p90
         };
+        
+        // CRITICAL DEBUG: Log when TCC variable is processed for SullivanCotter APP
+        if (isSullivanCotterAPP && (normalizedVarName === 'tcc' || originalVariable.toLowerCase().includes('tcc') || originalVariable.toLowerCase().includes('total cash'))) {
+          console.log('✅ SullivanCotter APP TCC Variable Processed:', {
+            surveySource: surveySource,
+            originalVariable,
+            normalizedVarName,
+            metrics: {
+              n_orgs,
+              n_incumbents,
+              p25,
+              p50,
+              p75,
+              p90
+            },
+            storedInVariables: variables[normalizedVarName] ? 'YES' : 'NO'
+          });
+        }
         
         // Enhanced logging for Call Pay variables (suppressed to reduce noise)
         const isCallPayVariable = normalizedVarName === 'on_call_compensation' || 
@@ -1602,26 +1691,62 @@ export class AnalyticsDataService {
       }
     } else {
       // WIDE FORMAT: Data has separate columns for each variable
-      const percentilePattern = /^(.+)_(p25|p50|p75|p90)$/i;
+      // DESIGN RULE (see docs/issues/BENCHMARKING_WIDE_FORMAT_ASTERISK_FIX.md):
+      // - Store variable if ANY percentile is defined (including 0). Never require p50 > 0 for storage.
+      // - Use flexible column pattern; missing/zero handling is display-only (***), not storage.
+      // ENTERPRISE FIX: More flexible pattern to handle variations:
+      // - "tcc_p50" (standard)
+      // - "Total Cash Compensation_p50" (with spaces in variable name)
+      // - "Total Cash Compensation p50" (space instead of underscore)
+      // - "tcc_p50", "tcc P50", "TCC_p50" (case variations)
+      const percentilePattern = /^(.+?)[_\s]+(p25|p50|p75|p90|25th|50th|75th|90th|25th%|50th%|75th%|90th%)$/i;
       const variableMap = new Map<string, { p25?: number; p50?: number; p75?: number; p90?: number }>();
       
       // Scan all columns for percentile patterns
+      const isSullivanCotterAPP = (survey.name && survey.name.toLowerCase().includes('sullivan') && survey.providerType === 'APP') ||
+                                 ((survey as any).source === 'SullivanCotter' && survey.providerType === 'APP');
+      
       Object.entries(actualRowData).forEach(([key, value]) => {
         const match = key.match(percentilePattern);
         if (match) {
           const [, varName, percentile] = match;
+          // CRITICAL: normalizeVariableName already maps to standard names (e.g., "Total Cash Compensation" -> "tcc")
           const normalizedVarName = normalizeVariableName(varName);
           const numValue = this.extractNumber(value);
+          
+          // CRITICAL DEBUG: Log TCC-related columns for Sullivan Cotter APP
+          if (isSullivanCotterAPP && (varName.toLowerCase().includes('tcc') || 
+                                     varName.toLowerCase().includes('total') && varName.toLowerCase().includes('cash') ||
+                                     (varName.toLowerCase().includes('compensation') && !varName.toLowerCase().includes('per') && !varName.toLowerCase().includes('to')))) {
+            console.log('🔍 SullivanCotter APP WIDE Format Column Found:', {
+              originalColumn: key,
+              extractedVarName: varName,
+              normalizedVarName,
+              percentile,
+              value,
+              extractedNumber: numValue
+            });
+          }
           
           if (!variableMap.has(normalizedVarName)) {
             variableMap.set(normalizedVarName, {});
           }
           
           const varData = variableMap.get(normalizedVarName)!;
-          if (percentile.toLowerCase() === 'p25') varData.p25 = numValue;
-          else if (percentile.toLowerCase() === 'p50') varData.p50 = numValue;
-          else if (percentile.toLowerCase() === 'p75') varData.p75 = numValue;
-          else if (percentile.toLowerCase() === 'p90') varData.p90 = numValue;
+          // Handle percentile variations: p25, 25th, 25th%, etc.
+          const percentileLower = percentile.toLowerCase().replace(/%/g, '').replace('th', '');
+          if (percentileLower === 'p25' || percentileLower === '25') varData.p25 = numValue;
+          else if (percentileLower === 'p50' || percentileLower === '50') varData.p50 = numValue;
+          else if (percentileLower === 'p75' || percentileLower === '75') varData.p75 = numValue;
+          else if (percentileLower === 'p90' || percentileLower === '90') varData.p90 = numValue;
+        } else if (isSullivanCotterAPP && (key.toLowerCase().includes('tcc') || 
+                                          (key.toLowerCase().includes('total') && key.toLowerCase().includes('cash')))) {
+          // Log columns that might be TCC but don't match the pattern
+          console.warn('⚠️ SullivanCotter APP Column Found But No Pattern Match:', {
+            column: key,
+            value,
+            reason: 'Column name does not match percentile pattern (e.g., "tcc_p50")'
+          });
         }
       });
       
@@ -1631,7 +1756,32 @@ export class AnalyticsDataService {
         // Filtering by selectedVariables should only happen at DISPLAY time, not during data processing
         const shouldProcess = true; // Always process - don't filter during normalization
         
-        if (shouldProcess && varData.p50 && varData.p50 > 0) {
+        // CRITICAL DEBUG: Check if this is Sullivan Cotter APP TCC variable (for logging)
+        const isSullivanCotterAPP = (survey.name && survey.name.toLowerCase().includes('sullivan') && survey.providerType === 'APP') ||
+                                   ((survey as any).source === 'SullivanCotter' && survey.providerType === 'APP');
+        const isTCCVariable = normalizedVarName === 'tcc' || 
+                             normalizedVarName.includes('total_cash') ||
+                             (normalizedVarName.includes('compensation') && !normalizedVarName.includes('per') && !normalizedVarName.includes('to'));
+        
+        // ENTERPRISE RULE: Store if ANY percentile present (including 0). Do NOT require p50 > 0.
+        // See docs/issues/BENCHMARKING_WIDE_FORMAT_ASTERISK_FIX.md
+        const hasAnyValue = varData.p25 !== undefined && varData.p25 !== null ||
+                           varData.p50 !== undefined && varData.p50 !== null ||
+                           varData.p75 !== undefined && varData.p75 !== null ||
+                           varData.p90 !== undefined && varData.p90 !== null;
+        
+        if (shouldProcess && hasAnyValue) {
+          if (isSullivanCotterAPP && isTCCVariable) {
+            console.log('✅ SullivanCotter APP WIDE Format TCC Variable Processed:', {
+              surveyName: survey.name,
+              surveySource: (survey as any).source,
+              providerType: survey.providerType,
+              normalizedVarName,
+              varData,
+              willBeStored: true
+            });
+          }
+          
           variables[normalizedVarName] = {
             variableName: this.formatVariableDisplayName(normalizedVarName),
             n_orgs,
@@ -1641,6 +1791,14 @@ export class AnalyticsDataService {
             p75: varData.p75 || 0,
             p90: varData.p90 || 0
           };
+        } else if (isSullivanCotterAPP && isTCCVariable) {
+          // Log why TCC variable wasn't stored
+          console.warn('⚠️ SullivanCotter APP TCC Variable NOT Stored:', {
+            surveyName: survey.name,
+            normalizedVarName,
+            varData,
+            reason: 'No percentile values found or all are null/undefined'
+          });
         }
       });
     }

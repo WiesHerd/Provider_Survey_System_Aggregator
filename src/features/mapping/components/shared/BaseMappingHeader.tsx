@@ -90,11 +90,30 @@ export const BaseMappingHeader: React.FC<BaseMappingHeaderProps> = ({
   onClearAllLearnedMappings,
   children
 }) => {
+  // Apple-ish polish: sentence-case tab labels + correct pluralization (specialty -> specialties)
+  const pluralizeLastWord = (word: string): string => {
+    const lower = word.toLowerCase();
+    const isConsonantY = lower.endsWith('y') && !/[aeiou]y$/.test(lower);
+    if (isConsonantY) return `${word.slice(0, -1)}ies`;
+    if (lower.endsWith('s')) return `${word}es`;
+    return `${word}s`;
+  };
+
+  const pluralizeEntity = (name: string): string => {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 0) return name;
+    const last = parts[parts.length - 1];
+    const pluralLast = pluralizeLastWord(last);
+    return [...parts.slice(0, -1), pluralLast].join(' ');
+  };
+
+  const entityPluralSentence = pluralizeEntity(entityName).toLowerCase();
+
   // Generate tab labels with counts
   const tabs = [
-    { key: 'unmapped', label: `Unmapped ${entityName}s (${unmappedCount})` },
-    { key: 'mapped', label: `Mapped ${entityName}s (${mappedCount})` },
-    { key: 'learned', label: `Learned Mappings (${learnedCount})` }
+    { key: 'unmapped', label: `Unmapped ${entityPluralSentence} (${unmappedCount})` },
+    { key: 'mapped', label: `Mapped ${entityPluralSentence} (${mappedCount})` },
+    { key: 'learned', label: `Learned mappings (${learnedCount})` }
   ];
 
   return (

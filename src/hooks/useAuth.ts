@@ -18,12 +18,15 @@ export { useAuthContext as useAuth, useAuthStatus };
  * @returns Authentication actions without state
  */
 export const useAuthActions = () => {
-  const { signUp, signIn, signInWithGoogle, signOut, clearError } = useAuthContext();
+  const { signUp, signIn, signInWithGoogle, sendVerificationEmail, resetPassword, refreshUser, signOut, clearError } = useAuthContext();
   
   return {
     signUp,
     signIn,
     signInWithGoogle,
+    sendVerificationEmail,
+    resetPassword,
+    refreshUser,
     signOut,
     clearError,
   };

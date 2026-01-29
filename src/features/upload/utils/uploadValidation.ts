@@ -10,6 +10,7 @@ import {
   duplicateDetectionService 
 } from '../../../services/DuplicateDetectionService';
 import { DataCategory, ProviderType } from '../../../types/provider';
+import { parseCSVLine } from '../../../shared/utils/csvParser';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -438,28 +439,6 @@ export const validateFileUpload = async (
 };
 
 // Helper functions
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current.trim());
-  return result;
-}
 
 function detectDataType(values: any[]): string {
   if (values.length === 0) return 'string';

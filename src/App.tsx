@@ -23,6 +23,7 @@ import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/ou
 import { DatabaseDiagnostics } from './components/DatabaseDiagnostics';
 import { validateAndLog } from './shared/utils/envValidation';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
+import { UploadQueueToast } from './components/upload/UploadQueueToast';
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -79,7 +80,9 @@ const theme = createTheme({
 const Dashboard = lazy(() => import('./components/Dashboard'));
 // IMPORTANT: Keep the legacy Upload screen as the default on /upload.
 // The refactored Upload feature is available via /upload-beta for opt-in testing.
-const SurveyUpload = lazy(() => import('./components/SurveyUpload'));
+const SurveyUpload = lazy(() =>
+  import('./components/SurveyUpload').then((module) => ({ default: module.SurveyUpload }))
+);
 const SurveyUploadBeta = lazy(() =>
   import('./features/upload').then((module) => ({ default: module.SurveyUpload }))
 );
@@ -142,7 +145,6 @@ const CustomReports = lazy(() =>
     })
 );
 const CannedReports = lazy(() => import('./features/reports/components/CannedReports').then(module => ({ default: module.default })));
-const SystemSettings = lazy(() => import('./components/SystemSettings'));
 const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
 const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
 
@@ -512,11 +514,6 @@ const PageContent = () => {
           title: 'Fair Market Value',
           description: 'Calculate and compare fair market value'
         };
-      case '/system-settings':
-        return {
-          title: 'System Settings',
-          description: 'Configure system preferences and settings'
-        };
       case '/specialty-blending':
         return {
           title: 'Specialty Blending',
@@ -588,11 +585,6 @@ const PageContent = () => {
               <Route path="/canned-reports" element={
                 <ErrorBoundary componentName="Canned Reports">
                   <CannedReports />
-                </ErrorBoundary>
-              } />
-              <Route path="/system-settings" element={
-                <ErrorBoundary componentName="System Settings">
-                  <SystemSettings />
                 </ErrorBoundary>
               } />
               <Route path="/specialty-blending" element={<SpecialtyBlending />} />
@@ -707,21 +699,22 @@ function App() {
         <DatabaseProvider>
           <DatabaseInitializationScreen />
           <AuthProvider>
-            <AuthGuard requireAuth={true}>
-              <ToastProvider>
-                <StorageProvider>
-                  <MappingProvider>
-                    <YearProvider>
-                      <ProviderContextProvider>
+            <ToastProvider>
+              <StorageProvider>
+                <MappingProvider>
+                  <YearProvider>
+                    <ProviderContextProvider>
+                      <AuthGuard requireAuth={true}>
                         <Router basename={basename}>
                           <PageContent />
                         </Router>
-                      </ProviderContextProvider>
-                    </YearProvider>
-                  </MappingProvider>
-                </StorageProvider>
-              </ToastProvider>
-            </AuthGuard>
+                        <UploadQueueToast />
+                      </AuthGuard>
+                    </ProviderContextProvider>
+                  </YearProvider>
+                </MappingProvider>
+              </StorageProvider>
+            </ToastProvider>
           </AuthProvider>
         </DatabaseProvider>
         {process.env.NODE_ENV === 'development' && (

@@ -44,8 +44,8 @@ class FMVCache {
     version: ''
   };
   
-  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-  private readonly STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours (offline-first)
+  private readonly STALE_THRESHOLD = 0; // Manual refresh only
   
   static getInstance(): FMVCache {
     if (!FMVCache.instance) {
@@ -115,6 +115,10 @@ class FMVCache {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 }
+
+export const clearGlobalFMVCache = (): void => {
+  FMVCache.getInstance().clearCache();
+};
 
 /**
  * Custom hook for managing FMV calculator data and state
@@ -315,7 +319,7 @@ export const useFMVData = () => {
         
         // Only exclude very specific procedure names that are clearly not specialties
         const isSpecificProcedure = (
-          lowerSpecialty.includes('procedure') && !lowerSpecialty.includes('specialty') ||
+          (lowerSpecialty.includes('procedure') && !lowerSpecialty.includes('specialty')) ||
           (lowerSpecialty.includes('surgery') && !lowerSpecialty.includes('general') && !lowerSpecialty.includes('specialty')) ||
           (lowerSpecialty.includes('treatment') && !lowerSpecialty.includes('specialty')) ||
           (lowerSpecialty.includes('therapy') && !lowerSpecialty.includes('specialty'))
@@ -984,29 +988,6 @@ export const useFMVData = () => {
   }, [filters, tccFTEAdjusted, wrvusFTEAdjusted, cf, compareType, callPayFTEAdjusted, callPayAdjustments]);
 
   /**
-   * Background refresh for stale data (Google-style)
-   */
-  const fetchMarketDataInBackground = useCallback(async () => {
-    try {
-      console.log('🔄 Background refreshing FMV data...');
-      const analyticsDataService = new AnalyticsDataService();
-      const allData = await analyticsDataService.getAnalyticsData({
-        specialty: '',
-        surveySource: '',
-        geographicRegion: '',
-        providerType: '',
-        year: ''
-      });
-      
-      // Update cache with fresh data
-      fmvCache.setCachedData(allData);
-      console.log('✅ Background refresh completed');
-    } catch (error) {
-      console.warn('⚠️ Background refresh failed:', error);
-    }
-  }, []);
-
-  /**
    * Fetches and calculates market data based on current filters
    */
   const fetchMarketData = useCallback(async () => {
@@ -1027,13 +1008,6 @@ export const useFMVData = () => {
           // Only use cache if data structure matches what we need
           if (hasVariablesStructure === needsVariablesStructure) {
             console.log('🚀 Using cached FMV market data (fast!)');
-            // Trigger background refresh if data is getting stale
-            if (fmvCache.hasStaleData()) {
-              // Background refresh without blocking UI
-              setTimeout(() => {
-                fetchMarketDataInBackground();
-              }, 0);
-            }
             // Process cached data with current filters
             await processMarketData(cachedData);
             return;

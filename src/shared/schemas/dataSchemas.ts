@@ -23,7 +23,15 @@ export const SurveySchema = z.object({
   dataPoints: z.number().int().nonnegative('Data points must be non-negative'),
   colorAccent: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color accent must be a valid hex color'),
   metadata: z.record(z.string(), z.any()).optional(),
-  providerType: z.string().refine((val) => ['PHYSICIAN', 'APP', 'CALL', 'CUSTOM'].includes(val), { message: 'Invalid provider type' }).optional(),
+  providerType: z.string().refine((val) => {
+    if (!val) return true; // Optional field, allow undefined/empty
+    const normalized = val.toUpperCase().trim();
+    // Accept exact matches or variations that contain the base type
+    return ['PHYSICIAN', 'APP', 'CALL', 'CUSTOM'].includes(normalized) ||
+           normalized.includes('PHYSICIAN') ||
+           normalized.includes('APP') ||
+           normalized.includes('CALL');
+  }, { message: 'Invalid provider type' }).optional(),
   dataCategory: z.string().refine((val) => ['COMPENSATION', 'CALL_PAY', 'MOONLIGHTING', 'CUSTOM'].includes(val), { message: 'Invalid data category' }).optional(),
   source: z.string().optional(),
   surveyLabel: z.string().max(100).optional(),
@@ -114,7 +122,13 @@ export const SpecialtyMappingSchema = z.object({
   id: z.string().min(1, 'Mapping ID is required'),
   standardizedName: z.string().min(1, 'Standardized name is required'),
   sourceSpecialties: z.array(SourceSpecialtySchema).min(1, 'At least one source specialty is required'),
-  providerType: z.string().refine((val) => ['PHYSICIAN', 'APP'].includes(val), { message: 'Invalid provider type' }).optional(),
+  providerType: z.string().refine((val) => {
+    if (!val) return true; // Optional field, allow undefined/empty
+    const normalized = val.toUpperCase().trim();
+    return ['PHYSICIAN', 'APP'].includes(normalized) ||
+           normalized.includes('PHYSICIAN') ||
+           normalized.includes('APP');
+  }, { message: 'Invalid provider type' }).optional(),
   createdAt: z.date(),
   updatedAt: z.date()
 });
@@ -129,7 +143,14 @@ export const UnmappedSpecialtySchema = z.object({
   name: z.string().min(1, 'Specialty name is required'),
   surveySource: z.string().min(1, 'Survey source is required'),
   frequency: z.number().int().nonnegative('Frequency must be non-negative'),
-  providerType: z.string().refine((val) => ['PHYSICIAN', 'APP', 'CALL', 'CUSTOM'].includes(val), { message: 'Invalid provider type' }).optional(),
+  providerType: z.string().refine((val) => {
+    if (!val) return true; // Optional field, allow undefined/empty
+    const normalized = val.toUpperCase().trim();
+    return ['PHYSICIAN', 'APP', 'CALL', 'CUSTOM'].includes(normalized) ||
+           normalized.includes('PHYSICIAN') ||
+           normalized.includes('APP') ||
+           normalized.includes('CALL');
+  }, { message: 'Invalid provider type' }).optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional()
 });

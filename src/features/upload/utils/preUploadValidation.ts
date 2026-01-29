@@ -6,6 +6,7 @@
  */
 
 import { readCSVFile } from '../../../shared/utils';
+import { parseCSVLine } from '../../../shared/utils/csvParser';
 
 export interface PreUploadValidationResult {
   isValid: boolean;
@@ -43,16 +44,20 @@ export async function validateFileStructure(file: File): Promise<PreUploadValida
   const warnings: ValidationError[] = [];
   const info: ValidationError[] = [];
 
-  // Validate file extension
-  if (!file.name.toLowerCase().endsWith('.csv')) {
+  // Validate file extension (CSV or Excel supported)
+  const lowerName = file.name.toLowerCase();
+  const isCsv = lowerName.endsWith('.csv');
+  const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+
+  if (!isCsv && !isExcel) {
     errors.push({
       severity: 'critical',
       category: 'format',
-      message: `File must be a CSV file. Found: ${file.name.split('.').pop()?.toUpperCase() || 'unknown'}`,
+      message: `File must be a CSV or Excel file. Found: ${file.name.split('.').pop()?.toUpperCase() || 'unknown'}`,
       fixInstructions: [
-        'Save your file as a CSV file',
-        'In Excel: File → Save As → CSV (Comma delimited)',
-        'In Google Sheets: File → Download → CSV'
+        'Save your file as a CSV or Excel file',
+        'In Excel: File → Save As → CSV (Comma delimited) or Excel Workbook',
+        'In Google Sheets: File → Download → CSV or Microsoft Excel (.xlsx)'
       ],
       example: 'survey-data.csv'
     });
@@ -175,7 +180,7 @@ export async function validateFileStructure(file: File): Promise<PreUploadValida
 export async function validateHeaders(file: File): Promise<{
   isValid: boolean;
   headers: string[];
-  format?: 'normalized' | 'wide' | 'wide_variable';
+  format?: 'normalized';
   formatConfidence?: number;
   errors: ValidationError[];
   warnings: ValidationError[];
@@ -277,113 +282,20 @@ export async function validateHeaders(file: File): Promise<{
 
 /**
  * Detect CSV format from headers
+ * Simplified to normalized format only
  */
 function detectFormat(headers: string[]): {
-  format: 'normalized' | 'wide' | 'wide_variable' | undefined;
+  format: 'normalized' | undefined;
   confidence: number;
 } {
-  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  // Use simplified format detection from formatDetection.ts
+  const { detectFormat: detectNormalizedFormat } = require('./formatDetection');
+  const result = detectNormalizedFormat(headers);
   
-  // Check for wide_variable format (tcc_p25, wrvu_p25, cf_p25, etc.)
-  const hasWideVariablePattern = 
-    lowerHeaders.some(h => h.includes('tcc_p')) &&
-    lowerHeaders.some(h => h.includes('wrvu_p')) &&
-    lowerHeaders.some(h => h.includes('cf_p')) &&
-    lowerHeaders.some(h => h === 'specialty' || h.includes('specialty')) &&
-    lowerHeaders.some(h => h === 'provider_type' || h.includes('provider_type'));
-  
-  if (hasWideVariablePattern) {
-    // Count how many percentile columns match the pattern
-    const percentileMatches = lowerHeaders.filter(h => 
-      h.match(/^(tcc|wrvu|cf)_p(25|50|75|90)$/)
-    ).length;
-    const confidence = Math.min(100, (percentileMatches / 12) * 100); // 12 possible percentile columns
-    
-    return { format: 'wide_variable', confidence };
-  }
-
-  // Check for normalized format (variable, p25, p50, p75, p90, n_orgs, n_incumbents)
-  const hasVariableField = lowerHeaders.some(h => 
-    h === 'variable' || h === 'benchmark' || h.includes('variable')
-  );
-  const hasPercentiles = lowerHeaders.some(h => 
-    h === 'p25' || h === 'p50' || h === 'p75' || h === 'p90' ||
-    h.includes('25th') || h.includes('50th') || h.includes('75th') || h.includes('90th')
-  );
-  const hasCounts = lowerHeaders.some(h => 
-    h === 'n_orgs' || h.includes('n_org') || h.includes('group count') ||
-    h === 'n_incumbents' || h.includes('n_incumbent') || h.includes('indv count')
-  );
-  const hasSpecialty = lowerHeaders.some(h => 
-    h === 'specialty' || h.includes('specialty')
-  );
-
-  if (hasVariableField && hasPercentiles && hasCounts && hasSpecialty) {
-    // Count required columns
-    const requiredColumns = [
-      'variable', 'specialty', 'n_orgs', 'n_incumbents', 'p25', 'p50', 'p75', 'p90'
-    ];
-    const foundColumns = requiredColumns.filter(col => 
-      lowerHeaders.some(h => h === col || h.includes(col))
-    ).length;
-    const confidence = (foundColumns / requiredColumns.length) * 100;
-    
-    return { format: 'normalized', confidence };
-  }
-
-  // Check for wide format (Provider Name, Specialty, Geographic Region, Provider Type, Compensation)
-  const hasProviderName = lowerHeaders.some(h => 
-    h.includes('provider name') || h.includes('physician name') || h === 'name'
-  );
-  const hasGeographicRegion = lowerHeaders.some(h => 
-    h.includes('geographic region') || h.includes('region') || h === 'region'
-  );
-  const hasCompensation = lowerHeaders.some(h => 
-    h.includes('compensation') || h.includes('salary') || h.includes('pay') ||
-    h.includes('tcc') || h.includes('wrvu') || h.includes('cf')
-  );
-
-  if (hasProviderName && hasSpecialty && hasGeographicRegion && hasCompensation) {
-    const requiredColumns = ['provider name', 'specialty', 'geographic region', 'provider type', 'compensation'];
-    const foundColumns = requiredColumns.filter(col => 
-      lowerHeaders.some(h => h.includes(col))
-    ).length;
-    const confidence = (foundColumns / requiredColumns.length) * 100;
-    
-    return { format: 'wide', confidence };
-  }
-
-  return { format: undefined, confidence: 0 };
-}
-
-/**
- * Simple CSV line parser for headers
- */
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current.trim());
-  return result;
+  return {
+    format: result.format,
+    confidence: result.confidence
+  };
 }
 
 /**

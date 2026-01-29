@@ -20,7 +20,9 @@ export const useSurveyCount = (): UseSurveyCountReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSurveys = useCallback(async () => {
+  const fetchSurveys = useCallback(async (retryCount: number = 0): Promise<void> => {
+    const maxRetries = 3;
+    
     try {
       setLoading(true);
       setError(null);
@@ -28,7 +30,17 @@ export const useSurveyCount = (): UseSurveyCountReturn => {
       const allSurveys = await dataService.getAllSurveys();
       setSurveys(allSurveys || []);
     } catch (err) {
-      console.error('🔍 Error fetching surveys:', err);
+      console.error(`🔍 Error fetching surveys (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
+      
+      // Retry with exponential backoff
+      if (retryCount < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 4000); // 1s, 2s, 4s
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchSurveys(retryCount + 1);
+      }
+      
+      // All retries failed
       setError(err instanceof Error ? err.message : 'Failed to load surveys');
       setSurveys([]);
     } finally {

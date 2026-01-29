@@ -15,6 +15,8 @@ export function parseCSVLine(line: string): string[] {
   let current = '';
   let inQuotes = false;
   let parenDepth = 0;
+
+  const delimiter = detectDelimiter(line);
   
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
@@ -34,7 +36,7 @@ export function parseCSVLine(line: string): string[] {
     } else if (char === ')') {
       parenDepth--;
       current += char;
-    } else if (char === ',' && !inQuotes && parenDepth === 0) {
+    } else if (char === delimiter && !inQuotes && parenDepth === 0) {
       // Field separator (only when not in quotes and not inside parentheses)
       result.push(current.trim());
       current = '';
@@ -47,6 +49,42 @@ export function parseCSVLine(line: string): string[] {
   result.push(current.trim());
   
   return result;
+}
+
+function detectDelimiter(line: string): ',' | '\t' {
+  let inQuotes = false;
+  let parenDepth = 0;
+  let commaCount = 0;
+  let tabCount = 0;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (char === '(') {
+      parenDepth++;
+      continue;
+    }
+    if (char === ')') {
+      parenDepth = Math.max(0, parenDepth - 1);
+      continue;
+    }
+    if (inQuotes || parenDepth > 0) {
+      continue;
+    }
+    if (char === ',') {
+      commaCount++;
+    } else if (char === '\t') {
+      tabCount++;
+    }
+  }
+
+  if (tabCount > commaCount && tabCount > 0) {
+    return '\t';
+  }
+  return ',';
 }
 
 /**

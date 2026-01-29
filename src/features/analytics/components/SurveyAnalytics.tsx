@@ -52,12 +52,38 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     return []; // Empty array - user must explicitly select variables
   });
   
+  // CRITICAL: Sort variables by original file column order (preserve upload file sequence)
+  // This ensures physician surveys display columns in the same order as the upload file
+  const [orderedVariables, setOrderedVariables] = useState<string[]>(selectedVariables);
+  
+  useEffect(() => {
+    const sortVariables = async () => {
+      if (selectedVariables.length === 0) {
+        setOrderedVariables([]);
+        return;
+      }
+      
+      try {
+        const { sortVariablesByOriginalOrder } = require('../utils/variableOrdering');
+        const sorted = await sortVariablesByOriginalOrder(selectedVariables, selectedProviderType);
+        setOrderedVariables(sorted);
+      } catch (error) {
+        console.error('Error sorting variables by original order:', error);
+        // Fallback to original order on error
+        setOrderedVariables(selectedVariables);
+      }
+    };
+    
+    sortVariables();
+  }, [selectedVariables, selectedProviderType]);
+  
   // CRITICAL DEBUG: Log whenever selectedVariables changes
   useEffect(() => {
     const { formatVariableDisplayName } = require('../utils/variableFormatters');
     console.log('🔍 SurveyAnalytics: selectedVariables CHANGED:', {
       count: selectedVariables.length,
       variables: selectedVariables,
+      orderedVariables: orderedVariables,
       hasBaseSalary: selectedVariables.includes('base_salary'),
       hasOnCallComp: selectedVariables.includes('on_call_compensation'),
       allVariables: selectedVariables.map(v => ({ 
@@ -65,7 +91,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
         displayName: formatVariableDisplayName(v) 
       }))
     });
-  }, [selectedVariables]);
+  }, [selectedVariables, orderedVariables]);
   
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // const [isDiscoveringVariables, setIsDiscoveringVariables] = useState(false); // Not used currently
@@ -206,7 +232,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     geographicRegion: '',
     providerType: '', // Don't pre-select provider type in filters
     year: ''
-  }, selectedVariables); // NEW: Pass selected variables to hook
+  }, orderedVariables); // NEW: Pass ordered variables to hook (preserves original file column order)
 
   // NEW: Get specialty options with mapping transparency
   const { specialties: specialtyOptions, loading: specialtyOptionsLoading, error: specialtyOptionsError } = useSpecialtyOptions();
@@ -463,7 +489,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     });
     
     return sortedData;
-  }, [allData, filters, effectiveProviderType, selectedVariables, isBenchmarkingScreen, selectedProviderType, providerTypeFilter]);
+  }, [allData, filters, effectiveProviderType, orderedVariables, isBenchmarkingScreen, selectedProviderType, providerTypeFilter]);
 
   // Generate cascading filter options based on current filter state and provider type
   const filterOptions = useMemo(() => {
@@ -571,6 +597,21 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     // Other options (specialties, regions, etc.) can still use cascading filters for better UX
     const allSurveySources = allData.map(row => row.surveySource).filter((item): item is string => Boolean(item));
     const availableSourcesFromAllData = [...new Set(allSurveySources)].sort();
+    
+    // ENTERPRISE DIAGNOSTIC: Log survey sources to debug missing Physician surveys
+    console.log('🔍 SurveyAnalytics: Survey source generation for Benchmarking:', {
+      totalDataRows: allData.length,
+      totalSurveySources: allSurveySources.length,
+      uniqueSurveySources: availableSourcesFromAllData.length,
+      allSurveySourcesList: availableSourcesFromAllData,
+      hasPhysicianSurveys: availableSourcesFromAllData.some(s => s.toLowerCase().includes('physician')),
+      hasAppSurveys: availableSourcesFromAllData.some(s => s.toLowerCase().includes('app')),
+      sampleDataRows: allData.slice(0, 5).map(row => ({
+        surveySource: row.surveySource,
+        providerType: row.providerType,
+        dataCategory: (row as any).dataCategory
+      }))
+    });
     
     // CRITICAL FIX: Generate data categories from ALL data, not cascading-filtered data
     // This ensures all data categories are always available in the dropdown, regardless of other filter selections
@@ -809,7 +850,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
             error={error}
             onExport={exportToExcel}
             onFormatVariables={handleFormatVariables}
-            selectedVariables={selectedVariables}
+            selectedVariables={orderedVariables} // Use ordered variables to preserve original file column order
             formattingRules={formattingRules}
           />
         </div>

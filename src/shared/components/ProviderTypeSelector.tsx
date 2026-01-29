@@ -6,7 +6,7 @@
  * real-time feedback about data availability.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDownIcon,
   ExclamationTriangleIcon
@@ -15,6 +15,7 @@ import { ProviderTypeSelectorProps } from '../../types/provider';
 import { useProviderTypeDetection } from '../../hooks/useProviderTypeDetection';
 import LoadingSpinner from './LoadingSpinner';
 import { ProviderTypeInfo } from '../../services/ProviderTypeDetectionService';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * Dynamic Provider Type Selector component
@@ -33,6 +34,10 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   className = ''
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [highlightAnimation, setHighlightAnimation] = useState(false);
+  const previousTypesRef = useRef<ProviderTypeInfo[]>([]);
+  const hasInitializedRef = useRef(false); // Track if we've done initial load
+  const toast = useToast();
   
   // Use dynamic provider type detection
   const {
@@ -47,13 +52,33 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'survey-uploaded' || e.key === 'survey-deleted') {
-        console.log('🔄 Survey change detected, refreshing provider type detection...');
+        console.log('🔄 Survey change detected via storage event, refreshing provider type detection...');
         refresh();
       }
     };
 
+    const handleCustomEvent = () => {
+      console.log('🔄 Survey change detected via custom event, refreshing provider type detection...');
+      refresh();
+    };
+
+    const handleProviderTypesRefreshed = () => {
+      console.log('🔄 Provider types refreshed event received, refreshing provider type detection...');
+      refresh();
+    };
+
+    // Listen for both storage events (cross-tab) and custom events (same-tab)
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('survey-uploaded', handleCustomEvent);
+    window.addEventListener('survey-deleted', handleCustomEvent);
+    window.addEventListener('provider-types-refreshed', handleProviderTypesRefreshed);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('survey-uploaded', handleCustomEvent);
+      window.removeEventListener('survey-deleted', handleCustomEvent);
+      window.removeEventListener('provider-types-refreshed', handleProviderTypesRefreshed);
+    };
   }, [refresh]);
 
   // Get the display text for the current value
@@ -120,15 +145,77 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
 
   const currentDisplay = getCurrentDisplay();
 
-  // Auto-switch to available provider type if current selection has no data
+  // ENTERPRISE FIX: Detect new provider types and show visual feedback
+  // CRITICAL: Only show toast when provider types are actually added (not on initial page load)
   useEffect(() => {
-    if (!isLoading && !error && hasAnyData && availableTypes.length > 0) {
+    if (!isLoading && !error && availableTypes.length > 0) {
+      // ENTERPRISE FIX: Skip toast on initial load - only show when types are actually added
+      if (!hasInitializedRef.current) {
+        // First load - just initialize the previous types, don't show toast
+        console.log('🔍 Initial provider type detection - skipping toast (not a new upload)');
+        previousTypesRef.current = [...availableTypes];
+        hasInitializedRef.current = true;
+        return;
+      }
+      
+      const previousTypes = previousTypesRef.current;
+      const currentTypeKeys = new Set(availableTypes.map(t => t.type));
+      const previousTypeKeys = new Set(previousTypes.map(t => t.type));
+      
+      // Find newly added provider types (only if they weren't there before)
+      const newTypes = availableTypes.filter(t => !previousTypeKeys.has(t.type));
+      
+      if (newTypes.length > 0) {
+        // New provider type(s) detected - show visual feedback
+        console.log('🎉 New provider type(s) detected:', newTypes.map(t => t.type));
+        
+        // Trigger highlight animation
+        setHighlightAnimation(true);
+        setTimeout(() => setHighlightAnimation(false), 2000);
+        
+        // Show success toast notification
+        const newType = newTypes[0]; // Show notification for first new type
+        const displayName = newType.type === 'PHYSICIAN' ? 'Physician' : 
+                           newType.type === 'APP' ? 'APP' : 
+                           newType.type === 'CALL' ? 'Call Pay' : newType.displayName;
+        toast.success(
+          `${displayName} surveys available`,
+          `Your ${displayName.toLowerCase()} survey has been uploaded and is now available in the Data View.`,
+          6000 // Show for 6 seconds
+        );
+      }
+      
+      // Update previous types for next comparison
+      previousTypesRef.current = [...availableTypes];
+    }
+  }, [availableTypes, isLoading, error, toast]);
+
+  // Auto-switch to available provider type if current selection has no data
+  // ENTERPRISE FIX: Also auto-switch to newly uploaded provider type if it's more recent
+  // CRITICAL: This handles the case where user deletes the last survey of a provider type
+  useEffect(() => {
+    if (!isLoading && !error) {
+      // ENTERPRISE FIX: If no data at all, don't auto-switch (let user see empty state)
+      if (!hasAnyData || availableTypes.length === 0) {
+        // If current selection has no data and there's no data at all, keep current selection
+        // The empty state message will guide the user
+        return;
+      }
+      
       const currentTypeInfo = availableTypes.find(t => t.type === value);
       if (!currentTypeInfo) {
         // Current selection has no data, switch to first available type
-        const firstAvailable = availableTypes[0];
-        if (firstAvailable.type !== value && (firstAvailable.type === 'PHYSICIAN' || firstAvailable.type === 'APP')) {
-          onChange(firstAvailable.type as 'PHYSICIAN' | 'APP');
+        // Sort by most recent first to prioritize newly uploaded surveys
+        const sortedTypes = [...availableTypes].sort((a, b) => {
+          if (a.lastUpdated && b.lastUpdated) {
+            return b.lastUpdated.getTime() - a.lastUpdated.getTime();
+          }
+          return b.surveyCount - a.surveyCount;
+        });
+        const firstAvailable = sortedTypes[0];
+        if (firstAvailable.type !== value && (firstAvailable.type === 'PHYSICIAN' || firstAvailable.type === 'APP' || firstAvailable.type === 'CALL')) {
+          console.log(`🔄 Auto-switching from "${value}" (no data) to "${firstAvailable.type}" (${firstAvailable.surveyCount} surveys)`);
+          onChange(firstAvailable.type as 'PHYSICIAN' | 'APP' | 'CALL');
         }
       }
     }
@@ -244,7 +331,9 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       {/* Dropdown Button - Google Style with Data Indicator */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 h-10"
+        className={`w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 h-10 ${
+          highlightAnimation ? 'ring-2 ring-indigo-500 ring-offset-2 shadow-lg border-indigo-400' : ''
+        }`}
         aria-label="Select provider type"
         aria-expanded={isOpen}
         aria-haspopup="listbox"

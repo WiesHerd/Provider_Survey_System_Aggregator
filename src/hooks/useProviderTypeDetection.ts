@@ -150,8 +150,11 @@ export const useProviderTypeDetection = (
   // Add immediate refresh capability when data changes
   useEffect(() => {
     const handleDataChange = () => {
-      console.log('🔄 Data change detected, refreshing provider types...');
-      loadProviderTypes();
+      console.log('🔄 Data change detected, forcing provider type detection refresh...');
+      // ENTERPRISE FIX: Clear cache and force refresh when surveys are uploaded/deleted
+      // This ensures the dropdown only shows provider types that actually have data
+      providerTypeDetectionService.clearCache();
+      refresh(); // Use refresh() which calls forceRefresh() internally
     };
 
     // Listen for custom events that indicate data changes
@@ -162,7 +165,7 @@ export const useProviderTypeDetection = (
       window.removeEventListener('survey-uploaded', handleDataChange);
       window.removeEventListener('survey-deleted', handleDataChange);
     };
-  }, [loadProviderTypes]);
+  }, [refresh]); // Use refresh instead of loadProviderTypes to ensure cache is cleared
 
   // Set up refresh interval - only refresh if we have data
   useEffect(() => {

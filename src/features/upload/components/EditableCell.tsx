@@ -7,7 +7,6 @@ import React, { useState, useRef, useEffect, memo } from 'react';
 import { TextField, Tooltip } from '@mui/material';
 import { EditableCellProps } from '../types/editableTable';
 import { getCellValidationMessage } from '../utils/rowValidation';
-import { sanitizeHtml } from '../../../shared/utils/sanitization';
 
 /**
  * Editable Cell component with inline editing and validation highlighting
@@ -102,8 +101,8 @@ export const EditableCell: React.FC<EditableCellProps> = memo(({
   const borderWidth = validation && (validation.hasCriticalError || validation.hasWarning) ? 2 : 1;
   const validationMessage = validation ? getCellValidationMessage(validation) : '';
 
-  // Display value - sanitize for XSS protection when displaying (not editing)
-  const displayValue = isEditing ? editValue : sanitizeHtml(String(value || ''));
+  // Display value - React automatically escapes text content for XSS protection
+  const displayValue = isEditing ? editValue : String(value || '');
 
   if (isEditing) {
     return (

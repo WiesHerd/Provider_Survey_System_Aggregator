@@ -93,7 +93,7 @@ export async function diagnoseCallPayData() {
             return lower.includes('call') || 
                    lower.includes('oncall') || 
                    lower.includes('on-call') ||
-                   lower.includes('daily') && lower.includes('rate');
+                   (lower.includes('daily') && lower.includes('rate'));
           });
           
           console.log(`  - On-Call related columns:`, onCallColumns);

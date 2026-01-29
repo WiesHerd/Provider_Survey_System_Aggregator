@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Check Firebase Audit Logs</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { color: #4f46e5; }
+    button {
+      background: #4f46e5;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover { background: #4338ca; }
+    #output {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 600px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .log-entry {
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px 0;
+      margin: 10px 0;
+    }
+    .delete-op { background: #fee2e2; padding: 5px; border-left: 3px solid #ef4444; }
+    .survey-op { background: #e0e7ff; padding: 5px; border-left: 3px solid #6366f1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Firebase Audit Log Checker</h1>
+    <p>This will check your Firebase audit logs to see what delete operations were performed.</p>
+    
+    <button onclick="checkAuditLogs()">Check Audit Logs</button>
+    <button onclick="checkSurveys()">Check Current Surveys</button>
+    <button onclick="checkSurveyData()">Check SurveyData (Orphaned)</button>
+    
+    <div id="output">Click a button above to start investigation...</div>
+  </div>
+
+  <script type="module">
+    window.checkAuditLogs = async () => {
+      const output = document.getElementById('output');
+      output.innerHTML = '🔍 Checking audit logs...\n\n';
+      
+      try {
+        // Import Firebase
+        const { getFirebaseDb, getFirebaseAuth } = await import('./config/firebase.js');
+        const { collection, query, getDocs, orderBy, limit } = await import('firebase/firestore');
+        
+        const db = getFirebaseDb();
+        const auth = getFirebaseAuth();
+        
+        if (!auth.currentUser) {
+          output.innerHTML = '❌ Not authenticated. Please sign in to your app first.';
+          return;
+        }
+        
+        const userId = auth.currentUser.uid;
+        output.innerHTML += `👤 User: ${userId}\n\n`;
+        
+        // Check audit logs
+        const auditRef = collection(db, `users/${userId}/auditLogs`);
+        const q = query(auditRef, orderBy('timestamp', 'desc'), limit(50));
+        const snapshot = await getDocs(q);
+        
+        output.innerHTML += `📊 Found ${snapshot.size} audit log entries\n\n`;
+        output.innerHTML += '═══════════════════════════════════════\n\n';
+        
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const timestamp = data.timestamp?.toDate?.() || new Date();
+          const action = data.action || 'unknown';
+          const resourceType = data.resourceType || '';
+          const resourceId = data.resourceId || '';
+          
+          let className = '';
+          if (action.toLowerCase().includes('delete')) {
+            className = 'delete-op';
+          } else if (action.toLowerCase().includes('survey')) {
+            className = 'survey-op';
+          }
+          
+          output.innerHTML += `<div class="log-entry ${className}">`;
+          output.innerHTML += `⏰ ${timestamp.toLocaleString()}\n`;
+          output.innerHTML += `🎯 Action: ${action}\n`;
+          output.innerHTML += `📦 Resource: ${resourceType} (${resourceId})\n`;
+          if (data.details) {
+            output.innerHTML += `📝 Details: ${JSON.stringify(data.details, null, 2)}\n`;
+          }
+          output.innerHTML += `</div>\n`;
+        });
+        
+      } catch (error) {
+        output.innerHTML += `\n❌ Error: ${error.message}`;
+      }
+    };
+    
+    window.checkSurveys = async () => {
+      const output = document.getElementById('output');
+      output.innerHTML = '🔍 Checking surveys collection...\n\n';
+      
+      try {
+        const { getFirebaseDb, getFirebaseAuth } = await import('./config/firebase.js');
+        const { collection, getDocs } = await import('firebase/firestore');
+        
+        const db = getFirebaseDb();
+        const auth = getFirebaseAuth();
+        const userId = auth.currentUser.uid;
+        
+        const surveysRef = collection(db, `users/${userId}/surveys`);
+        const snapshot = await getDocs(surveysRef);
+        
+        output.innerHTML += `📊 Found ${snapshot.size} surveys\n\n`;
+        
+        if (snapshot.size === 0) {
+          output.innerHTML += '❌ SURVEYS COLLECTION IS EMPTY!\n';
+          output.innerHTML += 'This confirms the surveys collection was deleted.\n';
+        } else {
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            output.innerHTML += `✅ Survey: ${data.name || 'Unnamed'}\n`;
+            output.innerHTML += `   ID: ${doc.id}\n`;
+            output.innerHTML += `   Year: ${data.year}, Provider: ${data.providerType}\n\n`;
+          });
+        }
+        
+      } catch (error) {
+        output.innerHTML += `\n❌ Error: ${error.message}`;
+      }
+    };
+    
+    window.checkSurveyData = async () => {
+      const output = document.getElementById('output');
+      output.innerHTML = '🔍 Checking surveyData collection...\n\n';
+      
+      try {
+        const { getFirebaseDb, getFirebaseAuth } = await import('./config/firebase.js');
+        const { collection, getDocs, query, limit: limitFn } = await import('firebase/firestore');
+        
+        const db = getFirebaseDb();
+        const auth = getFirebaseAuth();
+        const userId = auth.currentUser.uid;
+        
+        const dataRef = collection(db, `users/${userId}/surveyData`);
+        const q = query(dataRef, limitFn(100)); // Get first 100 rows
+        const snapshot = await getDocs(q);
+        
+        output.innerHTML += `📊 Found ${snapshot.size}+ surveyData rows\n\n`;
+        
+        // Group by surveyId
+        const surveyIds = new Set();
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.surveyId) {
+            surveyIds.add(data.surveyId);
+          }
+        });
+        
+        output.innerHTML += `🔑 Unique surveyIds in data: ${surveyIds.size}\n\n`;
+        output.innerHTML += 'Survey IDs:\n';
+        surveyIds.forEach((id) => {
+          output.innerHTML += `  • ${id}\n`;
+        });
+        
+        output.innerHTML += '\n⚠️ These surveyIds have orphaned data (no survey metadata)!\n';
+        
+      } catch (error) {
+        output.innerHTML += `\n❌ Error: ${error.message}`;
+      }
+    };
+  </script>
+</body>
+</html>

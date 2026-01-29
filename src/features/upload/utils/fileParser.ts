@@ -104,7 +104,7 @@ export async function parseFile(
         };
       }
     } else {
-      // Parse Excel file
+      // Parse Excel file (standard single-row headers)
       const excelResult = await parseExcelFile(file, selectedSheet);
       
       metadata.sheetName = excelResult.selectedSheet;

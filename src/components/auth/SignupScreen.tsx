@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { GoogleLogo } from './GoogleLogo';
+import { LegalDialogs } from './LegalDialogs';
 
 /**
  * Signup screen props
@@ -56,6 +57,8 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [formErrors, setFormErrors] = useState<{ 
     email?: string; 
     password?: string; 
@@ -80,6 +83,10 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   };
 
   const passwordStrength = getPasswordStrength(password);
+  const handleOpenTerms = () => setIsTermsOpen(true);
+  const handleCloseTerms = () => setIsTermsOpen(false);
+  const handleOpenPrivacy = () => setIsPrivacyOpen(true);
+  const handleClosePrivacy = () => setIsPrivacyOpen(false);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -265,6 +272,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
           {error && (
             <Alert 
               severity="error" 
+              aria-live="polite"
               sx={{ 
                 mb: 4, 
                 borderRadius: '8px',
@@ -564,15 +572,20 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                   <Typography sx={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.5 }}>
                     I agree to the{' '}
                     <Link
-                      href="#"
+                      component="button"
+                      type="button"
                       onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
                         e.preventDefault();
-                        // TODO: Open Terms of Service modal/page
+                        handleOpenTerms();
                       }}
                       sx={{
                         color: '#6366f1',
                         textDecoration: 'none',
                         fontWeight: 500,
+                        cursor: 'pointer',
+                        background: 'none',
+                        border: 'none',
+                        p: 0,
                         '&:hover': {
                           textDecoration: 'none',
                           color: '#4f46e5'
@@ -583,15 +596,20 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                     </Link>
                     {' '}and{' '}
                     <Link
-                      href="#"
+                      component="button"
+                      type="button"
                       onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
                         e.preventDefault();
-                        // TODO: Open Privacy Policy modal/page
+                        handleOpenPrivacy();
                       }}
                       sx={{
                         color: '#6366f1',
                         textDecoration: 'none',
                         fontWeight: 500,
+                        cursor: 'pointer',
+                        background: 'none',
+                        border: 'none',
+                        p: 0,
                         '&:hover': {
                           textDecoration: 'none',
                           color: '#4f46e5'
@@ -775,6 +793,13 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
           </Typography>
         </Box>
       </Box>
+
+      <LegalDialogs
+        isTermsOpen={isTermsOpen}
+        isPrivacyOpen={isPrivacyOpen}
+        onCloseTerms={handleCloseTerms}
+        onClosePrivacy={handleClosePrivacy}
+      />
     </Box>
   );
 };

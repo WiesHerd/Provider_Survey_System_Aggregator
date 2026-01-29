@@ -9,8 +9,9 @@
  * - Background refetching
  */
 
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DataService } from '../../../services/DataService';
+import { getDataService } from '../../../services/DataService';
 import { useProviderContext } from '../../../contexts/ProviderContext';
 import { queryKeys } from '../../../shared/services/queryClient';
 import { IVariableMapping, IUnmappedVariable } from '../types/mapping';
@@ -34,7 +35,8 @@ interface VariableMappingData {
 export const useVariableMappingQuery = (showAllCategories: boolean = false) => {
   const { selectedProviderType } = useProviderContext();
   const queryClient = useQueryClient();
-  const dataService = new DataService();
+  // IMPORTANT: Use singleton DataService to avoid repeated IndexedDB initialization
+  const dataService = useMemo(() => getDataService(), []);
   
   // Determine provider type filter
   const dataProviderType = showAllCategories 

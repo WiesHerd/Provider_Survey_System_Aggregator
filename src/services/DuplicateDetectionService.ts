@@ -6,7 +6,8 @@
 
 import { DataCategory, ProviderType } from '../types/provider';
 import { calculateFileHash, calculateContentHash } from '../features/upload/utils/fileHash';
-import { getDataService } from './DataService';
+import { getDataService, StorageMode } from './DataService';
+import { IndexedDBService } from './IndexedDBService';
 import { logger } from '../shared/utils/logger';
 
 export interface SurveyMetadata {
@@ -74,29 +75,57 @@ export class DuplicateDetectionService {
   }
 
   /**
+   * Invalidate the surveys cache
+   * Call this after survey deletion, upload, or any operation that modifies surveys
+   */
+  public invalidateCache(): void {
+    this.surveysCache = null;
+    this.cacheTimestamp = 0;
+    logger.log('🔄 DuplicateDetectionService: Cache invalidated');
+  }
+
+  /**
    * Get all surveys with caching
+   * ENTERPRISE FIX: Use DataService to get surveys from the same storage backend as the rest of the app
+   * This ensures duplicate detection checks the same database where surveys are actually stored/deleted
+   * Previously queried IndexedDB directly, which caused issues when using Firebase (deleted surveys still appeared)
    */
   private async getAllSurveys(): Promise<any[]> {
     const now = Date.now();
     
-    // Return cached surveys if still valid
-    if (this.surveysCache && (now - this.cacheTimestamp) < this.CACHE_TTL) {
+    // Return cached surveys if still valid (but only if cache is very fresh - 30 seconds)
+    // This prevents stale cache issues after deletions
+    if (this.surveysCache && (now - this.cacheTimestamp) < 30000) { // 30 seconds - very short cache
+      logger.log('🔍 DuplicateDetectionService: Using cached surveys (cache age: ' + Math.round((now - this.cacheTimestamp) / 1000) + 's)');
       return this.surveysCache;
     }
 
     try {
+      // ENTERPRISE FIX: Use DataService to get surveys from the same storage backend
+      // This ensures we check Firebase if Firebase is being used, or IndexedDB if that's the backend
+      // This prevents the issue where a survey is deleted from Firebase but duplicate detection checks IndexedDB
+      const { getDataService } = await import('./DataService');
       const dataService = getDataService();
+      logger.log('🔍 DuplicateDetectionService: Fetching surveys from DataService (uses same storage backend as rest of app)');
       const surveys = await dataService.getAllSurveys();
       
-      // Update cache
+      logger.log(`🔍 DuplicateDetectionService: Found ${surveys.length} surveys in database`);
+      
+      if (surveys.length > 0) {
+        logger.log(`🔍 DuplicateDetectionService: Survey IDs:`, surveys.map((s: any) => s.id).slice(0, 10));
+        logger.log(`🔍 DuplicateDetectionService: Survey names:`, surveys.map((s: any) => s.name || s.type || 'N/A').slice(0, 10));
+      }
+      
+      // Update cache with short TTL to prevent stale data after deletions
       this.surveysCache = surveys;
       this.cacheTimestamp = now;
       
       return surveys;
     } catch (error) {
       logger.error('Error fetching surveys for duplicate detection:', error);
-      // Return cached data if available, even if stale
+      // Return cached data if available, even if stale (better than blocking upload)
       if (this.surveysCache) {
+        logger.warn('⚠️ Using stale cache due to error - duplicate detection may be inaccurate');
         return this.surveysCache;
       }
       return [];
@@ -110,6 +139,9 @@ export class DuplicateDetectionService {
     compositeKey: string,
     surveys: any[]
   ): DuplicateMatch | undefined {
+    logger.log(`🔍 Checking for exact duplicate with key: "${compositeKey}"`);
+    logger.log(`🔍 Comparing against ${surveys.length} existing surveys in IndexedDB`);
+    
     for (const survey of surveys) {
       // Handle legacy surveys without new metadata fields
       // Try to extract source from type field if source is missing
@@ -142,7 +174,11 @@ export class DuplicateDetectionService {
       
       const surveyKey = this.generateCompositeKey(surveyMetadata);
       
+      logger.log(`🔍 Comparing: "${compositeKey}" vs "${surveyKey}" (Survey ID: ${survey.id}, Name: ${survey.name || 'N/A'})`);
+      
       if (surveyKey === compositeKey) {
+        logger.warn(`⚠️ EXACT MATCH FOUND! Survey ID: ${survey.id}, Name: ${survey.name || 'N/A'}`);
+        logger.warn(`⚠️ Match details: source="${source}", category="${dataCategory}", providerType="${survey.providerType}", year="${survey.year}", label="${survey.surveyLabel || survey.metadata?.surveyLabel || ''}"`);
         return {
           survey,
           matchType: 'exact'
@@ -150,6 +186,7 @@ export class DuplicateDetectionService {
       }
     }
     
+    logger.log(`✅ No exact match found for key: "${compositeKey}"`);
     return undefined;
   }
 
@@ -181,6 +218,8 @@ export class DuplicateDetectionService {
 
   /**
    * Check for similar surveys using fuzzy matching
+   * CRITICAL: Only flag as similar if source matches OR similarity is extremely high (>0.95)
+   * Different sources (e.g., Gallagher vs SullivanCotter) are NOT duplicates
    */
   private checkSimilarSurveys(
     metadata: SurveyMetadata,
@@ -195,18 +234,54 @@ export class DuplicateDetectionService {
         continue;
       }
 
+      // Handle legacy surveys
+      let source = survey.source || '';
+      if (!source && survey.type) {
+        const typeParts = survey.type.split(' ');
+        source = typeParts[0] || '';
+      }
+      
+      let dataCategory = survey.dataCategory || '';
+      if (!dataCategory && survey.type) {
+        if (survey.type.toLowerCase().includes('call pay')) {
+          dataCategory = 'CALL_PAY';
+        } else if (survey.type.toLowerCase().includes('moonlighting')) {
+          dataCategory = 'MOONLIGHTING';
+        } else {
+          dataCategory = 'COMPENSATION';
+        }
+      }
+
       const surveyMetadata: SurveyMetadata = {
-        source: survey.source || '',
-        dataCategory: survey.dataCategory || '',
+        source: source,
+        dataCategory: dataCategory,
         providerType: survey.providerType || '',
         year: survey.year || '',
         surveyLabel: survey.surveyLabel || survey.metadata?.surveyLabel || ''
       };
       
+      // CRITICAL: Different sources are NEVER duplicates, even if everything else matches
+      const source1 = (metadata.source || '').trim().toLowerCase();
+      const source2 = (surveyMetadata.source || '').trim().toLowerCase();
+      
+      if (source1 && source2 && source1 !== source2) {
+        // Different sources = not a duplicate, skip
+        logger.log(`🔍 Skipping similarity check: Different sources ("${source1}" vs "${source2}")`);
+        continue;
+      }
+      
       const similarity = this.calculateSimilarity(metadata, surveyMetadata);
       
-      // Consider similar if similarity > 0.7
-      if (similarity > 0.7) {
+      // Only flag as similar if:
+      // 1. Source matches AND similarity > 0.8 (high threshold)
+      // 2. OR similarity is extremely high (>0.95) even without source match (edge case)
+      const sourceMatches = source1 && source2 && source1 === source2;
+      const isSimilar = sourceMatches 
+        ? similarity > 0.8  // If source matches, require 80% similarity
+        : similarity > 0.95; // If source doesn't match, require 95% similarity (very rare)
+      
+      if (isSimilar) {
+        logger.log(`🔍 Similar survey found: similarity=${similarity.toFixed(2)}, sourceMatch=${sourceMatches}`);
         similarSurveys.push({
           survey,
           matchType: 'similar',
@@ -319,8 +394,30 @@ export class DuplicateDetectionService {
       // Generate composite key
       const compositeKey = this.generateCompositeKey(input.metadata);
       
+      logger.log(`🔍 DUPLICATE CHECK STARTED`);
+      logger.log(`🔍 New survey metadata:`, {
+        source: input.metadata.source,
+        dataCategory: input.metadata.dataCategory,
+        providerType: input.metadata.providerType,
+        year: input.metadata.year,
+        surveyLabel: input.metadata.surveyLabel
+      });
+      logger.log(`🔍 Generated composite key: "${compositeKey}"`);
+      
       // Get all surveys
       const surveys = await this.getAllSurveys();
+      
+      if (surveys.length === 0) {
+        logger.log(`✅ No surveys in IndexedDB - no duplicates possible`);
+        return {
+          hasDuplicate: false,
+          similarSurveys: [],
+          matchType: 'none',
+          compositeKey
+        };
+      }
+      
+      logger.log(`🔍 Found ${surveys.length} surveys in IndexedDB. Survey IDs:`, surveys.map(s => s.id).slice(0, 10));
       
       // Check for exact duplicate
       const exactMatch = this.checkExactDuplicate(compositeKey, surveys);
@@ -402,6 +499,47 @@ export class DuplicateDetectionService {
   public clearCache(): void {
     this.surveysCache = null;
     this.cacheTimestamp = 0;
+    logger.log('🔄 DuplicateDetectionService: Cache cleared');
+  }
+
+  /**
+   * Debug method: Get all surveys and their composite keys
+   * Useful for troubleshooting duplicate detection
+   */
+  public async debugGetAllSurveysWithKeys(): Promise<Array<{ survey: any; compositeKey: string; details: SurveyMetadata }>> {
+    const surveys = await this.getAllSurveys();
+    return surveys.map(survey => {
+      let source = survey.source || '';
+      if (!source && survey.type) {
+        const typeParts = survey.type.split(' ');
+        source = typeParts[0] || '';
+      }
+      
+      let dataCategory = survey.dataCategory || '';
+      if (!dataCategory && survey.type) {
+        if (survey.type.toLowerCase().includes('call pay')) {
+          dataCategory = 'CALL_PAY';
+        } else if (survey.type.toLowerCase().includes('moonlighting')) {
+          dataCategory = 'MOONLIGHTING';
+        } else {
+          dataCategory = 'COMPENSATION';
+        }
+      }
+      
+      const metadata: SurveyMetadata = {
+        source: source,
+        dataCategory: dataCategory,
+        providerType: survey.providerType || '',
+        year: survey.year || '',
+        surveyLabel: survey.surveyLabel || survey.metadata?.surveyLabel || ''
+      };
+      
+      return {
+        survey,
+        compositeKey: this.generateCompositeKey(metadata),
+        details: metadata
+      };
+    });
   }
 }
 
