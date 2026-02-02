@@ -35,12 +35,13 @@ export class IndexedDBInspector {
   }
 
   /**
-   * Clear all data from IndexedDB
+   * Clear all user data (full wipe): surveys, mappings, preferences, custom reports, FMV, blend templates, etc.
+   * Uses DataService.deleteAllUserData() so Firebase is cleared when in Firebase mode, and IndexedDB + localStorage always.
    */
   async clearAllData() {
     try {
-      await this.dataService.deleteAllSurveys();
-      console.log('🗑️ All IndexedDB data cleared');
+      await this.dataService.deleteAllUserData();
+      console.log('🗑️ All user data cleared (surveys, mappings, preferences, reports, FMV, blends)');
       return true;
     } catch (error) {
       console.error('Error clearing data:', error);

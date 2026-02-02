@@ -45,6 +45,12 @@ const createIndexedDBPersister = () => {
 const indexedDBPersister = createIndexedDBPersister();
 
 /**
+ * Resolves when the persisted query cache has been restored from IndexedDB (or after timeout).
+ * Used to gate first paint so first navigation hits hydrated cache.
+ */
+export let cacheReadyPromise: Promise<void> = Promise.resolve();
+
+/**
  * Create and configure QueryClient with enterprise defaults
  * 
  * Cache Policies:
@@ -111,7 +117,7 @@ export const createQueryClient = () => {
     };
 
     // Restore cache from IndexedDB on initialization
-    const restoreCache = async () => {
+    const restoreCache = async (): Promise<void> => {
       try {
         const cached = await indexedDBPersister.restoreClient();
         if (cached) {
@@ -136,8 +142,13 @@ export const createQueryClient = () => {
       }
     };
 
-    // Restore on initialization
-    restoreCache();
+    // ENTERPRISE: Gate first paint on cache restore so first navigation hits hydrated cache.
+    // Race with 2s timeout so slow IndexedDB does not block the app forever.
+    const CACHE_RESTORE_TIMEOUT_MS = 2000;
+    cacheReadyPromise = Promise.race([
+      restoreCache(),
+      new Promise<void>((resolve) => setTimeout(resolve, CACHE_RESTORE_TIMEOUT_MS)),
+    ]);
 
     // Persist on cache updates (debounced)
     let persistTimeout: NodeJS.Timeout;

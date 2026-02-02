@@ -16,7 +16,11 @@ export function clearPerformanceCaches(): void {
     const performanceService = getPerformanceOptimizedDataService();
     // Clear all survey list cache entries (pattern matches "all_surveys_*")
     performanceService.clearCache('all_surveys');
-    console.log('✅ Cleared performance cache for survey list');
+    // Clear mapping caches so Provider Type / Specialty / Region mapping pages show new surveys
+    performanceService.clearCache('provider_type_mapping');
+    performanceService.clearCache('specialty_mapping');
+    performanceService.clearCache('region_mapping');
+    console.log('✅ Cleared performance cache for survey list and mapping screens');
   } catch (error) {
     console.warn('⚠️ Failed to clear performance cache:', error);
   }
@@ -87,6 +91,15 @@ export async function invalidateAllCachesAfterDelete(surveyId?: string): Promise
   
   // Clear performance caches first (synchronous)
   clearPerformanceCaches();
+  
+  // CRITICAL: Invalidate duplicate detection cache so re-upload after delete sees fresh survey list
+  try {
+    const { duplicateDetectionService } = await import('../../services/DuplicateDetectionService');
+    duplicateDetectionService.invalidateCache();
+    console.log('✅ Invalidated duplicate detection cache after deletion');
+  } catch (error) {
+    console.warn('⚠️ Failed to invalidate duplicate detection cache:', error);
+  }
   
   // Invalidate query caches (asynchronous)
   await invalidateQueryCaches(surveyId);

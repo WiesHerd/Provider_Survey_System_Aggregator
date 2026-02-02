@@ -17,6 +17,16 @@ import {
 import { getUploadQueueService, UploadJob } from '../../services/UploadQueueService';
 import { useToast } from '../../contexts/ToastContext';
 
+/** Job IDs for which SurveyUpload already showed the success toast (so we don't duplicate). */
+const jobIdsWithToastShownByUploadPage = new Set<string>();
+
+/**
+ * Call from SurveyUpload when it shows the success toast so UploadQueueToast does not show a duplicate.
+ */
+export function markJobSuccessToastShown(jobId: string): void {
+  jobIdsWithToastShownByUploadPage.add(jobId);
+}
+
 /**
  * Upload Queue Toast Component
  * Listens to upload queue and shows toast notifications
@@ -33,7 +43,7 @@ export const UploadQueueToast: React.FC = () => {
 
       // Show toast notifications for status changes
       if (job.status === 'completed') {
-        // CRITICAL: Check if upload went to Firebase or IndexedDB
+        // Error toast only if upload went to IndexedDB but we expected Firebase
         const checkStorageLocation = async () => {
           try {
             const { getCurrentStorageMode, StorageMode } = await import('../../config/storage');
@@ -43,7 +53,6 @@ export const UploadQueueToast: React.FC = () => {
             const actualMode = (dataService as any).mode || storageMode;
             
             if (actualMode !== StorageMode.FIREBASE && job.surveyId) {
-              // Verify if survey is actually in Firebase
               const { getFirebaseDb } = await import('../../config/firebase');
               const { getFirebaseAuth } = await import('../../config/firebase');
               const { doc, getDoc } = await import('firebase/firestore');
@@ -54,35 +63,33 @@ export const UploadQueueToast: React.FC = () => {
               if (db && userId) {
                 const surveyRef = doc(db, `users/${userId}/surveys/${job.surveyId}`);
                 const surveySnap = await getDoc(surveyRef);
-                
                 if (!surveySnap.exists()) {
                   toast.error(
                     'Upload Saved Locally Only',
                     `${job.fileName} was saved to local storage (IndexedDB) but NOT to Firebase cloud storage. Check console for details.`,
                     15000
                   );
-                  return;
                 }
               }
             }
-            
-            // Normal success message
+          } catch {
+            // Non-critical: no toast on check failure
+          }
+        };
+        checkStorageLocation();
+
+        // Fallback success toast when user is not on upload page (SurveyUpload unmounted).
+        // Delay so that if user is on upload page, SurveyUpload shows first and we skip.
+        const FALLBACK_SUCCESS_TOAST_DELAY_MS = 2500;
+        setTimeout(() => {
+          if (!jobIdsWithToastShownByUploadPage.has(job.id)) {
             toast.success(
               'Upload Complete',
-              `${job.fileName} uploaded successfully (${job.rowCount?.toLocaleString()} rows)`,
-              5000
-            );
-          } catch (checkError) {
-            // If check fails, show normal success (better than showing error)
-            toast.success(
-              'Upload Complete',
-              `${job.fileName} uploaded successfully (${job.rowCount?.toLocaleString()} rows)`,
+              `${job.fileName} uploaded successfully (${(job.rowCount ?? 0).toLocaleString()} rows)`,
               5000
             );
           }
-        };
-        
-        checkStorageLocation();
+        }, FALLBACK_SUCCESS_TOAST_DELAY_MS);
       } else if (job.status === 'failed') {
         toast.error(
           'Upload Failed',

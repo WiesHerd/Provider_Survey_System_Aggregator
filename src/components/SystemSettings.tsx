@@ -109,7 +109,7 @@ const SystemSettings: React.FC = () => {
   };
 
   const clearAllData = async () => {
-    if (!window.confirm('Are you sure you want to delete ALL survey data? This action cannot be undone and will remove all uploaded surveys, mappings, and analytics data.')) {
+    if (!window.confirm('Are you sure you want to delete ALL your data? This cannot be undone and will remove surveys, mappings, preferences, custom reports, saved FMV calculations, blend templates, and analytics data from this device and from the cloud (if signed in).')) {
       return;
     }
 

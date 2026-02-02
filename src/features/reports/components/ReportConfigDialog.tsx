@@ -34,7 +34,7 @@ import { ReportConfig, ReportMetric, BlendingMethod, Percentile } from '../types
 import { AnalyticsDataService } from '../../analytics/services/analyticsDataService';
 import { queryKeys, queryClient } from '../../../shared/services/queryClient';
 import { DynamicAggregatedData } from '../../analytics/types/variables';
-import { formatProviderTypeForDisplay } from '../../../shared/utils/formatters';
+import { formatProviderTypeForDisplay, formatSpecialtyForDisplay } from '../../../shared/utils/formatters';
 import { getDataService } from '../../../services/DataService';
 import { StorageMode } from '../../../config/storage';
 import { isFirebaseAvailable } from '../../../config/firebase';
@@ -74,6 +74,7 @@ function ReportConfigDialogComponent({
   const filterOptionsCache = useRef<{
     metadata: {
       providerTypes: Array<{ type: string; displayName: string }>;
+      specialties: string[];
       surveySources: string[];
       years: string[];
       regions: string[];
@@ -85,6 +86,7 @@ function ReportConfigDialogComponent({
   // Store metadata separately for instant access
   const [filterMetadata, setFilterMetadata] = useState<{
     providerTypes: Array<{ type: string; displayName: string }>;
+    specialties: string[];
     surveySources: string[];
     years: string[];
     regions: string[];
@@ -123,10 +125,12 @@ function ReportConfigDialogComponent({
     try {
       const preferenceData = {
         selectedProviderType: config.selectedProviderType,
+        selectedSpecialty: config.selectedSpecialty,
         selectedSurveySource: config.selectedSurveySource,
         selectedRegion: config.selectedRegion,
         selectedYear: config.selectedYear,
         enableBlending: config.enableBlending,
+        blendYears: config.blendYears,
         blendingMethod: config.blendingMethod,
         selectedPercentiles: config.selectedPercentiles
       };
@@ -142,10 +146,12 @@ function ReportConfigDialogComponent({
   const [config, setConfig] = useState<ReportConfig>({
     metric,
     selectedProviderType: [],
+    selectedSpecialty: [],
     selectedSurveySource: [],
     selectedRegion: [],
     selectedYear: [],
     enableBlending: false,
+    blendYears: false,
     blendingMethod: 'weighted',
     selectedPercentiles: ['p25', 'p50', 'p75', 'p90']
   });
@@ -163,10 +169,12 @@ function ReportConfigDialogComponent({
       setConfig({
         metric,
         selectedProviderType: normalizeArray(saved.selectedProviderType),
+        selectedSpecialty: normalizeArray(saved.selectedSpecialty),
         selectedSurveySource: normalizeArray(saved.selectedSurveySource),
         selectedRegion: normalizeArray(saved.selectedRegion),
         selectedYear: normalizeArray(saved.selectedYear),
         enableBlending: saved.enableBlending ?? false,
+        blendYears: saved.blendYears ?? false,
         blendingMethod: saved.blendingMethod ?? 'weighted',
         selectedPercentiles: saved.selectedPercentiles ?? ['p25', 'p50', 'p75', 'p90']
       });
@@ -455,6 +463,7 @@ function ReportConfigDialogComponent({
 
       return {
         providerTypes: availableProviderTypes,
+        specialties: filterMetadata.specialties ?? [],
         surveySources: availableSources,
         regions: availableRegions,
         years: availableYears
@@ -465,6 +474,7 @@ function ReportConfigDialogComponent({
     if (allData.length === 0) {
       return {
         providerTypes: [],
+        specialties: [],
         surveySources: [],
         regions: [],
         years: []
@@ -547,9 +557,15 @@ function ReportConfigDialogComponent({
     // This fallback path is only reached when filterMetadata is null, so return empty array
     // Provider types will be available once filterMetadata is loaded
     const allProviderTypes: Array<{ type: string; displayName: string }> = [];
+    const availableSpecialties = Array.from(new Set(
+      filteredData
+        .map(d => (d as DynamicAggregatedData).standardizedName || (d as DynamicAggregatedData).surveySpecialty)
+        .filter((s): s is string => Boolean(s))
+    )).sort();
 
       return {
         providerTypes: allProviderTypes,
+        specialties: availableSpecialties,
         surveySources: availableSources,
         regions: availableRegions,
         years: availableYears
@@ -566,6 +582,16 @@ function ReportConfigDialogComponent({
   }, [open]);
 
   // Reset dependent filters when parent filters change (filter out invalid selections)
+  useEffect(() => {
+    const availableSpecialties = cascadingFilterOptions.specialties ?? [];
+    if (availableSpecialties.length > 0 && config.selectedSpecialty.length > 0) {
+      const validSpecialties = config.selectedSpecialty.filter(s => availableSpecialties.includes(s));
+      if (validSpecialties.length !== config.selectedSpecialty.length) {
+        setConfig(prev => ({ ...prev, selectedSpecialty: validSpecialties }));
+      }
+    }
+  }, [cascadingFilterOptions.specialties]);
+
   useEffect(() => {
     // When provider type changes, filter out invalid survey sources
     if (config.selectedProviderType.length > 0) {
@@ -615,7 +641,11 @@ function ReportConfigDialogComponent({
       const now = Date.now();
       if (filterOptionsCache.current && (now - filterOptionsCache.current.timestamp) < CACHE_TTL) {
         console.log('🎯 Report Config: Using component cache for filter options');
-        setFilterMetadata(filterOptionsCache.current.metadata);
+        const cached = filterOptionsCache.current.metadata;
+        setFilterMetadata({
+          ...cached,
+          specialties: cached.specialties ?? []
+        });
         setLoadingOptions(false);
         
         // Set minimal allData for cascading filters
@@ -678,9 +708,12 @@ function ReportConfigDialogComponent({
           });
           
           // Also add from cached data rows (may have different format, but include for completeness)
+          const specialtiesSet = new Set<string>();
           allData.forEach(row => {
             if (row.surveySource) surveySourcesSet.add(row.surveySource);
             if (row.surveyYear) yearsSet.add(row.surveyYear);
+            const specialty = (row.standardizedName || row.surveySpecialty || '').trim();
+            if (specialty) specialtiesSet.add(specialty);
             // ENTERPRISE FIX: Only add geographic regions, exclude dataCategory values
             if (row.geographicRegion) {
               const regionStr = String(row.geographicRegion).trim();
@@ -705,6 +738,7 @@ function ReportConfigDialogComponent({
           
           const metadata = {
             providerTypes,
+            specialties: Array.from(specialtiesSet).sort(),
             surveySources: Array.from(surveySourcesSet).sort(),
             years: Array.from(yearsSet).sort().reverse(),
             regions: Array.from(regionsSet).sort()
@@ -757,6 +791,7 @@ function ReportConfigDialogComponent({
       // Create metadata immediately (provider types, sources, years available instantly)
       const metadata = {
         providerTypes,
+        specialties: [] as string[], // Will be populated when regions load (from analytics data)
         surveySources: Array.from(surveySourcesSet).sort(),
         years: Array.from(yearsSet).sort().reverse(),
         regions: [] as string[] // Will be populated asynchronously
@@ -930,10 +965,16 @@ function ReportConfigDialogComponent({
         setAllData(allData);
       }
       
-      // Update metadata with regions
+      // Update metadata with regions and specialties (from analytics data)
+      const specialtiesSet = new Set<string>();
+      allData.forEach(row => {
+        const specialty = (row.standardizedName || row.surveySpecialty || '').trim();
+        if (specialty) specialtiesSet.add(specialty);
+      });
       const updatedMetadata = {
         ...existingMetadata,
-        regions: Array.from(regionsSet).sort()
+        regions: Array.from(regionsSet).sort(),
+        specialties: Array.from(specialtiesSet).sort()
       };
       
       setFilterMetadata(updatedMetadata);
@@ -1300,6 +1341,85 @@ function ReportConfigDialogComponent({
                 />
               </FormControl>
 
+              {/* Specialty Dropdown */}
+              <FormControl fullWidth size="small">
+                <Autocomplete
+                  multiple
+                  value={config.selectedSpecialty}
+                  onChange={(event: any, newValue: string[]) => {
+                    setConfig({ ...config, selectedSpecialty: newValue });
+                  }}
+                  options={cascadingFilterOptions.specialties}
+                  getOptionLabel={(option: string) => formatSpecialtyForDisplay(option)}
+                  renderInput={(params: any) => (
+                    <TextField
+                      {...params}
+                      label="Specialty"
+                      placeholder={config.selectedSpecialty.length === 0 ? 'All Specialties' : 'Select specialties...'}
+                      size="small"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          minHeight: '40px',
+                          border: '1px solid #d1d5db !important',
+                          '&:hover': {
+                            borderColor: '#9ca3af !important',
+                            borderWidth: '1px !important'
+                          },
+                          '&.Mui-focused': {
+                            boxShadow: 'none',
+                            borderColor: '#3b82f6 !important',
+                            borderWidth: '1px !important'
+                          },
+                          '& fieldset': {
+                            border: 'none !important'
+                          }
+                        },
+                        '& .MuiInputLabel-root': {
+                          '&.Mui-focused': {
+                            color: '#3b82f6'
+                          },
+                          '&.MuiInputLabel-shrink': {
+                            transform: 'translate(14px, -9px) scale(0.75)',
+                            backgroundColor: 'white',
+                            padding: '0 6px',
+                            zIndex: 1,
+                          }
+                        }
+                      }}
+                    />
+                  )}
+                  renderOption={(props: any, option: string) => {
+                    const isSelected = config.selectedSpecialty.includes(option);
+                    return renderOptionWithCheckmark(props, formatSpecialtyForDisplay(option), isSelected);
+                  }}
+                  renderTags={(value: string[], getTagProps: any) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {value.map((option: string, index: number) => (
+                        <Chip
+                          {...getTagProps({ index })}
+                          key={option}
+                          label={formatSpecialtyForDisplay(option)}
+                          size="small"
+                          sx={{ height: '24px', fontSize: '0.75rem' }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                  disableCloseOnSelect
+                  sx={{
+                    '& .MuiAutocomplete-paper': {
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
+                      maxHeight: '300px'
+                    }
+                  }}
+                />
+              </FormControl>
+
               {/* Survey Source Dropdown */}
               <FormControl fullWidth size="small">
                 <Autocomplete
@@ -1539,6 +1659,26 @@ function ReportConfigDialogComponent({
                   }}
                 />
               </FormControl>
+
+              {/* Blend selected years - only when 2+ years selected */}
+              {config.selectedYear.length >= 2 && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={config.blendYears ?? false}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setConfig({ ...config, blendYears: e.target.checked })
+                      }
+                      size="small"
+                    />
+                  }
+                  label={
+                    <span className="text-sm">
+                      Blend selected years into one benchmark per specialty/source (uses same blend method below)
+                    </span>
+                  }
+                />
+              )}
               </div>
             </div>
 

@@ -15,7 +15,9 @@ import {
   ReportData,
   ReportDataRow,
   ReportMetric,
-  ReportGenerationOptions
+  ReportGenerationOptions,
+  BlendBreakdownItem,
+  BlendingMethod
 } from '../types/reports';
 import {
   blendSpecialtyData,
@@ -25,6 +27,8 @@ import {
   groupRowsBySpecialtyRegionAndProviderType,
   groupRowsBySpecialtyProviderTypeSourceAndYear,
   groupRowsBySpecialtyRegionProviderTypeSourceAndYear,
+  groupRowsBySpecialtyProviderTypeAndBaseSource,
+  groupRowsBySpecialtyRegionProviderTypeAndBaseSource,
   isSpecialtyMapped
 } from '../utils/reportBlendingUtils';
 import { queryClient, queryKeys } from '../../../shared/services/queryClient';
@@ -195,21 +199,26 @@ async function generateReport(
       };
     }
 
-    // Group by specialty, region, provider type, survey source, and year
-    // This ensures that rows with identical values in these dimensions are grouped together
-    // If region is selected, group by specialty + provider type + survey source + year
-    // If region is not selected, group by specialty + region + provider type + survey source + year
-    
-    // ENTERPRISE FIX: Log provider types before grouping to verify filtering worked
+    // When blendYears is on and 2+ years selected, group by base survey source (no year) so we can blend across years
+    const useYearBlend = !!(config.blendYears && config.selectedYear.length >= 2);
+    const displayYearBlended = useYearBlend && config.selectedYear.length >= 2
+      ? config.selectedYear.slice().sort().join('-')
+      : undefined;
+
+    // Group by specialty, region, provider type, survey source, and year (or base source when blending years)
     const uniqueProviderTypesBeforeGrouping = Array.from(new Set(
       filteredData.map(row => (row.providerType || '').trim().toUpperCase())
     )).sort();
     console.log(`🔍 Report Generation: Provider types before grouping:`, uniqueProviderTypesBeforeGrouping);
-    
-    const groupedData = config.selectedRegion && config.selectedRegion.length > 0
-      ? groupRowsBySpecialtyProviderTypeSourceAndYear(filteredData)
-      : groupRowsBySpecialtyRegionProviderTypeSourceAndYear(filteredData);
-    console.log('🔍 Report Generation: Grouped into', groupedData.size, 'groups');
+
+    const groupedData = useYearBlend
+      ? (config.selectedRegion && config.selectedRegion.length > 0
+          ? groupRowsBySpecialtyProviderTypeAndBaseSource(filteredData)
+          : groupRowsBySpecialtyRegionProviderTypeAndBaseSource(filteredData))
+      : (config.selectedRegion && config.selectedRegion.length > 0
+          ? groupRowsBySpecialtyProviderTypeSourceAndYear(filteredData)
+          : groupRowsBySpecialtyRegionProviderTypeSourceAndYear(filteredData));
+    console.log('🔍 Report Generation: Grouped into', groupedData.size, 'groups', useYearBlend ? '(year-blend)' : '');
     
     // ENTERPRISE FIX: Log sample group keys to verify provider types are in group keys
     const sampleGroupKeys = Array.from(groupedData.keys()).slice(0, 5);
@@ -221,22 +230,33 @@ async function generateReport(
     let unmappedRows = 0;
 
     groupedData.forEach((specialtyRows, groupKey) => {
-      // Extract specialty, region, provider type, survey source, and year from group key
-      // Format: "specialty|providerType|surveySource|year" or "specialty|region|providerType|surveySource|year"
+      // Extract dimensions from group key (format depends on useYearBlend and region filter)
       const parts = groupKey.split('|');
       const standardizedName = parts[0];
-      const region = config.selectedRegion && config.selectedRegion.length > 0 
-        ? undefined 
-        : parts[1];
-      const providerType = config.selectedRegion && config.selectedRegion.length > 0
-        ? parts[1]
-        : parts[2];
-      const surveySource = config.selectedRegion && config.selectedRegion.length > 0
-        ? parts[2]
-        : parts[3];
-      const year = config.selectedRegion && config.selectedRegion.length > 0
-        ? parts[3]
-        : parts[4];
+      let region: string | undefined;
+      let providerType: string;
+      let surveySource: string;
+      let year: string | undefined;
+
+      if (useYearBlend) {
+        // Year-blend keys: "specialty|providerType|baseSource" (3) or "specialty|region|providerType|baseSource" (4)
+        if (config.selectedRegion && config.selectedRegion.length > 0) {
+          providerType = parts[1];
+          surveySource = parts[2];
+          region = undefined;
+        } else {
+          region = parts[1];
+          providerType = parts[2];
+          surveySource = parts[3];
+        }
+        year = displayYearBlended;
+      } else {
+        // Standard keys: "specialty|providerType|surveySource|year" (4) or "specialty|region|providerType|surveySource|year" (5)
+        region = config.selectedRegion && config.selectedRegion.length > 0 ? undefined : parts[1];
+        providerType = config.selectedRegion && config.selectedRegion.length > 0 ? parts[1] : parts[2];
+        surveySource = config.selectedRegion && config.selectedRegion.length > 0 ? parts[2] : parts[3];
+        year = config.selectedRegion && config.selectedRegion.length > 0 ? parts[3] : parts[4];
+      }
       
       // ENTERPRISE FIX: Log provider type from group key to verify it matches filter
       if (groupedData.size < 10 || Array.from(groupedData.keys()).indexOf(groupKey) < 5) {
@@ -257,25 +277,27 @@ async function generateReport(
         : (region || specialtyRows[0]?.geographicRegion ? formatRegionForDisplay(region || specialtyRows[0].geographicRegion) : 'All Regions');
 
       const isMapped = isSpecialtyMapped(standardizedName, mappings);
+      const shouldBlendThisGroup = useYearBlend
+        ? specialtyRows.length >= 1
+        : (config.enableBlending && isMapped && specialtyRows.length > 1);
+      const blendMethodForGroup = useYearBlend && config.blendingMethod === 'none' ? 'weighted' : config.blendingMethod;
 
-      if (config.enableBlending && isMapped && specialtyRows.length > 1) {
-        // Blend the rows (only blend within same region)
+      if (shouldBlendThisGroup) {
         const blended = blendSpecialtyData(
           specialtyRows,
-          config.blendingMethod,
+          blendMethodForGroup,
           metric,
           config.selectedPercentiles
         );
 
         if (blended) {
-          // For blended rows, show year if all rows have the same year, otherwise show "Multiple"
-          const years = specialtyRows.map(r => r.surveyYear).filter((y): y is string => Boolean(y));
-          const uniqueYears = Array.from(new Set(years));
-          const displayYear = uniqueYears.length === 1 
-            ? uniqueYears[0] 
-            : uniqueYears.length > 1 
-              ? 'Multiple' 
-              : undefined;
+          const displayYear = useYearBlend
+            ? displayYearBlended
+            : (() => {
+                const years = specialtyRows.map(r => r.surveyYear).filter((y): y is string => Boolean(y));
+                const uniqueYears = Array.from(new Set(years));
+                return uniqueYears.length === 1 ? uniqueYears[0] : uniqueYears.length > 1 ? 'Multiple' : undefined;
+              })();
           
           // ENTERPRISE FIX: Always use the actual row's provider type for display, not the group key
           // For blended rows, use the first row's provider type (all rows in group should have same type)
@@ -298,7 +320,31 @@ async function generateReport(
           if (uniqueProviderTypes.length > 1) {
             console.error(`❌ Report Generation: CRITICAL - Blended group has multiple provider types! Group key: "${groupKey}", Provider types:`, uniqueProviderTypes);
           }
-          
+
+          const variableKeyForBreakdown = getVariableKeyForMetric(specialtyRows[0], metric);
+          const totalN = variableKeyForBreakdown
+            ? specialtyRows.reduce((sum, r) => sum + (r.variables[variableKeyForBreakdown]?.n_incumbents || 0), 0)
+            : 0;
+          const keyForWeights = variableKeyForBreakdown;
+          const weightsForBreakdown =
+            keyForWeights && blendMethodForGroup === 'weighted' && totalN > 0
+              ? specialtyRows.map(r => (r.variables[keyForWeights]?.n_incumbents || 0) / totalN)
+              : specialtyRows.map(() => 1 / specialtyRows.length);
+          const blendBreakdown: BlendBreakdownItem[] = specialtyRows.map((row, i) => {
+            const m = variableKeyForBreakdown ? row.variables[variableKeyForBreakdown] : undefined;
+            return {
+              year: row.surveyYear || 'Unknown',
+              surveySource: row.surveySource || 'Unknown',
+              n_incumbents: m?.n_incumbents || 0,
+              n_orgs: m?.n_orgs,
+              p25: config.selectedPercentiles.includes('p25') ? m?.p25 : undefined,
+              p50: config.selectedPercentiles.includes('p50') ? m?.p50 : undefined,
+              p75: config.selectedPercentiles.includes('p75') ? m?.p75 : undefined,
+              p90: config.selectedPercentiles.includes('p90') ? m?.p90 : undefined,
+              weight: weightsForBreakdown[i] ?? 0
+            };
+          });
+
           rows.push({
             specialty: displaySpecialty,
             region: displayRegion,
@@ -315,7 +361,9 @@ async function generateReport(
             p90: config.selectedPercentiles.includes('p90') ? blended.p90 : undefined,
             n_orgs: blended.n_orgs,
             n_incumbents: blended.n_incumbents,
-            isBlended: true
+            isBlended: true,
+            blendBreakdown,
+            blendMethod: blendMethodForGroup as BlendingMethod
           });
           blendedRows++;
         }
@@ -627,6 +675,19 @@ function applyFilters(
     )).sort();
     console.log(`🔍 Report Generation: Provider types in data after filtering:`, uniqueProviderTypesAfter);
     console.log(`🔍 Report Generation: Provider type filter (${config.selectedProviderType.join(', ')}): ${beforeCount} -> ${filtered.length}`);
+  }
+
+  // Filter by specialty if selected (multi-select) – e.g. Cardiology, Family Medicine
+  const selectedSpecialty = config.selectedSpecialty ?? [];
+  if (selectedSpecialty.length > 0) {
+    const beforeCount = filtered.length;
+    filtered = filtered.filter(row => {
+      const rowSpecialty = (row.standardizedName || row.surveySpecialty || '').trim();
+      return selectedSpecialty.some(selected =>
+        rowSpecialty.toLowerCase() === selected.trim().toLowerCase()
+      );
+    });
+    console.log(`🔍 Report Generation: Specialty filter (${selectedSpecialty.join(', ')}): ${beforeCount} -> ${filtered.length}`);
   }
 
   // Filter by survey source if selected (multi-select)

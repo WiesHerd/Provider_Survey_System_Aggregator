@@ -42,15 +42,10 @@ interface SurveyAnalyticsProps {
  * 4. Handling export functionality
  */
 const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilter }) => {
-  console.log('🔍 SurveyAnalytics: Component rendered');
-  // const { currentYear } = useYear(); // Not currently used
   const { selectedProviderType } = useProviderContext();
   
-  // NEW: Variable selection state - Start with NO default selections (user must select)
-  const [selectedVariables, setSelectedVariables] = useState<string[]>(() => {
-    console.log('🔍 SurveyAnalytics: Initializing selectedVariables with NO defaults');
-    return []; // Empty array - user must explicitly select variables
-  });
+  // Variable selection state - no default selections (user must select)
+  const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   
   // CRITICAL: Sort variables by original file column order (preserve upload file sequence)
   // This ensures physician surveys display columns in the same order as the upload file
@@ -76,22 +71,6 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     
     sortVariables();
   }, [selectedVariables, selectedProviderType]);
-  
-  // CRITICAL DEBUG: Log whenever selectedVariables changes
-  useEffect(() => {
-    const { formatVariableDisplayName } = require('../utils/variableFormatters');
-    console.log('🔍 SurveyAnalytics: selectedVariables CHANGED:', {
-      count: selectedVariables.length,
-      variables: selectedVariables,
-      orderedVariables: orderedVariables,
-      hasBaseSalary: selectedVariables.includes('base_salary'),
-      hasOnCallComp: selectedVariables.includes('on_call_compensation'),
-      allVariables: selectedVariables.map(v => ({ 
-        key: v, 
-        displayName: formatVariableDisplayName(v) 
-      }))
-    });
-  }, [selectedVariables, orderedVariables]);
   
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // const [isDiscoveringVariables, setIsDiscoveringVariables] = useState(false); // Not used currently

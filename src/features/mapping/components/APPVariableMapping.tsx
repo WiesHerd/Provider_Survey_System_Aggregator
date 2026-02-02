@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAPPData } from '../../../hooks/useAPPData';
 import { AdvancedErrorBoundary } from './AdvancedErrorBoundary';
-import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
+import { EnterpriseLoadingSpinner } from '../../../shared/components';
 import { getDataService } from '../../../services/DataService';
 
 interface APPVariableMapping {

@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { YearManagementService } from '../services/YearManagementService';
 import { IYearConfig, IYearFilter } from '../types/year';
+import { useAuth } from './AuthContext';
 
 interface YearContextType {
   // Current year state
@@ -36,11 +37,13 @@ interface YearProviderProps {
 }
 
 export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
-  const [currentYear, setCurrentYearState] = useState<string>('2025');
+  const { user } = useAuth();
+  const currentYearFallback = String(new Date().getFullYear());
+  const [currentYear, setCurrentYearState] = useState<string>(currentYearFallback);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [yearConfigs, setYearConfigs] = useState<IYearConfig[]>([]);
   const [yearFilter, setYearFilterState] = useState<IYearFilter>({
-    selectedYear: '2025',
+    selectedYear: currentYearFallback,
     includeAllYears: false
   });
   const [loading, setLoading] = useState(true);
@@ -91,29 +94,40 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
     }
   }, [yearService]);
 
-  // Initialize year data
+  // Initialize year data on mount
   useEffect(() => {
     initializeYears();
   }, [initializeYears]);
 
-  const setCurrentYear = async (year: string) => {
+  const setCurrentYear = useCallback(async (year: string) => {
+    setError(null);
+    const previousYear = currentYear;
+    // Optimistic update: show selected year immediately so dropdown doesn't revert
+    setCurrentYearState(year);
+    setYearFilterState(prev => ({ ...prev, selectedYear: year }));
     try {
-      setError(null);
       await yearService.activateYear(year);
-      setCurrentYearState(year);
-      
-      // Update year filter
-      setYearFilterState(prev => ({
-        ...prev,
-        selectedYear: year
-      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set current year');
       console.error('Error setting current year:', err);
+      // Revert on failure
+      setCurrentYearState(previousYear);
+      setYearFilterState(prev => ({ ...prev, selectedYear: previousYear }));
     }
-  };
+  }, [yearService, currentYear]);
 
-  const createYear = async (year: string, description?: string): Promise<IYearConfig> => {
+  const refreshYears = useCallback(async () => {
+    await initializeYears();
+  }, [initializeYears]);
+
+  // Refresh years when auth user becomes available or changes (so dropdown shows Firebase years)
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) return;
+    refreshYears();
+  }, [user?.uid, refreshYears]);
+
+  const createYear = useCallback(async (year: string, description?: string): Promise<IYearConfig> => {
     try {
       setError(null);
       const newConfig = await yearService.createYear(year, description);
@@ -128,9 +142,9 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
       console.error('Error creating year:', err);
       throw new Error(errorMessage);
     }
-  };
+  }, [yearService, refreshYears]);
 
-  const activateYear = async (year: string) => {
+  const activateYear = useCallback(async (year: string) => {
     try {
       setError(null);
       await yearService.activateYear(year);
@@ -145,9 +159,9 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
       setError(err instanceof Error ? err.message : 'Failed to activate year');
       console.error('Error activating year:', err);
     }
-  };
+  }, [yearService]);
 
-  const setDefaultYear = async (year: string) => {
+  const setDefaultYear = useCallback(async (year: string) => {
     try {
       setError(null);
       await yearService.setDefaultYear(year);
@@ -158,50 +172,63 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
       setError(err instanceof Error ? err.message : 'Failed to set default year');
       console.error('Error setting default year:', err);
     }
-  };
+  }, [yearService, refreshYears]);
 
-  const setYearFilter = (filter: IYearFilter) => {
+  const setYearFilter = useCallback((filter: IYearFilter) => {
     setYearFilterState(filter);
-  };
+  }, []);
 
-  const refreshYears = async () => {
-    await initializeYears();
-  };
-
-  const resetYearConfiguration = async () => {
+  const resetYearConfiguration = useCallback(async () => {
     try {
       setError(null);
       await yearService.resetYearConfiguration();
-      
-      // Force set to 2025 since that's what the user has
-      setCurrentYearState('2025');
+
+      const fallbackYear = String(new Date().getFullYear());
+      setCurrentYearState(fallbackYear);
       setYearFilterState({
-        selectedYear: '2025',
+        selectedYear: fallbackYear,
         includeAllYears: false
       });
-      
+
       await initializeYears();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset year configuration');
       console.error('Error resetting year configuration:', err);
     }
-  };
+  }, [yearService, initializeYears]);
 
-  const value: YearContextType = {
-    currentYear,
-    availableYears,
-    yearConfigs,
-    setCurrentYear,
-    createYear,
-    activateYear,
-    setDefaultYear,
-    yearFilter,
-    setYearFilter,
-    loading,
-    error,
-    refreshYears,
-    resetYearConfiguration
-  };
+  const value = useMemo<YearContextType>(
+    () => ({
+      currentYear,
+      availableYears,
+      yearConfigs,
+      setCurrentYear,
+      createYear,
+      activateYear,
+      setDefaultYear,
+      yearFilter,
+      setYearFilter,
+      loading,
+      error,
+      refreshYears,
+      resetYearConfiguration
+    }),
+    [
+      currentYear,
+      availableYears,
+      yearConfigs,
+      setCurrentYear,
+      createYear,
+      activateYear,
+      setDefaultYear,
+      yearFilter,
+      setYearFilter,
+      loading,
+      error,
+      refreshYears,
+      resetYearConfiguration
+    ]
+  );
 
   return (
     <YearContext.Provider value={value}>

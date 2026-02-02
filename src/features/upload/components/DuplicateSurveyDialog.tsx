@@ -17,7 +17,7 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  Divider
+  CircularProgress
 } from '@mui/material';
 import {
   ExclamationTriangleIcon,
@@ -33,6 +33,8 @@ export interface DuplicateSurveyDialogProps {
   open: boolean;
   onClose: () => void;
   onResolve: (action: DuplicateResolutionAction, newLabel?: string) => void;
+  /** True while replace/rename is in progress — shows loading state and disables actions */
+  isResolving?: boolean;
   onShowExisting?: (survey: {
     year?: string;
     providerType?: string;
@@ -56,6 +58,7 @@ export const DuplicateSurveyDialog: React.FC<DuplicateSurveyDialogProps> = ({
   open,
   onClose,
   onResolve,
+  isResolving = false,
   onShowExisting,
   duplicateResult,
   newSurveyMetadata
@@ -96,13 +99,18 @@ export const DuplicateSurveyDialog: React.FC<DuplicateSurveyDialogProps> = ({
     });
   };
 
+  const primaryLabel = isResolving
+    ? (selectedAction === 'replace' ? 'Replacing survey…' : 'Adding survey…')
+    : 'Continue';
+
   return (
     <StandardDialog
       open={open}
-      onClose={onClose}
+      onClose={isResolving ? () => {} : onClose}
+      disableBackdropClose={isResolving}
       maxWidth="sm"
       title="Duplicate survey detected"
-      subtitle="A survey with matching information already exists in your database."
+      subtitle="A survey with matching information already exists. Choose an option below and click Continue to complete your upload, or Cancel to abandon it."
       icon={
         <ExclamationTriangleIcon
           className="h-5 w-5"
@@ -115,6 +123,7 @@ export const DuplicateSurveyDialog: React.FC<DuplicateSurveyDialogProps> = ({
           <Button
             onClick={onClose}
             variant="text"
+            disabled={isResolving}
             sx={{
               textTransform: 'none',
               fontWeight: 500,
@@ -128,25 +137,36 @@ export const DuplicateSurveyDialog: React.FC<DuplicateSurveyDialogProps> = ({
           <Button
             onClick={handleConfirm}
             variant="contained"
-            disabled={selectedAction === 'keep' && !renameLabel.trim()}
+            disabled={(selectedAction === 'keep' && !renameLabel.trim()) || isResolving}
+            startIcon={isResolving ? <CircularProgress size={18} color="inherit" /> : null}
             sx={{
               textTransform: 'none',
               fontWeight: 500,
               px: 3,
-              minWidth: 'auto',
+              minWidth: 140,
               boxShadow: 'none',
               '&:hover': {
                 boxShadow: 'none'
               }
             }}
           >
-            Continue
+            {primaryLabel}
           </Button>
         </>
       }
     >
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {/* Main content - Material Design 3: Simple, focused */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+          ...(isResolving && {
+            opacity: 0.7,
+            pointerEvents: 'none'
+          })
+        }}
+      >
+        {/* Main content — one loading state lives in the primary button only (Apple-style) */}
         <Typography 
           variant="body1" 
           sx={{ 

@@ -27,11 +27,21 @@ export interface SpecialtyBlend {
 }
 
 export interface FilterState {
-  selectedSurvey: string;
-  selectedYear: string;
-  selectedRegion: string;
-  selectedProviderType: string;
-  specialtySearch: string;
+  /** @deprecated Use selectedSurveys */
+  selectedSurvey?: string;
+  /** @deprecated Use selectedYears */
+  selectedYear?: string;
+  /** @deprecated Use selectedRegions */
+  selectedRegion?: string;
+  /** @deprecated Use selectedProviderTypes */
+  selectedProviderType?: string;
+  /** @deprecated Use selectedSpecialties */
+  specialtySearch?: string;
+  selectedSurveys?: string[];
+  selectedYears?: string[];
+  selectedRegions?: string[];
+  selectedProviderTypes?: string[];
+  selectedSpecialties?: string[];
   blendingMethod: 'simple' | 'weighted' | 'custom';
   customWeights: Record<number, number>;
 }

@@ -1,11 +1,19 @@
 /**
  * Report Blending Utilities
  * 
- * Utilities for blending specialty data across multiple surveys
+ * Utilities for blending specialty data across multiple surveys and across years
  */
 
 import { DynamicAggregatedData } from '../../analytics/types/variables';
 import { BlendingMethod, BlendedSpecialtyResult, ReportMetric, Percentile } from '../types/reports';
+
+/**
+ * Get base survey source name (strip trailing year e.g. " 2023", " 2024") for grouping across years
+ */
+export function getBaseSurveySource(surveySource: string): string {
+  if (!surveySource || surveySource === 'Unknown') return surveySource || 'Unknown';
+  return surveySource.replace(/\s+\d{4}$/, '').trim() || surveySource;
+}
 
 /**
  * Blend multiple rows for the same specialty
@@ -251,6 +259,51 @@ export function groupRowsBySpecialtyProviderTypeSourceAndYear(
     if (!grouped.has(key)) {
       grouped.set(key, []);
     }
+    grouped.get(key)!.push(row);
+  });
+
+  return grouped;
+}
+
+/**
+ * Group rows by specialty, provider type, and base survey source (no year).
+ * Used when blending across years: "MGMA 2023" and "MGMA 2024" share the same key.
+ * Key format: "specialty|providerType|baseSurveySource"
+ */
+export function groupRowsBySpecialtyProviderTypeAndBaseSource(
+  rows: DynamicAggregatedData[]
+): Map<string, DynamicAggregatedData[]> {
+  const grouped = new Map<string, DynamicAggregatedData[]>();
+
+  rows.forEach(row => {
+    const specialty = row.standardizedName || row.surveySpecialty || 'Unknown';
+    const providerType = row.providerType || 'Unknown';
+    const baseSource = getBaseSurveySource(row.surveySource || 'Unknown');
+    const key = `${specialty}|${providerType}|${baseSource}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(row);
+  });
+
+  return grouped;
+}
+
+/**
+ * Group rows by specialty, region, provider type, and base survey source (no year).
+ * Used when blending across years with region in the key.
+ * Key format: "specialty|region|providerType|baseSurveySource"
+ */
+export function groupRowsBySpecialtyRegionProviderTypeAndBaseSource(
+  rows: DynamicAggregatedData[]
+): Map<string, DynamicAggregatedData[]> {
+  const grouped = new Map<string, DynamicAggregatedData[]>();
+
+  rows.forEach(row => {
+    const specialty = row.standardizedName || row.surveySpecialty || 'Unknown';
+    const region = row.geographicRegion || 'All Regions';
+    const providerType = row.providerType || 'Unknown';
+    const baseSource = getBaseSurveySource(row.surveySource || 'Unknown');
+    const key = `${specialty}|${region}|${providerType}|${baseSource}`;
+    if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(row);
   });
 

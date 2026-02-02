@@ -75,17 +75,30 @@ const CannedReports: React.FC<CannedReportsProps> = () => {
     setReportConfig(config);
     setShowConfigDialog(false);
     setReportData(null); // Clear previous data
+    setError(null);
+    setShowError(false);
 
     try {
       let data: ReportData;
 
-      // Determine metric from template ID
+      // Determine metric from template ID – all canned reports use TCC, wRVU, or CF generator
       if (selectedTemplate.id === 'total-cash-compensation') {
         data = await generateTCCReport(config);
       } else if (selectedTemplate.id === 'work-rvus') {
         data = await generateWRVUReport(config);
       } else if (selectedTemplate.id === 'conversion-factors') {
         data = await generateCFReport(config);
+      } else if (
+        selectedTemplate.id === 'specialty-compensation-summary' ||
+        selectedTemplate.id === 'regional-comparison' ||
+        selectedTemplate.id === 'survey-source-comparison' ||
+        selectedTemplate.id === 'provider-type-analysis' ||
+        selectedTemplate.id === 'percentile-distribution' ||
+        selectedTemplate.id === 'custom-multi-metric' ||
+        selectedTemplate.id === 'year-over-year-trends' ||
+        selectedTemplate.id === 'top-bottom-performers'
+      ) {
+        data = await generateTCCReport(config);
       } else {
         throw new Error(`Unknown report template: ${selectedTemplate.id}`);
       }
@@ -93,12 +106,18 @@ const CannedReports: React.FC<CannedReportsProps> = () => {
       if (data.rows.length === 0) {
         // Show helpful message instead of empty table
         console.warn('⚠️ Report generated with no rows');
-        setError('No data matches your current filters. Try selecting different options or check that you have uploaded survey data.');
+        setError(
+          'No data matches your current filters. Try selecting different options or check that you have uploaded survey data. ' +
+          'The report config is open so you can adjust filters and try again.'
+        );
         setShowError(true);
         setShowConfigDialog(true); // Reopen config dialog
         return;
       }
 
+      // Success: clear any previous error and show the report
+      setError(null);
+      setShowError(false);
       setReportData(data);
       setShowSuccess(true);
     } catch (error) {

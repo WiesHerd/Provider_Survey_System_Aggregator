@@ -12,50 +12,71 @@ export class YearManagementService {
   private readonly INDEXEDDB_VERSION = 1;
 
   /**
-   * Get all available years
+   * Get all available years from Firebase/survey data (and configs).
+   * Does not invent years: prioritizes years that exist in survey data.
+   * Only adds current/previous year as fallback when no survey data exists.
    */
   async getAvailableYears(): Promise<string[]> {
     try {
-      // First, get years from year configs
-      const configs = await this.getYearConfigs();
-      const configYears = configs.map(config => config.year);
-      
-      // Also detect years from actual survey data
       const { getDataService } = await import('../services/DataService');
       const dataService = getDataService();
       const surveys = await dataService.getAllSurveys();
-      
+
       const surveyYears = new Set<string>();
       surveys.forEach(survey => {
         const surveyAny = survey as any;
-        if (surveyAny.year) surveyYears.add(surveyAny.year);
-        if (surveyAny.surveyYear) surveyYears.add(surveyAny.surveyYear);
+        const y = surveyAny.year ?? surveyAny.surveyYear ?? surveyAny.metadata?.year;
+        if (y != null && y !== '') {
+          surveyYears.add(String(y).trim());
+        }
       });
-      
-      // Combine both sources and remove duplicates
-      const allYears = [...new Set([...configYears, ...Array.from(surveyYears)])];
-      
-      
-      return allYears.sort((a, b) => b.localeCompare(a));
+
+      const configs = await this.getYearConfigs();
+      const configYears = configs.map(config => String(config.year).trim()).filter(Boolean);
+      configYears.forEach(y => surveyYears.add(y));
+
+      const currentYearNum = new Date().getFullYear();
+      const currentStr = String(currentYearNum);
+      const previousStr = String(currentYearNum - 1);
+      if (surveyYears.size === 0) {
+        surveyYears.add(currentStr);
+        surveyYears.add(previousStr);
+      } else {
+        if (!surveyYears.has(currentStr)) surveyYears.add(currentStr);
+        if (!surveyYears.has(previousStr)) surveyYears.add(previousStr);
+      }
+
+      const allYears = Array.from(surveyYears).sort((a, b) => b.localeCompare(a));
+      return allYears;
     } catch (error) {
-      return [];
+      console.error('YearManagementService.getAvailableYears error:', error);
+      const currentYearNum = new Date().getFullYear();
+      return [String(currentYearNum), String(currentYearNum - 1)].sort(
+        (a, b) => b.localeCompare(a)
+      );
     }
   }
 
   /**
-   * Get year configurations
+   * Get year configurations.
+   * Uses DataService (Firebase when in Firebase mode, localStorage fallback) so year config syncs across devices.
    */
   async getYearConfigs(): Promise<IYearConfig[]> {
     try {
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
+      const fromPreferences = await dataService.getUserPreference(this.YEAR_CONFIG_KEY);
+      if (fromPreferences && Array.isArray(fromPreferences) && fromPreferences.length > 0) {
+        return this.reviveYearConfigDates(fromPreferences);
+      }
       const stored = localStorage.getItem(this.YEAR_CONFIG_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored) as IYearConfig[];
+        const revived = this.reviveYearConfigDates(parsed);
+        await dataService.saveUserPreference(this.YEAR_CONFIG_KEY, revived);
+        return revived;
       }
-      
-      // Check what year data actually exists in IndexedDB
       const actualYear = await this.detectActualYear();
-      
-      // Default configuration based on actual data
       const defaultConfig: IYearConfig = {
         id: actualYear,
         year: actualYear,
@@ -67,7 +88,6 @@ export class YearManagementService {
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      
       await this.saveYearConfigs([defaultConfig]);
       return [defaultConfig];
     } catch (error) {
@@ -75,80 +95,96 @@ export class YearManagementService {
     }
   }
 
+  private safeDate(value: unknown, yearFallback: string): Date {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+    if (value != null && typeof (value as { toDate?: () => Date }).toDate === 'function') {
+      const d = (value as { toDate: () => Date }).toDate();
+      if (d instanceof Date && !Number.isNaN(d.getTime())) return d;
+    }
+    if (value != null) {
+      const d = new Date(value as string | number);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+    const y = /^\d{4}$/.test(yearFallback) ? yearFallback : String(new Date().getFullYear());
+    return new Date(`${y}-01-01`);
+  }
+
+  private reviveYearConfigDates(configs: IYearConfig[]): IYearConfig[] {
+    return configs.map(c => {
+      const year = (c && typeof c.year === 'string') ? c.year : String(new Date().getFullYear());
+      return {
+        ...c,
+        startDate: this.safeDate(c.startDate, year),
+        endDate: this.safeDate(c.endDate, year),
+        createdAt: this.safeDate(c.createdAt, year),
+        updatedAt: this.safeDate(c.updatedAt, year)
+      };
+    });
+  }
+
   /**
-   * Detect the actual year from uploaded survey data
+   * Detect the actual year from uploaded survey data (Firebase / DataService).
+   * Returns the most recent year that has survey data (so the dropdown shows "whatever was loaded").
+   * Uses survey.year, survey.surveyYear, survey.metadata.year; then name/filename patterns.
+   * Falls back to current calendar year only when no survey data exists.
    */
   async detectActualYear(): Promise<string> {
     try {
-      // Check IndexedDB for survey data
       const { getDataService } = await import('../services/DataService');
       const dataService = getDataService();
-      
-      // Get all surveys to see what years exist
       const surveys = await dataService.getAllSurveys();
-      
-      
+      const collectedYears: string[] = [];
+
       if (surveys && surveys.length > 0) {
-        // Look for year information in survey metadata
         for (const survey of surveys) {
           const surveyAny = survey as any;
-          // Survey metadata logging removed for performance
-          
-          // IndexedDB uses 'year' field, BackendService uses 'surveyYear' field
-          if (surveyAny.year) {
-            return surveyAny.year;
-          }
-          if (surveyAny.surveyYear) {
-            return surveyAny.surveyYear;
+          const y = surveyAny.year ?? surveyAny.surveyYear ?? surveyAny.metadata?.year;
+          if (y != null && String(y).trim() !== '') {
+            collectedYears.push(String(y).trim());
           }
         }
-        
-        // If no explicit year, check survey names for year patterns
-        for (const survey of surveys) {
-          const surveyAny = survey as any;
-          const surveyName = surveyAny.surveyProvider || surveyAny.name || '';
-          const yearMatch = surveyName.match(/\b(20\d{2})\b/);
-          if (yearMatch) {
-            return yearMatch[1];
+        if (collectedYears.length === 0) {
+          for (const survey of surveys) {
+            const surveyAny = survey as any;
+            const name = surveyAny.surveyProvider ?? surveyAny.name ?? surveyAny.type ?? '';
+            const yearMatch = String(name).match(/\b(20\d{2})\b/);
+            if (yearMatch) collectedYears.push(yearMatch[1]);
           }
         }
-        
-        // Check survey filenames for year patterns
-        for (const survey of surveys) {
-          const surveyAny = survey as any;
-          const filename = surveyAny.filename || surveyAny.name || '';
-          const yearMatch = filename.match(/\b(20\d{2})\b/);
-          if (yearMatch) {
-            console.log('🔍 YearManagementService: Found year from filename pattern:', yearMatch[1]);
-            return yearMatch[1];
+        if (collectedYears.length === 0) {
+          for (const survey of surveys) {
+            const surveyAny = survey as any;
+            const filename = surveyAny.filename ?? surveyAny.name ?? '';
+            const yearMatch = String(filename).match(/\b(20\d{2})\b/);
+            if (yearMatch) collectedYears.push(yearMatch[1]);
           }
+        }
+        if (collectedYears.length > 0) {
+          const mostRecent = collectedYears.sort((a, b) => b.localeCompare(a))[0];
+          return mostRecent;
         }
       }
-      
-      // Default to 2025 if no data found (since user has 2025 data)
-      console.log('🔍 YearManagementService: No year found in surveys, defaulting to 2025');
-      return '2025';
+
+      const currentYear = String(new Date().getFullYear());
+      console.log('🔍 YearManagementService: No year in survey data, using current year:', currentYear);
+      return currentYear;
     } catch (error) {
       console.error('Error detecting actual year:', error);
-      return '2025'; // Default to 2025 since that's what user has
+      return String(new Date().getFullYear());
     }
   }
 
   /**
-   * Get active year - prioritize detected year over stored configs
+   * Get active year - prioritize detected year from survey data over stored configs
    */
   async getActiveYear(): Promise<string> {
-    // First try to detect the actual year from data
     const detectedYear = await this.detectActualYear();
     if (detectedYear) {
-      console.log('🔍 YearManagementService: Using detected year:', detectedYear);
       return detectedYear;
     }
-    
-    // Fall back to stored configs
     const configs = await this.getYearConfigs();
     const activeConfig = configs.find(config => config.isActive);
-    return activeConfig?.year || '2025'; // Default to 2025
+    return activeConfig?.year ?? String(new Date().getFullYear());
   }
 
   /**
@@ -190,17 +226,33 @@ export class YearManagementService {
   }
 
   /**
-   * Activate a year
+   * Activate a year.
+   * If the year is not in configs (e.g. it came from survey data only), add a minimal config so there is always an active config.
    */
   async activateYear(year: string): Promise<void> {
-    const configs = await this.getYearConfigs();
-    
-    // Deactivate all other years
-    configs.forEach(config => {
-      config.isActive = config.year === year;
-      config.updatedAt = new Date();
-    });
-
+    const yearForDates = /^\d{4}$/.test(year) ? year : String(new Date().getFullYear());
+    let configs = await this.getYearConfigs();
+    const hasYear = configs.some(c => c.year === year);
+    if (!hasYear) {
+      const newConfig: IYearConfig = {
+        id: year,
+        year,
+        isActive: true,
+        isDefault: false,
+        description: `Survey data for ${year}`,
+        startDate: new Date(`${yearForDates}-01-01`),
+        endDate: new Date(`${yearForDates}-12-31`),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      configs = configs.map(c => ({ ...c, isActive: false, updatedAt: new Date() }));
+      configs.push(newConfig);
+    } else {
+      configs.forEach(config => {
+        config.isActive = config.year === year;
+        config.updatedAt = new Date();
+      });
+    }
     await this.saveYearConfigs(configs);
   }
 
@@ -511,10 +563,14 @@ export class YearManagementService {
   }
 
   /**
-   * Save year configurations
+   * Save year configurations.
+   * Persists via DataService (Firebase when in Firebase mode) and localStorage for backward compatibility.
    */
   private async saveYearConfigs(configs: IYearConfig[]): Promise<void> {
     try {
+      const { getDataService } = await import('../services/DataService');
+      const dataService = getDataService();
+      await dataService.saveUserPreference(this.YEAR_CONFIG_KEY, configs);
       localStorage.setItem(this.YEAR_CONFIG_KEY, JSON.stringify(configs));
     } catch (error) {
       console.error('Error saving year configs:', error);

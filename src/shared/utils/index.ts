@@ -52,6 +52,7 @@ export {
   readCSVFile,
   readFileWithEncoding,
   normalizeText,
+  normalizeRowStrings,
   detectEncodingIssues
 } from './textEncoding';
 

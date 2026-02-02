@@ -128,12 +128,12 @@ export const useProviderTypeDetection = (
   // Get cache status
   const cacheStatus = providerTypeDetectionService.getCacheStatus();
 
-  // Auto-refresh on mount
+  // Auto-refresh on mount - ALWAYS force refresh so we never show stale empty cache (e.g. from before auth)
   useEffect(() => {
     if (autoRefresh) {
-      loadProviderTypes();
+      refresh();
     }
-  }, [autoRefresh, loadProviderTypes]);
+  }, [autoRefresh, refresh]);
 
   // Safety timeout to ensure loading state is reset
   useEffect(() => {

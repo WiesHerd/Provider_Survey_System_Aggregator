@@ -54,6 +54,11 @@ export class DataService {
     const code = (error as any)?.code || '';
     const lower = message.toLowerCase();
     
+    // Auth not ready yet (Firestore init or user not signed in) — expected on initial load; no console spam
+    if (lower.includes('firestore not initialized') || lower.includes('user not authenticated')) {
+      return false; // Do NOT fall back; callers handle this case (e.g. getAllSurveys returns [], saveUserPreference uses localStorage)
+    }
+
     // CRITICAL: Authentication and permission errors should NEVER trigger fallback
     // User must be authenticated to upload to Firebase - this is not a recoverable error
     // Permission errors mean security rules aren't working - must fix, not fallback
@@ -321,7 +326,7 @@ export class DataService {
   }
 
   // Survey Methods
-  async getAllSurveys() {
+  async getAllSurveys(options?: { fromServer?: boolean }) {
     logger.log(`📥 DataService: Getting all surveys from Firebase only...`);
     
     // FIREBASE-ONLY MODE: Only use Firebase for survey loading
@@ -332,7 +337,7 @@ export class DataService {
 
     try {
       logger.log('📥 DataService: Getting all surveys from Firebase...');
-      const firebaseSurveys = await this.firestore.getAllSurveys();
+      const firebaseSurveys = await this.firestore.getAllSurveys({ fromServer: options?.fromServer });
       console.log(`✅ DataService: Retrieved ${firebaseSurveys.length} surveys from Firebase`);
       
       // CRITICAL DEBUG: Log Firebase survey details
@@ -348,8 +353,21 @@ export class DataService {
         console.warn('⚠️ DataService: Firebase returned 0 surveys - check Firebase console to verify surveys exist');
       }
       
+      // Belt-and-suspenders: ensure name/providerType exist from metadata (some Firestore docs store them only there)
+      const withMeta = firebaseSurveys.map((survey: any) => {
+        const meta = survey.metadata;
+        if (!meta || typeof meta !== 'object') return survey;
+        const out = { ...survey };
+        if (!out.name && meta.name) out.name = meta.name;
+        if (!out.providerType && meta.providerType) out.providerType = meta.providerType;
+        if (!out.type && meta.type) out.type = meta.type;
+        if (out.year == null && meta.year != null) out.year = String(meta.year);
+        if (!out.source && meta.source) out.source = meta.source;
+        if (!out.dataCategory && meta.dataCategory) out.dataCategory = meta.dataCategory;
+        return out;
+      });
       // Normalize provider types (Staff Physician -> PHYSICIAN)
-      const normalizedSurveys = firebaseSurveys.map(survey => {
+      const normalizedSurveys = withMeta.map((survey: any) => {
         if (survey.providerType) {
           const providerTypeUpper = (survey.providerType as string).toUpperCase();
           if (providerTypeUpper === 'STAFF PHYSICIAN' || providerTypeUpper === 'STAFFPHYSICIAN') {
@@ -362,9 +380,12 @@ export class DataService {
       return normalizedSurveys;
       
     } catch (firebaseError) {
-      // CRITICAL: Do NOT fall back to IndexedDB - throw error instead
-      // This ensures we know when Firebase is not working
       const errorMsg = firebaseError instanceof Error ? firebaseError.message : String(firebaseError);
+      // Auth not ready yet (e.g. initial load before Firebase auth resolves) — return empty so callers don't crash; they refetch after auth
+      if (errorMsg.includes('Firestore not initialized') || errorMsg.includes('user not authenticated')) {
+        logger.log('🔍 DataService: Auth not ready yet, returning empty surveys (will refetch after sign-in)');
+        return [];
+      }
       logger.error('❌ DataService: Failed to get surveys from Firebase:', errorMsg);
       throw new Error(`Failed to load surveys from Firebase: ${errorMsg}`);
     }
@@ -467,6 +488,53 @@ export class DataService {
 
   async forceClearDatabase() {
     return await this.getStorageService().forceClearDatabase();
+  }
+
+  /**
+   * Delete all user data (full wipe): surveys, mappings, preferences, custom reports, FMV, blend templates, etc.
+   * Used when the user triggers "Clear all data" in System Settings.
+   * Clears Firebase when in Firebase mode, always clears IndexedDB and app-scoped localStorage.
+   */
+  async deleteAllUserData(): Promise<void> {
+    if (this.mode === StorageMode.FIREBASE && this.firestore) {
+      try {
+        await this.firestore.deleteAllUserData();
+        logger.log('✅ DataService: Firebase user data cleared');
+      } catch (error) {
+        logger.error('❌ DataService: Firebase deleteAllUserData failed', error);
+        throw error;
+      }
+    }
+    try {
+      await this.indexedDB.deleteAllSurveys();
+      await this.indexedDB.clearAllSpecialtyMappings();
+      await this.indexedDB.clearAllColumnMappings();
+      await this.indexedDB.clearAllVariableMappings();
+      await this.indexedDB.clearAllRegionMappings();
+      await this.indexedDB.clearAllProviderTypeMappings();
+      const learnedTypes: Array<'column' | 'specialty' | 'variable' | 'region' | 'providerType'> = ['specialty', 'column', 'variable', 'region', 'providerType'];
+      for (const type of learnedTypes) {
+        await this.indexedDB.clearLearnedMappings(type);
+      }
+      const blendTemplates = await (this.indexedDB as any).getAllBlendTemplates();
+      for (const t of blendTemplates) {
+        await (this.indexedDB as any).deleteBlendTemplate(t.id);
+      }
+      const fmvCalcs = await (this.indexedDB as any).getAllFMVCalculations();
+      for (const c of fmvCalcs) {
+        await (this.indexedDB as any).deleteFMVCalculation(c.id);
+      }
+      logger.log('✅ DataService: IndexedDB user data cleared');
+    } catch (error) {
+      logger.error('❌ DataService: IndexedDB clear failed', error);
+      throw error;
+    }
+    try {
+      clearStorage.clearLocalStorage();
+      logger.log('✅ DataService: localStorage cleared');
+    } catch (error) {
+      logger.warn('⚠️ DataService: localStorage clear failed', error);
+    }
   }
 
   /**
@@ -1184,66 +1252,59 @@ export class DataService {
   }
 
   /**
-   * Get learned mappings - ALWAYS uses IndexedDB for persistence
-   * 
-   * CRITICAL: Learned mappings must persist reliably across years.
-   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
-   * This ensures learned mappings survive even if Firebase has issues.
+   * Get learned mappings - uses Firebase when in Firebase mode, IndexedDB as fallback.
+   * Enables learned mappings to sync across devices when user is signed in.
    */
   async getLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Record<string, string>> {
-    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
-    logger.log(`💾 getLearnedMappings: Using IndexedDB (always persistent)`);
-    return await this.indexedDB.getLearnedMappings(type, providerType);
+    return await this.runWithFirestoreFallback(
+      'getLearnedMappings',
+      async () => await this.firestore!.getLearnedMappings(type, providerType),
+      async () => await this.indexedDB.getLearnedMappings(type, providerType)
+    );
   }
 
   /**
-   * Save learned mapping - ALWAYS uses IndexedDB for persistence
-   * 
-   * CRITICAL: Learned mappings must persist reliably across years.
-   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
-   * This ensures learned mappings survive even if Firebase has issues.
+   * Save learned mapping - uses Firebase when in Firebase mode, IndexedDB as fallback.
    */
   async saveLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string, corrected: string, providerType?: string, surveySource?: string): Promise<void> {
-    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
-    logger.log(`💾 saveLearnedMapping: Using IndexedDB (always persistent)`);
-    return await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType, surveySource);
+    return await this.runWithFirestoreFallback(
+      'saveLearnedMapping',
+      async () => await this.firestore!.saveLearnedMapping(type, original, corrected, providerType, surveySource),
+      async () => await this.indexedDB.saveLearnedMapping(type, original, corrected, providerType, surveySource)
+    );
   }
 
   /**
-   * Remove learned mapping - ALWAYS uses IndexedDB for persistence
-   * 
-   * CRITICAL: Learned mappings must persist reliably across years.
-   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   * Remove learned mapping - uses Firebase when in Firebase mode, IndexedDB as fallback.
    */
   async removeLearnedMapping(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', original: string): Promise<void> {
-    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
-    logger.log(`💾 removeLearnedMapping: Using IndexedDB (always persistent)`);
-    return await this.indexedDB.removeLearnedMapping(type, original);
+    return await this.runWithFirestoreFallback(
+      'removeLearnedMapping',
+      async () => await this.firestore!.removeLearnedMapping(type, original),
+      async () => await this.indexedDB.removeLearnedMapping(type, original)
+    );
   }
 
   /**
-   * Clear learned mappings - ALWAYS uses IndexedDB for persistence
-   * 
-   * CRITICAL: Learned mappings must persist reliably across years.
-   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
+   * Clear learned mappings - uses Firebase when in Firebase mode, IndexedDB as fallback.
    */
   async clearLearnedMappings(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType'): Promise<void> {
-    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
-    logger.log(`💾 clearLearnedMappings: Using IndexedDB (always persistent)`);
-    return await this.indexedDB.clearLearnedMappings(type);
+    return await this.runWithFirestoreFallback(
+      'clearLearnedMappings',
+      async () => await this.firestore!.clearLearnedMappings(type),
+      async () => await this.indexedDB.clearLearnedMappings(type)
+    );
   }
 
   /**
-   * Get learned mappings with source - ALWAYS uses IndexedDB for persistence
-   * 
-   * CRITICAL: Learned mappings must persist reliably across years.
-   * IndexedDB is browser-based and doesn't have quota limits like Firebase free tier.
-   * This ensures learned mappings survive even if Firebase has issues.
+   * Get learned mappings with source - uses Firebase when in Firebase mode, IndexedDB as fallback.
    */
   async getLearnedMappingsWithSource(type: 'column' | 'specialty' | 'variable' | 'region' | 'providerType', providerType?: string): Promise<Array<{original: string, corrected: string, surveySource: string}>> {
-    // ALWAYS use IndexedDB for learned mappings - critical for year-over-year persistence
-    logger.log(`💾 getLearnedMappingsWithSource: Using IndexedDB (always persistent)`);
-    return await this.indexedDB.getLearnedMappingsWithSource(type, providerType);
+    return await this.runWithFirestoreFallback(
+      'getLearnedMappingsWithSource',
+      async () => await this.firestore!.getLearnedMappingsWithSource(type, providerType),
+      async () => await this.indexedDB.getLearnedMappingsWithSource(type, providerType)
+    );
   }
 
   async healthCheck() {
@@ -1486,6 +1547,12 @@ export class DataService {
       try {
         return await (this.firestore as any).saveUserPreference(key, value);
       } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        // Auth not ready yet (e.g. ProviderContext runs before Firebase auth) — persist to localStorage only, no throw
+        if (msg.includes('Firestore not initialized') || msg.includes('user not authenticated')) {
+          localStorage.setItem(`preference_${key}`, JSON.stringify(value));
+          return;
+        }
         if (this.isFirestoreUnavailableError(error)) {
           this.switchToIndexedDbForSession(`saveUserPreference(${key}): Firebase unavailable`, error);
           // Fall through to localStorage

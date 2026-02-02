@@ -6,10 +6,10 @@
 
 import React, { useMemo, useState } from 'react';
 import { ColDef } from 'ag-grid-community';
-import { Snackbar, Alert, TextField, InputAdornment, IconButton, Tooltip } from '@mui/material';
+import { Snackbar, Alert, TextField, InputAdornment, IconButton, Tooltip, Drawer, Typography, Divider, Table, TableBody, TableCell, TableRow, TableHead } from '@mui/material';
 import { MagnifyingGlassIcon as SearchIcon, XMarkIcon, ExclamationTriangleIcon, InformationCircleIcon, ArrowDownTrayIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import AgGridWrapper from '../../../components/AgGridWrapper';
-import { ReportData, ReportConfig } from '../types/reports';
+import { ReportData, ReportConfig, ReportDataRow } from '../types/reports';
 import { exportToExcel, exportToPDF } from '../services/reportExportService';
 import { EnterpriseLoadingSpinner } from '../../../shared/components';
 import { flexibleWordMatch } from '../../../shared/utils/specialtyMatching';
@@ -48,6 +48,7 @@ export const ReportTable: React.FC<ReportTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [selectedRowForBreakdown, setSelectedRowForBreakdown] = useState<ReportDataRow | null>(null);
 
   // ENTERPRISE FIX: Always show distinguishing columns when multiple values are selected
   // This ensures rows with same specialty but different filter combinations are clearly distinguishable
@@ -78,8 +79,8 @@ export const ReportTable: React.FC<ReportTableProps> = ({
   // ENTERPRISE FIX: Check if survey source column should be shown
   const shouldShowSurveySource = useMemo(() => {
     // Show if multiple survey sources selected OR any row has survey source data OR filter is applied
-    return config.selectedSurveySource.length > 1 || 
-           data.rows.some(row => row.surveySource) || 
+    return config.selectedSurveySource.length > 1 ||
+           data.rows.some(row => row.surveySource) ||
            (config.selectedSurveySource && config.selectedSurveySource.length > 0);
   }, [data.rows, config.selectedSurveySource]);
 
@@ -105,62 +106,11 @@ export const ReportTable: React.FC<ReportTableProps> = ({
     });
   }, [data.rows, searchTerm]);
 
-  // Create column definitions based on config
+  // Create column definitions: Year → Specialty → Region → Provider Type → Survey Source → # Incumbents → # Orgs → P25–P90 → Blended
   const columnDefs = useMemo<ColDef[]>(() => {
-    const cols: ColDef[] = [
-      {
-        headerName: 'Specialty',
-        field: 'specialty',
-        sortable: true,
-        filter: 'agTextColumnFilter',
-        resizable: true,
-        minWidth: 200,
-        flex: 2,
-        pinned: 'left',
-        cellStyle: { fontWeight: 500 }
-      }
-    ];
+    const cols: ColDef[] = [];
 
-    // Add Region column if region data exists or region filter is not applied
-    if (shouldShowRegion) {
-      cols.push({
-        headerName: 'Region',
-        field: 'region',
-        sortable: true,
-        filter: 'agTextColumnFilter',
-        resizable: true,
-        minWidth: 120,
-        flex: 1.2
-      });
-    }
-
-    // Add Provider Type column if provider type data exists or provider type filter is not applied
-    if (shouldShowProviderType) {
-      cols.push({
-        headerName: 'Provider Type',
-        field: 'providerType',
-        sortable: true,
-        filter: 'agTextColumnFilter',
-        resizable: true,
-        minWidth: 150,
-        flex: 1.5
-      });
-    }
-
-    // ENTERPRISE FIX: Add Survey Source column if should be shown (multiple selections or data exists)
-    if (shouldShowSurveySource) {
-      cols.push({
-        headerName: 'Survey Source',
-        field: 'surveySource',
-        sortable: true,
-        filter: 'agTextColumnFilter',
-        resizable: true,
-        minWidth: 180,
-        flex: 1.5
-      });
-    }
-
-    // Add Year column if year data exists or multiple years are selected
+    // 1. Year (when shown)
     if (shouldShowYear) {
       cols.push({
         headerName: 'Year',
@@ -174,7 +124,90 @@ export const ReportTable: React.FC<ReportTableProps> = ({
       });
     }
 
-    // Add percentile columns
+    // 2. Specialty
+    cols.push({
+      headerName: 'Specialty',
+      field: 'specialty',
+      sortable: true,
+      filter: 'agTextColumnFilter',
+      resizable: true,
+      minWidth: 200,
+      flex: 2,
+      valueFormatter: (params) => (params.value && String(params.value).trim()) ? params.value : '—',
+      cellStyle: (params: any) => {
+        const blended = params.data?.isBlended && (params.data?.blendBreakdown?.length ?? 0) > 0;
+        return { fontWeight: 500, ...(blended ? { cursor: 'pointer' } : {}) };
+      }
+    });
+
+    // 3. Region (when shown)
+    if (shouldShowRegion) {
+      cols.push({
+        headerName: 'Region',
+        field: 'region',
+        sortable: true,
+        filter: 'agTextColumnFilter',
+        resizable: true,
+        minWidth: 120,
+        flex: 1.2
+      });
+    }
+
+    // 4. Provider Type (when shown)
+    if (shouldShowProviderType) {
+      cols.push({
+        headerName: 'Provider Type',
+        field: 'providerType',
+        sortable: true,
+        filter: 'agTextColumnFilter',
+        resizable: true,
+        minWidth: 150,
+        flex: 1.5
+      });
+    }
+
+    // 5. Survey Source (when shown)
+    if (shouldShowSurveySource) {
+      cols.push({
+        headerName: 'Survey Source',
+        field: 'surveySource',
+        sortable: true,
+        filter: 'agTextColumnFilter',
+        resizable: true,
+        minWidth: 180,
+        flex: 1.5
+      });
+    }
+
+    // 6. # Incumbents
+    cols.push({
+      headerName: '# Incumbents',
+      field: 'n_incumbents',
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      resizable: true,
+      minWidth: 120,
+      flex: 1,
+      cellStyle: { textAlign: 'right' },
+      headerClass: 'ag-right-aligned-header',
+      valueFormatter: (params) => params.value?.toLocaleString('en-US') || '0'
+    });
+
+    // 7. # Orgs
+    cols.push({
+      headerName: '# Orgs',
+      field: 'n_orgs',
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      resizable: true,
+      minWidth: 100,
+      flex: 1,
+      cellStyle: { textAlign: 'right' },
+      headerClass: 'ag-right-aligned-header',
+      valueFormatter: (params) => params.value?.toLocaleString('en-US') || '0'
+    });
+
+    // 8. Percentile columns (P25, P50, P75, P90)
     config.selectedPercentiles.forEach(percentile => {
       cols.push({
         headerName: percentile.toUpperCase(),
@@ -190,44 +223,18 @@ export const ReportTable: React.FC<ReportTableProps> = ({
       });
     });
 
-    // Add sample size columns
-    cols.push(
-      {
-        headerName: '# Orgs',
-        field: 'n_orgs',
-        sortable: true,
-        filter: 'agNumberColumnFilter',
-        resizable: true,
-        minWidth: 100,
-        flex: 1,
-        cellStyle: { textAlign: 'right' },
-        headerClass: 'ag-right-aligned-header',
-        valueFormatter: (params) => params.value?.toLocaleString('en-US') || '0'
-      },
-      {
-        headerName: '# Incumbents',
-        field: 'n_incumbents',
-        sortable: true,
-        filter: 'agNumberColumnFilter',
-        resizable: true,
-        minWidth: 120,
-        flex: 1,
-        cellStyle: { textAlign: 'right' },
-        headerClass: 'ag-right-aligned-header',
-        valueFormatter: (params) => params.value?.toLocaleString('en-US') || '0'
-      },
-      {
-        headerName: 'Blended',
-        field: 'isBlended',
-        sortable: true,
-        filter: 'agTextColumnFilter',
-        resizable: true,
-        minWidth: 80,
-        flex: 0.8,
-        cellRenderer: (params: any) => params.value ? 'Yes' : 'No',
-        cellStyle: { textAlign: 'center' }
-      }
-    );
+    // 9. Blended
+    cols.push({
+      headerName: 'Blended',
+      field: 'isBlended',
+      sortable: true,
+      filter: 'agTextColumnFilter',
+      resizable: true,
+      minWidth: 80,
+      flex: 0.8,
+      cellRenderer: (params: any) => params.value ? 'Yes' : 'No',
+      cellStyle: { textAlign: 'center' }
+    });
 
     return cols;
   }, [config, shouldShowRegion, shouldShowProviderType, shouldShowYear, shouldShowSurveySource]);
@@ -435,6 +442,10 @@ export const ReportTable: React.FC<ReportTableProps> = ({
       <AgGridWrapper
         rowData={filteredRows}
         columnDefs={columnDefs}
+        onRowClicked={(params) => {
+          const row = params.data as ReportDataRow;
+          if (row?.isBlended && row?.blendBreakdown?.length) setSelectedRowForBreakdown(row);
+        }}
         pagination={true}
         paginationPageSize={25}
         defaultColDef={{
@@ -448,6 +459,67 @@ export const ReportTable: React.FC<ReportTableProps> = ({
         suppressRowHoverHighlight={false}
         rowHeight={40}
       />
+
+        {/* Blend breakdown drawer – click a blended row to see how it was calculated */}
+        <Drawer
+          anchor="right"
+          open={!!selectedRowForBreakdown}
+          onClose={() => setSelectedRowForBreakdown(null)}
+          sx={{ '& .MuiDrawer-paper': { width: 420, maxWidth: '100%' } }}
+        >
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Blend breakdown
+              </Typography>
+              <IconButton size="small" onClick={() => setSelectedRowForBreakdown(null)} aria-label="Close">
+                <XMarkIcon className="w-5 h-5" />
+              </IconButton>
+            </div>
+            {selectedRowForBreakdown && (
+              <>
+                <Typography variant="body2" className="text-gray-600 mb-1">
+                  {selectedRowForBreakdown.specialty}
+                  {selectedRowForBreakdown.region && ` · ${selectedRowForBreakdown.region}`}
+                </Typography>
+                <Typography variant="body2" className="text-gray-500 mb-4">
+                  Formula: {selectedRowForBreakdown.blendMethod === 'weighted'
+                    ? 'Weighted by sample size (n_incumbents)'
+                    : 'Equal weight per source'}
+                </Typography>
+                <Divider className="my-4" />
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Year</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Source</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="right">n</TableCell>
+                      {config.selectedPercentiles.includes('p50') && <TableCell sx={{ fontWeight: 600 }} align="right">P50</TableCell>}
+                      {config.selectedPercentiles.includes('p25') && <TableCell sx={{ fontWeight: 600 }} align="right">P25</TableCell>}
+                      {config.selectedPercentiles.includes('p75') && <TableCell sx={{ fontWeight: 600 }} align="right">P75</TableCell>}
+                      {config.selectedPercentiles.includes('p90') && <TableCell sx={{ fontWeight: 600 }} align="right">P90</TableCell>}
+                      <TableCell sx={{ fontWeight: 600 }} align="right">Weight</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedRowForBreakdown.blendBreakdown?.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{item.year}</TableCell>
+                        <TableCell>{item.surveySource}</TableCell>
+                        <TableCell align="right">{item.n_incumbents?.toLocaleString() ?? '-'}</TableCell>
+                        {config.selectedPercentiles.includes('p50') && <TableCell align="right">{item.p50 != null ? formatNumber(item.p50) : '-'}</TableCell>}
+                        {config.selectedPercentiles.includes('p25') && <TableCell align="right">{item.p25 != null ? formatNumber(item.p25) : '-'}</TableCell>}
+                        {config.selectedPercentiles.includes('p75') && <TableCell align="right">{item.p75 != null ? formatNumber(item.p75) : '-'}</TableCell>}
+                        {config.selectedPercentiles.includes('p90') && <TableCell align="right">{item.p90 != null ? formatNumber(item.p90) : '-'}</TableCell>}
+                        <TableCell align="right">{item.weight != null ? `${(item.weight * 100).toFixed(1)}%` : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+          </div>
+        </Drawer>
       </div>
     </>
   );

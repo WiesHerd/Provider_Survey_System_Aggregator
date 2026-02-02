@@ -206,7 +206,7 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                     onSearchChange={setSearchTerm}
                     onProviderTypeSelect={selectProviderType}
                     onClearSelection={clearSelectedProviderTypes}
-                    onRefresh={loadData}
+                    onRefresh={() => loadData(true)}
                     showAllCategories={showAllCategories}
                     onToggleCategoryFilter={() => setShowAllCategories(!showAllCategories)}
                   />
@@ -219,7 +219,7 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">No Unmapped Provider Types Found</h3>
                       <p className="text-gray-600 mb-4">All provider types are mapped, or no survey data is available.</p>
                       <button
-                        onClick={loadData}
+                        onClick={() => loadData(true)}
                         className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         <BoltIcon className="h-4 w-4 mr-2" />

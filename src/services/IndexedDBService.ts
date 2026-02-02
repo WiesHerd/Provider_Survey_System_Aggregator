@@ -1663,7 +1663,11 @@ export class IndexedDBService {
       }
 
       const db = await this.ensureDB();
-      
+
+      // CRITICAL: Use actual stored key (survey.id) for all deletes - may be user-scoped
+      // Passing surveyId from UI can be raw id; store key is survey.id from getSurveyById
+      const actualSurveyId = survey.id;
+
       // ENTERPRISE FIX: Use Promise-based pattern to ensure all cursor operations complete
       // This ensures the transaction doesn't complete until all deletions are done
       return new Promise((resolve) => {
@@ -1710,10 +1714,10 @@ export class IndexedDBService {
           }
         };
 
-        // Delete survey data using cursor - ENTERPRISE: Wait for all cursor operations
+        // Delete survey data using cursor - use actual stored survey id (user-scoped if applicable)
         const dataStore = transaction.objectStore('surveyData');
         const dataIndex = dataStore.index('surveyId');
-        const dataRequest = dataIndex.openCursor(IDBKeyRange.only(surveyId));
+        const dataRequest = dataIndex.openCursor(IDBKeyRange.only(actualSurveyId));
 
         dataRequest.onsuccess = (event) => {
           const cursor = (event.target as IDBRequest).result;
@@ -1741,9 +1745,9 @@ export class IndexedDBService {
           checkCompletion();
         };
 
-        // Delete survey metadata
+        // Delete survey metadata - use actual stored key (user-scoped if applicable)
         const surveyStore = transaction.objectStore('surveys');
-        const surveyDeleteRequest = surveyStore.delete(surveyId);
+        const surveyDeleteRequest = surveyStore.delete(actualSurveyId);
         
         surveyDeleteRequest.onsuccess = () => {
           surveyDeleteComplete = true;
@@ -1790,7 +1794,7 @@ export class IndexedDBService {
           }
 
           const mappingIndex = mappingStore.index(index);
-          const mappingRequest = mappingIndex.openCursor(IDBKeyRange.only(surveyId));
+          const mappingRequest = mappingIndex.openCursor(IDBKeyRange.only(actualSurveyId));
 
           mappingRequest.onsuccess = (event) => {
             const cursor = (event.target as IDBRequest).result;
@@ -3091,6 +3095,38 @@ export class IndexedDBService {
     return survey.providerType || 'PHYSICIAN';
   }
 
+  /**
+   * Get provider type value from a data row with robust column name detection.
+   * Tries known keys first, any key that normalizes to "providertype", then common
+   * survey aliases (Physician Type, Role, Position, etc.). Supports both flat rows
+   * and nested row.data for consistency with getUnmappedRegions.
+   */
+  private getProviderTypeFromRow(row: Record<string, unknown>): string | undefined {
+    const data: Record<string, unknown> =
+      row && typeof row === 'object' && 'data' in row && row.data && typeof row.data === 'object'
+        ? (row.data as Record<string, unknown>)
+        : (row as Record<string, unknown>);
+
+    const direct = data.providerType ?? data['Provider Type'] ?? data.provider_type ?? data['provider_type'];
+    if (direct != null && typeof direct === 'string') return direct;
+
+    const normalized = (key: string) => key.replace(/[\s_-]+/g, '').toLowerCase();
+    const target = 'providertype';
+    for (const key of Object.keys(data)) {
+      if (normalized(key) === target) {
+        const v = data[key];
+        if (typeof v === 'string') return v;
+      }
+    }
+
+    const aliasKeys = ['Physician Type', 'Role', 'Type', 'Provider Category', 'Position', 'Title'] as const;
+    for (const key of aliasKeys) {
+      const v = data[key];
+      if (v != null && typeof v === 'string' && v.trim()) return v;
+    }
+    return undefined;
+  }
+
   // Utility Methods
   async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {
     console.log('🔍 getUnmappedSpecialties: Called with providerType:', providerType);
@@ -3803,7 +3839,7 @@ export class IndexedDBService {
   async getUnmappedProviderTypes(providerType?: string): Promise<any[]> {
     try {
       const surveys = await this.getAllSurveys();
-      
+
       // ENTERPRISE FIX: Handle case when no surveys exist
       if (surveys.length === 0) {
         return [];
@@ -3811,17 +3847,22 @@ export class IndexedDBService {
       
       const mappings = await this.getProviderTypeMappings(providerType);
       
-    
-      const mappedNames = new Set<string>();
+      // Key by (providerType, surveySource) so the same label from different surveys
+      // stays unmapped until that specific source is in a mapping (allows mapping
+      // "Staff Physician" from SullivanCotter and Gallagher together).
+      const mappedNameSourcePairs = new Set<string>();
       mappings.forEach(mapping => {
-        mappedNames.add(mapping.standardizedName.toLowerCase());
         mapping.sourceProviderTypes.forEach((source: any) => {
-          mappedNames.add(source.providerType.toLowerCase());
+          const name = (source.providerType || '').toString().toLowerCase();
+          const src = (source.surveySource || '').toString();
+          if (name) mappedNameSourcePairs.add(`${name}|${src}`);
         });
       });
 
       const unmapped: any[] = [];
       const providerTypeCounts = new Map<string, { count: number; sources: Set<string> }>();
+      let includedSurveyCount = 0;
+      const debug = isUploadDebugEnabled();
 
       for (const survey of surveys) {
         // Filter surveys by provider type if specified
@@ -3829,54 +3870,75 @@ export class IndexedDBService {
         if (providerType !== undefined) {
           // Determine if this survey matches the requested provider type
           let surveyMatchesProviderType = false;
-          
+
           // Use helper methods for consistent classification
           const isCallPay = this.isCallPaySurvey(survey);
           const isMoonlighting = this.isMoonlightingSurvey(survey);
           const effectiveProviderType = this.getEffectiveProviderType(survey);
-          
+
           if (providerType === 'CALL') {
             // For CALL view: Show only Call Pay surveys
             surveyMatchesProviderType = isCallPay;
           } else if (providerType === 'PHYSICIAN') {
-            // For PHYSICIAN view: Include only PHYSICIAN compensation surveys, exclude CALL_PAY, MOONLIGHTING, and APP
-            // Moonlighting is a separate survey type, just like Call Pay
-            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
-                                         !isCallPay && 
+            // Same logic as getUnmappedSpecialties so Gallagher shows when Specialty Mapping shows it
+            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') &&
+                                         !isCallPay &&
                                          !isMoonlighting &&
                                          this.isCompensationSurvey(survey);
             surveyMatchesProviderType = isPhysicianCompensation;
           } else if (providerType === 'APP') {
             // For APP view: Include only APP surveys, exclude CALL_PAY, MOONLIGHTING, and PHYSICIAN
-            surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
-                                     !isCallPay && 
+            surveyMatchesProviderType = (effectiveProviderType === 'APP') &&
+                                     !isCallPay &&
                                      !isMoonlighting;
           } else {
             // For CUSTOM or other types: Match providerType exactly
             // For CUSTOM surveys, must match exactly (including custom providerType values)
-            surveyMatchesProviderType = effectiveProviderType === providerType || 
+            surveyMatchesProviderType = effectiveProviderType === providerType ||
                                      survey.providerType === providerType;
           }
-          
+
           if (!surveyMatchesProviderType) {
+            if (debug) {
+              console.log('🔍 getUnmappedProviderTypes (IndexedDB): SKIPPED', { id: survey.id, name: survey.name, reason: 'did not match provider type filter', effectiveProviderType, filter: providerType });
+            }
             continue;
           }
         }
-        
+
         const { rows } = await this.getSurveyData(survey.id);
-        
-        // Get survey source with proper fallbacks
-        const surveySource = survey.type || survey.name || 'Unknown';
-        
+        if (debug) {
+          const sampleProviderType = rows.length > 0 ? this.getProviderTypeFromRow(rows[0] as Record<string, unknown>) : undefined;
+          console.log('🔍 getUnmappedProviderTypes (IndexedDB): INCLUDED', { id: survey.id, name: survey.name, rowCount: rows.length, sampleProviderType });
+        }
+        includedSurveyCount++;
+
+        // Get survey source with same formula as getUnmappedSpecialties so labels match and
+        // getProviderTypeMappings filter (validSurveySources) matches stored sourceProviderTypes[].surveySource
+        let surveySource: string;
+        if ((survey as any).source && (survey as any).dataCategory) {
+          const source = (survey as any).source;
+          const dataCategory = (survey as any).dataCategory;
+          const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+            : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+            : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+            : dataCategory;
+          surveySource = `${source} ${categoryDisplay}`;
+        } else {
+          surveySource = survey.type || survey.name || 'Unknown';
+        }
+
         rows.forEach(row => {
-          // Look for provider type in different possible column names
-          const providerType = row.providerType || row['Provider Type'] || row.provider_type || row['provider_type'];
-          if (providerType && typeof providerType === 'string' && !mappedNames.has(providerType.toLowerCase())) {
-            const key = providerType.toLowerCase();
-            const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
-            current.count++;
-            current.sources.add(surveySource);
-            providerTypeCounts.set(key, current);
+          const rowProviderType = this.getProviderTypeFromRow(row as Record<string, unknown>);
+          if (rowProviderType && typeof rowProviderType === 'string') {
+            const key = rowProviderType.toLowerCase();
+            const pairKey = `${key}|${surveySource}`;
+            if (!mappedNameSourcePairs.has(pairKey)) {
+              const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
+              current.count++;
+              current.sources.add(surveySource);
+              providerTypeCounts.set(key, current);
+            }
           }
         });
       }
@@ -3892,6 +3954,10 @@ export class IndexedDBService {
           });
         });
       });
+
+      if (debug) {
+        console.log('🔍 getUnmappedProviderTypes (IndexedDB): Summary', { totalSurveys: surveys.length, surveysIncluded: includedSurveyCount, totalUnmappedEntries: unmapped.length });
+      }
 
       return unmapped;
     } catch (error) {
@@ -3996,7 +4062,7 @@ export class IndexedDBService {
         if (providerType) {
           
           // Get all surveys to determine which survey sources belong to this provider type
-          this.getAllSurveys().then(surveys => {
+            this.getAllSurveys().then(surveys => {
             const validSurveySources = new Set<string>();
             surveys.forEach(survey => {
               // Use the same logic as getUnmappedSpecialties to properly exclude Call Pay surveys
@@ -4029,8 +4095,19 @@ export class IndexedDBService {
               }
               
               if (surveyMatchesProviderType) {
-                validSurveySources.add(survey.name);
-                validSurveySources.add(survey.type);
+                // Use same surveySource formula as getUnmappedProviderTypes so mapping.sourceProviderTypes[].surveySource matches
+                if ((survey as any).source && (survey as any).dataCategory) {
+                  const source = (survey as any).source;
+                  const dataCategory = (survey as any).dataCategory;
+                  const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
+                    : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
+                    : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
+                    : dataCategory;
+                  validSurveySources.add(`${source} ${categoryDisplay}`);
+                } else {
+                  if (survey.name) validSurveySources.add(survey.name);
+                  if (survey.type) validSurveySources.add(survey.type);
+                }
               }
             });
             

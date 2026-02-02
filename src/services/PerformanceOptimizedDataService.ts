@@ -232,7 +232,8 @@ export class PerformanceOptimizedDataService {
   }
 
   /**
-   * Optimized provider type mapping data loading
+   * Optimized provider type mapping data loading.
+   * No year filter - show all surveys (same behavior as Specialty Mapping).
    */
   async getProviderTypeMappingData(providerType?: string): Promise<{
     mappings: any[];
@@ -241,7 +242,7 @@ export class PerformanceOptimizedDataService {
     learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
   }> {
     const cacheKey = `provider_type_mapping_${providerType || 'all'}`;
-    
+
     const cached = this.getCached<{
       mappings: any[];
       unmapped: any[];
@@ -255,9 +256,9 @@ export class PerformanceOptimizedDataService {
 
     const dataService = getDataService();
     console.log(`🚀 Loading provider type mapping data for provider type: ${providerType}`);
-    
+
     const startTime = performance.now();
-    
+
     const [mappings, unmapped, learned, learnedWithSource] = await Promise.all([
       dataService.getProviderTypeMappings(providerType),
       dataService.getUnmappedProviderTypes(providerType),

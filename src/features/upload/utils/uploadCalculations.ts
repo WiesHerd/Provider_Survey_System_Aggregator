@@ -845,3 +845,70 @@ export const generateSurveyPreview = (fileContent: string, maxRows: number = 5) 
     rows: previewRows
   };
 };
+
+/**
+ * Check if column mapping dialog should be shown (headers don't match expected format)
+ */
+export function checkIfMappingNeeded(
+  headers: string[],
+  validation: ColumnValidationResult
+): boolean {
+  if (!validation.isValid && validation.missingColumns.length > 0) {
+    const detectedLower = headers.map(h => h.toLowerCase().trim());
+    const hasVariableLike = detectedLower.some(h =>
+      h.includes('benchmark') || h.includes('variable')
+    );
+    const hasCountLike = detectedLower.some(h =>
+      h.includes('group count') || h.includes('indv count') || h.includes('organizations') || h.includes('incumbents')
+    );
+    const hasPercentileLike = detectedLower.some(h =>
+      h.includes('25th') || h.includes('50th') || h.includes('75th') || h.includes('90th') ||
+      h.includes('p25') || h.includes('p50') || h.includes('p75') || h.includes('p90')
+    );
+    if (hasVariableLike || hasCountLike || hasPercentileLike) return true;
+  }
+  if (validation.ambiguousTargets && Object.keys(validation.ambiguousTargets).length > 0) return true;
+  if (validation.unknownHeaders && validation.unknownHeaders.length > 0) return true;
+  return false;
+}
+
+/**
+ * Expected columns for mapping dialog by format
+ */
+export function getExpectedColumns(format: 'normalized' | 'wide'): Array<{
+  name: string;
+  required: boolean;
+  displayName: string;
+}> {
+  if (format === 'wide') {
+    return [
+      { name: 'specialty', required: true, displayName: 'Specialty' },
+      { name: 'provider_type', required: true, displayName: 'Provider Type' },
+      { name: 'geographic_region', required: true, displayName: 'Geographic Region' },
+      { name: 'tcc_p25', required: false, displayName: 'TCC P25' },
+      { name: 'tcc_p50', required: false, displayName: 'TCC P50' },
+      { name: 'tcc_p75', required: false, displayName: 'TCC P75' },
+      { name: 'tcc_p90', required: false, displayName: 'TCC P90' },
+      { name: 'wrvu_p25', required: false, displayName: 'wRVU P25' },
+      { name: 'wrvu_p50', required: false, displayName: 'wRVU P50' },
+      { name: 'wrvu_p75', required: false, displayName: 'wRVU P75' },
+      { name: 'wrvu_p90', required: false, displayName: 'wRVU P90' },
+      { name: 'cf_p25', required: false, displayName: 'CF P25' },
+      { name: 'cf_p50', required: false, displayName: 'CF P50' },
+      { name: 'cf_p75', required: false, displayName: 'CF P75' },
+      { name: 'cf_p90', required: false, displayName: 'CF P90' }
+    ];
+  }
+  return [
+    { name: 'specialty', required: true, displayName: 'Specialty' },
+    { name: 'variable', required: true, displayName: 'Variable / Benchmark' },
+    { name: 'n_orgs', required: true, displayName: 'Group Count / n_orgs' },
+    { name: 'n_incumbents', required: true, displayName: 'Indv Count / n_incumbents' },
+    { name: 'p25', required: true, displayName: '25th% / p25' },
+    { name: 'p50', required: true, displayName: '50th% / p50' },
+    { name: 'p75', required: true, displayName: '75th% / p75' },
+    { name: 'p90', required: true, displayName: '90th% / p90' },
+    { name: 'geographic_region', required: false, displayName: 'Geographic Region' },
+    { name: 'provider_type', required: false, displayName: 'Provider Type' }
+  ];
+}

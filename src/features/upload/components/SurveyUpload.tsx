@@ -32,6 +32,10 @@ import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseL
 import { downloadGeneratedSample } from '../../../utils/generateSampleFile';
 import { MappingCoverageSummary } from './MappingCoverageSummary';
 import { UploadSuccessSummary } from './UploadSuccessSummary';
+import { UploadValidationWizard } from './UploadValidationWizard';
+import { ColumnMappingDialog } from './ColumnMappingDialog';
+import { DuplicateSurveyDialog } from './DuplicateSurveyDialog';
+import { getExpectedColumns } from '../utils/uploadCalculations';
 import { useNavigate } from 'react-router-dom';
 import { useYear } from '../../../contexts/YearContext';
 import { useProviderContext } from '../../../contexts/ProviderContext';
@@ -99,6 +103,13 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
     // Validation
     formValidation,
     fileValidation,
+    validationResults: validationResultsMap,
+    pendingColumnMapping,
+    clearPendingColumnMapping,
+    uploadWithColumnMapping,
+    pendingDuplicate,
+    clearPendingDuplicate,
+    resolveDuplicate,
     
     // Actions
     uploadFiles,
@@ -122,7 +133,12 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
   // Local state for UI enhancements
   const [showProgressDialog, setShowProgressDialog] = React.useState(false);
   const [showValidationSummary, setShowValidationSummary] = React.useState(false);
-  const [validationResults, setValidationResults] = React.useState<any[]>([]);
+  
+  const firstFileValidation = files.length > 0 && files[0].id
+    ? validationResultsMap.get(files[0].id)
+    : undefined;
+  const hasValidationIssues = Boolean(firstFileValidation && firstFileValidation.totalIssues > 0);
+  const canProceedWithUpload = firstFileValidation?.canProceed ?? true;
   
   // File input ref for Browse button
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -431,7 +447,8 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                     formValidation.isValid &&
                     fileValidation.isValid &&
                     files.length > 0 &&
-                    isDatabaseReady;
+                    isDatabaseReady &&
+                    canProceedWithUpload;
 
                   return (
                     <Button
@@ -442,7 +459,8 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                         !formValidation.isValid ||
                         !fileValidation.isValid ||
                         files.length === 0 ||
-                        !isDatabaseReady
+                        !isDatabaseReady ||
+                        (hasValidationIssues && !canProceedWithUpload)
                       }
                       className={isButtonReady ? 'upload-cta-ready' : ''}
                       sx={{
@@ -512,6 +530,49 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
                   {fileValidation.warnings.join(', ')}
                 </Typography>
               </Alert>
+            )}
+
+            {/* Validation wizard: show when file has validation issues; Continue only when canProceed */}
+            {hasValidationIssues && firstFileValidation && (
+              <Box sx={{ mt: 3 }}>
+                <UploadValidationWizard
+                  isVisible={true}
+                  missingColumns={[]}
+                  unknownHeaders={[]}
+                  requiredColumns={[]}
+                  optionalColumns={[]}
+                  validationResult={firstFileValidation}
+                  onDownloadRecommended={handleDownloadTemplate}
+                  onDownloadFormat={() => handleDownloadTemplate()}
+                  onContinueUpload={canProceedWithUpload ? handleUpload : undefined}
+                />
+              </Box>
+            )}
+
+            {/* Column mapping: when validation indicates mapping needed */}
+            {pendingColumnMapping && (
+              <ColumnMappingDialog
+                open={true}
+                onClose={clearPendingColumnMapping}
+                onConfirm={(mappings) => uploadWithColumnMapping(mappings)}
+                detectedColumns={pendingColumnMapping.headers}
+                expectedColumns={getExpectedColumns(pendingColumnMapping.format)}
+                format={pendingColumnMapping.format}
+                sampleData={pendingColumnMapping.sampleData as Record<string, any>[]}
+                surveyType={formState.isCustom ? formState.customSurveyType : formState.surveyType}
+                providerType={formState.providerType}
+              />
+            )}
+
+            {/* Duplicate resolution: when duplicate detected before queue add */}
+            {pendingDuplicate && (
+              <DuplicateSurveyDialog
+                open={true}
+                onClose={clearPendingDuplicate}
+                onResolve={(action, newLabel) => resolveDuplicate(action, newLabel)}
+                duplicateResult={pendingDuplicate.duplicateResult}
+                newSurveyMetadata={pendingDuplicate.newSurveyMetadata}
+              />
             )}
           </Box>
         </Collapse>
@@ -666,7 +727,7 @@ export const SurveyUpload: React.FC<UploadProps> = memo(({
           setShowValidationSummary(false);
           handleUpload();
         }}
-        validationResults={validationResults}
+        validationResults={[]}
         totalRows={files.reduce((sum, file) => sum + (file as any).rowCount || 0, 0)}
         estimatedTime={`${Math.ceil(files.length * 0.5)} min`}
       />

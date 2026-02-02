@@ -73,16 +73,18 @@ export const getSurveyDisplayName = (survey: any): string => {
  * Returns just Source + Data Category without provider type
  */
 export const getShortenedSurveyType = (survey: any): string => {
-  // If full survey object is available, use new display logic
+  // If full survey object is available, use new display logic (hyphenated pill standard)
   if (survey && survey.source) {
     const source = survey.source;
     const dataCategory = survey.dataCategory;
+    const providerType = survey.providerType;
     const categoryDisplay = dataCategory === 'CALL_PAY' ? 'Call Pay'
       : dataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-      : dataCategory === 'COMPENSATION' ? (survey.providerType === 'APP' ? 'APP' : 'Physician')
-      : dataCategory === 'CUSTOM' ? 'Custom'
-      : dataCategory;
-    return `${source} ${categoryDisplay}`;
+      : dataCategory === 'COMPENSATION'
+        ? (providerType === 'APP' ? ' - APP' : ' - Phys')
+        : dataCategory === 'CUSTOM' ? 'Custom'
+        : dataCategory;
+    return `${source}${categoryDisplay}`.replace(/\s+/g, ' ').trim();
   }
   
   // BACKWARD COMPATIBILITY: Old logic for surveys without new structure
@@ -102,12 +104,13 @@ export const getShortenedSurveyType = (survey: any): string => {
       shortenedType = `${surveyType} Call Pay`;
     }
   } else if (providerType === 'PHYSICIAN') {
-    shortenedType = surveyType.replace('Physician', '').replace('Call Pay', 'Physician').trim();
-    if (!shortenedType.toLowerCase().includes('physician')) {
-      shortenedType = shortenedType ? `${shortenedType} Physician` : 'Physician';
+    // Match APP pill standard: "Source - Phys" (hyphenated, abbreviated)
+    shortenedType = surveyType.replace(/\s*Physician\s*/gi, ' - Phys ').replace(/\s+/g, ' ').trim();
+    if (!shortenedType.toLowerCase().includes('phys') && !shortenedType.toLowerCase().includes('physician')) {
+      shortenedType = shortenedType ? `${shortenedType} - Phys` : 'Phys';
     }
   } else if (providerType === 'APP') {
-    shortenedType = surveyType.replace('APP', ' - APP');
+    shortenedType = surveyType.replace(/\s*APP\s*/gi, ' - APP ').replace(/\s+/g, ' ').trim();
   }
   
   return shortenedType;

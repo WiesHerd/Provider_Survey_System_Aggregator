@@ -221,46 +221,33 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     }
   }, [availableTypes, value, hasAnyData, isLoading, error, onChange]);
 
-  // Get dropdown options based on available data
+  // Get dropdown options ONLY from Firebase: only show provider types that have survey data in Firestore
+  // availableTypes is built by ProviderTypeDetectionService from dataService.getAllSurveys() (Firebase)
   const getOptions = () => {
-  const options: Array<{
-    value: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
-    text: string;
-  }> = [];
+    const options: Array<{
+      value: 'PHYSICIAN' | 'APP' | 'CALL' | 'BOTH';
+      label: string;
+      count: number;
+    }> = [];
 
-     // Add Physician option if data exists
-     const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
-     if (physicianInfo) {
-       options.push({
-         value: 'PHYSICIAN',
-         text: 'Physician'
-       });
-     }
+    const physicianInfo = availableTypes.find(t => t.type === 'PHYSICIAN');
+    if (physicianInfo) {
+      options.push({ value: 'PHYSICIAN', label: 'Physician', count: physicianInfo.surveyCount });
+    }
 
-     // Add APP option if data exists
-     const appInfo = availableTypes.find(t => t.type === 'APP');
-     if (appInfo) {
-       options.push({
-         value: 'APP',
-         text: 'APP'
-       });
-     }
+    const appInfo = availableTypes.find(t => t.type === 'APP');
+    if (appInfo) {
+      options.push({ value: 'APP', label: 'APP', count: appInfo.surveyCount });
+    }
 
-     // Add Call Pay option if data exists
-     const callInfo = availableTypes.find(t => t.type === 'CALL');
-     if (callInfo) {
-       options.push({
-         value: 'CALL',
-         text: 'Call Pay'
-       });
-     }
+    const callInfo = availableTypes.find(t => t.type === 'CALL');
+    if (callInfo) {
+      options.push({ value: 'CALL', label: 'Call Pay', count: callInfo.surveyCount });
+    }
 
-    // Add Combined option only if multiple provider types exist AND showBothOption is true
-    if (showBothOption && availableTypes.length > 1) {
-      options.push({
-        value: 'BOTH',
-        text: 'Combined View'
-      });
+    if (showBothOption && hasAnyData && availableTypes.length >= 1) {
+      const total = availableTypes.reduce((sum, t) => sum + t.surveyCount, 0);
+      options.push({ value: 'BOTH', label: 'Combined View', count: total });
     }
 
     return options;
@@ -308,30 +295,13 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
     );
   }
 
-  // Show no data state
-  if (!hasAnyData) {
-    return (
-      <div className={`relative ${className}`}>
-        <div className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-normal bg-yellow-50 border border-yellow-300 rounded-md">
-          <span className="text-yellow-700">No provider data available</span>
-          <button
-            onClick={refresh}
-            className="text-yellow-600 hover:text-yellow-700"
-            title="Refresh"
-          >
-            <ExclamationTriangleIcon className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // Always show the dropdown; when no data, show hint below it
   return (
     <div className={`relative ${className}`}>
       {/* Dropdown Button - Google Style with Data Indicator */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150 h-10 ${
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-normal bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50/50 focus:outline-none focus:ring-1 focus:ring-blue-400/80 focus:border-blue-400 transition-all duration-150 h-10 ${
           highlightAnimation ? 'ring-2 ring-indigo-500 ring-offset-2 shadow-lg border-indigo-400' : ''
         }`}
         aria-label="Select provider type"
@@ -340,9 +310,17 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
       >
         <span className="text-gray-900">{currentDisplay.text}</span>
         <ChevronDownIcon 
-          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+          className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
         />
       </button>
+
+      {/* Hint when no data - dropdown still usable */}
+      {!hasAnyData && (
+        <div className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-yellow-700">
+          <ExclamationTriangleIcon className="h-3.5 w-3.5 flex-shrink-0" />
+          <span>No provider data available</span>
+        </div>
+      )}
 
       {/* Dropdown Menu */}
       {isOpen && (
@@ -353,10 +331,10 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
             onClick={() => setIsOpen(false)}
           />
           
-          {/* Menu - Google Style with Data Indicators */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+          {/* Menu - Apple-style hierarchy: label primary, count secondary */}
+          <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200/90 rounded-xl shadow-lg shadow-black/5 z-20 overflow-hidden">
             {options.length === 0 ? (
-              <div className="px-3 py-2.5 text-sm text-gray-500 text-center">
+              <div className="px-3.5 py-3 text-sm text-gray-500 text-center">
                 No provider data available
               </div>
             ) : (
@@ -367,17 +345,18 @@ export const ProviderTypeSelector: React.FC<ProviderTypeSelectorProps> = ({
                   <button
                     key={`${option.value}-${index}`}
                     onClick={() => handleOptionSelect(option.value)}
-                    className={`w-full flex items-start px-3 py-2.5 text-sm text-left transition-colors duration-150 ${
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm text-left transition-colors duration-150 ${
                       isSelected 
-                        ? 'bg-gray-100 text-gray-900' 
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-gray-100/80 text-gray-900' 
+                        : 'text-gray-700 hover:bg-gray-50/80'
                     }`}
                     role="option"
                     aria-selected={isSelected}
                   >
-                    <div className="flex-1">
-                      <span className="font-medium">{option.text}</span>
-                    </div>
+                    <span className="font-medium text-gray-900">{option.label}</span>
+                    <span className="text-gray-500 font-normal tabular-nums text-[13px]">
+                      ({option.count})
+                    </span>
                   </button>
                 );
               })

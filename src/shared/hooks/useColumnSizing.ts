@@ -139,20 +139,16 @@ export const useColumnSizing = ({
     }, debounceMs);
   }, [performSizing, debounceMs]);
 
-  // Initial sizing when grid API is ready
+  // Initial sizing when grid API is ready — single fallback delay for late-painted content
+  // Primary resize is onFirstDataRendered; this catches edge cases where AG Grid paints slightly later
   useEffect(() => {
     if (!gridApi || !enabled) {
       return;
     }
 
-    // Initial sizing with a small delay to ensure grid is fully rendered
-    const initialTimeout = setTimeout(() => {
-      performSizing();
-    }, 100);
+    const t = setTimeout(() => performSizing(), 100);
 
-    return () => {
-      clearTimeout(initialTimeout);
-    };
+    return () => clearTimeout(t);
   }, [gridApi, enabled, performSizing]);
 
   // ResizeObserver for container size changes

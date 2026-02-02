@@ -5,16 +5,19 @@ interface MappingLoadingSpinnerProps {
   entityName: string;
   message?: string;
   data?: any[];
+  /** Use 'inline' to show spinner in content area (avoids double spinner with Suspense). */
+  variant?: 'overlay' | 'inline';
 }
 
 /**
- * Standardized loading spinner for all mapping screens
- * Ensures consistent positioning and styling across all mapping screens
+ * Standardized loading spinner for all mapping screens.
+ * Prefer variant="inline" with a page shell to avoid multiple full-page spinners (Suspense + data).
  */
 export const MappingLoadingSpinner: React.FC<MappingLoadingSpinnerProps> = ({ 
   entityName, 
   message,
-  data
+  data,
+  variant = 'overlay'
 }) => {
   const defaultMessage = message || `Loading ${entityName.toLowerCase()} mappings...`;
   
@@ -23,7 +26,7 @@ export const MappingLoadingSpinner: React.FC<MappingLoadingSpinnerProps> = ({
       message={defaultMessage}
       recordCount="auto"
       data={data}
-      variant="overlay"
+      variant={variant}
       loading={true}
     />
   );

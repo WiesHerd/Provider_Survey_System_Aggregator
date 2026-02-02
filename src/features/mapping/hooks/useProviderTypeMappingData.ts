@@ -5,6 +5,7 @@ import { useProviderContext } from '../../../contexts/ProviderContext';
 import { getPerformanceOptimizedDataService } from '../../../services/PerformanceOptimizedDataService';
 
 const dataService = getDataService();
+const performanceService = getPerformanceOptimizedDataService();
 
 interface UseProviderTypeMappingDataReturn {
   // State
@@ -37,7 +38,7 @@ interface UseProviderTypeMappingDataReturn {
   deselectAllProviderTypes: () => void;
   
   // Data operations
-  loadData: () => Promise<void>;
+  loadData: (forceRefresh?: boolean) => Promise<void>;
   createMapping: () => Promise<void>;
   createGroupedMapping: (standardizedName: string, providerTypes: IUnmappedProviderType[]) => Promise<void>;
   deleteMapping: (mappingId: string) => Promise<void>;
@@ -56,7 +57,7 @@ interface UseProviderTypeMappingDataReturn {
  * Follows the exact same pattern as useMappingData
  */
 export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn => {
-  // Provider context
+  // Provider context (same as Specialty Mapping - no year filter, show all surveys)
   const { selectedProviderType } = useProviderContext();
   
   // State
@@ -109,40 +110,44 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     return filtered;
   }, [learnedMappings, mappedSearchTerm]);
 
-  // Performance service for caching (5-minute TTL)
-  const performanceService = useMemo(() => getPerformanceOptimizedDataService(), []);
   
-  // Track last loaded provider type to prevent unnecessary reloads
+  // Track last loaded provider type to prevent unnecessary reloads (same pattern as Specialty Mapping)
   const lastLoadedProviderType = useRef<string | undefined>(undefined);
   const lastLoadedShowAll = useRef<boolean>(false);
   const isInitialLoad = useRef(true);
+  const forceRefreshRef = useRef(false);
 
   // Load data with intelligent caching
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh = false) => {
     try {
       // Calculate current provider type filter
-      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
-        ? undefined 
+      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH')
+        ? undefined
         : selectedProviderType;
-      
-      // Skip reload if same parameters and not initial load
-      if (!isInitialLoad.current && 
-          lastLoadedProviderType.current === dataProviderType && 
+
+      // Skip reload only if same parameters, not initial load, and not forcing refresh (e.g. after create/delete)
+      if (!forceRefresh && !forceRefreshRef.current && !isInitialLoad.current &&
+          lastLoadedProviderType.current === dataProviderType &&
           lastLoadedShowAll.current === showAllCategories) {
         console.log('🎯 Skipping reload - data already loaded with same parameters');
         return;
       }
-      
+      forceRefreshRef.current = false;
+
       setLoading(true);
       setError(null);
-      
+
+      if (forceRefresh) {
+        performanceService.clearCache('provider_type_mapping');
+      }
       console.log('🚀 Loading provider type mapping data...', {
         dataProviderType,
-        showAllCategories
+        showAllCategories,
+        forceRefresh
       });
       const startTime = performance.now();
-      
-      // Use performance service for caching (5-minute TTL)
+
+      // Use performance service for caching (5-minute TTL); no year filter - show all surveys like Specialty Mapping
       const data = await performanceService.getProviderTypeMappingData(dataProviderType);
       
       const duration = performance.now() - startTime;
@@ -156,14 +161,14 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
       lastLoadedProviderType.current = dataProviderType;
       lastLoadedShowAll.current = showAllCategories;
       isInitialLoad.current = false;
-      
+
     } catch (err) {
       console.error('Error loading provider type mapping data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load provider type mapping data. Please ensure you have uploaded survey data first.');
     } finally {
       setLoading(false);
     }
-  }, [selectedProviderType, showAllCategories, performanceService]);
+  }, [selectedProviderType, showAllCategories]);
 
   // Selection management
   const selectProviderType = useCallback((providerType: IUnmappedProviderType) => {
@@ -205,13 +210,18 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
         createdAt: new Date(),
         updatedAt: new Date()
       } as any;
+      if (selectedProviderType && selectedProviderType !== 'BOTH') {
+        (mapping as any).providerType = selectedProviderType;
+      }
       await dataService.createProviderTypeMapping(mapping);
       setSelectedProviderTypes([]);
-      await loadData();
+      performanceService.clearCache('provider_type_mapping');
+      forceRefreshRef.current = true;
+      await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create provider type mapping');
     }
-  }, [selectedProviderTypes, loadData]);
+  }, [selectedProviderTypes, selectedProviderType, loadData]);
 
   const createGroupedMapping = useCallback(async (standardizedName: string, providerTypes: IUnmappedProviderType[]) => {
     try {
@@ -226,6 +236,9 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
         createdAt: new Date(),
         updatedAt: new Date()
       } as any;
+      if (selectedProviderType && selectedProviderType !== 'BOTH') {
+        (mapping as any).providerType = selectedProviderType;
+      }
       await dataService.createProviderTypeMapping(mapping);
       
       // Save learned mappings for each provider type
@@ -242,6 +255,7 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
         }
       }
       
+      performanceService.clearCache('provider_type_mapping');
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create grouped provider type mapping');
@@ -251,7 +265,9 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
   const deleteMapping = useCallback(async (mappingId: string) => {
     try {
       await dataService.deleteProviderTypeMapping(mappingId);
-      await loadData();
+      performanceService.clearCache('provider_type_mapping');
+      forceRefreshRef.current = true;
+      await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete provider type mapping');
     }
@@ -260,6 +276,7 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
   const clearAllMappings = useCallback(async () => {
     try {
       await dataService.clearAllProviderTypeMappings();
+      performanceService.clearCache('provider_type_mapping');
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to clear provider type mappings');
@@ -269,7 +286,9 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
   const removeLearnedMapping = useCallback(async (original: string) => {
     try {
       await dataService.removeLearnedMapping('providerType', original);
-      await loadData(); // Reload to get updated learned mappings
+      performanceService.clearCache('provider_type_mapping');
+      forceRefreshRef.current = true;
+      await loadData(true); // Reload to get updated learned mappings
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove learned mapping');
     }
@@ -281,16 +300,14 @@ export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn =
     setError(null);
   }, []);
 
-  // Load data on mount and when provider type or toggle changes
-  // Only reload if parameters actually changed (prevent infinite loops)
+  // Load data on mount and when provider type or toggle changes (same as Specialty Mapping - no year)
   useEffect(() => {
-    const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH') 
-      ? undefined 
+    const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH')
+      ? undefined
       : selectedProviderType;
-    
-    // Only reload if parameters changed
-    if (isInitialLoad.current || 
-        lastLoadedProviderType.current !== dataProviderType || 
+
+    if (isInitialLoad.current ||
+        lastLoadedProviderType.current !== dataProviderType ||
         lastLoadedShowAll.current !== showAllCategories) {
       console.log('🔍 useProviderTypeMappingData: Reloading data due to state change:', {
         selectedProviderType,

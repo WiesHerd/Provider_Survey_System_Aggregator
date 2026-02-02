@@ -156,9 +156,16 @@ export function normalizeText(text: string): string {
   
   let normalized = text;
   
-  // Normalize dashes
+  // Normalize dashes and hyphens (common source of "box" characters in survey data)
   normalized = normalized.replace(/\u2014/g, '-');  // Em dash (—) → hyphen (-)
   normalized = normalized.replace(/\u2013/g, '-');  // En dash (–) → hyphen (-)
+  normalized = normalized.replace(/\u2011/g, '-');  // Non-breaking hyphen (‑) → hyphen (-)
+  normalized = normalized.replace(/\u2010/g, '-');  // Unicode hyphen (‐) → hyphen (-)
+  
+  // Normalize spaces (non-breaking and other special spaces often display as boxes)
+  normalized = normalized.replace(/\u00A0/g, ' ');  // Non-breaking space ( ) → regular space
+  normalized = normalized.replace(/\u202F/g, ' ');  // Narrow no-break space → regular space
+  normalized = normalized.replace(/\u2060/g, '');  // Word joiner (invisible) → remove
   
   // Normalize quotes
   normalized = normalized.replace(/\u201C/g, '"');  // Left double quote (") → regular quote (")
@@ -179,10 +186,31 @@ export function normalizeText(text: string): string {
   // Pattern: letter?letter (e.g., "Pediatrics?General" → "Pediatrics-General")
   normalized = normalized.replace(/([a-zA-Z])\?([a-zA-Z])/g, '$1-$2');
   
-  // Remove standalone replacement characters (box characters)
+  // Remove standalone replacement characters (box characters / tofu)
   normalized = normalized.replace(/\uFFFD/g, '');
   
+  // Remove any other common problematic characters that may render as boxes
+  normalized = normalized.replace(/\uFFFE/g, '');  // Not a character (often from BOM issues)
+  
   return normalized;
+}
+
+/**
+ * Normalize all string values in a row (for survey data). Use when saving or displaying
+ * to prevent "weird characters" (e.g. non-breaking space, en-dash) from showing as boxes.
+ */
+export function normalizeRowStrings<T extends Record<string, unknown>>(row: T): T {
+  if (!row || typeof row !== 'object') return row;
+  const out = { ...row } as T;
+  for (const key of Object.keys(out)) {
+    const v = out[key];
+    if (typeof v === 'string') {
+      (out as Record<string, unknown>)[key] = normalizeText(v);
+    } else if (v != null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
+      (out as Record<string, unknown>)[key] = normalizeRowStrings(v as Record<string, unknown>);
+    }
+  }
+  return out;
 }
 
 /**

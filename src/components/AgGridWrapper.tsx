@@ -13,6 +13,9 @@ interface AgGridWrapperProps {
   rowData: any[];
   columnDefs: any[];
   onGridReady?: (params: any) => void;
+  /** Called when AG Grid has rendered the first set of rows — use to run column sizing after content is painted */
+  onFirstDataRendered?: () => void;
+  onRowClicked?: (params: { data: any; node: any }) => void;
   pagination?: boolean;
   paginationPageSize?: number;
   onPageChange?: (page: number) => void;
@@ -34,6 +37,8 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
   rowData,
   columnDefs,
   onGridReady,
+  onFirstDataRendered,
+  onRowClicked,
   pagination = true,
   paginationPageSize = 25,
   onPageChange,
@@ -282,6 +287,8 @@ const AgGridWrapper: React.FC<AgGridWrapperProps> = ({
           rowData={paginatedData}
           columnDefs={columnDefs}
           onGridReady={handleGridReady}
+          onFirstDataRendered={onFirstDataRendered}
+          onRowClicked={onRowClicked}
           domLayout={domLayout}
           suppressRowHoverHighlight={suppressRowHoverHighlight}
           rowHeight={rowHeight}

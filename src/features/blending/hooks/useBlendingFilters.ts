@@ -5,14 +5,13 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useDebouncedValue } from '../../../shared/hooks/useDebouncedValue';
 
 export interface BlendingFilters {
-  selectedSurvey: string;
-  selectedYear: string;
-  selectedRegion: string;
-  selectedProviderType: string;
-  specialtySearch: string;
+  selectedSurveys: string[];
+  selectedYears: string[];
+  selectedRegions: string[];
+  selectedProviderTypes: string[];
+  selectedSpecialties: string[];
 }
 
 export interface FilterOptions {
@@ -20,6 +19,7 @@ export interface FilterOptions {
   years: string[];
   regions: string[];
   providerTypes: string[];
+  specialties: string[];
 }
 
 /**
@@ -36,124 +36,96 @@ export const useBlendingFilters = (allData: any[]) => {
     return String(value);
   }, []);
 
-  // Filter state
-  const [selectedSurvey, setSelectedSurvey] = useState('');
-  const [selectedYear, setSelectedYear] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('');
-  const [selectedProviderType, setSelectedProviderType] = useState('');
-  const [specialtySearch, setSpecialtySearch] = useState('');
-  
-  // Debounce specialty search to avoid excessive filtering on every keystroke
-  const debouncedSpecialtySearch = useDebouncedValue(specialtySearch, 300);
+  // Filter state - all multi-select
+  const [selectedSurveys, setSelectedSurveys] = useState<string[]>([]);
+  const [selectedYears, setSelectedYears] = useState<string[]>([]);
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
+  const [selectedProviderTypes, setSelectedProviderTypes] = useState<string[]>([]);
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
 
-  // Cascading filter options - computed based on current selections
+  // Cascading filter options - computed based on current multi-select selections
   const filterOptions = useMemo((): FilterOptions => {
-    console.log('🔍 Filter Options Debug:', {
-      allDataLength: allData?.length || 0,
-      selectedSurvey,
-      selectedYear,
-      selectedRegion,
-      selectedProviderType
-    });
-
     if (!allData || allData.length === 0) {
-      console.log('⚠️ No survey data available for filters');
       return {
         surveys: [],
         years: [],
         regions: [],
-        providerTypes: []
+        providerTypes: [],
+        specialties: []
       };
     }
 
-    // Always show all available surveys
     const surveys = [...new Set(allData.map(row => safeString(row?.surveySource)).filter(Boolean))].sort();
 
-    // For other filters, show options based on current selections
-    let filteredData = allData;
-
-    // Apply survey filter if one is selected
-    if (selectedSurvey) {
-      filteredData = filteredData.filter(row => safeString(row?.surveySource) === selectedSurvey);
+    let dataForYears = allData;
+    if (selectedSurveys.length > 0) {
+      dataForYears = dataForYears.filter(row => selectedSurveys.includes(safeString(row?.surveySource)));
     }
+    const years = [...new Set(dataForYears.map(row => safeString(row?.surveyYear)).filter(Boolean))].sort();
 
-    // For years, show all available years from the current filtered data
-    const years = [...new Set(filteredData.map(row => safeString(row?.surveyYear)).filter(Boolean))].sort();
-
-    // Apply year filter if one is selected
-    if (selectedYear) {
-      filteredData = filteredData.filter(row => safeString(row?.surveyYear) === selectedYear);
+    let dataForRegions = dataForYears;
+    if (selectedYears.length > 0) {
+      dataForRegions = dataForRegions.filter(row => selectedYears.includes(safeString(row?.surveyYear)));
     }
+    const regions = [...new Set(dataForRegions.map(row => safeString(row?.geographicRegion)).filter(Boolean))].sort();
 
-    // For regions, show all available regions from the current filtered data
-    const regions = [...new Set(filteredData.map(row => safeString(row?.geographicRegion)).filter(Boolean))].sort();
-
-    // Apply region filter if one is selected
-    if (selectedRegion) {
-      filteredData = filteredData.filter(row => safeString(row?.geographicRegion) === selectedRegion);
+    let dataForProviderTypes = dataForRegions;
+    if (selectedRegions.length > 0) {
+      dataForProviderTypes = dataForProviderTypes.filter(row => selectedRegions.includes(safeString(row?.geographicRegion)));
     }
+    const providerTypes = [...new Set(dataForProviderTypes.map(row => safeString(row?.providerType)).filter(Boolean))].sort();
 
-    // For provider types, show all available provider types from the current filtered data
-    const providerTypes = [...new Set(filteredData.map(row => safeString(row?.providerType)).filter(Boolean))].sort();
+    let dataForSpecialties = dataForProviderTypes;
+    if (selectedProviderTypes.length > 0) {
+      dataForSpecialties = dataForSpecialties.filter(row => {
+        const pt = safeString(row?.providerType);
+        return selectedProviderTypes.some(selected => {
+          if (selected === 'Physician') {
+            return pt === 'Staff Physician' || pt === 'Physician' || pt === 'staff physician';
+          }
+          return pt === selected;
+        });
+      });
+    }
+    const specialties = [...new Set(dataForSpecialties.map(row => safeString(row?.surveySpecialty)).filter(Boolean))].sort();
 
-    const result = {
+    return {
       surveys,
       years,
       regions,
-      providerTypes
+      providerTypes,
+      specialties
     };
+  }, [allData, selectedSurveys, selectedYears, selectedRegions, selectedProviderTypes, safeString]);
 
-    console.log('🔍 Final Filter Options:', result);
-    return result;
-  }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, safeString]);
-
-  // Cascading filter change handlers
-  const handleSurveyChange = useCallback((value: string) => {
-    const normalized = value === 'all-surveys' ? '' : (value ? safeString(value) : '');
-    setSelectedSurvey(normalized);
-    // Only clear dependent filters when selecting a specific survey (not "All")
-    // When "All Surveys" is selected, preserve other filter selections
-    if (normalized && normalized !== '') {
-      // Only clear other filters when a specific survey is selected
-      setSelectedYear('');
-      setSelectedRegion('');
-      setSelectedProviderType('');
-    }
-    // When selecting "All Surveys" (empty string), keep all other filters
-  }, [safeString]);
-
-  const handleYearChange = useCallback((value: string) => {
-    const normalized = value ? safeString(value) : '';
-    setSelectedYear(normalized);
-    // Don't clear dependent filters - just update available options
-    // Let the filter options logic handle showing only valid combinations
-  }, [safeString]);
-
-  const handleRegionChange = useCallback((value: string) => {
-    const normalized = value ? safeString(value) : '';
-    setSelectedRegion(normalized);
-    // Don't clear dependent filters - just update available options
-    // Let the filter options logic handle showing only valid combinations
-  }, [safeString]);
-
-  const handleProviderTypeChange = useCallback((value: string) => {
-    setSelectedProviderType(value ? safeString(value) : '');
-  }, [safeString]);
-
-  const handleSpecialtySearchChange = useCallback((value: string) => {
-    setSpecialtySearch(value);
+  const handleSurveyChange = useCallback((value: string[]) => {
+    setSelectedSurveys(Array.isArray(value) ? value : []);
   }, []);
 
-  // Filter and sort survey data based on all filters
+  const handleYearChange = useCallback((value: string[]) => {
+    setSelectedYears(Array.isArray(value) ? value : []);
+  }, []);
+
+  const handleRegionChange = useCallback((value: string[]) => {
+    setSelectedRegions(Array.isArray(value) ? value : []);
+  }, []);
+
+  const handleProviderTypeChange = useCallback((value: string[]) => {
+    setSelectedProviderTypes(Array.isArray(value) ? value : []);
+  }, []);
+
+  const handleSelectedSpecialtiesChange = useCallback((value: string[]) => {
+    setSelectedSpecialties(Array.isArray(value) ? value : []);
+  }, []);
+
+  // Filter rows: include if each dimension is empty OR row value is in selected list
   const filteredSurveyData = useMemo(() => {
     if (!allData || allData.length === 0) {
       return [];
     }
 
     return allData.filter((row: any) => {
-      if (!row) {
-        return false;
-      }
+      if (!row) return false;
 
       const surveyValue = safeString(row.surveySource);
       const yearValue = safeString(row.surveyYear);
@@ -161,67 +133,52 @@ export const useBlendingFilters = (allData: any[]) => {
       const providerTypeValue = safeString(row.providerType);
       const specialtyValue = safeString(row.surveySpecialty);
 
-      const matchesSurvey = !selectedSurvey || surveyValue === selectedSurvey;
-      const matchesYear = !selectedYear || yearValue === selectedYear;
-      const matchesRegion = !selectedRegion || regionValue === selectedRegion;
+      const matchesSurvey = selectedSurveys.length === 0 || selectedSurveys.includes(surveyValue);
+      const matchesYear = selectedYears.length === 0 || selectedYears.includes(yearValue);
+      const matchesRegion = selectedRegions.length === 0 || selectedRegions.includes(regionValue);
 
       let matchesProviderType = true;
-      if (selectedProviderType) {
-        if (selectedProviderType === 'Physician') {
-          matchesProviderType = providerTypeValue === 'Staff Physician' || providerTypeValue === 'Physician' || providerTypeValue === 'staff physician';
-        } else {
-          matchesProviderType = providerTypeValue === selectedProviderType;
-        }
+      if (selectedProviderTypes.length > 0) {
+        matchesProviderType = selectedProviderTypes.some(selected => {
+          if (selected === 'Physician') {
+            return providerTypeValue === 'Staff Physician' || providerTypeValue === 'Physician' || providerTypeValue === 'staff physician';
+          }
+          return providerTypeValue === selected;
+        });
       }
 
-      const matchesSpecialty = !debouncedSpecialtySearch || (() => {
-        // Use flexible word matching for specialty search
-        const searchTerms = debouncedSpecialtySearch.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
-        if (searchTerms.length === 0) return true;
-        
-        const specialtyText = specialtyValue.toLowerCase();
-        return searchTerms.every(term => specialtyText.includes(term));
-      })();
+      const matchesSpecialty =
+        selectedSpecialties.length === 0 ||
+        selectedSpecialties.some(s => s && specialtyValue === s);
 
       return matchesSurvey && matchesYear && matchesRegion && matchesProviderType && matchesSpecialty;
     });
-  }, [allData, selectedSurvey, selectedYear, selectedRegion, selectedProviderType, debouncedSpecialtySearch, safeString]);
+  }, [allData, selectedSurveys, selectedYears, selectedRegions, selectedProviderTypes, selectedSpecialties, safeString]);
 
   return {
-    // Filter state
-    selectedSurvey,
-    selectedYear,
-    selectedRegion,
-    selectedProviderType,
-    specialtySearch,
-    
-    // Filter options
+    selectedSurveys,
+    selectedYears,
+    selectedRegions,
+    selectedProviderTypes,
+    selectedSpecialties,
     filterOptions,
-    
-    // Filtered data
     filteredSurveyData,
-    
-    // Handlers
     handleSurveyChange,
     handleYearChange,
     handleRegionChange,
     handleProviderTypeChange,
-    handleSpecialtySearchChange,
-    
-    // Direct setters for template restoration
-    setSelectedSurvey,
-    setSelectedYear,
-    setSelectedRegion,
-    setSelectedProviderType,
-    setSpecialtySearch,
-    
-    // Reset function
+    handleSelectedSpecialtiesChange,
+    setSelectedSurveys,
+    setSelectedYears,
+    setSelectedRegions,
+    setSelectedProviderTypes,
+    setSelectedSpecialties,
     resetFilters: useCallback(() => {
-      setSelectedSurvey('');
-      setSelectedYear('');
-      setSelectedRegion('');
-      setSelectedProviderType('');
-      setSpecialtySearch('');
+      setSelectedSurveys([]);
+      setSelectedYears([]);
+      setSelectedRegions([]);
+      setSelectedProviderTypes([]);
+      setSelectedSpecialties([]);
     }, [])
   };
 };

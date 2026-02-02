@@ -5,7 +5,7 @@
  * across the entire application. This context enables the dual-provider workflow.
  */
 
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
 import { ProviderType, UIProviderType } from '../types/provider';
 import { providerDataService } from '../services/ProviderDataService';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
@@ -344,39 +344,45 @@ export const ProviderContextProvider: React.FC<ProviderContextProviderProps> = (
     return state.availableProviderTypes.includes(providerType);
   }, [state.availableProviderTypes]);
 
-  // Context Value
-  const contextValue: ProviderContextType = {
-    // State
-    selectedProviderType: state.selectedProviderType,
-    availableProviderTypes: state.availableProviderTypes,
-    isProviderDetectionEnabled: state.isProviderDetectionEnabled,
-    lastDetectionResult: state.lastDetectionResult,
-    providerTypeHistory: state.providerTypeHistory,
-
-    // Actions
-    setProviderType,
-    setAvailableProviderTypes,
-    toggleProviderDetection,
-    setDetectionResult,
-    clearHistory,
-    resetToDefault,
-    refreshProviderTypeDetection,
-
-    // Computed Properties
-    isPhysicianSelected,
-    isAPPSelected,
-    isBothSelected,
-    canSwitchToProviderType
-  };
-
-  // Debug logging
-  console.log('🔍 ProviderContext: Current state', {
-    selectedProviderType: state.selectedProviderType,
-    availableProviderTypes: state.availableProviderTypes,
-    isPhysicianSelected,
-    isAPPSelected,
-    isBothSelected
-  });
+  // Context Value - memoized to prevent unnecessary re-renders of all consumers
+  const contextValue = useMemo<ProviderContextType>(
+    () => ({
+      selectedProviderType: state.selectedProviderType,
+      availableProviderTypes: state.availableProviderTypes,
+      isProviderDetectionEnabled: state.isProviderDetectionEnabled,
+      lastDetectionResult: state.lastDetectionResult,
+      providerTypeHistory: state.providerTypeHistory,
+      setProviderType,
+      setAvailableProviderTypes,
+      toggleProviderDetection,
+      setDetectionResult,
+      clearHistory,
+      resetToDefault,
+      refreshProviderTypeDetection,
+      isPhysicianSelected,
+      isAPPSelected,
+      isBothSelected,
+      canSwitchToProviderType
+    }),
+    [
+      state.selectedProviderType,
+      state.availableProviderTypes,
+      state.isProviderDetectionEnabled,
+      state.lastDetectionResult,
+      state.providerTypeHistory,
+      setProviderType,
+      setAvailableProviderTypes,
+      toggleProviderDetection,
+      setDetectionResult,
+      clearHistory,
+      resetToDefault,
+      refreshProviderTypeDetection,
+      isPhysicianSelected,
+      isAPPSelected,
+      isBothSelected,
+      canSwitchToProviderType
+    ]
+  );
 
   return (
     <ProviderContext.Provider value={contextValue}>

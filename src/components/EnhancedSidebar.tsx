@@ -2,10 +2,12 @@ import React, { useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProviderContext } from '../contexts/ProviderContext';
+import { useYear } from '../contexts/YearContext';
 import { UIProviderType } from '../types/provider';
 import { ProviderTypeSelector } from '../shared/components/ProviderTypeSelector';
 import { UserMenu } from './UserMenu';
 import { queryKeys } from '../shared/services/queryClient';
+import { routeChunkPreload } from '../shared/routeChunkPreload';
 import {
 	HomeIcon,
 	ChartBarIcon,
@@ -48,6 +50,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 	const currentPath = location.pathname;
 	const listRef = useRef<HTMLDivElement>(null);
 	const { selectedProviderType, setProviderType } = useProviderContext();
+	const { currentYear } = useYear();
 	const queryClient = useQueryClient();
 	const [logoError, setLogoError] = useState(false);
 	const [collapsedLogoError, setCollapsedLogoError] = useState(false);
@@ -91,11 +94,23 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
 	// ENTERPRISE: Aggressive prefetching on hover for instant navigation
 	const handleMouseEnter = useCallback((path: string) => {
+		// Preload route chunk so "Loading page..." is brief or absent when user clicks
+		routeChunkPreload[path]?.();
+
 		const providerType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
 		const providerTypeKey = providerType || 'all';
 		
-		// Prefetch mapping data with 24h cache
-		if (path === '/specialty-mapping') {
+		// Prefetch survey list for Upload screen (same key/shape as useSurveyListQuery)
+		if (path === '/upload') {
+			queryClient.prefetchQuery({
+				queryKey: queryKeys.surveyList(currentYear, providerType),
+				queryFn: async () => {
+					const { fetchSurveyList } = await import('../features/upload/hooks/useSurveyListQuery');
+					return fetchSurveyList(currentYear, providerType);
+				},
+				staleTime: 1000 * 60 * 60 * 24, // 24 hours
+			}).catch(() => {});
+		} else if (path === '/specialty-mapping') {
 			queryClient.prefetchQuery({
 				queryKey: [...queryKeys.mappings.specialty(), providerTypeKey],
 				queryFn: async () => {
@@ -227,7 +242,7 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				staleTime: 1000 * 60 * 60, // 1 hour
 			}).catch(() => {});
 		}
-	}, [queryClient, selectedProviderType]);
+	}, [queryClient, selectedProviderType, currentYear]);
 
 	// Check if current path is in Analytics & Reports section
 	const isAnalyticsRoute = (path: string) => {

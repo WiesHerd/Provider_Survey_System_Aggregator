@@ -10,6 +10,7 @@ import {
   doc, 
   getDoc, 
   getDocs, 
+  getDocsFromServer,
   setDoc, 
   deleteDoc, 
   query, 
@@ -32,7 +33,7 @@ import { ISpecialtyMapping, IUnmappedSpecialty } from '../features/mapping/types
 import { IColumnMapping } from '../types/column';
 import { ISurveyRow } from '../types/survey';
 import { ProviderType, DataCategory } from '../types/provider';
-import { readCSVFile, parseCSVLine } from '../shared/utils';
+import { readCSVFile, parseCSVLine, normalizeRowStrings, normalizeText } from '../shared/utils';
 import { isExcelFile, parseFile } from '../features/upload/utils/fileParser';
 import { stripUserPrefix } from '../shared/utils/userScoping';
 
@@ -435,9 +436,9 @@ export class FirestoreService {
   }
 
   /**
-   * Remove undefined values from object (Firestore doesn't allow undefined)
-   * Also handles null values in metadata that might cause issues
-   * This is critical - Firestore will reject any document with undefined values
+   * Remove undefined values and empty field names from object.
+   * Firestore rejects documents with undefined values or empty string field names
+   * (e.g. from CSV/Excel blank column headers). This is critical for batch writes.
    */
   private removeUndefinedValues(obj: any): any {
     if (obj === null || obj === undefined) {
@@ -456,11 +457,11 @@ export class FirestoreService {
     if (typeof obj === 'object') {
       const cleaned: any = {};
       for (const [key, value] of Object.entries(obj)) {
-        // Skip undefined values completely - this is the key fix
+        // Firestore: document fields must not be empty (no "" keys)
+        if (key === '') continue;
+        // Skip undefined values
         if (value !== undefined) {
-          // Recursively clean nested objects (like metadata)
           const cleanedValue = this.removeUndefinedValues(value);
-          // Only add if the cleaned value is not undefined
           if (cleanedValue !== undefined) {
             cleaned[key] = cleanedValue;
           }
@@ -487,15 +488,16 @@ export class FirestoreService {
 
   // ==================== Survey Methods ====================
 
-  async getAllSurveys(): Promise<Survey[]> {
-    return await this.getAllSurveysWithRetry();
+  async getAllSurveys(options?: { fromServer?: boolean }): Promise<Survey[]> {
+    return await this.getAllSurveysWithRetry(3, options?.fromServer);
   }
 
   /**
    * Get all surveys with retry logic and exponential backoff
-   * Includes health check before retry attempts
+   * Includes health check before retry attempts.
+   * When fromServer is true, bypasses local cache so duplicate check sees fresh state after deletes.
    */
-  async getAllSurveysWithRetry(maxRetries: number = 3): Promise<Survey[]> {
+  async getAllSurveysWithRetry(maxRetries: number = 3, fromServer: boolean = false): Promise<Survey[]> {
     if (!this.db || !this.userId) {
       throw new Error('Firestore not initialized or user not authenticated');
     }
@@ -532,9 +534,11 @@ export class FirestoreService {
           }
         }
 
-        // Attempt to get surveys
+        // Attempt to get surveys - fromServer bypasses cache (critical for duplicate check after delete)
         const surveysRef = collection(this.db, this.getUserPath('surveys'));
-        const snapshot = await getDocs(surveysRef);
+        const snapshot = fromServer
+          ? await getDocsFromServer(surveysRef)
+          : await getDocs(surveysRef);
         
         const surveys = snapshot.docs.map(doc => {
           const data = doc.data();
@@ -545,6 +549,21 @@ export class FirestoreService {
             createdAt: data.createdAt ? this.toDate(data.createdAt) : undefined,
             updatedAt: data.updatedAt ? this.toDate(data.updatedAt) : undefined,
           } as Survey;
+          
+          // CRITICAL: Some Firestore documents store name/providerType ONLY in metadata (see Firebase console)
+          // Without this, surveys like "SullivanCotter APP 2025" never show in the list when filtering by APP
+          const meta = (survey as any).metadata;
+          if (meta && typeof meta === 'object') {
+            if (!survey.name && meta.name) survey.name = meta.name;
+            if (!survey.providerType && meta.providerType) survey.providerType = meta.providerType as any;
+            if (!survey.type && meta.type) survey.type = meta.type;
+            if (survey.year == null && meta.year != null) survey.year = String(meta.year);
+            if (survey.rowCount == null && meta.rowCount != null) (survey as any).rowCount = meta.rowCount;
+            if (survey.specialtyCount == null && meta.specialtyCount != null) (survey as any).specialtyCount = meta.specialtyCount;
+            if (survey.dataPoints == null && meta.dataPoints != null) (survey as any).dataPoints = meta.dataPoints;
+            if (!(survey as any).source && meta.source) (survey as any).source = meta.source;
+            if (!(survey as any).dataCategory && meta.dataCategory) (survey as any).dataCategory = meta.dataCategory;
+          }
           
           // CRITICAL: Normalize "Staff Physician" to "PHYSICIAN" when reading from Firestore
           // This ensures surveys with "Staff Physician" are treated as "PHYSICIAN"
@@ -1008,7 +1027,7 @@ export class FirestoreService {
 
   async forceClearDatabase(): Promise<void> {
     // Delete all collections for this user
-    const collections = ['surveys', 'surveyData', 'specialtyMappings', 'columnMappings', 
+    const collections = ['surveys', 'surveyData', 'specialtyMappings', 'columnMappings',
                        'variableMappings', 'regionMappings', 'providerTypeMappings'];
     
     for (const collName of collections) {
@@ -1016,6 +1035,39 @@ export class FirestoreService {
     }
     
     console.log('✅ FirestoreService: Cleared all database');
+  }
+
+  /**
+   * Delete all user-scoped data (full wipe for "Clear all data").
+   * Removes surveys, survey data, all mappings, preferences, custom reports, FMV, blend templates, etc.
+   */
+  async deleteAllUserData(): Promise<void> {
+    if (!this.db || !this.userId) {
+      throw new Error('Firestore not initialized or user not authenticated');
+    }
+    console.warn('⚠️ DANGER: deleteAllUserData() - full wipe of all user data');
+    const collections = [
+      'surveys',
+      'surveyData',
+      'uploadIntents',
+      'specialtyMappings',
+      'columnMappings',
+      'variableMappings',
+      'regionMappings',
+      'providerTypeMappings',
+      'learnedMappings',
+      'preferences',
+      'auditLogs',
+      'blendTemplates',
+      'specialtyMappingSources',
+      'customReports',
+      'fmvCalculations',
+      'cache'
+    ];
+    for (const collName of collections) {
+      await this.deleteCollectionInBatches(this.getUserPath(collName));
+    }
+    console.log('✅ FirestoreService: deleteAllUserData completed');
   }
 
   // ==================== Survey Data Methods ====================
@@ -1070,7 +1122,10 @@ export class FirestoreService {
     const snapshot = await getDocs(q);
     const fetchTime = performance.now() - startTime;
     
-    // Only log in debug mode to prevent console spam
+    // When 0 rows returned, log once so user can verify in Firebase Console (users/{uid}/surveyData, filter by surveyId)
+    if (snapshot.docs.length === 0) {
+      console.warn(`⚠️ FirestoreService: 0 rows for surveyId="${cleanSurveyId}". Check Firebase Console → Firestore → users/.../surveyData for documents with surveyId=${cleanSurveyId}.`);
+    }
     if (isUploadDebugEnabled()) {
       console.log(`⚡ FirestoreService: Fetched ${snapshot.docs.length} rows in ${fetchTime.toFixed(2)}ms`);
     }
@@ -1145,11 +1200,12 @@ export class FirestoreService {
               // Firestore will handle uniqueness and the index ensures no collisions within a batch
               const dataId = `${surveyId}_${startIndex + rowIndex}`;
               const rowRef = doc(this.db!, collectionPath, dataId);
-              
+              // Normalize special characters (e.g. non-breaking space, en-dash) so they don't display as boxes
+              const normalizedRow = normalizeRowStrings(row as Record<string, unknown>) as ISurveyRow;
             const rowData = this.removeUndefinedValues({
               id: dataId,
               surveyId, // CRITICAL: Must match the surveyId used in metadata
-              ...row,
+              ...normalizedRow,
               createdAt: Timestamp.now(),
             });
             
@@ -1754,13 +1810,19 @@ export class FirestoreService {
       // ============== STEP 2: Parse File (10-40%) ==============
       let rows: ISurveyRow[] = [];
       let encoding: string | undefined;
+      let originalHeaders: string[] = [];
 
       if (isExcelFile(file)) {
         const parseResult = await parseFile(file);
+        originalHeaders = (parseResult.headers || []).filter((h: string) => h != null && String(h).trim() !== '');
+        // Firestore rejects empty field names - use placeholder for blank headers so column data is preserved
+        const safeHeader = (h: string, index: number) => (h != null && String(h).trim() !== '') ? h : `_empty_${index}`;
         rows = parseResult.rows.map((row) => {
           const rowData: Record<string, any> = {};
           parseResult.headers.forEach((header, index) => {
-            rowData[header] = row[index] ?? '';
+            const key = safeHeader(header, index);
+            const raw = row[index] ?? '';
+            rowData[key] = typeof raw === 'string' ? normalizeText(raw) : raw;
           });
           return rowData as ISurveyRow;
         });
@@ -1777,6 +1839,13 @@ export class FirestoreService {
 
         rows = this.parseCSV(text);
         encoding = detectedEncoding;
+        // Preserve upload column sequence: header row from CSV (same order as in file)
+        const firstLine = text.split(/\r?\n/).find((l: string) => l.trim());
+        if (firstLine) {
+          originalHeaders = parseCSVLine(firstLine).filter((h: string) => h != null && String(h).trim() !== '');
+        } else if (rows.length > 0) {
+          originalHeaders = Object.keys(rows[0]);
+        }
       }
 
       onProgress?.(40);
@@ -1804,6 +1873,14 @@ export class FirestoreService {
       // CRITICAL: Log the providerType being saved to help debug categorization issues
       console.log(`💾 FirestoreService: Creating survey with providerType: "${normalizedProviderType}" (from form: "${providerType}")`);
       
+      // Derive source and dataCategory so Provider Type / Specialty mapping pages show correct labels (e.g. "Gallagher Physician")
+      const surveyTypeLower = (surveyType || '').toLowerCase();
+      const knownSources = ['MGMA', 'SullivanCotter', 'Gallagher', 'ECG', 'AMGA'];
+      const source = knownSources.find(s => surveyTypeLower.startsWith(s.toLowerCase())) ?? (surveyType.trim().split(/\s+/)[0] || 'Unknown');
+      const dataCategory = surveyTypeLower.includes('call pay') ? 'CALL_PAY' as const
+        : surveyTypeLower.includes('moonlighting') ? 'MOONLIGHTING' as const
+        : 'COMPENSATION' as const;
+      
       const survey: Survey = {
         id: surveyId,
         name: surveyName,
@@ -1819,9 +1896,12 @@ export class FirestoreService {
           fileSize: file.size,
           providerType: normalizedProviderType, // Use normalized value
           encoding,
+          originalHeaders: originalHeaders.length > 0 ? originalHeaders : (rows.length > 0 ? Object.keys(rows[0]) : []),
         },
         providerType: normalizedProviderType as ProviderType, // Use normalized value
-      };
+        source,
+        dataCategory,
+      } as Survey;
 
       await this.checkStorageQuota(survey, rows);
       onProgress?.(45);
@@ -1925,24 +2005,24 @@ export class FirestoreService {
   }
 
   /**
-   * Parse CSV text into rows
+   * Parse CSV text into rows.
+   * Uses safe keys for blank headers so Firestore (no empty field names) accepts the data.
    */
   private parseCSV(text: string): ISurveyRow[] {
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length === 0) return [];
 
-    // Parse header
     const header = parseCSVLine(lines[0]);
     const rows: ISurveyRow[] = [];
+    const safeKey = (key: string, index: number) => (key != null && String(key).trim() !== '') ? key : `_empty_${index}`;
 
-    // Parse data rows
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]);
-      if (values.length !== header.length) continue; // Skip malformed rows
+      if (values.length !== header.length) continue;
 
       const row: any = {};
       header.forEach((key, index) => {
-        row[key] = values[index] || '';
+        row[safeKey(key, index)] = values[index] || '';
       });
       rows.push(row as ISurveyRow);
     }
@@ -2405,66 +2485,78 @@ export class FirestoreService {
     }
 
     console.log('🔍 FirestoreService.getUnmappedProviderTypes: Called with providerType:', providerType);
-    
+
     try {
       const surveys = await this.getAllSurveys();
       console.log('🔍 FirestoreService.getUnmappedProviderTypes: Total surveys found:', surveys.length);
-      
+
       if (surveys.length === 0) {
         return [];
       }
       
       const mappings = await this.getProviderTypeMappings(providerType);
       
-      const mappedNames = new Set<string>();
+      // Key by (providerType, surveySource) so the same label from different surveys
+      // stays unmapped until that specific source is in a mapping (allows mapping
+      // "Staff Physician" from SullivanCotter and Gallagher together).
+      const mappedNameSourcePairs = new Set<string>();
       mappings.forEach(mapping => {
-        mappedNames.add(mapping.standardizedName.toLowerCase());
         mapping.sourceProviderTypes?.forEach((source: any) => {
-          // Handle both old and new structure
-          const providerTypeName = source.providerType || source.name || '';
-          if (providerTypeName) {
-            mappedNames.add(providerTypeName.toLowerCase());
-          }
+          const providerTypeName = (source.providerType || source.name || '').toString().toLowerCase();
+          const src = (source.surveySource || '').toString();
+          if (providerTypeName) mappedNameSourcePairs.add(`${providerTypeName}|${src}`);
         });
       });
 
       const unmapped: any[] = [];
       const providerTypeCounts = new Map<string, { count: number; sources: Set<string> }>();
+      let includedSurveyCount = 0;
+      const debug = isUploadDebugEnabled();
 
       for (const survey of surveys) {
         // Filter surveys by provider type if specified
         // Use the same logic as getUnmappedSpecialties to properly exclude Call Pay surveys
         if (providerType !== undefined) {
           let surveyMatchesProviderType = false;
-          
+
           const isCallPay = this.isCallPaySurvey(survey);
           const isMoonlighting = this.isMoonlightingSurvey(survey);
           const effectiveProviderType = this.getEffectiveProviderType(survey);
-          
+
           if (providerType === 'CALL') {
             surveyMatchesProviderType = isCallPay;
           } else if (providerType === 'PHYSICIAN') {
-            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') && 
-                                         !isCallPay && 
+            // Same logic as getUnmappedSpecialties so Gallagher shows when Specialty Mapping shows it
+            const isPhysicianCompensation = (effectiveProviderType === 'PHYSICIAN') &&
+                                         !isCallPay &&
                                          !isMoonlighting &&
                                          this.isCompensationSurvey(survey);
             surveyMatchesProviderType = isPhysicianCompensation;
           } else if (providerType === 'APP') {
-            surveyMatchesProviderType = (effectiveProviderType === 'APP') && 
-                                     !isCallPay && 
+            surveyMatchesProviderType = (effectiveProviderType === 'APP') &&
+                                     !isCallPay &&
                                      !isMoonlighting;
           } else {
-            surveyMatchesProviderType = effectiveProviderType === providerType || 
+            surveyMatchesProviderType = effectiveProviderType === providerType ||
                                      survey.providerType === providerType;
           }
-          
+
           if (!surveyMatchesProviderType) {
+            if (debug) {
+              console.log('🔍 getUnmappedProviderTypes: SKIPPED', { id: survey.id, name: survey.name, reason: 'did not match provider type filter', effectiveProviderType, filter: providerType });
+            }
             continue;
           }
         }
-        
+
+        // Same call as getUnmappedSpecialties (no limit; Firestore default 10k)
         const { rows } = await this.getSurveyData(survey.id);
-        
+        if (debug) {
+          const sampleProviderType = rows.length > 0 ? this.getProviderTypeFromRow(rows[0] as Record<string, unknown>) : undefined;
+          console.log('🔍 getUnmappedProviderTypes: INCLUDED', { id: survey.id, name: survey.name, rowCount: rows.length, sampleProviderType });
+        }
+        includedSurveyCount++;
+
         // Get survey source with proper fallbacks
         let surveySource: string;
         if ((survey as any).source && (survey as any).dataCategory) {
@@ -2478,16 +2570,18 @@ export class FirestoreService {
         } else {
           surveySource = survey.type || survey.name || 'Unknown';
         }
-        
+
         rows.forEach(row => {
-          // Look for provider type in different possible column names
-          const rowProviderType = row.providerType || row['Provider Type'] || row.provider_type || row['provider_type'];
-          if (rowProviderType && typeof rowProviderType === 'string' && !mappedNames.has(rowProviderType.toLowerCase())) {
+          const rowProviderType = this.getProviderTypeFromRow(row as Record<string, unknown>);
+          if (rowProviderType && typeof rowProviderType === 'string') {
             const key = rowProviderType.toLowerCase();
-            const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
-            current.count++;
-            current.sources.add(surveySource);
-            providerTypeCounts.set(key, current);
+            const pairKey = `${key}|${surveySource}`;
+            if (!mappedNameSourcePairs.has(pairKey)) {
+              const current = providerTypeCounts.get(key) || { count: 0, sources: new Set() };
+              current.count++;
+              current.sources.add(surveySource);
+              providerTypeCounts.set(key, current);
+            }
           }
         });
       }
@@ -2504,6 +2598,9 @@ export class FirestoreService {
         });
       });
 
+      if (debug) {
+        console.log('🔍 getUnmappedProviderTypes: Summary', { totalSurveys: surveys.length, surveysIncluded: includedSurveyCount, totalUnmappedEntries: unmapped.length });
+      }
       console.log('🔍 FirestoreService.getUnmappedProviderTypes: Processing complete:', {
         providerType,
         totalSurveys: surveys.length,
@@ -2954,6 +3051,38 @@ export class FirestoreService {
     
     // For COMPENSATION or legacy surveys, use providerType directly
     return survey.providerType || 'PHYSICIAN';
+  }
+
+  /**
+   * Get provider type value from a data row with robust column name detection.
+   * Tries known keys first, any key that normalizes to "providertype", then common
+   * survey aliases (Physician Type, Role, Position, etc.). Supports both flat rows
+   * and nested row.data for consistency with getUnmappedRegions.
+   */
+  private getProviderTypeFromRow(row: Record<string, unknown>): string | undefined {
+    const data: Record<string, unknown> =
+      row && typeof row === 'object' && 'data' in row && row.data && typeof row.data === 'object'
+        ? (row.data as Record<string, unknown>)
+        : (row as Record<string, unknown>);
+
+    const direct = data.providerType ?? data['Provider Type'] ?? data.provider_type ?? data['provider_type'];
+    if (direct != null && typeof direct === 'string') return direct;
+
+    const normalized = (key: string) => key.replace(/[\s_-]+/g, '').toLowerCase();
+    const target = 'providertype';
+    for (const key of Object.keys(data)) {
+      if (normalized(key) === target) {
+        const v = data[key];
+        if (typeof v === 'string') return v;
+      }
+    }
+
+    const aliasKeys = ['Physician Type', 'Role', 'Type', 'Provider Category', 'Position', 'Title'] as const;
+    for (const key of aliasKeys) {
+      const v = data[key];
+      if (v != null && typeof v === 'string' && v.trim()) return v;
+    }
+    return undefined;
   }
 
   async getUnmappedSpecialties(providerType?: string): Promise<IUnmappedSpecialty[]> {

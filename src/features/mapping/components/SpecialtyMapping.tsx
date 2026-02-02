@@ -88,15 +88,50 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
     }
   }, [loading]);
   
+  // Single loading experience: render page shell + one content-area spinner (avoids double spinner with Suspense)
   if (loading && !emergencyTimeout) {
     return (
-      <EnterpriseLoadingSpinner
-        message="Loading specialty mappings..."
-        recordCount="auto"
-        data={mappings}
-        variant="overlay"
-        loading={loading}
-      />
+      <div className="w-full min-h-screen">
+        <div className="w-full flex flex-col gap-4">
+          <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <BaseMappingHeader
+              entityName="Specialty"
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              unmappedCount={0}
+              mappedCount={0}
+              learnedCount={0}
+              selectedCount={0}
+              isBulkSelected={false}
+              allUnmappedCount={0}
+              onShowHelp={handleShowHelp}
+              onToggleSelectAll={handleToggleSelectAll}
+              onCreateMapping={createMapping}
+              onCreateIndividualMappings={createIndividualMappings}
+              onCreateGroupedMapping={createGroupedMapping}
+              onApplyAllLearnedMappings={applyAllLearnedMappings}
+              onClearAllLearnedMappings={handleClearAllLearnedMappings}
+            >
+              <button
+                disabled
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl text-gray-400 cursor-not-allowed border border-gray-200"
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                Clear all mappings (0)
+              </button>
+            </BaseMappingHeader>
+            <div className="flex flex-col items-center justify-center py-16">
+              <EnterpriseLoadingSpinner
+                message="Loading specialty mappings..."
+                recordCount="auto"
+                data={mappings}
+                variant="inline"
+                loading={loading}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
   

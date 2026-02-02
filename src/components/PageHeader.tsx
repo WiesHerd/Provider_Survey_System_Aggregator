@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CloudArrowUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { downloadSampleFile } from '../utils/downloadUtils';
 import { useYear } from '../contexts/YearContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface PageHeaderProps {
   title: string;
@@ -13,7 +14,19 @@ interface PageHeaderProps {
 
 const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloadButton, titleClassName, className }) => {
   const [isDownloading, setIsDownloading] = useState(false);
-  const { currentYear, setCurrentYear, availableYears } = useYear();
+  const { currentYear, setCurrentYear, availableYears, loading, error } = useYear();
+  const toast = useToast();
+  const lastErrorToastRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!error) {
+      lastErrorToastRef.current = null;
+      return;
+    }
+    if (lastErrorToastRef.current === error) return;
+    lastErrorToastRef.current = error;
+    toast.error('Year selection', error);
+  }, [error, toast]);
 
   const handleDownload = async () => {
     setIsDownloading(true);
@@ -39,28 +52,29 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
         
         {/* Year Dropdown */}
         <div className="relative group">
-          {/* Modern dropdown button with clear visual cues */}
-          <div className="
+          {/* Visible button - pointer-events-none so clicks pass through to select */}
+          <div
+            className={`
             inline-flex items-center px-3 h-8 rounded-xl text-sm font-medium
             transition-all duration-200 shadow-sm border
-            hover:shadow-md cursor-pointer
-            bg-white text-gray-700 border-gray-200 
-            hover:border-gray-300 hover:bg-gray-50
+            bg-white text-gray-700 border-gray-200
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-          ">
+            pointer-events-none
+            ${loading ? 'opacity-70 cursor-wait' : 'hover:shadow-md cursor-pointer hover:border-gray-300 hover:bg-gray-50'}
+          `}
+            aria-hidden
+          >
             <span className="font-medium">
-              {currentYear}
+              {loading ? '...' : currentYear}
             </span>
-            
-            {/* Clear dropdown indicator - Silicon Valley style */}
-            <ChevronDownIcon className="ml-2 w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors" />
+            <ChevronDownIcon className="ml-2 w-4 h-4 text-gray-500 transition-colors" />
           </div>
-          
-          {/* Invisible select overlay for functionality */}
+          {/* Select on top so it receives clicks and opens reliably */}
           <select
             value={currentYear}
             onChange={(e) => setCurrentYear(e.target.value)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            disabled={loading}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
             aria-label="Select year"
           >
             {availableYears.map((year) => (

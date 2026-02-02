@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy, useEffect, memo } from 'react';
+import React, { useState, Suspense, lazy, useEffect, memo, useMemo } from 'react';
 import { BrowserRouter as Router, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -14,7 +14,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { DatabaseProvider, useDatabase } from './contexts/DatabaseContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthGuard } from './components/auth/AuthGuard';
-import { queryClient } from './shared/services/queryClient';
+import { queryClient, cacheReadyPromise } from './shared/services/queryClient';
 import './utils/indexedDBInspector'; // Initialize IndexedDB inspector
 import { SuspenseSpinner } from './shared/components';
 import { SurveyMigrationService } from './services/SurveyMigrationService';
@@ -23,7 +23,22 @@ import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/ou
 import { DatabaseDiagnostics } from './components/DatabaseDiagnostics';
 import { validateAndLog } from './shared/utils/envValidation';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
-import { UploadQueueToast } from './components/upload/UploadQueueToast';
+import { UploadQueueToast, UploadProgressIndicator } from './components/upload/UploadQueueToast';
+
+/**
+ * Gates rendering of the router until the query cache has been restored from IndexedDB
+ * (or after timeout), so first navigation hits hydrated cache.
+ */
+const CacheGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    cacheReadyPromise.then(() => setReady(true));
+  }, []);
+  if (!ready) {
+    return <SuspenseSpinner message="Restoring cache..." />;
+  }
+  return <>{children}</>;
+};
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -86,6 +101,8 @@ const SurveyUpload = lazy(() =>
 const SurveyUploadBeta = lazy(() =>
   import('./features/upload').then((module) => ({ default: module.SurveyUpload }))
 );
+// Alias so any stray reference to SurveyUploadLegacy (e.g. from cache) resolves
+const SurveyUploadLegacy = SurveyUpload;
 
 // DevTools component - only loads in development
 // Using string-based import to avoid TypeScript compile-time resolution
@@ -527,7 +544,10 @@ const PageContent = () => {
     }
   };
 
-  const headerContent = getHeaderContent();
+  const headerContent = useMemo(
+    () => getHeaderContent(),
+    [location.pathname, location.search]
+  );
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -705,10 +725,13 @@ function App() {
                   <YearProvider>
                     <ProviderContextProvider>
                       <AuthGuard requireAuth={true}>
-                        <Router basename={basename}>
-                          <PageContent />
-                        </Router>
+                        <CacheGate>
+                          <Router basename={basename}>
+                            <PageContent />
+                          </Router>
+                        </CacheGate>
                         <UploadQueueToast />
+                        <UploadProgressIndicator />
                       </AuthGuard>
                     </ProviderContextProvider>
                   </YearProvider>

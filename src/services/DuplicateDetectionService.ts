@@ -85,29 +85,25 @@ export class DuplicateDetectionService {
   }
 
   /**
-   * Get all surveys with caching
+   * Get all surveys with optional caching
    * ENTERPRISE FIX: Use DataService to get surveys from the same storage backend as the rest of the app
-   * This ensures duplicate detection checks the same database where surveys are actually stored/deleted
-   * Previously queried IndexedDB directly, which caused issues when using Firebase (deleted surveys still appeared)
+   * When forceRefresh or fromServer is true, bypasses cache and (for Firebase) reads from server so
+   * duplicate check sees fresh state after a survey is deleted.
    */
-  private async getAllSurveys(): Promise<any[]> {
+  private async getAllSurveys(options?: { forceRefresh?: boolean; fromServer?: boolean }): Promise<any[]> {
     const now = Date.now();
-    
-    // Return cached surveys if still valid (but only if cache is very fresh - 30 seconds)
-    // This prevents stale cache issues after deletions
-    if (this.surveysCache && (now - this.cacheTimestamp) < 30000) { // 30 seconds - very short cache
+    const useCache = !options?.forceRefresh && !options?.fromServer && this.surveysCache && (now - this.cacheTimestamp) < 30000;
+
+    if (useCache && this.surveysCache) {
       logger.log('🔍 DuplicateDetectionService: Using cached surveys (cache age: ' + Math.round((now - this.cacheTimestamp) / 1000) + 's)');
       return this.surveysCache;
     }
 
     try {
-      // ENTERPRISE FIX: Use DataService to get surveys from the same storage backend
-      // This ensures we check Firebase if Firebase is being used, or IndexedDB if that's the backend
-      // This prevents the issue where a survey is deleted from Firebase but duplicate detection checks IndexedDB
       const { getDataService } = await import('./DataService');
       const dataService = getDataService();
       logger.log('🔍 DuplicateDetectionService: Fetching surveys from DataService (uses same storage backend as rest of app)');
-      const surveys = await dataService.getAllSurveys();
+      const surveys = await dataService.getAllSurveys({ fromServer: options?.fromServer });
       
       logger.log(`🔍 DuplicateDetectionService: Found ${surveys.length} surveys in database`);
       
@@ -389,6 +385,10 @@ export class DuplicateDetectionService {
     input: DuplicateCheckInput
   ): Promise<DuplicateCheckResult> {
     const startTime = Date.now();
+
+    // CRITICAL: Invalidate cache and fetch from server so we see fresh state after a delete
+    // Without this, re-uploading after deleting a survey can falsely show "duplicate detected"
+    this.invalidateCache();
     
     try {
       // Generate composite key
@@ -404,8 +404,8 @@ export class DuplicateDetectionService {
       });
       logger.log(`🔍 Generated composite key: "${compositeKey}"`);
       
-      // Get all surveys
-      const surveys = await this.getAllSurveys();
+      // Get all surveys - force fresh fetch and from server (bypass Firestore cache after delete)
+      const surveys = await this.getAllSurveys({ forceRefresh: true, fromServer: true });
       
       if (surveys.length === 0) {
         logger.log(`✅ No surveys in IndexedDB - no duplicates possible`);

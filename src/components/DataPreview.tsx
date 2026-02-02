@@ -10,6 +10,7 @@ import {
 import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
+import { normalizeText } from '../shared/utils/textEncoding';
 import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useColumnSizing } from '../shared/hooks/useColumnSizing';
@@ -69,6 +70,8 @@ interface DataPreviewProps {
   };
   onFilterChange: (filterName: string, value: string) => void;
   onGridReady?: (api: any) => void;
+  /** Called when grid is ready so parent can trigger column resize on demand (e.g. pill click) */
+  onResizeReady?: (requestResize: () => void) => void;
 }
 
 interface FileStats {
@@ -78,7 +81,7 @@ interface FileStats {
   totalDataPoints: number;
 }
 
-const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange, onGridReady }) => {
+const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters, onFilterChange, onGridReady, onResizeReady }) => {
   const dataService = getDataService();
   const isDatabaseReady = useDatabaseReady();
   const hasLoadedRef = useRef(false);
@@ -331,6 +334,31 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           }
         }
         
+        // ENTERPRISE FIX: If still not found, resolve by metadata (ID mismatch / stale list)
+        // e.g. list shows wrong id but survey exists in Firestore with same fileName/type/year
+        if (!survey && (file.fileName || file.surveyType || file.surveyYear)) {
+          try {
+            const allSurveys = await dataService.getAllSurveys();
+            const meta = (s: any) => s?.metadata || {};
+            const match = allSurveys.find((s: any) => {
+              const fileNameMatch = file.fileName && (meta(s).fileName === file.fileName || (s as any).fileName === file.fileName);
+              const yearMatch = !file.surveyYear || String(s.year || meta(s).year || '').trim() === String(file.surveyYear).trim();
+              const typeMatch = !file.surveyType || (s.name || s.type || meta(s).name || meta(s).type || '').toString().toLowerCase().includes(file.surveyType.toLowerCase());
+              return fileNameMatch || (yearMatch && typeMatch);
+            });
+            if (match) {
+              survey = match;
+              console.log('🔍 DataPreview: Resolved survey by metadata (ID mismatch fallback):', {
+                resolvedId: survey.id,
+                name: survey.name,
+                fileName: meta(survey).fileName
+              });
+            }
+          } catch (metaError) {
+            console.warn('DataPreview: Metadata fallback failed:', metaError);
+          }
+        }
+        
         // ENTERPRISE FIX: Check if cancelled again after async operation
         if (isCancelled) {
           setIsLoading(false);
@@ -362,6 +390,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           setIsRefreshing(false); // CRITICAL: Clear refreshing state
           return;
         }
+        
+        // Use resolved survey id for data fetch (correct when resolved by metadata fallback)
+        const effectiveSurveyId = survey.id || resolvedSurveyId;
         
         // ENTERPRISE FIX: Check if survey is still uploading (has metadata but no data yet)
         // Also check if rowCount is 0 but survey was just uploaded (might be timing issue)
@@ -405,7 +436,11 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         let fromCache = false;
         
         // Use cached data if it matches and is fresh (less than 5 minutes old)
-        if (cached && cached.surveyId === resolvedSurveyId && cached.filters === filtersKey) {
+        // CRITICAL: Do NOT use cache when cached data is empty but metadata says rows exist - otherwise retries never hit Firebase
+        const cacheHasRows = cached && cached.data && cached.data.length > 0;
+        const expectingRows = survey && (survey.rowCount ?? 0) > 0;
+        const cacheOkForExpectation = cacheHasRows || !expectingRows;
+        if (cached && cached.surveyId === effectiveSurveyId && cached.filters === filtersKey && cacheOkForExpectation) {
           const cacheAge = now - cached.timestamp;
           if (cacheAge < CACHE_TTL) {
             console.log(`✅ Using cached survey data (age: ${Math.round(cacheAge / 1000)}s) - skipping Firebase read`);
@@ -417,7 +452,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // Cache miss or stale - fetch from database
         if (!fromCache) {
           console.log('📥 Fetching survey data from database (cache miss or stale)', {
-            surveyId: resolvedSurveyId,
+            surveyId: effectiveSurveyId,
             originalFileId: file.id,
             filters: filters,
             storageMode: dataService.getMode()
@@ -425,14 +460,14 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           // ENTERPRISE FIX: Try multiple ID formats to ensure we find the data
           // The survey ID might be stored with or without user prefix
           let result = await dataService.getSurveyData(
-            resolvedSurveyId,
+            effectiveSurveyId,
             filters,
             { limit: 10000 } // Fetch all data (up to 10,000 rows)
           );
           
           // If no data found, try with original file ID (might be different format)
-          if (result.rows.length === 0 && file.id && file.id !== resolvedSurveyId) {
-            console.log('🔄 No data found with resolvedSurveyId, trying original file ID:', file.id);
+          if (result.rows.length === 0 && file.id && file.id !== effectiveSurveyId) {
+            console.log('🔄 No data found with effectiveSurveyId, trying original file ID:', file.id);
             const fallbackResult = await dataService.getSurveyData(
               file.id,
               filters,
@@ -448,20 +483,25 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           console.log('📥 Survey data fetch result:', {
             rowCount: surveyData.length,
             hasRows: surveyData.length > 0,
-            resolvedSurveyId,
+            effectiveSurveyId,
             originalFileId: file.id,
             firstRowSample: surveyData[0] || null,
             storageMode: dataService.getMode(),
             firstRowKeys: surveyData.length > 0 ? Object.keys(surveyData[0]) : []
           });
           
-          // Update cache
-          surveyDataCacheRef.current = {
-            surveyId: resolvedSurveyId,
-            filters: filtersKey,
-            data: surveyData,
-            timestamp: now
-          };
+          // Update cache only when we have data, or when survey has no expected rows (avoids caching "0 rows" and blocking retries)
+          const shouldCache = surveyData.length > 0 || !(survey && (survey.rowCount ?? 0) > 0);
+          if (shouldCache) {
+            surveyDataCacheRef.current = {
+              surveyId: effectiveSurveyId,
+              filters: filtersKey,
+              data: surveyData,
+              timestamp: now
+            };
+          } else {
+            surveyDataCacheRef.current = { surveyId: '', filters: '', data: [], timestamp: 0 };
+          }
         }
         
         // ENTERPRISE FIX: Check if cancelled after async data fetch
@@ -473,7 +513,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         
         console.log('✅ Survey data returned:', {
           rowCount: surveyData.length,
-          surveyId: resolvedSurveyId,
+          surveyId: effectiveSurveyId,
           originalFileId: file.id,
           fromCache,
           expectedRowCount: survey?.rowCount || 0,
@@ -489,14 +529,14 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // ENTERPRISE DIAGNOSTIC: If survey has rowCount but no data returned, log detailed diagnostic
         if (surveyData.length === 0 && survey && survey.rowCount > 0) {
           console.error('❌ CRITICAL DATA RETRIEVAL ISSUE:', {
-            surveyId: resolvedSurveyId,
+            surveyId: effectiveSurveyId,
             originalFileId: file.id,
             surveyRowCount: survey.rowCount,
             surveyName: survey.name,
             surveyProviderType: survey.providerType,
             storageMode: dataService.getMode(),
             filters: filters,
-            note: 'Survey metadata indicates data exists, but getSurveyData returned 0 rows. This could indicate: 1) Data not yet saved to database, 2) ID mismatch, 3) Data in different storage location'
+            action: 'Delete this survey (× on its tag) and re-upload the file. The row data was never written to Firebase.'
           });
         }
         
@@ -533,7 +573,10 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               setPreviewData([]);
               setPreviewHeaders([]);
               hasLoadedRef.current = true;
-              onError(`Survey metadata exists (${expectedRowCount} rows expected) but data rows are missing. The upload may have failed or data may be in a different storage location. Please try refreshing the page or re-uploading the file.`);
+              onError(
+                `This survey's row data was never saved (upload was likely interrupted or hit a limit). ` +
+                `To fix: 1) Click the "×" on this survey's tag above to remove it. 2) Re-upload your file.`
+              );
             }
           } else {
             // Survey has no expected rows - might be empty or still uploading
@@ -718,9 +761,9 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
               headers = storedHeaders;
             }
           } else {
-            // Fallback: Extract from data (may not preserve order)
+            // Fallback: Extract from data (may not preserve order). Strip empty keys (Firestore invalid).
             if (surveyData.length > 0) {
-              headers = Object.keys(surveyData[0]);
+              headers = Object.keys(surveyData[0]).filter(h => h !== '');
             }
             console.log('⚠️ Original headers not found in metadata, using Object.keys()');
           }
@@ -728,7 +771,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           // Fallback if survey metadata fetch fails
           console.warn('Could not fetch survey metadata, using Object.keys():', error);
           if (surveyData.length > 0) {
-            headers = Object.keys(surveyData[0]);
+            headers = Object.keys(surveyData[0]).filter(h => h !== '');
           }
         }
         
@@ -736,7 +779,7 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // If headers are still empty but we have data, use data keys as fallback
         if (headers.length === 0 && surveyData.length > 0) {
           console.warn('⚠️ Headers array is empty after all processing - using data keys as final fallback');
-          headers = Object.keys(surveyData[0]).filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+          headers = Object.keys(surveyData[0]).filter(h => h !== '' && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
           console.log('✅ Final fallback headers from data keys:', headers.slice(0, 10));
         }
         
@@ -758,12 +801,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         }
         
         // Hide db identifiers from preview (if not already filtered)
-        headers = headers.filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+        headers = headers.filter(h => h !== '' && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
         
         // ENTERPRISE FIX: Ensure headers array is not empty - fallback to data keys if needed
         if (headers.length === 0 && surveyData.length > 0) {
           console.warn('⚠️ Headers array is empty after processing - falling back to data keys');
-          headers = Object.keys(surveyData[0]).filter(h => h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
+          headers = Object.keys(surveyData[0]).filter(h => h !== '' && h.toLowerCase() !== 'id' && h.toLowerCase() !== 'surveyid');
           console.log('✅ Using fallback headers from data keys:', headers);
         }
         
@@ -785,26 +828,29 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
         // This handles cases where headers might be "Provider Type" but keys are "provider_type" or "providerType"
         const rows = surveyData.map(row => {
           return headers.map(header => {
+            let cellValue = '';
             // Try exact match first
             if (row[header as keyof typeof row] !== undefined) {
-              return String(row[header as keyof typeof row] || '');
+              cellValue = String(row[header as keyof typeof row] || '');
+            } else {
+              // Try case-insensitive match
+              const headerLower = header.toLowerCase().trim();
+              const matchingKey = Object.keys(row).find(k => k.toLowerCase().trim() === headerLower);
+              if (matchingKey) {
+                cellValue = String(row[matchingKey as keyof typeof row] || '');
+              } else {
+                // Try normalized match (handles spaces, underscores, hyphens)
+                const normalizedHeader = headerLower.replace(/[\s_\-]/g, '');
+                const normalizedMatch = Object.keys(row).find(k =>
+                  k.toLowerCase().trim().replace(/[\s_\-]/g, '') === normalizedHeader
+                );
+                if (normalizedMatch) {
+                  cellValue = String(row[normalizedMatch as keyof typeof row] || '');
+                }
+              }
             }
-            // Try case-insensitive match
-            const headerLower = header.toLowerCase().trim();
-            const matchingKey = Object.keys(row).find(k => k.toLowerCase().trim() === headerLower);
-            if (matchingKey) {
-              return String(row[matchingKey as keyof typeof row] || '');
-            }
-            // Try normalized match (handles spaces, underscores, hyphens)
-            const normalizedHeader = headerLower.replace(/[\s_\-]/g, '');
-            const normalizedMatch = Object.keys(row).find(k => 
-              k.toLowerCase().trim().replace(/[\s_\-]/g, '') === normalizedHeader
-            );
-            if (normalizedMatch) {
-              return String(row[normalizedMatch as keyof typeof row] || '');
-            }
-            // No match found - return empty string
-            return '';
+            // Normalize special characters so non-breaking space, en-dash, etc. don't display as boxes
+            return normalizeText(cellValue);
           });
         });
         
@@ -1029,11 +1075,13 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
     return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
-  // Enterprise-grade column sizing with ResizeObserver support
-  useColumnSizing({
+  // Enterprise-grade column sizing — runs on first data rendered and on resize; multiple delays catch late-painted content
+  const { performSizing } = useColumnSizing({
     gridApi,
     enabled: !!gridApi && filteredData.length > 0
   });
+  const performSizingRef = useRef(performSizing);
+  performSizingRef.current = performSizing;
 
   const createColumnDefs = () => {
     // Use the stored headers
@@ -1475,8 +1523,17 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
           </div>
         )}
         {previewHeaders.length === 0 || previewData.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-sm text-gray-500">
-            {isLoading ? 'Loading survey data...' : previewHeaders.length === 0 ? 'No columns found for this survey. Please check the browser console for details.' : 'No rows available for this survey.'}
+          <div className="h-full flex items-center justify-center text-sm text-gray-500 px-4">
+            {isLoading ? 'Loading survey data...' : previewHeaders.length === 0 ? 'No columns found for this survey. Please check the browser console for details.' : (
+              <span className="text-center">
+                No rows available for this survey.
+                {file?.id && (
+                  <span className="block mt-1 text-xs text-gray-400">
+                    Survey ID: <code className="bg-gray-100 px-1 rounded">{resolvedSurveyId || file.id}</code> — Check Firestore &quot;surveyData&quot; for this ID to confirm rows exist.
+                  </span>
+                )}
+              </span>
+            )}
           </div>
         ) : (
           <AgGridWrapper
@@ -1491,6 +1548,13 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
                   console.log('Grid API passed to parent component');
                 }
                 // Column sizing is handled by useColumnSizing hook
+              }}
+              onFirstDataRendered={() => {
+                // Size columns after AG Grid has painted rows — fixes specialty column staying narrow
+                requestAnimationFrame(() => {
+                  performSizingRef.current?.();
+                  onResizeReady?.(() => performSizingRef.current?.());
+                });
               }}
               rowData={filteredData.map((row) => {
                 const obj: Record<string, string> = {};

@@ -72,8 +72,13 @@ export {
   NORMALIZED_REQUIRED_COLUMNS,
   COLUMN_ALIASES,
   validateColumns,
+  checkIfMappingNeeded,
+  getExpectedColumns,
   type ColumnValidationResult
 } from './uploadCalculations';
 
 // Mapping
 export * from './mappingApplication';
+
+// Survey list filters (client-side DATA VIEW filtering)
+export { filterSurveysByProviderType } from './surveyListFilters';

@@ -91,25 +91,25 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     allowTemplates: true
   });
 
-  // Use the custom filters hook
+  // Use the custom filters hook (all multi-select arrays)
   const {
-    selectedSurvey,
-    selectedYear,
-    selectedRegion,
-    selectedProviderType,
-    specialtySearch,
+    selectedSurveys,
+    selectedYears,
+    selectedRegions,
+    selectedProviderTypes,
+    selectedSpecialties: selectedSpecialtyFilters,
     filterOptions,
     filteredSurveyData,
     handleSurveyChange,
     handleYearChange,
     handleRegionChange,
     handleProviderTypeChange,
-    handleSpecialtySearchChange,
-    setSelectedSurvey,
-    setSelectedYear,
-    setSelectedRegion,
-    setSelectedProviderType,
-    setSpecialtySearch,
+    handleSelectedSpecialtiesChange,
+    setSelectedSurveys,
+    setSelectedYears,
+    setSelectedRegions,
+    setSelectedProviderTypes,
+    setSelectedSpecialties,
     resetFilters
   } = useBlendingFilters(allData);
 
@@ -197,21 +197,22 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     setBlendName(template.name);
     setBlendDescription(template.description || '');
     
-    // Restore filter state if available
+    // Restore filter state if available (support old single-value and new array format)
     if (template.filterState) {
-      setSelectedSurvey(template.filterState.selectedSurvey || '');
-      setSelectedYear(template.filterState.selectedYear || '');
-      setSelectedRegion(template.filterState.selectedRegion || '');
-      setSelectedProviderType(template.filterState.selectedProviderType || '');
-      setSpecialtySearch(template.filterState.specialtySearch || '');
-      setBlendingMethod(template.filterState.blendingMethod || 'weighted');
-      setCustomWeights(template.filterState.customWeights || {});
+      const fs = template.filterState;
+      setSelectedSurveys(Array.isArray(fs.selectedSurveys) ? fs.selectedSurveys : fs.selectedSurvey ? [fs.selectedSurvey] : []);
+      setSelectedYears(Array.isArray(fs.selectedYears) ? fs.selectedYears : fs.selectedYear ? [fs.selectedYear] : []);
+      setSelectedRegions(Array.isArray(fs.selectedRegions) ? fs.selectedRegions : fs.selectedRegion ? [fs.selectedRegion] : []);
+      setSelectedProviderTypes(Array.isArray(fs.selectedProviderTypes) ? fs.selectedProviderTypes : fs.selectedProviderType ? [fs.selectedProviderType] : []);
+      setSelectedSpecialties(Array.isArray(fs.selectedSpecialties) ? fs.selectedSpecialties : []);
+      setBlendingMethod(fs.blendingMethod || 'weighted');
+      setCustomWeights(fs.customWeights || {});
     }
     
     // Store template to be processed when filtered data updates
     setPendingTemplate(template);
     setPendingTemplateSelections(template.specialties ? template.specialties.map(() => -1) : []);
-  }, [templates, setSelectedSurvey, setSelectedYear, setSelectedRegion, setSelectedProviderType, setSpecialtySearch, toast]);
+  }, [templates, setSelectedSurveys, setSelectedYears, setSelectedRegions, setSelectedProviderTypes, setSelectedSpecialties, toast]);
 
   // Calculate blended metrics for selected specialties
   const blendedMetrics = useMemo(() => {
@@ -275,13 +276,13 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
         isPublic: false,
         tags: [],
         filterState: {
-          selectedSurvey: selectedSurvey,
-          selectedYear: selectedYear,
-          selectedRegion: selectedRegion,
-          selectedProviderType: selectedProviderType,
-          specialtySearch: specialtySearch,
-          blendingMethod: blendingMethod,
-          customWeights: customWeights
+          selectedSurveys,
+          selectedYears,
+          selectedRegions,
+          selectedProviderTypes,
+          selectedSpecialties: selectedSpecialtyFilters,
+          blendingMethod,
+          customWeights
         }
       };
       
@@ -422,7 +423,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   const getCurrentWorkflowStep = (): WorkflowStep => {
     if (selectedDataRows.length > 0) return 'review';
     if (filteredSurveyData.length > 0) return 'select';
-    if (selectedSurvey || selectedYear || selectedRegion || selectedProviderType) return 'filter';
+    if (selectedSurveys.length > 0 || selectedYears.length > 0 || selectedRegions.length > 0 || selectedProviderTypes.length > 0) return 'filter';
     return 'method';
   };
 
@@ -576,16 +577,16 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
             <div className="px-6 py-6">
               {/* Advanced Filters */}
               <SurveyDataFilters
-                selectedSurvey={selectedSurvey}
-                selectedYear={selectedYear}
-                selectedRegion={selectedRegion}
-                selectedProviderType={selectedProviderType}
-                specialtySearch={specialtySearch}
+                selectedSurveys={selectedSurveys}
+                selectedYears={selectedYears}
+                selectedRegions={selectedRegions}
+                selectedProviderTypes={selectedProviderTypes}
+                selectedSpecialties={selectedSpecialtyFilters}
                 onSurveyChange={handleSurveyChange}
                 onYearChange={handleYearChange}
                 onRegionChange={handleRegionChange}
                 onProviderTypeChange={handleProviderTypeChange}
-                onSpecialtySearchChange={handleSpecialtySearchChange}
+                onSelectedSpecialtiesChange={handleSelectedSpecialtiesChange}
                 onClearFilters={resetFilters}
                 filterOptions={filterOptions}
               />

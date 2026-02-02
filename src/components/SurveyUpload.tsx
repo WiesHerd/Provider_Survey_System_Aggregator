@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useLocation } from 'react-router-dom';
-import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress, Button } from '@mui/material';
+import { CloudArrowUpIcon, XMarkIcon, ChevronDownIcon, ChevronRightIcon, ArrowUpTrayIcon, TrashIcon, ArrowDownTrayIcon, ExclamationTriangleIcon, ArrowPathIcon, TableCellsIcon } from '@heroicons/react/24/outline';
+import { FormControl, Select, MenuItem, Autocomplete, TextField, Box, Typography, LinearProgress, Button, Tooltip } from '@mui/material';
 import DataPreview from './DataPreview';
 import { getDataService } from '../services/DataService';
 import { ISurveyRow } from '../types/survey';
@@ -12,6 +12,7 @@ import { useYear } from '../contexts/YearContext';
 import { useProviderContext } from '../contexts/ProviderContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSurveyListQuery } from '../features/upload/hooks/useSurveyListQuery';
+import { filterSurveysByProviderType } from '../features/upload/utils/surveyListFilters';
 import { providerTypeDetectionService } from '../services/ProviderTypeDetectionService';
 import { getPerformanceOptimizedDataService } from '../services/PerformanceOptimizedDataService';
 import { validateColumns } from '../features/upload/utils/uploadCalculations';
@@ -43,6 +44,8 @@ import { getUploadQueueService } from '../services/UploadQueueService';
 import { queryClient } from '../shared/services/queryClient';
 import { getFileValidationService, FileValidationResult } from '../services/FileValidationService';
 import { UploadErrorDisplay } from './upload/UploadErrorDisplay';
+import { markJobSuccessToastShown } from './upload/UploadQueueToast';
+import { useToast } from '../contexts/ToastContext';
 
 
 class UploadVerificationError extends Error {
@@ -110,12 +113,13 @@ const getShortenedSurveyType = (surveyType: string, providerType: ProviderType, 
       shortenedType = `${surveyType} Call Pay`;
     }
   } else if (providerType === 'PHYSICIAN') {
-    shortenedType = surveyType.replace('Physician', '').replace('Call Pay', 'Physician').trim();
-    if (!shortenedType.toLowerCase().includes('physician')) {
-      shortenedType = shortenedType ? `${shortenedType} Physician` : 'Physician';
+    // Match APP pill standard: "Source - Phys" (hyphenated, abbreviated)
+    shortenedType = surveyType.replace(/\s*Physician\s*/gi, ' - Phys ').replace(/\s+/g, ' ').trim();
+    if (!shortenedType.toLowerCase().includes('phys') && !shortenedType.toLowerCase().includes('physician')) {
+      shortenedType = shortenedType ? `${shortenedType} - Phys` : 'Phys';
     }
   } else if (providerType === 'APP') {
-    shortenedType = surveyType.replace('APP', ' - APP');
+    shortenedType = surveyType.replace(/\s*APP\s*/gi, ' - APP ').replace(/\s+/g, ' ').trim();
   }
   
   return shortenedType;
@@ -268,7 +272,8 @@ interface UploadedSurvey extends UploadedSurveyMetadata {
 function SurveyUpload(): JSX.Element {
 
   const dataService = getDataService();
-  const { currentYear, setCurrentYear } = useYear();
+  const toast = useToast();
+  const { currentYear, setCurrentYear, refreshYears } = useYear();
   const location = useLocation();
   const hasLoadedOnThisMount = useRef(false);
 
@@ -302,7 +307,8 @@ function SurveyUpload(): JSX.Element {
   const [error, setError] = useState<string>('');
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
   const [gridApi, setGridApi] = useState<any>(null);
-  
+  const requestResizeRef = useRef<(() => void) | null>(null);
+
   // Reset grid API when survey changes to ensure fresh connection
   useEffect(() => {
     setGridApi(null);
@@ -318,9 +324,11 @@ function SurveyUpload(): JSX.Element {
   const [showClearAllConfirmation, setShowClearAllConfirmation] = useState(false);
   const [showForceClose, setShowForceClose] = useState(false);
   const [surveyToDelete, setSurveyToDelete] = useState<UploadedSurvey | null>(null);
+  const [isDeletingSingleSurvey, setIsDeletingSingleSurvey] = useState(false);
   
   // Duplicate detection states
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [isResolvingDuplicate, setIsResolvingDuplicate] = useState(false);
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<any>(null);
   const [pendingUploadData, setPendingUploadData] = useState<{
     parsedRows: any[];
@@ -409,10 +417,7 @@ function SurveyUpload(): JSX.Element {
     }));
   };
 
-  // ENTERPRISE FIX: Use React Query for intelligent caching
-  // This provides instant navigation (cached data) and background refresh, just like Google apps
-  // No forced reload on navigation - React Query handles caching intelligently
-  // CRITICAL: Filter surveys by selected DATA VIEW (provider type) to segregate Physician and APP surveys
+  // ENTERPRISE FIX: Single cache entry - fetch all surveys once, filter by DATA VIEW in UI (avoids Firestore read per view)
   const { 
     data: rawSurveys, 
     loading: queryLoading, 
@@ -420,17 +425,23 @@ function SurveyUpload(): JSX.Element {
     refetch: refetchSurveys 
   } = useSurveyListQuery(
     undefined, // No year filter - show all surveys on upload screen
-    selectedProviderType === 'BOTH' ? undefined : selectedProviderType, // Filter by DATA VIEW selection (show all if BOTH selected)
+    undefined, // No provider filter here - we filter by selectedProviderType in the component
     true // Always enabled - React Query caching prevents excessive reads
   );
+  
+  // When DATA VIEW changes, clear selection so we don't show a survey that's not in the current view
+  const prevProviderTypeRef = useRef(selectedProviderType);
+  useEffect(() => {
+    if (prevProviderTypeRef.current !== selectedProviderType) {
+      prevProviderTypeRef.current = selectedProviderType;
+      if (selectedSurvey) setSelectedSurvey('');
+    }
+  }, [selectedProviderType, selectedSurvey]);
   
   // DIAGNOSTIC: Log what surveys are being returned after filtering
   // ENTERPRISE FIX: Removed excessive logging and infinite loops
   // Only log in debug mode to prevent thousands of console messages
   const debugMode = typeof window !== 'undefined' && window.localStorage.getItem('bp_upload_debug') === 'true';
-  
-  // ENTERPRISE FIX: Prevent infinite loop - use ref to track if we've already checked
-  const hasCheckedSurveysRef = useRef(false);
   
   useEffect(() => {
     // Only log in debug mode - prevent console spam
@@ -443,26 +454,7 @@ function SurveyUpload(): JSX.Element {
     }
   }, [rawSurveys, queryLoading, debugMode]);
 
-  // ENTERPRISE FIX: Prevent infinite refetch loop
-  // Only refetch once on initial mount if we truly have no surveys
-  useEffect(() => {
-    if (!hasCheckedSurveysRef.current && !queryLoading) {
-      hasCheckedSurveysRef.current = true;
-      // Only refetch if we have no surveys AND haven't checked yet
-      if (!rawSurveys || rawSurveys.length === 0) {
-        // Single refetch attempt - don't loop
-        const timeoutId = setTimeout(() => {
-          queryClient.removeQueries({ queryKey: ['surveys', 'list'] });
-          refetchSurveys().catch(() => {
-            // Silently fail - don't spam console
-          });
-        }, 1000);
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [queryLoading]); // Only depend on queryLoading to prevent loops
-
-  // Process React Query data into component format
+  // Process React Query data into component format (filter by DATA VIEW client-side)
   // ENTERPRISE FIX: Removed excessive logging - only log in debug mode
   useEffect(() => {
     // Only log in debug mode to prevent console spam
@@ -478,9 +470,10 @@ function SurveyUpload(): JSX.Element {
       return;
     }
 
-    // ENTERPRISE: Filter out deleted surveys FIRST to prevent them from reappearing
-    // This ensures deleted surveys never show up in the UI, even after refetch
-    const filteredSurveys = rawSurveys.filter((survey: any) => 
+    // Filter by DATA VIEW (BOTH / Physician / APP) client-side - single Firestore cache for all views
+    const byProviderType = filterSurveysByProviderType(rawSurveys, selectedProviderType);
+    // Filter out deleted surveys so they never reappear in the UI
+    const filteredSurveys = byProviderType.filter((survey: any) => 
       !deletedSurveyIdsRef.current.has(survey.id)
     );
     
@@ -581,7 +574,7 @@ function SurveyUpload(): JSX.Element {
       // No surveys available, clear selection
       setSelectedSurvey('');
     }
-  }, [rawSurveys, currentYear, selectedSurvey]);
+  }, [rawSurveys, selectedProviderType, currentYear, selectedSurvey]);
 
   // Update loading state from React Query
   useEffect(() => {
@@ -900,10 +893,8 @@ function SurveyUpload(): JSX.Element {
 
   const removeUploadedSurvey = async (surveyId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    
-    // ENTERPRISE FIX: Prevent multiple clicks during deletion
-    if (isDeleting) {
-      console.log('⚠️ Delete already in progress, ignoring click');
+
+    if (isDeleting || isDeletingSingleSurvey) {
       return;
     }
     
@@ -920,150 +911,79 @@ function SurveyUpload(): JSX.Element {
   const deletedSurveyIdsRef = useRef<Set<string>>(new Set());
   
   const confirmDeleteSurvey = async () => {
-    if (!surveyToDelete || isDeleting) return; // Prevent multiple clicks
-    
-    // ENTERPRISE: Close confirmation modal immediately and update UI optimistically
-    setShowDeleteConfirmation(false);
+    if (!surveyToDelete || isDeletingSingleSurvey) return;
+
     const surveyIdToDelete = surveyToDelete.id;
     const surveyName = surveyToDelete.fileName || 'survey';
-    setSurveyToDelete(null);
-    
-    // ENTERPRISE: Mark survey as deleted IMMEDIATELY to prevent it from reappearing
-    deletedSurveyIdsRef.current.add(surveyIdToDelete);
-    
-    // ENTERPRISE: Invalidate React Query cache IMMEDIATELY before optimistic update
-    // This prevents refetch from bringing back the deleted survey
-    const { queryClient } = require('../shared/services/queryClient');
-    queryClient.setQueryData(['surveys', 'list', undefined, undefined], (oldData: any) => {
-      if (!oldData || !Array.isArray(oldData)) return oldData;
-      // Filter out deleted survey from cached data
-      return oldData.filter((s: any) => s.id !== surveyIdToDelete);
-    });
-    
-    // ENTERPRISE: Update UI immediately (optimistic update)
-    // This makes the deletion feel instant to the user
-    if (selectedSurvey === surveyIdToDelete) {
-      setSelectedSurvey(null);
-    }
-    setUploadedSurveys(prev => prev.filter(s => s.id !== surveyIdToDelete));
-    
-    // ENTERPRISE: Notify other components immediately (non-blocking)
-    const { notifySurveyDeletion } = require('../shared/utils/deleteHelpers');
-    notifySurveyDeletion(surveyIdToDelete);
-    
-    // ENTERPRISE: Invalidate all caches IMMEDIATELY to prevent stale data
-    const { invalidateAllCachesAfterDelete } = require('../shared/utils/deleteHelpers');
-    invalidateAllCachesAfterDelete(surveyIdToDelete).catch((err: Error) => {
-      console.warn('Cache invalidation failed (non-critical):', err);
-    });
-    
-    // Clear performance cache immediately
-    const { getPerformanceOptimizedDataService } = require('../services/PerformanceOptimizedDataService');
-    const performanceService = getPerformanceOptimizedDataService();
-    performanceService.clearCache('all_surveys');
-    
-    console.log(`🗑️ Starting background deletion for survey: ${surveyIdToDelete}`);
-    
-    // ENTERPRISE: Run deletion in background (non-blocking)
-    // No blocking modal - user can continue working
-    dataService.deleteSurveyEverywhere(surveyIdToDelete)
-      .then(async (deleteResult) => {
-        if (!deleteResult.success) {
-          console.error('❌ Background deletion failed:', deleteResult.errors);
-          // Show error toast if deletion fails
-          handleError(`Failed to delete ${surveyName}. Please try again.`);
-          // Remove from deleted set if deletion failed (allow it to reappear)
-          deletedSurveyIdsRef.current.delete(surveyIdToDelete);
-          return;
-        }
-        
-        console.log(`✅ Background deletion completed: ${deleteResult.counts.indexedDbDataRows} rows deleted`);
-        
-        duplicateDetectionService.clearCache();
-        
-        // ENTERPRISE-GRADE: Comprehensive refresh strategy (Google/Amazon/Apple approach)
-        // After deletion, invalidate ALL caches and refetch everything to ensure UI consistency
-        // This is more reliable than trying to update individual pieces
-        console.log('🔄 Enterprise-grade refresh: Invalidating all caches and refetching data...');
-        
-        // Step 1: Clear ALL performance caches
-        try {
-          const { getPerformanceOptimizedDataService } = require('../services/PerformanceOptimizedDataService');
-          const performanceService = getPerformanceOptimizedDataService();
-          performanceService.clearCache('all_surveys');
-          console.log('✅ Cleared all performance caches');
-        } catch (error) {
-          console.warn('⚠️ Failed to clear performance cache:', error);
-        }
-        
-        // Step 2: Clear provider type detection cache
-        try {
-          const { providerTypeDetectionService } = require('../services/ProviderTypeDetectionService');
-          providerTypeDetectionService.clearCache();
-          console.log('✅ Cleared provider type detection cache');
-        } catch (error) {
-          console.warn('⚠️ Failed to clear provider type detection cache:', error);
-        }
-        
-        // Step 3: Invalidate ALL React Query caches (comprehensive invalidation - enterprise-grade)
-        // This is the "nuclear option" - clear everything and refetch, ensuring 100% consistency
-        // Similar to what Google/Amazon/Apple do: when in doubt, refresh everything
-        const { queryClient } = require('../shared/services/queryClient');
-        queryClient.removeQueries(); // Remove ALL queries - most aggressive approach
-        console.log('✅ Cleared all React Query caches (enterprise-grade comprehensive refresh)');
-        
-        // Step 4: Wait for database to fully commit deletion, then perform comprehensive refetch
-        // ENTERPRISE-GRADE: This ensures all data is synchronized, similar to a page refresh
-        // but without the jarring UX of actually reloading the page
-        setTimeout(async () => {
-          try {
-            console.log('🔄 Enterprise-grade comprehensive refresh starting...');
-            
-            // 4a: Refetch survey list (triggers all dependent queries to refetch)
-            await refetchSurveys();
-            console.log('✅ Survey list refetched');
-            
-            // 4b: Refresh provider type detection (ensures Data View dropdown is accurate)
-            const { providerTypeDetectionService } = require('../services/ProviderTypeDetectionService');
-            const result = await providerTypeDetectionService.detectAvailableProviderTypes();
-            console.log('✅ Provider type detection refreshed:', {
-              availableTypes: result.availableTypes.map((t: any) => t.type),
-              hasAnyData: result.hasAnyData
-            });
-            
-            // 4c: Dispatch events to trigger all component refreshes
-            // This ensures ProviderTypeSelector, analytics, and other components update
-            window.dispatchEvent(new CustomEvent('provider-types-refreshed', { 
-              detail: { availableTypes: result.availableTypes.map((t: any) => t.type) }
-            }));
-            window.dispatchEvent(new CustomEvent('survey-deleted', { 
-              detail: { surveyId: surveyIdToDelete, refreshComplete: true }
-            }));
-            
-            // 4d: Force invalidate all survey-related queries one more time to ensure consistency
-            queryClient.invalidateQueries({ queryKey: ['surveys'] });
-            queryClient.invalidateQueries({ queryKey: ['surveyData'] });
-            
-            console.log('✅ Enterprise-grade comprehensive refresh complete - all data synchronized');
-            console.log('📊 Final state:', {
-              availableProviderTypes: result.availableTypes.map((t: any) => t.type),
-              hasAnyData: result.hasAnyData,
-              note: 'Data View dropdown should now reflect accurate provider types'
-            });
-          } catch (err) {
-            console.error('❌ Error during enterprise refresh:', err);
-            // Even if refresh fails, the optimistic UI update already removed the survey
-            // User can manually refresh if needed, but UI should be mostly correct
-          }
-        }, 1000); // 1 second delay to ensure database deletion is fully committed (Firebase eventual consistency)
-      })
-      .catch((error) => {
-        console.error('❌ Error in background deletion:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        handleError(`Error removing ${surveyName}: ${errorMessage}`);
-        // Remove from deleted set if deletion failed (allow it to reappear)
-        deletedSurveyIdsRef.current.delete(surveyIdToDelete);
+
+    // Apple-style: show "Deleting..." in modal until delete completes
+    setIsDeletingSingleSurvey(true);
+
+    try {
+      console.log(`🗑️ Deleting survey: ${surveyIdToDelete}`);
+      const deleteResult = await dataService.deleteSurveyEverywhere(surveyIdToDelete);
+
+      if (!deleteResult.success) {
+        handleError(`Failed to delete ${surveyName}. Please try again.`);
+        return;
+      }
+
+      console.log(`✅ Deletion completed: ${deleteResult.counts?.indexedDbDataRows ?? 0} rows deleted`);
+
+      // Close modal and update UI only after delete succeeds
+      setShowDeleteConfirmation(false);
+      setSurveyToDelete(null);
+      setIsDeletingSingleSurvey(false);
+
+      deletedSurveyIdsRef.current.add(surveyIdToDelete);
+
+      const { queryClient } = require('../shared/services/queryClient');
+      queryClient.setQueryData(['surveys', 'list', undefined, undefined], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData)) return oldData;
+        return oldData.filter((s: any) => s.id !== surveyIdToDelete);
       });
+
+      if (selectedSurvey === surveyIdToDelete) {
+        setSelectedSurvey(null);
+      }
+      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyIdToDelete));
+
+      const { notifySurveyDeletion } = require('../shared/utils/deleteHelpers');
+      notifySurveyDeletion(surveyIdToDelete);
+
+      const { invalidateAllCachesAfterDelete } = require('../shared/utils/deleteHelpers');
+      invalidateAllCachesAfterDelete(surveyIdToDelete).catch((err: Error) => {
+        console.warn('Cache invalidation failed (non-critical):', err);
+      });
+
+      refreshYears().catch(() => { /* non-blocking */ });
+
+      const { getPerformanceOptimizedDataService } = require('../services/PerformanceOptimizedDataService');
+      getPerformanceOptimizedDataService().clearCache('all_surveys');
+
+      duplicateDetectionService.clearCache();
+
+      // Refetch and refresh in background so list/empty state stays correct
+      const { providerTypeDetectionService } = require('../services/ProviderTypeDetectionService');
+      providerTypeDetectionService.clearCache();
+      queryClient.invalidateQueries({ queryKey: ['surveys'] });
+      queryClient.invalidateQueries({ queryKey: ['surveyData'] });
+      refetchSurveys().then(async () => {
+        const result = await providerTypeDetectionService.detectAvailableProviderTypes();
+        window.dispatchEvent(new CustomEvent('provider-types-refreshed', {
+          detail: { availableTypes: result.availableTypes.map((t: any) => t.type) }
+        }));
+        window.dispatchEvent(new CustomEvent('survey-deleted', {
+          detail: { surveyId: surveyIdToDelete, refreshComplete: true }
+        }));
+      }).catch((err) => console.warn('Post-delete refetch failed:', err));
+    } catch (error) {
+      console.error('❌ Error deleting survey:', error);
+      handleError(`Error removing ${surveyName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsDeletingSingleSurvey(false);
+      setShowDeleteConfirmation(false);
+      setSurveyToDelete(null);
+    }
   };
 
   // Get expected columns for mapping dialog
@@ -1204,9 +1124,15 @@ function SurveyUpload(): JSX.Element {
     };
 
     try {
-      // Read the CSV file again
-      const text = await file.text();
-      const rows = text.split('\n').filter(row => row.trim());
+      // Read with encoding detection and normalization (same path as FirestoreService)
+      const { text, issues, normalized } = await readCSVFile(file);
+      if (issues.length > 0) {
+        console.warn('Encoding issues detected during column-mapping upload:', issues);
+      }
+      if (normalized) {
+        console.log('Character normalization applied to uploaded file');
+      }
+      const rows = text.split(/\r?\n/).filter(row => row.trim());
       const originalHeaders = parseCSVLine(rows[0]);
       const dataRows = rows.slice(1).filter(row => row.trim());
       
@@ -1929,21 +1855,20 @@ function SurveyUpload(): JSX.Element {
               
               console.log('✅ Survey added to UI after upload completion - should be visible immediately');
               
-              // ENTERPRISE FIX: Force immediate refresh of survey list to show new upload
-              // This ensures the UI updates immediately without requiring manual refresh
-              console.log('🔄 Forcing immediate survey list refresh after upload completion...');
-              
-              // Step 1: Update selected survey to use real ID IMMEDIATELY (before any async operations)
-              // This ensures the UI switches to the new survey right away
+              // Step 1: Update selected survey to use real ID so the new pill is selected
               const realSurveyId = uploadedSurvey.id;
-              console.log(`✅ Survey updated in UI with real ID ${realSurveyId} - selecting immediately`);
               setSelectedSurvey(realSurveyId);
               
-              // Step 2: Clear ALL survey-related caches to force fresh fetch
-              queryClient.removeQueries({ queryKey: ['surveys'] }); // Remove ALL survey queries
-              queryClient.removeQueries({ queryKey: ['surveys', 'list'] }); // Remove all list queries
+              // Step 2: Show toast only after pills are updated (confirmed upload, UI refreshed first)
+              toast.success(
+                'Upload Complete',
+                `${uploadedSurvey.name} uploaded successfully (${(uploadedSurvey.rowCount ?? 0).toLocaleString()} rows)`,
+                5000
+              );
+              markJobSuccessToastShown(job.id); // Prevent UploadQueueToast from showing duplicate when user stayed on page
               
-              // Step 3: Invalidate all survey queries to trigger refetch
+              // Step 3: Invalidate survey queries (do NOT remove - that would wipe optimistic update)
+              // Next natural refetch (e.g. mount, focus) will get authoritative list
               queryClient.invalidateQueries({ 
                 queryKey: ['surveys'],
                 exact: false
@@ -1966,37 +1891,33 @@ function SurveyUpload(): JSX.Element {
                 console.warn('⚠️ Failed to invalidate analytics cache (non-critical):', cacheError);
               }
               
-              // Step 4: Force immediate refetch (don't wait for Firebase eventual consistency)
-              // The optimistic update above ensures UI shows the survey immediately
-              // This refetch ensures the data is fresh and consistent
-              refetchSurveys().then((refetchResult) => {
-                console.log('✅ Immediate refetch completed after upload:', {
-                  surveyCount: refetchResult.data?.length || 0,
-                  includesNewSurvey: refetchResult.data?.some((s: any) => s.id === uploadedSurvey.id) || false,
-                  newSurveyProviderType: finalProviderType,
-                  currentFilter: selectedProviderType
-                });
-                
-                // ENTERPRISE FIX: Ensure the new survey is visible even if filter doesn't match
-                // If we uploaded a Physician survey but are viewing APP, switch to Physician view
-                if (finalProviderType === 'PHYSICIAN' && selectedProviderType !== 'PHYSICIAN' && selectedProviderType !== 'BOTH') {
-                  console.log('🔄 Auto-switching to Physician view to show newly uploaded survey');
-                  // The ProviderTypeSelector will handle this via the survey-uploaded event
-                  // But we can also force it here if needed
-                }
-                
-                if (refetchResult.data && refetchResult.data.length > 0) {
-                  console.log('✅ Survey list refreshed - new survey should be visible');
-                }
-              }).catch((err) => {
-                console.warn('⚠️ Immediate refetch failed, will retry:', err);
-                // Retry after a short delay if immediate refetch fails
-                setTimeout(() => {
-                  refetchSurveys().catch((retryErr) => {
-                    console.warn('⚠️ Retry refetch also failed (non-critical):', retryErr);
+              // Step 4: Delayed refetch (2.5s) so Firebase has time to commit; merge if new survey missing
+              // Immediate refetch was overwriting optimistic update before Firebase was consistent
+              const FIREBASE_REFETCH_DELAY_MS = 2500;
+              setTimeout(() => {
+                refetchSurveys().then((refetchResult) => {
+                  const data = refetchResult.data ?? [];
+                  const includesNewSurvey = data.some((s: any) => s.id === uploadedSurvey.id);
+                  console.log('✅ Delayed refetch completed after upload:', {
+                    surveyCount: data.length,
+                    includesNewSurvey,
+                    newSurveyProviderType: finalProviderType,
+                    currentFilter: selectedProviderType
                   });
-                }, 1000);
-              });
+                  // Merge: if Firebase didn't return the new survey yet, keep it in cache
+                  if (!includesNewSurvey && data.length >= 0) {
+                    queryClient.setQueryData(queryKey, (current: any) => {
+                      if (!current || !Array.isArray(current)) return [uploadedSurvey];
+                      const hasIt = current.some((s: any) => s.id === uploadedSurvey.id);
+                      if (hasIt) return current;
+                      return [uploadedSurvey, ...current];
+                    });
+                    console.log('✅ Merged new survey into cache (Firebase not yet consistent)');
+                  }
+                }).catch((err) => {
+                  console.warn('⚠️ Delayed refetch failed (non-critical):', err);
+                });
+              }, FIREBASE_REFETCH_DELAY_MS);
               
               // ENTERPRISE FIX: Dispatch survey-uploaded event AFTER upload completes and is verified
               // This ensures provider type detection refreshes at the right time
@@ -2140,6 +2061,7 @@ function SurveyUpload(): JSX.Element {
       return;
     }
 
+    setIsResolvingDuplicate(true);
     try {
       setIsUploading(true);
       
@@ -2231,6 +2153,8 @@ function SurveyUpload(): JSX.Element {
       setError(`Failed to ${action} survey: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsUploading(false);
       setShowDuplicateDialog(false);
+    } finally {
+      setIsResolvingDuplicate(false);
     }
   };
 
@@ -2449,47 +2373,10 @@ function SurveyUpload(): JSX.Element {
       // Process the uploaded data (pass resetTimeout to prevent premature timeout)
       await processUploadedData(parsedRows, file, headers, resetTimeout);
       
-      // CRITICAL FIX: Verify survey was saved before cache invalidation
-      console.log('🔍 Verifying survey was saved to database before cache invalidation...');
-      const savedSurveysBefore = await dataService.getAllSurveys();
+      // Post-queue add: file is only queued here; survey is not in DB yet.
+      // Real verification happens in the queue subscription (verifyUpload) when job completes.
       
-      // Build expected survey name to find it
-      const finalSource = surveySource === 'Custom' ? customSurveySource : surveySource;
-      const finalDataCategory = dataCategory === 'CUSTOM' ? customDataCategory : dataCategory;
-      const finalProviderType = providerType === 'CUSTOM' ? customProviderType : providerType;
-      const categoryDisplay = finalDataCategory === 'CALL_PAY' ? 'Call Pay'
-        : finalDataCategory === 'MOONLIGHTING' ? 'Moonlighting'
-        : finalDataCategory === 'COMPENSATION' ? (finalProviderType === 'APP' ? 'APP' : 'Physician')
-        : finalDataCategory;
-      const safeSurveyLabel = (surveyLabel && typeof surveyLabel === 'string' && surveyLabel.trim()) ? surveyLabel.trim() : '';
-      const labelSuffix = safeSurveyLabel ? ` - ${safeSurveyLabel}` : '';
-      const expectedSurveyName = `${finalSource} ${categoryDisplay} ${surveyYear}${labelSuffix}`;
-      const surveyYearString = String(surveyYear).trim();
-      
-      const savedSurveyBefore = savedSurveysBefore.find(s => 
-        s.name === expectedSurveyName && 
-        String(s.year || '').trim() === surveyYearString
-      );
-      
-      if (savedSurveyBefore) {
-        console.log('✅ Survey verified in database before cache invalidation:', {
-          id: savedSurveyBefore.id,
-          name: savedSurveyBefore.name,
-          year: savedSurveyBefore.year,
-          providerType: savedSurveyBefore.providerType,
-          source: savedSurveyBefore.source
-        });
-      } else {
-        console.error('❌ Survey NOT found in database before cache invalidation!', {
-          expectedName: expectedSurveyName,
-          expectedYear: surveyYearString,
-          totalSurveys: savedSurveysBefore.length,
-          allSurveyNames: savedSurveysBefore.map(s => ({ name: s.name, year: s.year }))
-        });
-        // Continue anyway - might be a timing issue with IndexedDB
-      }
-      
-      // CRITICAL FIX: Set isUploading to false BEFORE cache invalidation
+      // CRITICAL FIX: Set isUploading to false (upload is now in background queue)
       // This allows the query to refetch when cache is invalidated
       setIsUploading(false);
       console.log('✅ Upload complete, isUploading set to false - query can now refetch');
@@ -2585,87 +2472,49 @@ function SurveyUpload(): JSX.Element {
     }
   };
 
-  const confirmClearCurrentView = async () => {
-    let forceCloseTimeout: NodeJS.Timeout | null = null;
-
-    try {
-      setIsDeleting(true);
-      setIsDeletingAll(false);
-      startProgress();
-
-      const surveyIds = rawSurveys?.map((survey: any) => survey.id) || [];
-      if (surveyIds.length === 0) {
-        setShowClearAllConfirmation(false);
-        setIsDeleting(false);
-        completeProgress();
-        return;
-      }
-
-      forceCloseTimeout = setTimeout(() => {
-        console.warn('⚠️ Clear view operation taking too long, showing force close option');
-        setShowForceClose(true);
-      }, 30000);
-
-      await clearSurveysByIds(surveyIds);
-      console.log('✅ Current view surveys deleted successfully');
-      duplicateDetectionService.clearCache();
-
-      // Clear performance cache and refetch
-      try {
-        const performanceService = getPerformanceOptimizedDataService();
-        performanceService.clearCache('all_surveys');
-      } catch (error) {
-        console.warn('Failed to clear performance cache:', error);
-      }
-
-      try {
-        await refetchSurveys();
-      } catch (error) {
-        console.warn('Failed to refetch surveys after view delete:', error);
-      }
-    } catch (error) {
-      console.error('❌ Failed to clear current view:', error);
-      handleError(`Failed to clear current view: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      if (forceCloseTimeout) {
-        clearTimeout(forceCloseTimeout);
-      }
+  const confirmClearCurrentView = () => {
+    const surveyIds = rawSurveys?.map((survey: any) => survey.id) || [];
+    if (surveyIds.length === 0) {
       setShowClearAllConfirmation(false);
-      setIsDeleting(false);
-      setShowForceClose(false);
-      completeProgress();
+      return;
     }
+    setShowClearAllConfirmation(false);
+    setShowForceClose(false);
+    toast.info('Clearing current view...', 'Surveys are being removed in the background. You can keep working.');
+    (async () => {
+      try {
+        await clearSurveysByIds(surveyIds);
+        duplicateDetectionService.clearCache();
+        try {
+          getPerformanceOptimizedDataService().clearCache('all_surveys');
+        } catch {
+          /* non-critical */
+        }
+        await refetchSurveys();
+        toast.success('Current view cleared', 'Surveys have been removed.');
+      } catch (error) {
+        console.error('❌ Failed to clear current view:', error);
+        toast.error('Clear failed', error instanceof Error ? error.message : 'Failed to clear current view.');
+        handleError(`Failed to clear current view: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    })();
   };
 
-  const confirmClearAll = async () => {
-    let forceCloseTimeout: NodeJS.Timeout | null = null;
-    
-    try {
-      setIsDeleting(true);
-      setIsDeletingAll(true);
-      startProgress(); // Start smooth progress animation
-      
-      console.log('🧹 Starting clear all operation...');
-      
-      // Set up force close timeout (30 seconds)
-      forceCloseTimeout = setTimeout(() => {
-        console.warn('⚠️ Clear all operation taking too long, showing force close option');
-        setShowForceClose(true);
-      }, 30000);
-      
-      // Add timeout wrapper for each operation
-      const withTimeout = (promise: Promise<any>, timeoutMs: number, operation: string) => {
-        return Promise.race([
-          promise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
-          )
-        ]);
-      };
-      
-      // Clear all surveys everywhere with timeout
-      console.log('🗑️ Deleting all surveys...');
+  const confirmClearAll = () => {
+    setShowClearAllConfirmation(false);
+    setShowForceClose(false);
+    toast.info('Clearing all surveys...', 'This runs in the background. You can keep working.');
+    const withTimeout = (promise: Promise<any>, timeoutMs: number, operation: string) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+        )
+      ]);
+    (async () => {
       try {
+        console.log('🗑️ Deleting all surveys...');
+        try {
         const deleteAllResult = await withTimeout(
           dataService.deleteAllSurveysEverywhere(),
           15000,
@@ -2766,60 +2615,15 @@ function SurveyUpload(): JSX.Element {
       // Also dispatch custom events for immediate refresh
       window.dispatchEvent(new CustomEvent('survey-deleted', { detail: { type: 'all' } }));
       
-      console.log('✅ Clear all operation completed successfully!');
-      
-      // Complete progress and show success message
-      completeProgress();
-      
-      // Reset states immediately
-      setIsDeleting(false);
-      setIsDeletingAll(false);
-      
-      // Close modal after showing progress
-      setTimeout(() => {
-        console.log('🔄 Closing modal and reloading page...');
-        setShowClearAllConfirmation(false);
-        alert('✅ All data cleared successfully! The page will reload to ensure a clean state.');
-        window.location.reload();
-      }, 1500);
-      
-      // Backup timeout to force close modal if something goes wrong
-      setTimeout(() => {
-        console.log('🛑 Backup timeout: Force closing modal');
-        setShowClearAllConfirmation(false);
-        setIsDeleting(false);
-        setIsDeletingAll(false);
-        setShowForceClose(false);
-      }, 10000); // 10 seconds backup timeout
-      
-    } catch (error) {
-      console.error('❌ Error during clear all operation:', error);
-      handleError(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      completeProgress(); // Complete progress even on error
-      
-      // Reset states immediately on error
-      setIsDeleting(false);
-      setIsDeletingAll(false);
-      
-      // Close modal after showing progress even on error
-      setTimeout(() => {
-        console.log('🔄 Closing modal after error...');
-        setShowClearAllConfirmation(false);
-        setShowForceClose(false);
-      }, 1500);
-    } finally {
-      // Clear the force close timeout
-      if (forceCloseTimeout) {
-        clearTimeout(forceCloseTimeout);
+        console.log('✅ Clear all operation completed successfully!');
+        toast.success('All surveys cleared', 'The page will reload to ensure a clean state.');
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (error) {
+        console.error('❌ Error during clear all operation:', error);
+        toast.error('Clear failed', error instanceof Error ? error.message : 'Error clearing data.');
+        handleError(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-      
-      // Ensure states are reset even if there's an error
-      setTimeout(() => {
-        setIsDeleting(false);
-        setIsDeletingAll(false);
-        setShowForceClose(false);
-      }, 2000);
-    }
+    })();
   };
 
 
@@ -3515,6 +3319,19 @@ function SurveyUpload(): JSX.Element {
                 </button>
                 <h2 className="text-lg font-semibold text-gray-900">Uploaded Surveys</h2>
               </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
+                    refetchSurveys();
+                  }}
+                  disabled={queryLoading}
+                  className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full border border-gray-200 hover:border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50"
+                  aria-label="Refresh survey list"
+                  title="Refresh list to see newly uploaded surveys"
+                >
+                  <ArrowPathIcon className={`h-4 w-4 ${queryLoading ? 'animate-spin' : ''}`} />
+                </button>
               {uploadedSurveys.length > 0 && (
                 <div className="relative group">
                   <button
@@ -3533,18 +3350,18 @@ function SurveyUpload(): JSX.Element {
                   </div>
                 </div>
               )}
+              </div>
             </div>
 
             {!isUploadedSurveysCollapsed && (
               <>
-                
                 {isLoading ? (
                   <EnterpriseLoadingSpinner
                     message="Loading surveys..."
                     recordCount={uploadedSurveys.length}
                     data={uploadedSurveys}
                     progress={progress}
-                    variant="overlay"
+                    variant="inline"
                     loading={isLoading}
                   />
                 ) : uploadedSurveys.length === 0 ? (
@@ -3632,35 +3449,13 @@ function SurveyUpload(): JSX.Element {
                           key={survey.id}
                           className="relative inline-flex items-center"
                         >
-                          <button
+                            <button
                             onClick={() => {
-                              setSelectedSurvey(survey.id);
-                              // Trigger Google-style intelligent sizing after survey selection
-                              const triggerIntelligentSizing = () => {
-                                if (gridApi) {
-                                  try {
-                                    // Step 1: Auto-size based on content
-                                    if (gridApi.autoSizeAllColumns) {
-                                      gridApi.autoSizeAllColumns();
-                                    }
-                                    // Step 2: Size to fit container intelligently
-                                    if (gridApi.sizeColumnsToFit) {
-                                      gridApi.sizeColumnsToFit();
-                                    }
-                                    console.log('Intelligent sizing triggered for survey:', survey.surveyType);
-                                  } catch (error) {
-                                    console.log('Intelligent sizing on survey selection failed:', error);
-                                  }
-                                } else {
-                                  console.log('Grid API not available for intelligent sizing');
-                                }
-                              };
-                              
-                              // Multiple attempts with progressive delays to ensure it works for all surveys
-                              setTimeout(triggerIntelligentSizing, 100);
-                              setTimeout(triggerIntelligentSizing, 300);
-                              setTimeout(triggerIntelligentSizing, 600);
-                              setTimeout(triggerIntelligentSizing, 1000);
+                              if (survey.id === selectedSurvey) {
+                                requestResizeRef.current?.();
+                              } else {
+                                setSelectedSurvey(survey.id);
+                              }
                             }}
                             className={`group inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-full border-2 shadow-none outline-none transition-all duration-200 hover:shadow-none hover:outline-none hover:ring-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 ${
                               isActive 
@@ -3758,6 +3553,11 @@ function SurveyUpload(): JSX.Element {
                               e.currentTarget.style.outline = 'none';
                             }}
                           >
+                            <Tooltip title="Select survey and auto-resize table columns" placement="top" enterDelay={300} leaveDelay={0}>
+                              <span className="flex items-center opacity-0 group-hover:opacity-60 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
+                                <TableCellsIcon className="h-3.5 w-3.5 flex-shrink-0 text-current" strokeWidth={1.8} aria-hidden />
+                              </span>
+                            </Tooltip>
                             {survey.isOrphaned && (
                               <ExclamationTriangleIcon className="h-4 w-4 text-red-600 flex-shrink-0" title={`Orphaned survey: Expected ${survey.orphanedInfo?.expectedRowCount || 0} rows but has no data. Delete and re-upload.`} />
                             )}
@@ -3788,6 +3588,7 @@ function SurveyUpload(): JSX.Element {
                             onClick={(e) => removeUploadedSurvey(survey.id, e)}
                             className="ml-1 text-gray-400 hover:text-red-500 p-1 rounded-full"
                             title="Remove survey"
+                            aria-label="Remove survey"
                           >
                             <XMarkIcon className="h-4 w-4" />
                           </button>
@@ -3818,7 +3619,8 @@ function SurveyUpload(): JSX.Element {
                   onError={handleError}
                   globalFilters={globalFilters}
                   onFilterChange={handleFilterChange}
-                  {...({ onGridReady: (api: any) => setGridApi(api) } as any)}
+                  onGridReady={(api: any) => setGridApi(api)}
+                  onResizeReady={(requestResize) => { requestResizeRef.current = requestResize; }}
                 />
               </div>
             </div>
@@ -3826,15 +3628,7 @@ function SurveyUpload(): JSX.Element {
         })()}
       </div>
     </div>
-      {/* Upload Progress Modal - Fixed Position Overlay */}
-      {isUploading && (
-        <EnterpriseLoadingSpinner
-          message="Uploading survey..."
-          progress={progress}
-          variant="overlay"
-          loading={isUploading}
-        />
-      )}
+      {/* Upload progress shown only by bottom-right UploadProgressIndicator (no center overlay) */}
       {/* OPTIMIZED: Removed blocking deletion modal - deletion now happens in background */}
       {/* User can continue working while deletion processes */}
 
@@ -3851,6 +3645,7 @@ function SurveyUpload(): JSX.Element {
             setDuplicateCheckResult(null);
           }}
           onResolve={handleDuplicateResolution}
+          isResolving={isResolvingDuplicate}
           duplicateResult={duplicateCheckResult}
           onShowExisting={async (survey) => {
             const year = survey.year ? String(survey.year).trim() : '';
@@ -3877,35 +3672,45 @@ function SurveyUpload(): JSX.Element {
       )}
 
       {showDeleteConfirmation && surveyToDelete && (
-        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-xl shadow-lg border border-green-400 w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Confirmation</h3>
-            <p className="text-sm text-gray-700 mb-6">
-              Are you sure you want to delete this item?
-            </p>
-            
-            {/* OPTIMIZED: Removed blocking progress indicator - deletion is now non-blocking */}
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeleteConfirmation(false);
-                  setSurveyToDelete(null);
-                }}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeleteSurvey}
-                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
-              >
-                Delete
-              </button>
-            </div>
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-busy={isDeletingSingleSurvey}>
+          <div className="bg-white rounded-xl shadow-lg border border-red-200 w-full max-w-sm p-6">
+            {isDeletingSingleSurvey ? (
+              <>
+                <div className="flex flex-col items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-10 w-10 border-2 border-red-600 border-t-transparent mb-4" aria-hidden />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Deleting survey</h3>
+                  <p className="text-sm text-gray-600">
+                    Removing <strong>{surveyToDelete.fileName || 'this survey'}</strong>…
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove survey</h3>
+                <p className="text-sm text-gray-700 mb-6">
+                  Remove <strong>{surveyToDelete.fileName || 'this survey'}</strong> from your database? This cannot be undone.
+                </p>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeleteConfirmation(false);
+                      setSurveyToDelete(null);
+                    }}
+                    className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteSurvey}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
