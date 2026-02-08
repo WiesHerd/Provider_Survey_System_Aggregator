@@ -1,18 +1,14 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { IProviderTypeMapping, IUnmappedProviderType } from '../types/mapping';
 import { getDataService } from '../../../services/DataService';
 import { useProviderContext } from '../../../contexts/ProviderContext';
-import { getPerformanceOptimizedDataService } from '../../../services/PerformanceOptimizedDataService';
-
-const dataService = getDataService();
-const performanceService = getPerformanceOptimizedDataService();
+import { queryKeys } from '../../../shared/services/queryClient';
+import { useProviderTypeMappingQuery } from './useProviderTypeMappingQuery';
 
 interface UseProviderTypeMappingDataReturn {
-  // State
-  // Cross-category mapping state
   showAllCategories: boolean;
   setShowAllCategories: (value: boolean) => void;
-  
   mappings: IProviderTypeMapping[];
   unmappedProviderTypes: IUnmappedProviderType[];
   selectedProviderTypes: IUnmappedProviderType[];
@@ -20,349 +16,224 @@ interface UseProviderTypeMappingDataReturn {
   loading: boolean;
   error: string | null;
   activeTab: 'unmapped' | 'mapped' | 'learned';
-  
-  // Search state
   searchTerm: string;
   mappedSearchTerm: string;
-  
-  // Computed values
   filteredUnmapped: IUnmappedProviderType[];
   filteredMappings: IProviderTypeMapping[];
   filteredLearned: Record<string, string>;
-  
-  // Actions
   setActiveTab: (tab: 'unmapped' | 'mapped' | 'learned') => void;
   selectProviderType: (providerType: IUnmappedProviderType) => void;
   clearSelectedProviderTypes: () => void;
   selectAllProviderTypes: () => void;
   deselectAllProviderTypes: () => void;
-  
-  // Data operations
   loadData: (forceRefresh?: boolean) => Promise<void>;
   createMapping: () => Promise<void>;
   createGroupedMapping: (standardizedName: string, providerTypes: IUnmappedProviderType[]) => Promise<void>;
   deleteMapping: (mappingId: string) => Promise<void>;
   clearAllMappings: () => Promise<void>;
   removeLearnedMapping: (original: string) => void;
-  
-  
-  // Search and filters
   setSearchTerm: (term: string) => void;
   setMappedSearchTerm: (term: string) => void;
   clearError: () => void;
 }
 
 /**
- * Custom hook for managing provider type mapping data and operations
- * Follows the exact same pattern as useMappingData
+ * Provider type mapping data hook backed by TanStack Query (same pattern as useMappingData + useSpecialtyMappingQuery).
+ * No refetch on mount — cache is used so return visits are instant. Invalidate only on create/delete/update.
  */
 export const useProviderTypeMappingData = (): UseProviderTypeMappingDataReturn => {
-  // Provider context (same as Specialty Mapping - no year filter, show all surveys)
+  const queryClient = useQueryClient();
   const { selectedProviderType } = useProviderContext();
-  
-  // State
-  const [mappings, setMappings] = useState<IProviderTypeMapping[]>([]);
-  const [unmappedProviderTypes, setUnmappedProviderTypes] = useState<IUnmappedProviderType[]>([]);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const [selectedProviderTypes, setSelectedProviderTypes] = useState<IUnmappedProviderType[]>([]);
-  const [learnedMappings, setLearnedMappings] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unmapped' | 'mapped' | 'learned'>('unmapped');
-  
-  // Search state
   const [searchTerm, setSearchTerm] = useState('');
   const [mappedSearchTerm, setMappedSearchTerm] = useState('');
 
-  // State for cross-category mapping toggle (Call Pay, Physician, APP)
-  // Default to false (filtered by current Data View selection) to match expected UI behavior
-  const [showAllCategories, setShowAllCategories] = useState(false);
-  
-  // Computed values
-  const filteredUnmapped = useMemo(() => {
-    if (!searchTerm) return unmappedProviderTypes;
-    return unmappedProviderTypes.filter(providerType =>
-      providerType.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      providerType.surveySource.toLowerCase().includes(searchTerm.toLowerCase())
+  const {
+    data: queryData,
+    isLoading: queryLoading,
+    error: queryError,
+    refetch,
+    mappings,
+    unmapped,
+    learned,
+    createMapping: queryCreateMapping,
+    deleteMapping: queryDeleteMapping,
+    clearAllMappings: queryClearAllMappings,
+    removeLearnedMapping: queryRemoveLearnedMapping,
+  } = useProviderTypeMappingQuery(showAllCategories);
+
+  const dataService = useMemo(() => getDataService(), []);
+
+  useEffect(() => {
+    if (queryData) {
+      setSelectedProviderTypes([]);
+    }
+  }, [queryData]);
+
+  const loading = queryLoading;
+  const error = queryError
+    ? (queryError instanceof Error ? queryError.message : String(queryError))
+    : null;
+
+  const loadData = useCallback(
+    async (forceRefresh = false) => {
+      if (forceRefresh) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.mappings.providerType() });
+      }
+      await refetch();
+    },
+    [queryClient, refetch]
+  );
+
+  const selectProviderType = useCallback((providerType: IUnmappedProviderType) => {
+    setSelectedProviderTypes((prev) =>
+      prev.some((s) => s.id === providerType.id)
+        ? prev.filter((s) => s.id !== providerType.id)
+        : [...prev, providerType]
     );
-  }, [unmappedProviderTypes, searchTerm]);
-  
+  }, []);
+
+  const clearSelectedProviderTypes = useCallback(() => setSelectedProviderTypes([]), []);
+  const filteredUnmapped = useMemo(() => {
+    if (!searchTerm) return unmapped;
+    return unmapped.filter(
+      (p) =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.surveySource?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [unmapped, searchTerm]);
+
   const filteredMappings = useMemo(() => {
     if (!mappedSearchTerm) return mappings;
-    return mappings.filter(mapping =>
-      mapping.standardizedName.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
-      mapping.sourceProviderTypes.some(source =>
-        source.providerType.toLowerCase().includes(mappedSearchTerm.toLowerCase())
-      )
+    return mappings.filter(
+      (m) =>
+        m.standardizedName?.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+        m.sourceProviderTypes?.some((s: { providerType?: string }) =>
+          s.providerType?.toLowerCase().includes(mappedSearchTerm.toLowerCase())
+        )
     );
   }, [mappings, mappedSearchTerm]);
-  
+
   const filteredLearned = useMemo(() => {
-    if (!mappedSearchTerm) return learnedMappings;
-    const filtered: Record<string, string> = {};
-    Object.entries(learnedMappings).forEach(([key, value]) => {
+    if (!mappedSearchTerm) return learned;
+    const out: Record<string, string> = {};
+    Object.entries(learned).forEach(([k, v]) => {
       if (
-        key.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
-        value.toLowerCase().includes(mappedSearchTerm.toLowerCase())
-      ) {
-        filtered[key] = value;
-      }
+        k.toLowerCase().includes(mappedSearchTerm.toLowerCase()) ||
+        v.toLowerCase().includes(mappedSearchTerm.toLowerCase())
+      )
+        out[k] = v;
     });
-    return filtered;
-  }, [learnedMappings, mappedSearchTerm]);
-
-  
-  // Track last loaded provider type to prevent unnecessary reloads (same pattern as Specialty Mapping)
-  const lastLoadedProviderType = useRef<string | undefined>(undefined);
-  const lastLoadedShowAll = useRef<boolean>(false);
-  const isInitialLoad = useRef(true);
-  const forceRefreshRef = useRef(false);
-
-  // Load data with intelligent caching
-  const loadData = useCallback(async (forceRefresh = false) => {
-    try {
-      // Calculate current provider type filter
-      const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH')
-        ? undefined
-        : selectedProviderType;
-
-      // Skip reload only if same parameters, not initial load, and not forcing refresh (e.g. after create/delete)
-      if (!forceRefresh && !forceRefreshRef.current && !isInitialLoad.current &&
-          lastLoadedProviderType.current === dataProviderType &&
-          lastLoadedShowAll.current === showAllCategories) {
-        console.log('🎯 Skipping reload - data already loaded with same parameters');
-        return;
-      }
-      forceRefreshRef.current = false;
-
-      setLoading(true);
-      setError(null);
-
-      if (forceRefresh) {
-        performanceService.clearCache('provider_type_mapping');
-      }
-      console.log('🚀 Loading provider type mapping data...', {
-        dataProviderType,
-        showAllCategories,
-        forceRefresh
-      });
-      const startTime = performance.now();
-
-      // Use performance service for caching (5-minute TTL); no year filter - show all surveys like Specialty Mapping
-      const data = await performanceService.getProviderTypeMappingData(dataProviderType);
-      
-      const duration = performance.now() - startTime;
-      console.log(`✅ Provider type mapping data loaded in ${duration.toFixed(2)}ms`);
-      
-      setMappings(data.mappings);
-      setUnmappedProviderTypes(data.unmapped);
-      setLearnedMappings(data.learned || {});
-      
-      // Update tracking refs
-      lastLoadedProviderType.current = dataProviderType;
-      lastLoadedShowAll.current = showAllCategories;
-      isInitialLoad.current = false;
-
-    } catch (err) {
-      console.error('Error loading provider type mapping data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load provider type mapping data. Please ensure you have uploaded survey data first.');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedProviderType, showAllCategories]);
-
-  // Selection management
-  const selectProviderType = useCallback((providerType: IUnmappedProviderType) => {
-    setSelectedProviderTypes(prev => {
-      const isSelected = prev.some(s => s.id === providerType.id);
-      if (isSelected) {
-        return prev.filter(s => s.id !== providerType.id);
-      } else {
-        return [...prev, providerType];
-      }
-    });
-  }, []);
-
-  const clearSelectedProviderTypes = useCallback(() => {
-    setSelectedProviderTypes([]);
-  }, []);
+    return out;
+  }, [learned, mappedSearchTerm]);
 
   const selectAllProviderTypes = useCallback(() => {
     setSelectedProviderTypes([...filteredUnmapped]);
   }, [filteredUnmapped]);
 
-  const deselectAllProviderTypes = useCallback(() => {
-    setSelectedProviderTypes([]);
-  }, []);
+  const deselectAllProviderTypes = useCallback(() => setSelectedProviderTypes([]), []);
 
-  // Mapping operations
   const createMapping = useCallback(async () => {
     if (selectedProviderTypes.length === 0) return;
-    
-    try {
-      const mapping: IProviderTypeMapping = {
-        id: `providerType_${Date.now()}`,
-        standardizedName: selectedProviderTypes[0].name,
-        sourceProviderTypes: selectedProviderTypes.map(p => ({
-          providerType: p.name,
-          surveySource: p.surveySource,
-          frequency: p.frequency
-        })),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as any;
-      if (selectedProviderType && selectedProviderType !== 'BOTH') {
-        (mapping as any).providerType = selectedProviderType;
-      }
-      await dataService.createProviderTypeMapping(mapping);
-      setSelectedProviderTypes([]);
-      performanceService.clearCache('provider_type_mapping');
-      forceRefreshRef.current = true;
-      await loadData(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create provider type mapping');
-    }
-  }, [selectedProviderTypes, selectedProviderType, loadData]);
+    const mapping: any = {
+      id: `providerType_${Date.now()}`,
+      standardizedName: selectedProviderTypes[0].name,
+      sourceProviderTypes: selectedProviderTypes.map((p) => ({
+        providerType: p.name,
+        surveySource: p.surveySource,
+        frequency: p.frequency,
+      })),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (selectedProviderType && selectedProviderType !== 'BOTH') mapping.providerType = selectedProviderType;
+    await queryCreateMapping(mapping);
+    setSelectedProviderTypes([]);
+  }, [selectedProviderTypes, selectedProviderType, queryCreateMapping]);
 
-  const createGroupedMapping = useCallback(async (standardizedName: string, providerTypes: IUnmappedProviderType[]) => {
-    try {
-      const mapping: IProviderTypeMapping = {
+  const createGroupedMapping = useCallback(
+    async (standardizedName: string, providerTypes: IUnmappedProviderType[]) => {
+      const mapping: any = {
         id: `providerType_group_${Date.now()}`,
         standardizedName,
-        sourceProviderTypes: providerTypes.map(p => ({
+        sourceProviderTypes: providerTypes.map((p) => ({
           providerType: p.name,
           surveySource: p.surveySource,
-          frequency: p.frequency
+          frequency: p.frequency,
         })),
         createdAt: new Date(),
-        updatedAt: new Date()
-      } as any;
-      if (selectedProviderType && selectedProviderType !== 'BOTH') {
-        (mapping as any).providerType = selectedProviderType;
-      }
-      await dataService.createProviderTypeMapping(mapping);
-      
-      // Save learned mappings for each provider type
-      for (const providerType of providerTypes) {
+        updatedAt: new Date(),
+      };
+      if (selectedProviderType && selectedProviderType !== 'BOTH') mapping.providerType = selectedProviderType;
+      await queryCreateMapping(mapping);
+      for (const p of providerTypes) {
         try {
           await dataService.saveLearnedMapping(
-            'providerType', 
-            providerType.name, 
-            standardizedName, 
-            selectedProviderType, // Pass current provider type filter
-            providerType.surveySource // Pass survey source
+            'providerType',
+            p.name,
+            standardizedName,
+            selectedProviderType === 'BOTH' ? undefined : selectedProviderType,
+            p.surveySource
           );
-        } catch (learnedError) {
+        } catch {
+          // optional
         }
       }
-      
-      performanceService.clearCache('provider_type_mapping');
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create grouped provider type mapping');
-    }
-  }, [loadData, selectedProviderType]);
+      await refetch();
+    },
+    [queryCreateMapping, dataService, selectedProviderType, refetch]
+  );
 
-  const deleteMapping = useCallback(async (mappingId: string) => {
-    try {
-      await dataService.deleteProviderTypeMapping(mappingId);
-      performanceService.clearCache('provider_type_mapping');
-      forceRefreshRef.current = true;
-      await loadData(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete provider type mapping');
-    }
-  }, [loadData]);
+  const deleteMapping = useCallback(
+    async (mappingId: string) => {
+      await queryDeleteMapping(mappingId);
+    },
+    [queryDeleteMapping]
+  );
 
   const clearAllMappings = useCallback(async () => {
-    try {
-      await dataService.clearAllProviderTypeMappings();
-      performanceService.clearCache('provider_type_mapping');
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear provider type mappings');
-    }
-  }, [loadData]);
+    await queryClearAllMappings();
+  }, [queryClearAllMappings]);
 
-  const removeLearnedMapping = useCallback(async (original: string) => {
-    try {
-      await dataService.removeLearnedMapping('providerType', original);
-      performanceService.clearCache('provider_type_mapping');
-      forceRefreshRef.current = true;
-      await loadData(true); // Reload to get updated learned mappings
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove learned mapping');
-    }
-  }, [loadData]);
+  const removeLearnedMapping = useCallback(
+    async (original: string) => {
+      await queryRemoveLearnedMapping(original);
+    },
+    [queryRemoveLearnedMapping]
+  );
 
-
-  // Clear error
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  // Load data on mount and when provider type or toggle changes (same as Specialty Mapping - no year)
-  useEffect(() => {
-    const dataProviderType = (showAllCategories || selectedProviderType === 'BOTH')
-      ? undefined
-      : selectedProviderType;
-
-    if (isInitialLoad.current ||
-        lastLoadedProviderType.current !== dataProviderType ||
-        lastLoadedShowAll.current !== showAllCategories) {
-      console.log('🔍 useProviderTypeMappingData: Reloading data due to state change:', {
-        selectedProviderType,
-        showAllCategories,
-        dataProviderType,
-        wasInitialLoad: isInitialLoad.current
-      });
-      loadData();
-    } else {
-      console.log('🎯 useProviderTypeMappingData: Skipping reload - no parameter change');
-    }
-  }, [selectedProviderType, showAllCategories, loadData]);
+  const clearError = useCallback(() => {}, []);
 
   return {
-    // State
-    // Cross-category mapping state
     showAllCategories,
     setShowAllCategories,
-    
     mappings,
-    unmappedProviderTypes,
+    unmappedProviderTypes: unmapped,
     selectedProviderTypes,
-    learnedMappings,
+    learnedMappings: learned,
     loading,
     error,
     activeTab,
-    
-    // Search state
     searchTerm,
     mappedSearchTerm,
-    
-    // Computed values
     filteredUnmapped,
     filteredMappings,
     filteredLearned,
-    
-    // Actions
     setActiveTab,
     selectProviderType,
     clearSelectedProviderTypes,
     selectAllProviderTypes,
     deselectAllProviderTypes,
-    
-    // Data operations
     loadData,
     createMapping,
     createGroupedMapping,
     deleteMapping,
     clearAllMappings,
     removeLearnedMapping,
-    
-    
-    // Search and filters
     setSearchTerm,
     setMappedSearchTerm,
-    clearError
+    clearError,
   };
 };

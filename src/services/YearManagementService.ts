@@ -35,15 +35,14 @@ export class YearManagementService {
       const configYears = configs.map(config => String(config.year).trim()).filter(Boolean);
       configYears.forEach(y => surveyYears.add(y));
 
+      // Only add current/previous calendar year when there is NO survey or config data.
+      // Otherwise show only years that have actual data so the dropdown filters correctly.
       const currentYearNum = new Date().getFullYear();
       const currentStr = String(currentYearNum);
       const previousStr = String(currentYearNum - 1);
       if (surveyYears.size === 0) {
         surveyYears.add(currentStr);
         surveyYears.add(previousStr);
-      } else {
-        if (!surveyYears.has(currentStr)) surveyYears.add(currentStr);
-        if (!surveyYears.has(previousStr)) surveyYears.add(previousStr);
       }
 
       const allYears = Array.from(surveyYears).sort((a, b) => b.localeCompare(a));

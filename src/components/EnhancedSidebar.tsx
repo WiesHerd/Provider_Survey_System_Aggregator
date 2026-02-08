@@ -6,7 +6,7 @@ import { useYear } from '../contexts/YearContext';
 import { UIProviderType } from '../types/provider';
 import { ProviderTypeSelector } from '../shared/components/ProviderTypeSelector';
 import { UserMenu } from './UserMenu';
-import { queryKeys } from '../shared/services/queryClient';
+import { queryKeys, BENCHMARKING_QUERY_KEY } from '../shared/services/queryClient';
 import { routeChunkPreload } from '../shared/routeChunkPreload';
 import {
 	HomeIcon,
@@ -175,15 +175,9 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				staleTime: 1000 * 60 * 60 * 24, // 24 hours
 			}).catch(() => {});
 		} else if (path === '/benchmarking' || path === '/regional-analytics') {
-			// Prefetch benchmarking data (shared by both routes)
+			// Prefetch benchmarking data (shared by both routes); use canonical key so hook hits same cache
 			queryClient.prefetchQuery({
-				queryKey: queryKeys.benchmarking({
-					specialty: '',
-					surveySource: '',
-					region: '',
-					providerType: '',
-					year: ''
-				}),
+				queryKey: BENCHMARKING_QUERY_KEY,
 				queryFn: async () => {
 					const module = await import('../features/analytics/hooks/useBenchmarkingQuery') as unknown as { fetchBenchmarkingData: (filters: { specialty: string; surveySource: string; geographicRegion: string; providerType: string; year: string }) => Promise<any> };
 					return module.fetchBenchmarkingData({
@@ -231,16 +225,8 @@ const EnhancedSidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 				staleTime: 1000 * 60 * 60, // 1 hour
 			}).catch(() => {});
 		} else if (path === '/specialty-blending') {
-			// Prefetch blending data
-			queryClient.prefetchQuery({
-				queryKey: queryKeys.blending('default', '1.0', 'default'),
-				queryFn: async () => {
-					const { getDataService } = await import('../services/DataService');
-					const dataService = getDataService();
-					return dataService.getAllSurveys();
-				},
-				staleTime: 1000 * 60 * 60, // 1 hour
-			}).catch(() => {});
+			// Prefetch blending data into GlobalBlendingCache so screen shows data on click
+			import('../features/blending/hooks/useSpecialtyBlending').then((m) => m.prefetchBlendingData()).catch(() => {});
 		}
 	}, [queryClient, selectedProviderType, currentYear]);
 

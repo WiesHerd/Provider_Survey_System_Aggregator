@@ -6,8 +6,6 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
-import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useYear } from '../contexts/YearContext';
 import { ReportConfig } from '../features/reports/chart-builder/types/reportBuilder';
 import { ReportActions } from '../features/reports/chart-builder/components/ReportActions';
@@ -21,6 +19,7 @@ import { useReportData } from '../features/reports/chart-builder/hooks/useReport
 import { useSavedReports } from '../features/reports/chart-builder/hooks/useSavedReports';
 import { useSpecialtyMappings } from '../features/reports/chart-builder/hooks/useSpecialtyMappings';
 import { exportReportToCSV } from '../features/reports/chart-builder/utils/reportExport';
+import { TableSkeletonLoader } from '../shared/components/TableSkeletonLoader';
 
 interface CustomReportsProps {
   data?: any[];
@@ -28,12 +27,6 @@ interface CustomReportsProps {
 }
 
 const CustomReports: React.FC<CustomReportsProps> = () => {
-  const { progress, startProgress, completeProgress } = useSmoothProgress({
-    duration: 3000,
-    maxProgress: 90,
-    intervalMs: 100
-  });
-  
   const { currentYear } = useYear();
   
   // Use custom hooks
@@ -59,15 +52,6 @@ const CustomReports: React.FC<CustomReportsProps> = () => {
     rows.sort((a, b) => (tableSortDesc ? b.value - a.value : a.value - b.value));
     return rows;
   }, [chartData, tableSortDesc]);
-
-  // Start progress animation when loading begins
-  useEffect(() => {
-    if (loading) {
-      startProgress();
-    } else {
-      completeProgress();
-    }
-  }, [loading, startProgress, completeProgress]);
 
   // Handle clear all filters
   const handleClearAllFilters = useCallback(() => {
@@ -110,19 +94,6 @@ const CustomReports: React.FC<CustomReportsProps> = () => {
     });
   }, [loadConfig, currentYear]);
 
-  if (loading) {
-    return (
-      <EnterpriseLoadingSpinner
-        message="Loading analytics data..."
-        recordCount="auto"
-        data={surveyData}
-        progress={progress}
-        variant="overlay"
-        loading={loading}
-      />
-    );
-  }
-
   return (
     <ErrorBoundary>
     <div className="bg-gray-50 min-h-full">
@@ -137,6 +108,10 @@ const CustomReports: React.FC<CustomReportsProps> = () => {
             onDeleteReport={deleteReport}
           />
 
+          {loading ? (
+            <TableSkeletonLoader message="Loading analytics data…" />
+          ) : (
+            <>
           <ReportConfigPanel
             config={config}
             availableOptions={availableOptions}
@@ -166,6 +141,8 @@ const CustomReports: React.FC<CustomReportsProps> = () => {
             onSort={setTableSortDesc}
             sortDesc={tableSortDesc}
           />
+            </>
+          )}
           </div>
         </div>
     </ErrorBoundary>

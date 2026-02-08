@@ -41,7 +41,7 @@ import { DuplicateSurveyDialog, DuplicateResolutionAction } from '../features/up
 import { AuditLogService } from '../services/AuditLogService';
 import { calculateFileHash } from '../features/upload/utils/fileHash';
 import { getUploadQueueService } from '../services/UploadQueueService';
-import { queryClient } from '../shared/services/queryClient';
+import { queryClient, queryKeys } from '../shared/services/queryClient';
 import { getFileValidationService, FileValidationResult } from '../services/FileValidationService';
 import { UploadErrorDisplay } from './upload/UploadErrorDisplay';
 import { markJobSuccessToastShown } from './upload/UploadQueueToast';
@@ -417,14 +417,14 @@ function SurveyUpload(): JSX.Element {
     }));
   };
 
-  // ENTERPRISE FIX: Single cache entry - fetch all surveys once, filter by DATA VIEW in UI (avoids Firestore read per view)
+  // Survey list filtered by Select Year so Uploaded Surveys only shows the selected year
   const { 
     data: rawSurveys, 
     loading: queryLoading, 
     error: queryError,
     refetch: refetchSurveys 
   } = useSurveyListQuery(
-    undefined, // No year filter - show all surveys on upload screen
+    currentYear, // Filter by year dropdown - only show surveys for the selected year
     undefined, // No provider filter here - we filter by selectedProviderType in the component
     true // Always enabled - React Query caching prevents excessive reads
   );
@@ -937,8 +937,7 @@ function SurveyUpload(): JSX.Element {
 
       deletedSurveyIdsRef.current.add(surveyIdToDelete);
 
-      const { queryClient } = require('../shared/services/queryClient');
-      queryClient.setQueryData(['surveys', 'list', undefined, undefined], (oldData: any) => {
+      queryClient.setQueryData(queryKeys.surveyList(currentYear, undefined), (oldData: any) => {
         if (!oldData || !Array.isArray(oldData)) return oldData;
         return oldData.filter((s: any) => s.id !== surveyIdToDelete);
       });
@@ -1800,10 +1799,10 @@ function SurveyUpload(): JSX.Element {
                 providerType: uploadedSurvey.providerType
               });
               
-              // ENTERPRISE FIX: Update React Query cache with the real survey AFTER upload completes
-              // This ensures the survey appears in the UI immediately without requiring manual refresh
-              const queryKey = ['surveys', 'list', undefined, selectedProviderType === 'BOTH' ? undefined : selectedProviderType];
-              queryClient.setQueryData(queryKey, (oldData: any) => {
+              // CRITICAL: Use the same query key as useSurveyListQuery so the pill list updates
+              // (hook uses currentYear; writing to wrong key left pills stale until manual refresh)
+              const surveyListKey = queryKeys.surveyList(currentYear, undefined);
+              queryClient.setQueryData(surveyListKey, (oldData: any) => {
                 if (!oldData || !Array.isArray(oldData)) {
                   return [uploadedSurvey];
                 }
@@ -1868,11 +1867,9 @@ function SurveyUpload(): JSX.Element {
               markJobSuccessToastShown(job.id); // Prevent UploadQueueToast from showing duplicate when user stayed on page
               
               // Step 3: Invalidate survey queries (do NOT remove - that would wipe optimistic update)
-              // Next natural refetch (e.g. mount, focus) will get authoritative list
-              queryClient.invalidateQueries({ 
-                queryKey: ['surveys'],
-                exact: false
-              });
+              queryClient.invalidateQueries({ queryKey: ['surveys'], exact: false });
+              // Immediate refetch so the list (and pill) update from backend without waiting for delayed refetch
+              refetchSurveys().catch((err) => console.warn('Immediate post-upload refetch failed (non-critical):', err));
               
               // ENTERPRISE FIX: Invalidate benchmarking/analytics queries so new survey appears in Benchmarking screen
               // This ensures the Survey Source dropdown on Benchmarking screen shows the newly uploaded survey
@@ -1906,7 +1903,7 @@ function SurveyUpload(): JSX.Element {
                   });
                   // Merge: if Firebase didn't return the new survey yet, keep it in cache
                   if (!includesNewSurvey && data.length >= 0) {
-                    queryClient.setQueryData(queryKey, (current: any) => {
+                    queryClient.setQueryData(surveyListKey, (current: any) => {
                       if (!current || !Array.isArray(current)) return [uploadedSurvey];
                       const hasIt = current.some((s: any) => s.id === uploadedSurvey.id);
                       if (hasIt) return current;
@@ -3389,47 +3386,21 @@ function SurveyUpload(): JSX.Element {
                         'Upload your first survey to get started with data analysis, mapping, and benchmarking.'
                       )}
                     </p>
-                    {selectedProviderType && selectedProviderType !== 'BOTH' && (
-                      <div className="flex gap-3 mb-4">
+                    {selectedProviderType && selectedProviderType !== 'BOTH' ? (
+                      <div className="flex gap-3">
                         <button
                           onClick={async () => {
-                            console.log('🔍 Show All Surveys clicked - setting filter to BOTH');
                             setProviderTypeContext('BOTH', 'show-all-surveys');
-                            // Also clear cache and refetch to ensure we get all surveys
                             await queryClient.invalidateQueries({ queryKey: ['surveys'] });
                             setTimeout(() => refetchSurveys(), 100);
                           }}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-sm"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-indigo-600 rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-sm"
                         >
                           <ArrowPathIcon className="h-4 w-4" />
                           View All Surveys
                         </button>
                       </div>
-                    )}
-                    <button
-                      onClick={async () => {
-                        console.log('🔄 Manual refresh triggered - clearing cache and refetching...');
-                        console.log('🔍 Current filter state:', { selectedProviderType, currentYear });
-                        // Clear all survey-related caches
-                        queryClient.removeQueries({ queryKey: ['surveys'] });
-                        await queryClient.invalidateQueries({ queryKey: ['surveys'] });
-                        // Force refetch
-                        const result = await refetchSurveys();
-                        console.log('✅ Refresh complete. Surveys returned:', result.data?.length || 0);
-                        if (result.data && result.data.length > 0) {
-                          console.log('📋 Refreshed surveys:', result.data.map((s: any) => ({
-                            id: s.id,
-                            name: s.name,
-                            providerType: s.providerType,
-                            year: s.year
-                          })));
-                        }
-                      }}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
-                    >
-                      <ArrowPathIcon className="h-4 w-4" />
-                      Refresh Surveys
-                    </button>
+                    ) : null}
                     {queryLoading && (
                       <p className="text-xs text-gray-500 mt-2">Loading surveys...</p>
                     )}
@@ -3443,12 +3414,34 @@ function SurveyUpload(): JSX.Element {
                   >
                     {uploadedSurveys.map((survey) => {
                       const isActive = selectedSurvey === survey.id;
+                      const fullLabel = getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType, survey);
+                      const rowCount = survey.stats?.totalRows ?? (survey as any).rowCount ?? 0;
+                      // When Data View matches survey (e.g. Physician selected), omit " - Phys" from pill; same for APP. Year omitted when it matches Select Year.
+                      const providerMatchesView = (selectedProviderType === 'PHYSICIAN' && (survey.providerType === 'PHYSICIAN' || survey.providerType === 'Staff Physician')) ||
+                        (selectedProviderType === 'APP' && survey.providerType === 'APP');
+                      const yearMatchesView = String(survey.surveyYear || '') === String(currentYear || '');
+                      const pillLabel = providerMatchesView
+                        ? fullLabel.replace(/\s*-\s*Phys\s*$/i, '').replace(/\s*-\s*APP\s*$/i, '').trim() || fullLabel
+                        : fullLabel;
+                      const showYearInPill = !yearMatchesView;
+                      const tooltipTitle = (
+                        <span className="block text-center py-0.5">
+                          <span className="font-medium">{fullLabel}</span>
+                          <span className="text-gray-400 mx-1">·</span>
+                          <span>{survey.surveyYear}</span>
+                          <br />
+                          <span className="text-gray-400 text-xs">
+                            {(typeof rowCount === 'number' ? rowCount : 0).toLocaleString()} rows
+                          </span>
+                        </span>
+                      );
 
                       return (
                         <div
                           key={survey.id}
                           className="relative inline-flex items-center"
                         >
+                            <Tooltip title={tooltipTitle} placement="top" arrow enterDelay={400} leaveDelay={100}>
                             <button
                             onClick={() => {
                               if (survey.id === selectedSurvey) {
@@ -3457,7 +3450,7 @@ function SurveyUpload(): JSX.Element {
                                 setSelectedSurvey(survey.id);
                               }
                             }}
-                            className={`group inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-full border-2 shadow-none outline-none transition-all duration-200 hover:shadow-none hover:outline-none hover:ring-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 ${
+                            className={`group inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-full border-2 shadow-none outline-none transition-all duration-200 hover:shadow-none hover:outline-none hover:ring-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 max-w-[200px] min-w-0 ${
                               isActive 
                                 ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 hover:border-indigo-700'
                                 : survey.isOrphaned
@@ -3553,11 +3546,6 @@ function SurveyUpload(): JSX.Element {
                               e.currentTarget.style.outline = 'none';
                             }}
                           >
-                            <Tooltip title="Select survey and auto-resize table columns" placement="top" enterDelay={300} leaveDelay={0}>
-                              <span className="flex items-center opacity-0 group-hover:opacity-60 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
-                                <TableCellsIcon className="h-3.5 w-3.5 flex-shrink-0 text-current" strokeWidth={1.8} aria-hidden />
-                              </span>
-                            </Tooltip>
                             {survey.isOrphaned && (
                               <ExclamationTriangleIcon className="h-4 w-4 text-red-600 flex-shrink-0" title={`Orphaned survey: Expected ${survey.orphanedInfo?.expectedRowCount || 0} rows but has no data. Delete and re-upload.`} />
                             )}
@@ -3574,16 +3562,17 @@ function SurveyUpload(): JSX.Element {
                                 <span className="text-xs text-blue-600 font-medium">Uploading...</span>
                               </div>
                             )}
-                            <span className="font-medium">{getShortenedSurveyType(survey.surveyType, survey.providerType as ProviderType, survey)}</span>
-                            <span className={`text-xs ${isActive ? 'text-indigo-100' : survey.isDuplicate ? 'text-amber-700' : 'text-indigo-500'}`}>{survey.surveyYear}</span>
-                            {/* ENTERPRISE FIX: Show row count badge on hover for all surveys */}
-                            <span 
-                              className={`text-xs ml-1 opacity-0 group-hover:opacity-100 transition-opacity ${isActive ? 'text-indigo-200' : 'text-gray-500'}`}
-                              title={`${survey.stats?.totalRows?.toLocaleString() || (survey as any).rowCount?.toLocaleString() || 0} rows`}
-                            >
-                              ({survey.stats?.totalRows?.toLocaleString() || (survey as any).rowCount?.toLocaleString() || 0})
+                            <span className="font-medium min-w-0 max-w-[140px] truncate block" title={fullLabel}>
+                              {pillLabel}
+                            </span>
+                            {showYearInPill && (
+                              <span className={`text-xs flex-shrink-0 ${isActive ? 'text-indigo-100' : survey.isDuplicate ? 'text-amber-700' : 'text-indigo-500'}`}>{survey.surveyYear}</span>
+                            )}
+                            <span className="flex items-center opacity-0 group-hover:opacity-60 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto flex-shrink-0 ml-1" title="Select survey and auto-resize table columns">
+                              <TableCellsIcon className="h-3.5 w-3.5 text-current" strokeWidth={1.8} aria-hidden />
                             </span>
                           </button>
+                          </Tooltip>
                           <button
                             onClick={(e) => removeUploadedSurvey(survey.id, e)}
                             className="ml-1 text-gray-400 hover:text-red-500 p-1 rounded-full"

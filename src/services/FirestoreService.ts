@@ -1106,8 +1106,9 @@ export class FirestoreService {
       constraints.push(where('region', '==', filters.region));
     }
 
-    // Add pagination with default limit for performance
-    const queryLimit = pagination.limit || 10000; // Default to 10k for large datasets
+    // Add pagination with default limit for performance. Firestore max is 10,000 per query.
+    const rawLimit = pagination.limit ?? 10000;
+    const queryLimit = Math.min(rawLimit, 10000);
     constraints.push(limit(queryLimit));
     
     if (pagination.orderBy) {

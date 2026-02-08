@@ -5,7 +5,7 @@
  * All five filters use the same pattern: Autocomplete multiple with max 2 chips visible, then "+N more".
  */
 
-import React from 'react';
+import React, { memo } from 'react';
 import { FormControl, TextField, Autocomplete, Box, Chip, Typography } from '@mui/material';
 import type { AutocompleteRenderInputParams } from '@mui/material/Autocomplete';
 import { formatRegionForDisplay, formatSpecialtyForDisplay, capitalizeWords } from '../../../shared/utils/formatters';
@@ -46,7 +46,11 @@ const inputSx = {
     backgroundColor: 'white',
     borderRadius: '8px',
     minHeight: '40px',
-    maxHeight: '56px',
+    alignItems: 'flex-start',
+    paddingTop: '8px',
+    '& .MuiAutocomplete-tag': {
+      margin: '2px 4px 2px 0'
+    },
     '& fieldset': { borderColor: '#d1d5db' },
     '&:hover fieldset': { borderColor: '#9ca3af' },
     '&.Mui-focused fieldset': { borderColor: '#3b82f6', borderWidth: '1px' }
@@ -62,7 +66,7 @@ const optionSx = {
   }
 };
 
-export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
+const SurveyDataFiltersInner: React.FC<SurveyDataFiltersProps> = ({
   selectedSurveys,
   selectedYears,
   selectedRegions,
@@ -133,6 +137,13 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
                 sx={{
                   backgroundColor: chipColor,
                   color: 'white',
+                  minWidth: 100,
+                  maxWidth: '100%',
+                  '& .MuiChip-label': {
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  },
                   '& .MuiChip-deleteIcon': { color: 'rgba(255, 255, 255, 0.8)', '&:hover': { color: 'white' } }
                 }}
               />
@@ -155,12 +166,13 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium text-gray-700">Filters</h3>
         {hasActiveFilters && onClearFilters && (
           <ClearFilterButton onClick={onClearFilters} hasActiveFilters={hasActiveFilters} />
         )}
       </div>
+      <p className="text-xs text-gray-500 mb-4">Select by Survey, Year, Region, Provider Type, and Specialty</p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {specialtiesOptions.length > 0 &&
           renderMultiSelect(
@@ -226,3 +238,5 @@ export const SurveyDataFilters: React.FC<SurveyDataFiltersProps> = ({
     </div>
   );
 };
+
+export const SurveyDataFilters = memo(SurveyDataFiltersInner);

@@ -25,6 +25,7 @@ export const useRegionMappingQuery = () => {
   
   const query = useQuery<RegionMappingData>({
     queryKey: cacheKey,
+    placeholderData: (previousData) => previousData, // Stale-while-revalidate: show cached data when refetching (same as Analysis Tools)
     queryFn: async () => {
       const startTime = performance.now();
       

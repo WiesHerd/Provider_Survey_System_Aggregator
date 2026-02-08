@@ -7,6 +7,14 @@
 import { generatePieChartHTML, generateBarChartHTML, WeightDistributionData, CompensationRangeData } from './chartGenerators';
 import { calculateSimilarity, normalizeSpecialty } from '../../../shared/utils/specialtyMatching';
 
+/** Effective $/wRVU (TCC ÷ wRVU) at each percentile; NaN or omitted when wRVU is 0 */
+export interface EffectiveDollarsPerRVU {
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+}
+
 export interface BlendedMetrics {
   tcc_p25: number;
   tcc_p50: number;
@@ -23,6 +31,16 @@ export interface BlendedMetrics {
   totalRecords: number;
   specialties: string[];
   method: 'weighted' | 'simple' | 'custom';
+  /** Sum of tcc_n_incumbents over selected rows */
+  totalIncumbents: number;
+  /** Confidence score 0–1 (sample size and data quality) */
+  confidence: number;
+  /** TCC/wRVU at each percentile; use null when wRVU is 0 */
+  effectiveDollarsPerRVU: EffectiveDollarsPerRVU;
+  /** Interquartile range (P75 − P25) */
+  iqrTcc: number;
+  iqrWrvu: number;
+  iqrCf: number;
 }
 
 export type BlendingMethod = 'weighted' | 'simple' | 'custom';
@@ -287,7 +305,13 @@ export const calculateBlendedMetrics = (
     cf_p90: 0,
     totalRecords: 0,
     specialties: specialties.map(s => s.name),
-    method: 'weighted'
+    method: 'weighted',
+    totalIncumbents: 0,
+    confidence: 0,
+    effectiveDollarsPerRVU: { p25: 0, p50: 0, p75: 0, p90: 0 },
+    iqrTcc: 0,
+    iqrWrvu: 0,
+    iqrCf: 0
   };
 
   // Calculate weights based on records
@@ -346,6 +370,17 @@ export const calculateBlendedMetrics = (
     }
   });
 
+  // Derived metrics for legacy caller compatibility
+  blended.effectiveDollarsPerRVU = {
+    p25: blended.wrvu_p25 > 0 ? blended.tcc_p25 / blended.wrvu_p25 : NaN,
+    p50: blended.wrvu_p50 > 0 ? blended.tcc_p50 / blended.wrvu_p50 : NaN,
+    p75: blended.wrvu_p75 > 0 ? blended.tcc_p75 / blended.wrvu_p75 : NaN,
+    p90: blended.wrvu_p90 > 0 ? blended.tcc_p90 / blended.wrvu_p90 : NaN
+  };
+  blended.iqrTcc = blended.tcc_p75 - blended.tcc_p25;
+  blended.iqrWrvu = blended.wrvu_p75 - blended.wrvu_p25;
+  blended.iqrCf = blended.cf_p75 - blended.cf_p25;
+
   return blended;
 };
 
@@ -385,7 +420,13 @@ export const calculateBlendedMetricsNew = (
     cf_p90: 0,
     totalRecords: 0,
     specialties: selectedData.map(row => row.surveySpecialty),
-    method: blendingMethod
+    method: blendingMethod,
+    totalIncumbents: 0,
+    confidence: 0,
+    effectiveDollarsPerRVU: { p25: 0, p50: 0, p75: 0, p90: 0 },
+    iqrTcc: 0,
+    iqrWrvu: 0,
+    iqrCf: 0
   };
 
   // Calculate weights based on blending method
@@ -420,6 +461,9 @@ export const calculateBlendedMetricsNew = (
     }
     blended.totalRecords = selectedData.reduce((sum, row) => sum + (row.tcc_n_orgs || 0), 0);
   }
+
+  blended.totalIncumbents = selectedData.reduce((sum, row) => sum + (row.tcc_n_incumbents || 0), 0);
+  blended.confidence = calculateConfidence(selectedData, selectedData);
 
   // Helper function to check if a value is valid (not null, undefined, 0, or missing data indicators)
   // CRITICAL: Asterisks are converted to 0 during data normalization, so we must exclude 0 values
@@ -606,6 +650,18 @@ export const calculateBlendedMetricsNew = (
   blended.cf_p75 = Math.round(blended.cf_p75 * 100) / 100;
   blended.cf_p90 = Math.round(blended.cf_p90 * 100) / 100;
 
+  // Effective $/wRVU (TCC ÷ wRVU) at each percentile; NaN when wRVU is 0
+  blended.effectiveDollarsPerRVU = {
+    p25: blended.wrvu_p25 > 0 ? blended.tcc_p25 / blended.wrvu_p25 : NaN,
+    p50: blended.wrvu_p50 > 0 ? blended.tcc_p50 / blended.wrvu_p50 : NaN,
+    p75: blended.wrvu_p75 > 0 ? blended.tcc_p75 / blended.wrvu_p75 : NaN,
+    p90: blended.wrvu_p90 > 0 ? blended.tcc_p90 / blended.wrvu_p90 : NaN
+  };
+
+  // Interquartile range (P75 − P25)
+  blended.iqrTcc = Math.round((blended.tcc_p75 - blended.tcc_p25) * 100) / 100;
+  blended.iqrWrvu = Math.round((blended.wrvu_p75 - blended.wrvu_p25) * 100) / 100;
+  blended.iqrCf = Math.round((blended.cf_p75 - blended.cf_p25) * 100) / 100;
 
   return blended;
 };

@@ -10,7 +10,7 @@ import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 // Removed Material-UI table imports - using HTML table instead
 import { AnalyticsTableProps } from '../types/analytics';
 import { calculateSummaryRows } from '../utils/analyticsCalculations';
-import { EnterpriseLoadingSpinner, ModernPagination } from '../../../shared/components';
+import { EnterpriseLoadingSpinner, ModernPagination, TableSkeletonLoader } from '../../../shared/components';
 import { BoltIcon, ArrowDownTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { useMemoizedGrouping, useMemoizedColumnGroups } from '../hooks/useMemoizedCalculations';
 import { AnalyticsTableHeader } from './AnalyticsTableHeader';
@@ -133,16 +133,19 @@ export const AnalyticsTable: React.FC<AnalyticsTableProps> = memo(({
     }));
   }, []);
 
-  if (loading) {
+  // Stale-while-revalidate: show skeleton only when there is no data (initial load). If we have cached/placeholder data, show the table.
+  if (loading && (data == null || data.length === 0)) {
     return (
-      <EnterpriseLoadingSpinner
-        message="Loading analytics data..."
-        recordCount={data.length}
-        data={data}
-        progress={loadingProgress}
-        variant="overlay"
-        loading={loading}
-      />
+      <div className="w-full max-w-full" style={{ overflow: 'hidden' }}>
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h4 className="text-sm font-medium text-gray-700">Column Visibility</h4>
+        </div>
+        <TableSkeletonLoader
+          message="Loading benchmarking data…"
+          rowCount={8}
+          columnCount={5}
+        />
+      </div>
     );
   }
 

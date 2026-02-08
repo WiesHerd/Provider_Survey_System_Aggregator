@@ -58,8 +58,8 @@ export let cacheReadyPromise: Promise<void> = Promise.resolve();
  * - Survey slices & benchmarking: 24h staleTime, 7d gcTime
  * - Custom blends: 24h staleTime, invalidate on mutation
  * - Report definitions: 24h staleTime
- * - Mapping data: 1h staleTime, invalidate on mutation
- * - Survey list: 5m staleTime, invalidate on upload/delete
+ * - Mapping data: 24h staleTime, 7d gcTime, invalidate on mutation
+ * - Survey list: 24h staleTime, 7d gcTime, invalidate on upload/delete
  */
 export const createQueryClient = () => {
   const queryClient = new QueryClient({
@@ -122,19 +122,27 @@ export const createQueryClient = () => {
         const cached = await indexedDBPersister.restoreClient();
         if (cached) {
           const cacheData = JSON.parse(cached);
-          
+          const canonicalBenchmarkingKey = ['benchmarking'];
+
           Object.entries(cacheData).forEach(([queryHash, queryData]: [string, any]) => {
             // Only restore if data is less than 24 hours old
             const age = Date.now() - queryData.dataUpdatedAt;
             const maxAge = 1000 * 60 * 60 * 24; // 24 hours
-            
+
             if (age < maxAge) {
-              queryClient.setQueryData(queryData.queryKey, queryData.data, {
+              const key = queryData.queryKey;
+              queryClient.setQueryData(key, queryData.data, {
                 updatedAt: queryData.dataUpdatedAt,
               });
+              // Migrate old benchmarking key to canonical key so hook finds it after deploy
+              if (Array.isArray(key) && key[0] === 'benchmarking' && key.length === 2 && typeof key[1] === 'object') {
+                queryClient.setQueryData(canonicalBenchmarkingKey, queryData.data, {
+                  updatedAt: queryData.dataUpdatedAt,
+                });
+              }
             }
           });
-          
+
           console.log('✅ Query cache restored from IndexedDB');
         }
       } catch (error) {
@@ -143,8 +151,8 @@ export const createQueryClient = () => {
     };
 
     // ENTERPRISE: Gate first paint on cache restore so first navigation hits hydrated cache.
-    // Race with 2s timeout so slow IndexedDB does not block the app forever.
-    const CACHE_RESTORE_TIMEOUT_MS = 2000;
+    // Race with timeout so slow IndexedDB does not block the app forever (4s allows cold restore).
+    const CACHE_RESTORE_TIMEOUT_MS = 4000;
     cacheReadyPromise = Promise.race([
       restoreCache(),
       new Promise<void>((resolve) => setTimeout(resolve, CACHE_RESTORE_TIMEOUT_MS)),
@@ -171,10 +179,17 @@ export const createQueryClient = () => {
 export const queryClient = createQueryClient();
 
 /**
+ * Canonical query key for the full benchmarking dataset.
+ * Used by useBenchmarkingQuery and sidebar prefetch so cache lookup is always the same entry.
+ * Data is fetched once and filtered client-side; only upload/delete/mapping invalidate.
+ */
+export const BENCHMARKING_QUERY_KEY = ['benchmarking'] as const;
+
+/**
  * Query key factories for type-safe cache keys
  */
 export const queryKeys = {
-  // Benchmarking queries
+  // Benchmarking queries (use BENCHMARKING_QUERY_KEY for the canonical "full dataset" key)
   benchmarking: (filters: {
     year?: string;
     specialty?: string;

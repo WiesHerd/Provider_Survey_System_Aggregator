@@ -118,6 +118,8 @@ export interface BlendingState {
   currentBlend: SpecialtyBlend | null;
   templates: SpecialtyBlendTemplate[];
   isLoading: boolean;
+  /** True when showing stale data and fetching fresh data in background */
+  isRevalidating: boolean;
   error: string | null;
   validation: BlendingValidation;
 }
@@ -135,6 +137,7 @@ export interface BlendingActions {
   resetBlend: () => void;
   clearCache: () => void;
   refreshTemplates: () => Promise<void>;
+  refreshData: () => void;
 }
 
 export interface BlendingProps {

@@ -28,6 +28,14 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
     toast.error('Year selection', error);
   }, [error, toast]);
 
+  // When available years no longer include current (e.g. 2026 removed), sync to first available so selection and data match
+  useEffect(() => {
+    if (loading || availableYears.length === 0) return;
+    if (!availableYears.includes(currentYear)) {
+      setCurrentYear(availableYears[0]);
+    }
+  }, [loading, availableYears, currentYear, setCurrentYear]);
+
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
@@ -42,6 +50,11 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
 
 
   // Year Selector Component - Silicon Valley Style
+  // Use a value that is always in the list so the select never shows a stale/invalid year
+  const effectiveYear = availableYears.length > 0 && availableYears.includes(currentYear)
+    ? currentYear
+    : (availableYears[0] ?? currentYear);
+
   const YearSelector = () => {
     return (
       <div className="flex items-center space-x-3">
@@ -65,13 +78,13 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description, showDownloa
             aria-hidden
           >
             <span className="font-medium">
-              {loading ? '...' : currentYear}
+              {loading ? '...' : effectiveYear}
             </span>
             <ChevronDownIcon className="ml-2 w-4 h-4 text-gray-500 transition-colors" />
           </div>
           {/* Select on top so it receives clicks and opens reliably */}
           <select
-            value={currentYear}
+            value={effectiveYear}
             onChange={(e) => setCurrentYear(e.target.value)}
             disabled={loading}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"

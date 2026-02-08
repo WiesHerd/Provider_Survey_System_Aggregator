@@ -49,6 +49,7 @@ export const useVariableMappingQuery = (showAllCategories: boolean = false) => {
   // Main query - ENTERPRISE: Aggressive caching for instant navigation
   const query = useQuery<VariableMappingData>({
     queryKey: cacheKey,
+    placeholderData: (previousData) => previousData, // Stale-while-revalidate (same as Analysis Tools)
     queryFn: async () => {
       const startTime = performance.now();
       

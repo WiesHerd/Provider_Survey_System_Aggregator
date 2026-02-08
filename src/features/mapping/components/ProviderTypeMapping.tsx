@@ -8,7 +8,7 @@ import { useProviderTypeMappingData } from '../hooks/useProviderTypeMappingData'
 import { UnmappedProviderTypes } from './UnmappedProviderTypes';
 import { MappedProviderTypes } from './MappedProviderTypes';
 import { LearnedProviderTypeMappings } from './LearnedProviderTypeMappings';
-import { BaseMappingHeader, BaseMappingContent, HelpModal, MappingLoadingSpinner } from './shared';
+import { BaseMappingHeader, BaseMappingContent, HelpModal } from './shared';
 
 /**
  * ProviderTypeMapping component - Main orchestrator for provider type mapping functionality
@@ -126,8 +126,32 @@ export const ProviderTypeMapping: React.FC<ProviderTypeMappingProps> = ({
     onUnmappedChange?.(unmappedProviderTypes);
   }, [unmappedProviderTypes, onUnmappedChange]);
 
-  if (loading) {
-    return <MappingLoadingSpinner entityName="Provider Type" />;
+  // Same as Analysis Tools table: show loading only when no data (stale-while-revalidate). Use inline skeleton, not overlay.
+  const hasNoData =
+    !mappings.length &&
+    !unmappedProviderTypes.length &&
+    !Object.keys(learnedMappings).length;
+  if (loading && hasNoData) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 w-full max-w-full" style={{ overflow: 'hidden' }}>
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h4 className="text-sm font-medium text-gray-700">Provider Type Mapping</h4>
+        </div>
+        <p className="mb-4 text-sm text-gray-500" role="status" aria-live="polite">
+          Loading provider type mappings…
+        </p>
+        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-gray-200 last:border-b-0">
+              <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 flex-1 max-w-[200px] bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (

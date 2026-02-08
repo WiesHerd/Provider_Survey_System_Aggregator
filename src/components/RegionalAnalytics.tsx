@@ -20,6 +20,7 @@ import { formatVariableDisplayName } from '../features/analytics/utils/variableF
 import { VariableFormattingService } from '../features/analytics/services/variableFormattingService';
 import { matchSpecialtyName } from '../features/analytics/utils/analyticsCalculations';
 import { EmptyState } from '../features/mapping/components/shared/EmptyState';
+import { TableSkeletonLoader } from '../shared/components/TableSkeletonLoader';
 import RegionalPrintable from './RegionalPrintable';
 
 // These will be dynamically populated from region mappings
@@ -1303,19 +1304,6 @@ const RegionalAnalyticsComponent: React.FC = () => {
     return { regionTooltips: tooltips, provenanceDetails: details };
   }, [regionalComparisonData, filtered, regionMappings]);
 
-  if (loading) {
-    return (
-      <EnterpriseLoadingSpinner
-        message="Loading regional analytics..."
-        recordCount="auto"
-        data={analyticsData}
-        progress={queryProgress}
-        variant="overlay"
-        loading={loading}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1705,6 +1693,14 @@ const RegionalAnalyticsComponent: React.FC = () => {
 
         </div>
 
+        {loading ? (
+          <TableSkeletonLoader
+            message="Loading regional analytics…"
+            rowCount={8}
+            columnCount={5}
+          />
+        ) : (
+        <>
         {/* Main Data Container - Matches Fair Market Value screen structure */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="mb-6">
@@ -1947,6 +1943,8 @@ const RegionalAnalyticsComponent: React.FC = () => {
               regionNames={regionalComparisonData.map(region => region.region)}
             />
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

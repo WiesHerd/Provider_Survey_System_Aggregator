@@ -28,6 +28,12 @@ export interface BlendedReportData {
     wrvu: { p25: number; p50: number; p75: number; p90: number };
     cf: { p25: number; p50: number; p75: number; p90: number };
   };
+  totalIncumbents?: number;
+  confidence?: number;
+  effectiveDollarsPerRVU?: { p25: number; p50: number; p75: number; p90: number };
+  iqrTcc?: number;
+  iqrWrvu?: number;
+  iqrCf?: number;
 }
 
 /**
@@ -567,6 +573,48 @@ const addHeaderPage = async (pdf: jsPDF, data: BlendedReportData): Promise<void>
   );
   yPos = Math.max(yPos, specialtiesFinalY) + SPACING.LINE;
   
+  // Total Records
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Total Records:', PDF_MARGIN, yPos);
+  renderWrappedText(
+    pdf,
+    data.totalRecords.toLocaleString(),
+    VALUE_COLUMN_WIDTH,
+    VALUE_COLUMN_START,
+    yPos,
+    { fontSize: TYPOGRAPHY.BODY, color: COLORS.MUTED_TEXT, font: 'normal' }
+  );
+  yPos += SPACING.LINE;
+  
+  if (typeof data.totalIncumbents === 'number' && data.totalIncumbents > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Total Incumbents:', PDF_MARGIN, yPos);
+    renderWrappedText(
+      pdf,
+      data.totalIncumbents.toLocaleString(),
+      VALUE_COLUMN_WIDTH,
+      VALUE_COLUMN_START,
+      yPos,
+      { fontSize: TYPOGRAPHY.BODY, color: COLORS.MUTED_TEXT, font: 'normal' }
+    );
+    yPos += SPACING.LINE;
+  }
+  
+  if (typeof data.confidence === 'number') {
+    const confLabel = data.confidence > 0.7 ? 'High' : data.confidence >= 0.4 ? 'Medium' : 'Low';
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Confidence:', PDF_MARGIN, yPos);
+    renderWrappedText(
+      pdf,
+      `${confLabel} (${(data.confidence * 100).toFixed(0)}%)`,
+      VALUE_COLUMN_WIDTH,
+      VALUE_COLUMN_START,
+      yPos,
+      { fontSize: TYPOGRAPHY.BODY, color: COLORS.MUTED_TEXT, font: 'normal' }
+    );
+    yPos += SPACING.LINE;
+  }
+  
   // Custom weights section if applicable
   if (data.customWeights && data.customWeights.length > 0) {
       yPos += SPACING.SECTION;
@@ -687,6 +735,28 @@ const addMetricsTable = (pdf: jsPDF, data: BlendedReportData, startY: number): n
       p90: `$${formatCurrency(data.metrics.cf.p90, 2)}`
     }
   ];
+
+  if (data.effectiveDollarsPerRVU) {
+    const e = data.effectiveDollarsPerRVU;
+    const fmt = (v: number) => (Number.isNaN(v) || !Number.isFinite(v) ? '—' : `$${formatCurrency(v, 2)}`);
+    metricsRows.push({
+      metric: 'Effective $/wRVU (TCC ÷ wRVU)',
+      p25: fmt(e.p25),
+      p50: fmt(e.p50),
+      p75: fmt(e.p75),
+      p90: fmt(e.p90)
+    });
+  }
+
+  if (typeof data.iqrTcc === 'number' || typeof data.iqrWrvu === 'number' || typeof data.iqrCf === 'number') {
+    metricsRows.push({
+      metric: 'IQR (P75 − P25)',
+      p25: typeof data.iqrTcc === 'number' ? `$${formatCurrency(data.iqrTcc)}` : '—',
+      p50: typeof data.iqrWrvu === 'number' ? formatNumber(data.iqrWrvu) : '—',
+      p75: typeof data.iqrCf === 'number' ? `$${formatNumber(data.iqrCf, 2)}` : '—',
+      p90: ''
+    });
+  }
   
   // Render professional table with bold metric names
   pdf.setFont('helvetica', 'bold');

@@ -11,6 +11,7 @@ import { getDataService } from '../services/DataService';
 import { formatSpecialtyForDisplay, formatNormalizedValue } from '../shared/utils/formatters';
 import { filterSpecialtyOptions } from '../shared/utils/specialtyMatching';
 import { normalizeText } from '../shared/utils/textEncoding';
+import { TableSkeletonLoader } from '../shared/components/TableSkeletonLoader';
 import { EnterpriseLoadingSpinner } from '../shared/components/EnterpriseLoadingSpinner';
 import { useSmoothProgress } from '../shared/hooks/useSmoothProgress';
 import { useColumnSizing } from '../shared/hooks/useColumnSizing';
@@ -1208,59 +1209,12 @@ const DataPreview: React.FC<DataPreviewProps> = ({ file, onError, globalFilters,
 
   if (isLoading) {
     return (
-      <div className="w-full bg-white shadow-sm">
-        {/* Keep the filter controls visible during loading */}
-        <Box sx={{ 
-          display: 'flex',
-          flexDirection: 'column',
-          p: 2, 
-          borderBottom: 1, 
-          borderColor: 'divider'
-        }}>
-          {/* Header with Clear Filter Button */}
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-normal text-gray-600">Survey Preview</h3>
-            <div className="relative group">
-              <button
-                disabled
-                className="p-2 text-gray-300 cursor-not-allowed rounded-lg"
-                aria-label="Clear all filters"
-              >
-                <div className="relative w-5 h-5">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" />
-                  </svg>
-                </div>
-              </button>
-              {/* Tooltip */}
-              <div className="pointer-events-none absolute right-0 top-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                <div className="bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
-                  Clear Filters
-                  <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Filter Dropdowns - Disabled during loading */}
-          <div className="grid grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-10 bg-gray-200 rounded-md"></div>
-              </div>
-            ))}
-          </div>
-        </Box>
-
-        {/* Data Table Loading State */}
-        <div className="ag-theme-alpine" style={{ height: 520, width: '100%' }}>
-          <div className="animate-pulse">
-            <div className="h-10 bg-gray-200 mb-2"></div>
-            {[...Array(10)].map((_, i) => (
-              <div key={i} className="h-8 bg-gray-100 mb-1"></div>
-            ))}
-          </div>
-        </div>
+      <div className="w-full">
+        <TableSkeletonLoader
+          message="Loading survey data…"
+          rowCount={8}
+          columnCount={5}
+        />
       </div>
     );
   }

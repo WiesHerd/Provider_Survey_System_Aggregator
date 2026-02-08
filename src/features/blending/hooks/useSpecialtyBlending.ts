@@ -9,51 +9,163 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SpecialtyItem, SpecialtyBlend, SpecialtyBlendTemplate, BlendedResult, BlendingState, BlendingActions } from '../types/blending';
 import { validateBlend, normalizeWeights, normalizeSpecialtyWeights, calculateBlendedMetrics, calculateConfidence, generateBlendId } from '../utils/blendingCalculations';
 
-// Global cache that persists across component mounts
+const BLENDING_STORAGE_KEY = 'blending_cache_v1';
+
+interface StoredBlendingCache {
+  allData: any[];
+  availableSpecialties: SpecialtyItem[];
+  timestamp: number;
+}
+
+// Global cache that persists across component mounts and reloads (sessionStorage)
 class GlobalBlendingCache {
   private static instance: GlobalBlendingCache;
   private allDataCache: any[] | null = null;
   private availableSpecialtiesCache: SpecialtyItem[] | null = null;
   private lastFetch: number = 0;
   private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-  
+
   static getInstance(): GlobalBlendingCache {
     if (!GlobalBlendingCache.instance) {
       GlobalBlendingCache.instance = new GlobalBlendingCache();
     }
     return GlobalBlendingCache.instance;
   }
-  
+
   hasFreshData(): boolean {
     const now = Date.now();
-    return this.allDataCache !== null && 
+    return this.allDataCache !== null &&
            this.availableSpecialtiesCache !== null &&
            (now - this.lastFetch) < this.CACHE_DURATION;
   }
-  
-  getCachedData(): { allData: any[], availableSpecialties: SpecialtyItem[] } | null {
+
+  private loadFromStorage(): StoredBlendingCache | null {
+    try {
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(BLENDING_STORAGE_KEY) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as StoredBlendingCache;
+      if (!parsed?.allData || !parsed?.availableSpecialties || typeof parsed.timestamp !== 'number') return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistToStorage(): void {
+    if (this.allDataCache === null || this.availableSpecialtiesCache === null) return;
+    try {
+      const payload: StoredBlendingCache = {
+        allData: this.allDataCache,
+        availableSpecialties: this.availableSpecialtiesCache,
+        timestamp: this.lastFetch
+      };
+      sessionStorage.setItem(BLENDING_STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
+        console.warn('🔍 GlobalBlendingCache: sessionStorage quota exceeded, skipping persist');
+      }
+    }
+  }
+
+  getCachedData(): { allData: any[]; availableSpecialties: SpecialtyItem[] } | null {
     if (this.hasFreshData()) {
       return {
         allData: this.allDataCache!,
         availableSpecialties: this.availableSpecialtiesCache!
       };
     }
+    const stored = this.loadFromStorage();
+    if (stored && (Date.now() - stored.timestamp) < this.CACHE_DURATION) {
+      this.allDataCache = stored.allData;
+      this.availableSpecialtiesCache = stored.availableSpecialties;
+      this.lastFetch = stored.timestamp;
+      console.log('🔍 GlobalBlendingCache: Restored from sessionStorage');
+      return { allData: stored.allData, availableSpecialties: stored.availableSpecialties };
+    }
     return null;
   }
-  
+
+  /** Returns cached data even if expired (for stale-while-revalidate). */
+  getStaleCachedData(): { allData: any[]; availableSpecialties: SpecialtyItem[] } | null {
+    if (this.allDataCache !== null && this.availableSpecialtiesCache !== null) {
+      return { allData: this.allDataCache, availableSpecialties: this.availableSpecialtiesCache };
+    }
+    const stored = this.loadFromStorage();
+    if (stored) {
+      return { allData: stored.allData, availableSpecialties: stored.availableSpecialties };
+    }
+    return null;
+  }
+
   setCachedData(allData: any[], availableSpecialties: SpecialtyItem[]): void {
     this.allDataCache = allData;
     this.availableSpecialtiesCache = availableSpecialties;
     this.lastFetch = Date.now();
+    this.persistToStorage();
     console.log('🔍 GlobalBlendingCache: Data cached for 30 minutes');
   }
-  
+
   clearCache(): void {
     this.allDataCache = null;
     this.availableSpecialtiesCache = null;
     this.lastFetch = 0;
+    try {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(BLENDING_STORAGE_KEY);
+    } catch {}
     console.log('🔍 GlobalBlendingCache: Cache cleared');
   }
+
+  /**
+   * Prefetch blending data and fill cache (e.g. from sidebar hover).
+   * No-op if cache already has fresh data.
+   */
+  async prefetch(): Promise<void> {
+    if (this.hasFreshData()) {
+      return;
+    }
+    try {
+      const { getAnalysisToolsPerformanceService } = await import('../../../services/AnalysisToolsPerformanceService');
+      const performanceService = getAnalysisToolsPerformanceService();
+      const { allData: allSurveyData } = await performanceService.getCustomBlendingData({});
+      if (allSurveyData && allSurveyData.length > 0) {
+        const specialtyMap = new Map<string, SpecialtyItem>();
+        for (let i = 0; i < allSurveyData.length; i++) {
+          const survey = allSurveyData[i];
+          if (survey.surveySpecialty && survey.surveySource && survey.surveyYear) {
+            const key = `${survey.surveySpecialty}-${survey.surveySource}-${survey.surveyYear}-${survey.geographicRegion || 'National'}-${survey.providerType || 'Physician'}`;
+            if (!specialtyMap.has(key)) {
+              specialtyMap.set(key, {
+                id: key,
+                name: survey.surveySpecialty,
+                records: survey.tcc_n_orgs || 0,
+                weight: 0,
+                surveySource: survey.surveySource,
+                surveyYear: survey.surveyYear,
+                geographicRegion: survey.geographicRegion || 'National',
+                providerType: survey.providerType || 'Physician'
+              });
+            } else {
+              const existing = specialtyMap.get(key)!;
+              existing.records += (survey.tcc_n_orgs || 0);
+            }
+          }
+        }
+        const availableSpecialties = Array.from(specialtyMap.values());
+        this.setCachedData(allSurveyData, availableSpecialties);
+        console.log('🔍 GlobalBlendingCache: Prefetch complete');
+      }
+    } catch (err) {
+      console.warn('Blending prefetch failed:', err);
+    }
+  }
+}
+
+/**
+ * Prefetch blending data for sidebar hover / preload. Warms GlobalBlendingCache
+ * so the specialty-blending screen can show data immediately on navigation.
+ */
+export async function prefetchBlendingData(): Promise<void> {
+  await GlobalBlendingCache.getInstance().prefetch();
 }
 
 interface UseSpecialtyBlendingProps {
@@ -75,7 +187,9 @@ export const useSpecialtyBlending = ({
   const [currentBlend, setCurrentBlend] = useState<SpecialtyBlend | null>(null);
   const [templates, setTemplates] = useState<SpecialtyBlendTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRevalidating, setIsRevalidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Load saved templates from Firebase or IndexedDB
   useEffect(() => {
@@ -94,12 +208,78 @@ export const useSpecialtyBlending = ({
     loadTemplates();
   }, []);
 
-  // Populate available specialties from real survey data with global caching
+  // Populate available specialties: cache (memory + sessionStorage), stale-while-revalidate, then fetch
   useEffect(() => {
-    const fetchRealSurveyData = async () => {
-      const globalCache = GlobalBlendingCache.getInstance();
-      
-      // Check if we have fresh cached data first
+    const globalCache = GlobalBlendingCache.getInstance();
+
+    const processFetchedData = (allSurveyData: any[]) => {
+      const specialtyMap = new Map<string, SpecialtyItem>();
+      for (let i = 0; i < allSurveyData.length; i++) {
+        const survey = allSurveyData[i];
+        if (survey.surveySpecialty && survey.surveySource && survey.surveyYear) {
+          const key = `${survey.surveySpecialty}-${survey.surveySource}-${survey.surveyYear}-${survey.geographicRegion || 'National'}-${survey.providerType || 'Physician'}`;
+          if (!specialtyMap.has(key)) {
+            specialtyMap.set(key, {
+              id: key,
+              name: survey.surveySpecialty,
+              records: survey.tcc_n_orgs || 0,
+              weight: 0,
+              surveySource: survey.surveySource,
+              surveyYear: survey.surveyYear,
+              geographicRegion: survey.geographicRegion || 'National',
+              providerType: survey.providerType || 'Physician'
+            });
+          } else {
+            const existing = specialtyMap.get(key)!;
+            existing.records += (survey.tcc_n_orgs || 0);
+          }
+        }
+      }
+      return Array.from(specialtyMap.values());
+    };
+
+    const fetchRealSurveyData = async (isBackgroundRevalidate = false) => {
+      try {
+        if (!isBackgroundRevalidate) {
+          setError(null);
+        }
+        const { getAnalysisToolsPerformanceService } = await import('../../../services/AnalysisToolsPerformanceService');
+        const performanceService = getAnalysisToolsPerformanceService();
+        const { allData: allSurveyData } = await performanceService.getCustomBlendingData({});
+        if (allSurveyData && allSurveyData.length > 0) {
+          const availableSpecialties = processFetchedData(allSurveyData);
+          setAllData(allSurveyData);
+          setAvailableSpecialties(availableSpecialties);
+          globalCache.setCachedData(allSurveyData, availableSpecialties);
+          if (isBackgroundRevalidate) {
+            console.log('🔍 useSpecialtyBlending: Revalidated in background');
+            setIsRevalidating(false);
+          }
+        } else if (!isBackgroundRevalidate) {
+          setAllData([]);
+          setAvailableSpecialties([]);
+        }
+      } catch (err) {
+        if (!isBackgroundRevalidate) {
+          console.error('Failed to fetch survey data:', err);
+          setError('Failed to load survey data. Please try again.');
+          setAvailableSpecialties([]);
+        }
+      } finally {
+        if (!isBackgroundRevalidate) {
+          setIsLoading(false);
+        } else {
+          setIsRevalidating(false);
+        }
+      }
+    };
+
+    (async () => {
+      if (refreshTrigger > 0) {
+        await fetchRealSurveyData(false);
+        return;
+      }
+
       const cachedData = globalCache.getCachedData();
       if (cachedData) {
         console.log('🔍 useSpecialtyBlending: Using cached data (instant load)');
@@ -107,92 +287,33 @@ export const useSpecialtyBlending = ({
         setAvailableSpecialties(cachedData.availableSpecialties);
         return;
       }
-      
-      // Skip if data is already loaded to prevent unnecessary re-fetching
-      if (allData.length > 0) {
-        console.log('🔍 useSpecialtyBlending: Data already loaded, skipping fetch');
+
+      const staleData = globalCache.getStaleCachedData();
+      if (staleData) {
+        console.log('🔍 useSpecialtyBlending: Showing stale data, revalidating in background');
+        setAllData(staleData.allData);
+        setAvailableSpecialties(staleData.availableSpecialties);
+        setIsLoading(false);
+        setIsRevalidating(true);
+        fetchRealSurveyData(true);
         return;
       }
-      
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        console.log('🔍 useSpecialtyBlending: Starting optimized data fetch...');
-        
-        // Import the analytics data service to get real survey data
-        const { AnalyticsDataService } = await import('../../analytics/services/analyticsDataService');
-        const analyticsDataService = new AnalyticsDataService();
-        
-        // Get all survey data using the same service as analytics
-        const allSurveyData = await analyticsDataService.getAnalyticsData({
-          specialty: '',
-          surveySource: '',
-          geographicRegion: '',
-          providerType: '',
-          year: ''
-        });
-        
-        console.log('🔍 useSpecialtyBlending: Fetched data -', allSurveyData.length, 'records');
-        
-        if (allSurveyData && allSurveyData.length > 0) {
-          console.log('🔍 useSpecialtyBlending: Processing', allSurveyData.length, 'records');
-          
-          // Set the raw data for the browser (this is already aggregated data)
-          setAllData(allSurveyData);
-          
-          // Process aggregated survey data into specialty items
-          const specialtyMap = new Map<string, SpecialtyItem>();
-          
-          // Use for loop instead of forEach for better performance
-          for (let i = 0; i < allSurveyData.length; i++) {
-            const survey = allSurveyData[i];
-            
-            if (survey.surveySpecialty && survey.surveySource && survey.surveyYear) {
-              const key = `${survey.surveySpecialty}-${survey.surveySource}-${survey.surveyYear}-${survey.geographicRegion || 'National'}-${survey.providerType || 'Physician'}`;
-              
-              if (!specialtyMap.has(key)) {
-                specialtyMap.set(key, {
-                  id: key,
-                  name: survey.surveySpecialty,
-                  records: survey.tcc_n_orgs || 0,
-                  weight: 0,
-                  surveySource: survey.surveySource,
-                  surveyYear: survey.surveyYear,
-                  geographicRegion: survey.geographicRegion || 'National',
-                  providerType: survey.providerType || 'Physician'
-                });
-              } else {
-                // Update record count
-                const existing = specialtyMap.get(key)!;
-                existing.records += (survey.tcc_n_orgs || 0);
-              }
-            }
-          }
-          
-          console.log('🔍 useSpecialtyBlending: Created', specialtyMap.size, 'specialty items');
-          
-          const availableSpecialties = Array.from(specialtyMap.values());
-          setAvailableSpecialties(availableSpecialties);
-          
-          // Cache the data globally for 30 minutes
-          globalCache.setCachedData(allSurveyData, availableSpecialties);
-        } else {
-          console.log('🔍 useSpecialtyBlending: No data found');
-          // Fallback to empty array if no data
-          setAllData([]);
-          setAvailableSpecialties([]);
-        }
-      } catch (err) {
-        console.error('Failed to fetch survey data:', err);
-        setError('Failed to load survey data. Please try again.');
-        setAvailableSpecialties([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchRealSurveyData();
+
+      setIsLoading(true);
+      await fetchRealSurveyData(false);
+    })();
+  }, [refreshTrigger]);
+
+  const refreshData = useCallback(async () => {
+    const globalCache = GlobalBlendingCache.getInstance();
+    globalCache.clearCache();
+    const { getAnalysisToolsPerformanceService } = await import('../../../services/AnalysisToolsPerformanceService');
+    getAnalysisToolsPerformanceService().clearCache('customBlending');
+    setAllData([]);
+    setAvailableSpecialties([]);
+    setError(null);
+    setRefreshTrigger(prev => prev + 1);
+    console.log('🔍 useSpecialtyBlending: Manual refresh triggered');
   }, []);
 
   // Validation
@@ -412,6 +533,7 @@ export const useSpecialtyBlending = ({
     currentBlend,
     templates,
     isLoading,
+    isRevalidating,
     error,
     validation,
     
@@ -427,7 +549,8 @@ export const useSpecialtyBlending = ({
     validateBlend: validateBlendAction,
     resetBlend,
     clearCache,
-    refreshTemplates
+    refreshTemplates,
+    refreshData
   };
 };
 

@@ -1028,15 +1028,16 @@ export const useUploadData = (
         }
       }));
       
-      // Invalidate TanStack Query cache for benchmarking queries after successful upload
+      // Invalidate TanStack Query caches so Analysis Tools and Data Management show new data after upload
       try {
         const { queryClient } = require('../../../shared/services/queryClient');
+        const qc = queryClient.queryClient;
         const { invalidateBenchmarkingQueries } = require('../../../features/analytics/hooks/useBenchmarkingQuery');
-        invalidateBenchmarkingQueries(queryClient.queryClient);
-        // Also invalidate survey list queries (for SurveyUpload/DataPreview screens)
-        // Using ['surveys', 'list'] invalidates all survey list queries (all year/providerType combinations)
-        queryClient.queryClient.invalidateQueries({ queryKey: ['surveys', 'list'] });
-        console.log('✅ Invalidated benchmarking queries and survey list queries after survey upload');
+        invalidateBenchmarkingQueries(qc);
+        qc.invalidateQueries({ queryKey: ['surveys', 'list'] });
+        // Data Management (Specialties, Provider Types, Regions, Comp Metrics) read unmapped from IndexedDB; invalidate so they refetch
+        qc.invalidateQueries({ queryKey: ['mappings'] });
+        console.log('✅ Invalidated benchmarking, survey list, and mapping caches after survey upload');
       } catch (error) {
         console.warn('Failed to invalidate query cache:', error);
       }

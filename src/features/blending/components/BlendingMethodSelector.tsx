@@ -5,7 +5,7 @@
  * This component appears first in the workflow to set expectations
  */
 
-import React from 'react';
+import React, { memo } from 'react';
 import { CalculatorIcon, ChartBarIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 
 export type BlendingMethod = 'weighted' | 'simple' | 'custom';
@@ -20,7 +20,51 @@ interface BlendingMethodSelectorProps {
   filteredSurveyData: any[];
 }
 
-export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
+/** Scale current weights proportionally so they sum to 100%. If total is 0, use equal weights. */
+function normalizeWeightsTo100(
+  selectedDataRows: number[],
+  customWeights: Record<number, number>
+): Record<number, number> {
+  const total = selectedDataRows.reduce((sum, index) => sum + (customWeights[index] || 0), 0);
+  const n = selectedDataRows.length;
+  if (n === 0) return {};
+  if (total <= 0) {
+    const equal = Math.floor((100 / n) * 10) / 10;
+    const remainder = Math.round((100 - equal * n) * 10) / 10;
+    const out: Record<number, number> = {};
+    selectedDataRows.forEach((index, i) => {
+      out[index] = i === 0 ? equal + remainder : equal;
+    });
+    return out;
+  }
+  const scale = 100 / total;
+  const out: Record<number, number> = {};
+  let sum = 0;
+  selectedDataRows.forEach((index, i) => {
+    const w = (customWeights[index] || 0) * scale;
+    const rounded = i === selectedDataRows.length - 1
+      ? Math.round((100 - sum) * 10) / 10
+      : Math.round(w * 10) / 10;
+    out[index] = rounded;
+    sum += rounded;
+  });
+  return out;
+}
+
+/** Set equal weight per specialty so total is exactly 100%. */
+function equalWeights(selectedDataRows: number[]): Record<number, number> {
+  const n = selectedDataRows.length;
+  if (n === 0) return {};
+  const base = Math.floor((100 / n) * 10) / 10;
+  const remainder = Math.round((100 - base * n) * 10) / 10;
+  const out: Record<number, number> = {};
+  selectedDataRows.forEach((index, i) => {
+    out[index] = i === 0 ? base + remainder : base;
+  });
+  return out;
+}
+
+const BlendingMethodSelectorInner: React.FC<BlendingMethodSelectorProps> = ({
   method,
   onMethodChange,
   selectedCount,
@@ -31,6 +75,20 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
 }) => {
   const totalWeight = Object.values(customWeights).reduce((sum, weight) => sum + (weight || 0), 0);
   const isWeightValid = Math.abs(totalWeight - 100) < 0.1;
+
+  const handleNormalizeTo100 = () => {
+    const next = normalizeWeightsTo100(selectedDataRows, customWeights);
+    Object.entries(next).forEach(([indexStr, weight]) => {
+      onCustomWeightChange(Number(indexStr), weight);
+    });
+  };
+
+  const handleSetEqualWeights = () => {
+    const next = equalWeights(selectedDataRows);
+    Object.entries(next).forEach(([indexStr, weight]) => {
+      onCustomWeightChange(Number(indexStr), weight);
+    });
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
@@ -157,17 +215,33 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
         {/* Custom Weight Controls */}
         {method === 'custom' && selectedCount > 0 && (
           <div className="space-y-4 bg-gray-50 rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-medium text-gray-900">Set Custom Weights (%)</h3>
-              <div className={`text-sm font-medium ${
-                isWeightValid ? 'text-green-600' : 'text-red-600'
-              }`}>
-                Total: {totalWeight.toFixed(1)}%
-                {!isWeightValid && (
-                  <span className="ml-2 text-xs text-amber-600">
-                    (Should be 100%)
-                  </span>
-                )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-sm font-medium text-gray-600">
+                  Total: {totalWeight.toFixed(1)}%
+                  {!isWeightValid && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      (Should be 100%)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleNormalizeTo100}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl border border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
+                  >
+                    Normalize to 100%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSetEqualWeights}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
+                  >
+                    Set equal weights
+                  </button>
+                </div>
               </div>
             </div>
             <div className="space-y-4">
@@ -192,7 +266,7 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
                             {row.surveySource} • {(row.tcc_n_orgs || row.n_orgs || 0).toLocaleString()} records
                           </div>
                         </div>
-                        <div className="text-sm font-medium text-indigo-600 ml-4">
+                        <div className="text-sm font-medium text-gray-700 ml-4">
                           {currentWeight.toFixed(1)}%
                         </div>
                       </div>
@@ -238,9 +312,7 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
                               const value = parseFloat(e.target.value) || 0;
                               onCustomWeightChange(index, value);
                             }}
-                            className={`w-20 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                              currentWeight > 0 ? 'border-indigo-300 bg-indigo-50' : 'border-gray-300'
-                            }`}
+                            className="w-20 px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                             placeholder="0"
                           />
                           <span className="text-sm text-gray-500">%</span>
@@ -252,8 +324,8 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
               })}
             </div>
             {!isWeightValid && (
-              <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
-                💡 Tip: Weights should total 100% for optimal blending
+              <div className="text-xs text-gray-600 bg-gray-100 p-3 rounded-lg border border-gray-200">
+                Tip: Weights should total 100% for optimal blending
               </div>
             )}
           </div>
@@ -263,4 +335,5 @@ export const BlendingMethodSelector: React.FC<BlendingMethodSelectorProps> = ({
   );
 };
 
+export const BlendingMethodSelector = memo(BlendingMethodSelectorInner);
 

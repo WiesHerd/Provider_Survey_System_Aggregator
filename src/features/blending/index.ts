@@ -13,7 +13,7 @@ export { TemplateManager } from './components/TemplateManager';
 export { BlendingResults } from './components/BlendingResults';
 
 // Hooks
-export { useSpecialtyBlending } from './hooks/useSpecialtyBlending';
+export { useSpecialtyBlending, prefetchBlendingData } from './hooks/useSpecialtyBlending';
 
 // Types
 export type {

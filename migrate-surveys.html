@@ -64,14 +64,20 @@
   <pre id="log"></pre>
 
   <script>
+    // SECURITY: Do not commit real keys. Get config from Firebase Console > Project settings > Your apps,
+    // or copy from your .env.local (REACT_APP_FIREBASE_*). Restrict this API key to your domains in Google Cloud Console.
     const firebaseConfig = {
-      apiKey: "AIzaSyAV0l05MZGknZ0i39ETqOT04A06plbcEH4",
-      authDomain: "provider-survey-aggregator.firebaseapp.com",
-      projectId: "provider-survey-aggregator",
-      storageBucket: "provider-survey-aggregator.firebasestorage.app",
-      messagingSenderId: "59362936288",
-      appId: "1:59362936288:web:b1bd80877ae4ffadc09785"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.firebasestorage.app",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "1:YOUR_SENDER_ID:web:YOUR_APP_ID"
     };
+    if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+      document.getElementById('log').textContent = "Configure Firebase: edit migrate-surveys.html and set firebaseConfig from your .env.local or Firebase Console. Do not commit real keys.";
+      throw new Error("Firebase config not set");
+    }
 
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();

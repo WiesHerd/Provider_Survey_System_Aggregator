@@ -43,7 +43,19 @@ export const useBlendingFilters = (allData: any[]) => {
   const [selectedProviderTypes, setSelectedProviderTypes] = useState<string[]>([]);
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
 
-  // Cascading filter options - computed based on current multi-select selections
+  // Helper: row matches selected provider type (Physician matches Staff Physician, Physician, staff physician)
+  const matchesProviderType = useCallback((row: any, selectedSet: Set<string>) => {
+    if (selectedSet.size === 0) return true;
+    const pt = safeString(row?.providerType);
+    for (const selected of selectedSet) {
+      if (selected === 'Physician') {
+        if (pt === 'Staff Physician' || pt === 'Physician' || pt === 'staff physician') return true;
+      } else if (pt === selected) return true;
+    }
+    return false;
+  }, [safeString]);
+
+  // Single-pass cascading filter options: one O(n) pass over allData
   const filterOptions = useMemo((): FilterOptions => {
     if (!allData || allData.length === 0) {
       return {
@@ -54,49 +66,50 @@ export const useBlendingFilters = (allData: any[]) => {
         specialties: []
       };
     }
+    const surveySet = new Set<string>();
+    const yearSet = new Set<string>();
+    const regionSet = new Set<string>();
+    const providerTypeSet = new Set<string>();
+    const specialtySet = new Set<string>();
+    const selSurveys = new Set(selectedSurveys);
+    const selYears = new Set(selectedYears);
+    const selRegions = new Set(selectedRegions);
+    const selProviderTypes = new Set(selectedProviderTypes);
+    const selSpecialties = new Set(selectedSpecialties);
 
-    const surveys = [...new Set(allData.map(row => safeString(row?.surveySource)).filter(Boolean))].sort();
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      if (!row) continue;
+      const s = safeString(row.surveySource);
+      const y = safeString(row.surveyYear);
+      const r = safeString(row.geographicRegion);
+      const pt = safeString(row.providerType);
+      const sp = safeString(row.surveySpecialty);
 
-    let dataForYears = allData;
-    if (selectedSurveys.length > 0) {
-      dataForYears = dataForYears.filter(row => selectedSurveys.includes(safeString(row?.surveySource)));
+      if (s) surveySet.add(s);
+
+      const okSurvey = selSurveys.size === 0 || selSurveys.has(s);
+      if (okSurvey && y) yearSet.add(y);
+
+      const okYear = selYears.size === 0 || selYears.has(y);
+      if (okSurvey && okYear && r) regionSet.add(r);
+
+      const okRegion = selRegions.size === 0 || selRegions.has(r);
+      if (okSurvey && okYear && okRegion && pt) providerTypeSet.add(pt);
+
+      const okProvider = selProviderTypes.size === 0 || matchesProviderType(row, selProviderTypes);
+      if (okSurvey && okYear && okRegion && okProvider && sp) specialtySet.add(sp);
     }
-    const years = [...new Set(dataForYears.map(row => safeString(row?.surveyYear)).filter(Boolean))].sort();
 
-    let dataForRegions = dataForYears;
-    if (selectedYears.length > 0) {
-      dataForRegions = dataForRegions.filter(row => selectedYears.includes(safeString(row?.surveyYear)));
-    }
-    const regions = [...new Set(dataForRegions.map(row => safeString(row?.geographicRegion)).filter(Boolean))].sort();
-
-    let dataForProviderTypes = dataForRegions;
-    if (selectedRegions.length > 0) {
-      dataForProviderTypes = dataForProviderTypes.filter(row => selectedRegions.includes(safeString(row?.geographicRegion)));
-    }
-    const providerTypes = [...new Set(dataForProviderTypes.map(row => safeString(row?.providerType)).filter(Boolean))].sort();
-
-    let dataForSpecialties = dataForProviderTypes;
-    if (selectedProviderTypes.length > 0) {
-      dataForSpecialties = dataForSpecialties.filter(row => {
-        const pt = safeString(row?.providerType);
-        return selectedProviderTypes.some(selected => {
-          if (selected === 'Physician') {
-            return pt === 'Staff Physician' || pt === 'Physician' || pt === 'staff physician';
-          }
-          return pt === selected;
-        });
-      });
-    }
-    const specialties = [...new Set(dataForSpecialties.map(row => safeString(row?.surveySpecialty)).filter(Boolean))].sort();
-
+    const sort = (arr: string[]) => [...arr].filter(Boolean).sort();
     return {
-      surveys,
-      years,
-      regions,
-      providerTypes,
-      specialties
+      surveys: sort(Array.from(surveySet)),
+      years: sort(Array.from(yearSet)),
+      regions: sort(Array.from(regionSet)),
+      providerTypes: sort(Array.from(providerTypeSet)),
+      specialties: sort(Array.from(specialtySet))
     };
-  }, [allData, selectedSurveys, selectedYears, selectedRegions, selectedProviderTypes, safeString]);
+  }, [allData, selectedSurveys, selectedYears, selectedRegions, selectedProviderTypes, selectedSpecialties, safeString, matchesProviderType]);
 
   const handleSurveyChange = useCallback((value: string[]) => {
     setSelectedSurveys(Array.isArray(value) ? value : []);

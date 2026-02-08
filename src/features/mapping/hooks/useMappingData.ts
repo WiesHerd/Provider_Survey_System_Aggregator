@@ -204,20 +204,10 @@ export const useMappingData = (): UseMappingDataReturn => {
     }
   }, [queryError]);
   
-  // Data loading function - now just triggers refetch (React Query handles caching)
+  // Data loading function - triggers refetch (e.g. after mutation). React Query serves cache on mount; no refetch on mount so return visits are instant (same as Analysis Tools).
   const loadData = useCallback(async () => {
     await refetchData();
   }, [refetchData]);
-
-  // Reload data on mount and when data category or showAllProviderTypes toggle changes
-  // CRITICAL FIX: Include loadData in dependencies to ensure we always use the latest version
-  useEffect(() => {
-    console.log('🔍 useMappingData: Reloading data due to state change:', {
-      selectedProviderType,
-      showAllProviderTypes
-    });
-    loadData();
-  }, [loadData]); // loadData is a useCallback that depends on selectedProviderType and showAllProviderTypes
 
   // Specialty selection
   const selectSpecialty = useCallback((specialty: IUnmappedSpecialty) => {

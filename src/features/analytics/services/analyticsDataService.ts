@@ -126,7 +126,8 @@ export class AnalyticsDataService {
             providerType: survey.providerType
           });
           
-          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
+          // Firestore max query limit is 10,000; use that so all specialties appear in filters where possible
+          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 10000 });
           
           if (surveyData.rows.length === 0) {
             console.log('⚠️ No data rows for survey:', survey.name);
@@ -280,7 +281,8 @@ export class AnalyticsDataService {
             year: survey.year
           });
           
-          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 500 });
+          // Firestore max query limit is 10,000; use that so all specialties appear in filters where possible
+          const surveyData = await this.dataService.getSurveyData(survey.id, {}, { limit: 10000 });
           
           if (surveyData.rows.length === 0) {
             console.log(`📊 Survey ${survey.id} (${survey.name}) has no data rows - SKIPPED`);

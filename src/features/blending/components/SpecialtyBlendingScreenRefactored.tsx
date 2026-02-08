@@ -4,8 +4,8 @@
  * Enterprise-grade specialty blending with improved workflow and UX
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { ChevronDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import { ChevronDownIcon, ArrowPathIcon, ArrowPathRoundedSquareIcon } from '@heroicons/react/24/outline';
 import { useSpecialtyBlending } from '../hooks/useSpecialtyBlending';
 import { useBlendingFilters } from '../hooks/useBlendingFilters';
 import { useSelectionHistory } from '../hooks/useSelectionHistory';
@@ -21,8 +21,6 @@ import { WorkflowProgress } from './WorkflowProgress';
 import { useToast } from '../../../components/ui/use-toast';
 import { ConfirmationModal } from '../../../components/ui/confirmation-modal';
 import { SuccessModal } from '../../../components/ui/success-modal';
-import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
-import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import './BlendingCharts.css';
 
 interface SpecialtyBlendingScreenProps {
@@ -32,18 +30,11 @@ interface SpecialtyBlendingScreenProps {
 
 type WorkflowStep = 'method' | 'filter' | 'select' | 'review';
 
-export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreenProps> = ({
+const SpecialtyBlendingScreenRefactoredInner: React.FC<SpecialtyBlendingScreenProps> = ({
   onBlendCreated,
   onClose
 }) => {
   const { toast } = useToast();
-  
-  // Use smooth progress for dynamic loading
-  const { progress, startProgress, completeProgress } = useSmoothProgress({
-    duration: 3000,
-    maxProgress: 90,
-    intervalMs: 100
-  });
 
   // Blend configuration state
   const [blendName, setBlendName] = useState('');
@@ -62,9 +53,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
   const [blendingMethod, setBlendingMethod] = useState<'weighted' | 'simple' | 'custom'>('weighted');
   const [customWeights, setCustomWeights] = useState<Record<number, number>>({});
   
-  // Workflow state
-  const [currentWorkflowStep, setCurrentWorkflowStep] = useState<WorkflowStep>('method');
-  
   // Selection history for undo/redo
   const {
     selection: selectedDataRows,
@@ -81,11 +69,13 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     allData,
     templates,
     isLoading,
+    isRevalidating,
     error,
     validation,
     saveTemplate,
     deleteTemplate,
-    refreshTemplates
+    refreshTemplates,
+    refreshData
   } = useSpecialtyBlending({
     maxSpecialties: 10,
     allowTemplates: true
@@ -112,24 +102,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     setSelectedSpecialties,
     resetFilters
   } = useBlendingFilters(allData);
-
-  // Start progress animation when loading begins
-  useEffect(() => {
-    if (isLoading) {
-      startProgress();
-    } else {
-      completeProgress();
-    }
-  }, [isLoading, startProgress, completeProgress]);
-
-  // Update workflow step based on selections
-  useEffect(() => {
-    if (selectedDataRows.length > 0 && currentWorkflowStep === 'select') {
-      setCurrentWorkflowStep('review');
-    } else if (filteredSurveyData.length > 0 && currentWorkflowStep === 'filter') {
-      setCurrentWorkflowStep('select');
-    }
-  }, [selectedDataRows.length, filteredSurveyData.length, currentWorkflowStep]);
 
   // Template loading state
   const [pendingTemplate, setPendingTemplate] = useState<any>(null);
@@ -235,7 +207,6 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       });
       return;
     }
-    
     if (selectedDataRows.length === 0) {
       toast({
         title: 'No Data Selected',
@@ -244,7 +215,17 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
       });
       return;
     }
-    
+    if (blendingMethod === 'custom') {
+      const totalWeight = selectedDataRows.reduce((sum, idx) => sum + (customWeights[idx] ?? 0), 0);
+      if (Math.abs(totalWeight - 100) >= 0.5) {
+        toast({
+          title: 'Custom Weights Must Sum to 100%',
+          description: `Current total is ${totalWeight.toFixed(1)}%. Adjust weights in Step 1 before saving.`,
+          variant: 'destructive'
+        });
+        return;
+      }
+    }
     setShowSaveConfirmation(true);
   };
 
@@ -419,64 +400,27 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     setCustomWeights(prev => ({ ...prev, [index]: weight }));
   }, []);
 
-  // Get current workflow step
-  const getCurrentWorkflowStep = (): WorkflowStep => {
+  // Derived workflow step (no separate state)
+  const workflowStep: WorkflowStep = useMemo(() => {
     if (selectedDataRows.length > 0) return 'review';
     if (filteredSurveyData.length > 0) return 'select';
-    if (selectedSurveys.length > 0 || selectedYears.length > 0 || selectedRegions.length > 0 || selectedProviderTypes.length > 0) return 'filter';
+    if (selectedSurveys.length > 0 || selectedYears.length > 0 || selectedRegions.length > 0 || selectedProviderTypes.length > 0 || selectedSpecialtyFilters.length > 0) return 'filter';
     return 'method';
-  };
+  }, [selectedDataRows.length, filteredSurveyData.length, selectedSurveys.length, selectedYears.length, selectedRegions.length, selectedProviderTypes.length, selectedSpecialtyFilters.length]);
 
-  const workflowStep = getCurrentWorkflowStep();
-  
-  // Show loading state while data is being fetched
-  if (isLoading) {
-    return (
-      <EnterpriseLoadingSpinner
-        message="Loading survey data..."
-        recordCount="auto"
-        data={filteredSurveyData}
-        progress={progress}
-        variant="overlay"
-        loading={isLoading}
-      />
-    );
-  }
-
-  // Show error state if data loading failed
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="w-full px-2 py-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
-              <p className="text-gray-500 mb-4">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-              >
-                <ArrowPathIcon className="w-4 h-4 mr-2" />
-                Retry
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Shell-first: never block the whole screen. hasActiveFilters and noDataLoaded used for content region.
+  const hasActiveFilters = selectedSurveys.length > 0 || selectedYears.length > 0 || selectedRegions.length > 0 || selectedProviderTypes.length > 0 || selectedSpecialtyFilters.length > 0;
+  const noDataLoaded = allData.length === 0;
+  const showInitialLoading = isLoading && noDataLoaded;
+  const showNoDataState = !isLoading && noDataLoaded;
+  const blendingMethodLabel = blendingMethod === 'weighted' ? 'Weighted' : blendingMethod === 'simple' ? 'Simple average' : 'Custom weights';
 
   return (
     <div className="bg-gray-50 min-h-full">
       <div className="w-full px-2 py-2">
         
         {/* Workflow Progress Indicator */}
-        <WorkflowProgress currentStep={workflowStep} isCompleted={isBlendCreated} />
+        <WorkflowProgress currentStep={workflowStep} isCompleted={isBlendCreated} blendingMethodLabel={blendingMethodLabel} />
         
         {/* Blend Configuration */}
         <TemplateManager
@@ -494,19 +438,28 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           isLoadingTemplate={isLoadingTemplate}
         />
         
-        {/* Error Display */}
+        {/* Error Display - In-shell so layout is always visible */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-1">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">Error Loading Data</h3>
+                  <div className="mt-2 text-sm text-red-700">{error}</div>
+                </div>
               </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <div className="mt-2 text-sm text-red-700">{error}</div>
-              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors flex-shrink-0"
+              >
+                <ArrowPathIcon className="w-4 h-4 mr-2" />
+                Retry
+              </button>
             </div>
           </div>
         )}
@@ -552,7 +505,7 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           onRemoveItem={handleRemoveItem}
         />
         
-        {/* Survey Data Browser */}
+        {/* Survey Data Browser - Shell always visible; loading/no-data only in this region */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
@@ -560,7 +513,9 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
                 <h2 className="text-lg font-semibold text-gray-900">
                   Step 2 & 3: Filter and Select Data
                 </h2>
-                <p className="text-sm text-gray-600 mt-1">Filter survey data and select items for blending</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {showInitialLoading ? 'Loading surveys…' : isRevalidating ? 'Updating…' : 'Filter survey data and select items for blending'}
+                </p>
               </div>
               <button
                 onClick={() => setIsDataBrowserCollapsed(!isDataBrowserCollapsed)}
@@ -575,48 +530,120 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
           </div>
           {!isDataBrowserCollapsed && (
             <div className="px-6 py-6">
-              {/* Advanced Filters */}
-              <SurveyDataFilters
-                selectedSurveys={selectedSurveys}
-                selectedYears={selectedYears}
-                selectedRegions={selectedRegions}
-                selectedProviderTypes={selectedProviderTypes}
-                selectedSpecialties={selectedSpecialtyFilters}
-                onSurveyChange={handleSurveyChange}
-                onYearChange={handleYearChange}
-                onRegionChange={handleRegionChange}
-                onProviderTypeChange={handleProviderTypeChange}
-                onSelectedSpecialtiesChange={handleSelectedSpecialtiesChange}
-                onClearFilters={resetFilters}
-                filterOptions={filterOptions}
-              />
+              {showInitialLoading && (
+                <>
+                  <p className="mb-4 text-sm text-gray-500" role="status" aria-live="polite">
+                    Loading surveys…
+                  </p>
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden" aria-hidden="true">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-gray-200 last:border-b-0">
+                        <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 flex-1 max-w-[200px] bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-28 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 w-16 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
-              {/* Table Actions Bar - Directly above table for immediate feedback */}
-              <TableActionsBar
-                onSelectAll={handleSelectAll}
-                onClearAll={handleClearAll}
-                onSelectBySurvey={handleSelectBySurvey}
-                onSelectByYear={handleSelectByYear}
-                availableSurveys={filterOptions.surveys}
-                availableYears={filterOptions.years}
-                selectedCount={selectedDataRows.length}
-                totalCount={filteredSurveyData.length}
-                onUndo={canUndo ? undo : undefined}
-                onRedo={canRedo ? redo : undefined}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                selectedRows={selectedDataRows}
-                filteredSurveyData={filteredSurveyData}
-              />
+              {showNoDataState && (
+                <div className="bg-white rounded-xl border border-gray-200 p-8">
+                  <div className="text-center max-w-md mx-auto">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <ChevronDownIcon className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Survey Data Yet</h3>
+                    <p className="text-gray-500 mb-4">
+                      Survey data may not have loaded yet—for example, if you use cloud storage, sign in first and then click Refresh. Otherwise, upload surveys from the Upload page. Once data is loaded, you can filter by Survey, Year, Region, Provider Type, and Specialty, then select rows to blend.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        onClick={refreshData}
+                        disabled={isLoading}
+                        className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        <ArrowPathRoundedSquareIcon className="w-4 h-4 mr-2" />
+                        {isLoading ? 'Loading…' : 'Refresh'}
+                      </button>
+                      {onClose && (
+                        <button
+                          onClick={onClose}
+                          className="inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                        >
+                          Go to Upload
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              {/* Data Table */}
-              <SurveyDataTable
-                data={filteredSurveyData}
-                selectedRows={selectedDataRows}
-                onRowSelectionChange={handleRowSelectionChange}
-                isLoading={isLoading}
-                progress={progress}
-              />
+              {!showInitialLoading && !showNoDataState && (
+                <>
+                  {isRevalidating && (
+                    <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-800" role="status" aria-live="polite">
+                      Updating…
+                    </div>
+                  )}
+                  {/* Advanced Filters */}
+                  <SurveyDataFilters
+                    selectedSurveys={selectedSurveys}
+                    selectedYears={selectedYears}
+                    selectedRegions={selectedRegions}
+                    selectedProviderTypes={selectedProviderTypes}
+                    selectedSpecialties={selectedSpecialtyFilters}
+                    onSurveyChange={handleSurveyChange}
+                    onYearChange={handleYearChange}
+                    onRegionChange={handleRegionChange}
+                    onProviderTypeChange={handleProviderTypeChange}
+                    onSelectedSpecialtiesChange={handleSelectedSpecialtiesChange}
+                    onClearFilters={resetFilters}
+                    filterOptions={filterOptions}
+                  />
+
+                  {hasActiveFilters && filteredSurveyData.length === 0 && (
+                    <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      <span>No rows match your filters. Clear filters or adjust Survey, Year, Region, or Provider Type.</span>
+                      <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="shrink-0 font-medium text-amber-700 underline hover:no-underline"
+                      >
+                        Clear filters
+                      </button>
+                    </div>
+                  )}
+
+                  <TableActionsBar
+                    onSelectAll={handleSelectAll}
+                    onClearAll={handleClearAll}
+                    onSelectBySurvey={handleSelectBySurvey}
+                    onSelectByYear={handleSelectByYear}
+                    availableSurveys={filterOptions.surveys}
+                    availableYears={filterOptions.years}
+                    selectedCount={selectedDataRows.length}
+                    totalCount={filteredSurveyData.length}
+                    onUndo={canUndo ? undo : undefined}
+                    onRedo={canRedo ? redo : undefined}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    selectedRows={selectedDataRows}
+                    filteredSurveyData={filteredSurveyData}
+                  />
+
+                  <SurveyDataTable
+                    data={filteredSurveyData}
+                    selectedRows={selectedDataRows}
+                    onRowSelectionChange={handleRowSelectionChange}
+                    isLoading={false}
+                    progress={100}
+                  />
+                </>
+              )}
             </div>
           )}
         </div>
@@ -665,3 +692,8 @@ export const SpecialtyBlendingScreenRefactored: React.FC<SpecialtyBlendingScreen
     </div>
   );
 };
+
+const SpecialtyBlendingScreenRefactored = memo(SpecialtyBlendingScreenRefactoredInner);
+SpecialtyBlendingScreenRefactored.displayName = 'SpecialtyBlendingScreenRefactored';
+export { SpecialtyBlendingScreenRefactored };
+export default SpecialtyBlendingScreenRefactored;

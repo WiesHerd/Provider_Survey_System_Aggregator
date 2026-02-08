@@ -184,6 +184,22 @@ export const DatabaseProvider: React.FC<DatabaseProviderProps> = ({ children }) 
         }
       }
       
+      // When Firebase is primary, do not block the app: allow user in and use Firebase only.
+      // IndexedDB is only a fallback; they can retry or clear it later (e.g. delete SurveyAggregatorDB in DevTools).
+      if (isFirebasePrimary) {
+        console.warn('📦 DatabaseContext: IndexedDB failed but Firebase is primary - allowing app to load');
+        setState(prev => ({
+          ...prev,
+          isReady: true,
+          isInitializing: false,
+          healthStatus: 'unknown',
+          error: null,
+          lastChecked: Date.now()
+        }));
+        initializationStartedRef.current = false;
+        return;
+      }
+
       setState(prev => ({
         ...prev,
         isReady: false,

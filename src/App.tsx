@@ -162,7 +162,7 @@ const CustomReports = lazy(() =>
     })
 );
 const CannedReports = lazy(() => import('./features/reports/components/CannedReports').then(module => ({ default: module.default })));
-const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored').then(module => ({ default: module.SpecialtyBlendingScreenRefactored })));
+const SpecialtyBlending = lazy(() => import('./features/blending/components/SpecialtyBlendingScreenRefactored'));
 const SimpleAuthScreen = lazy(() => import('./components/auth/SimpleAuthScreen').then(module => ({ default: module.SimpleAuthScreen })));
 
 
@@ -258,6 +258,9 @@ const DatabaseInitializationScreen: React.FC = () => {
               <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
                 <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   Try refreshing the page
+                </Typography>
+                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <strong>If still stuck:</strong> Open DevTools (F12) → Application tab → Storage → IndexedDB → delete &quot;SurveyAggregatorDB&quot; → refresh the page
                 </Typography>
                 <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   Check if your browser supports IndexedDB

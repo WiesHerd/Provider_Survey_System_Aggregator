@@ -18,6 +18,8 @@ interface WorkflowProgressProps {
   currentStep: 'method' | 'filter' | 'select' | 'review';
   onStepClick?: (step: string) => void;
   isCompleted?: boolean;
+  /** @deprecated No longer displayed; kept for backward compatibility */
+  blendingMethodLabel?: string;
 }
 
 export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({

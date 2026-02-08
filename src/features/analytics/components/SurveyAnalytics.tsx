@@ -571,93 +571,30 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
       });
     }
     
-    // CRITICAL FIX: Generate survey sources from ALL data, not cascading-filtered data
-    // This ensures all surveys are always available in the dropdown, regardless of other filter selections
-    // Other options (specialties, regions, etc.) can still use cascading filters for better UX
-    const allSurveySources = allData.map(row => row.surveySource).filter((item): item is string => Boolean(item));
-    const availableSourcesFromAllData = [...new Set(allSurveySources)].sort();
-    
-    // ENTERPRISE DIAGNOSTIC: Log survey sources to debug missing Physician surveys
-    console.log('🔍 SurveyAnalytics: Survey source generation for Benchmarking:', {
-      totalDataRows: allData.length,
-      totalSurveySources: allSurveySources.length,
-      uniqueSurveySources: availableSourcesFromAllData.length,
-      allSurveySourcesList: availableSourcesFromAllData,
-      hasPhysicianSurveys: availableSourcesFromAllData.some(s => s.toLowerCase().includes('physician')),
-      hasAppSurveys: availableSourcesFromAllData.some(s => s.toLowerCase().includes('app')),
-      sampleDataRows: allData.slice(0, 5).map(row => ({
-        surveySource: row.surveySource,
-        providerType: row.providerType,
-        dataCategory: (row as any).dataCategory
-      }))
-    });
-    
-    // CRITICAL FIX: Generate data categories from ALL data, not cascading-filtered data
-    // This ensures all data categories are always available in the dropdown, regardless of other filter selections
-    // This allows users to filter by data category even if current specialty selection doesn't have that category
-    // ENTERPRISE FIX: Also detect Call Pay from survey source name if dataCategory is missing (backward compatibility)
-    const allDataCategories = allData.map(row => {
+    // CASCADING OPTIONS: Only show dropdown values that have data for the current filter combination.
+    // This prevents "No Benchmarking Data Available" from selecting options that yield zero rows.
+    const availableSourcesFromCascading = [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].sort();
+
+    // Data categories from cascading data only (so selected category always has data)
+    const dataCategoriesFromCascading = cascadingData.map((row: AggregatedData | DynamicAggregatedData) => {
       const dataCategory = (row as any).dataCategory;
-      // If no dataCategory, infer from surveySource for backward compatibility
       if (!dataCategory) {
         const surveySource = row.surveySource || '';
-        if (surveySource.toLowerCase().includes('call pay')) {
-          return 'CALL_PAY';
-        }
-        if (surveySource.toLowerCase().includes('moonlighting')) {
-          return 'MOONLIGHTING';
-        }
+        if (surveySource.toLowerCase().includes('call pay')) return 'CALL_PAY';
+        if (surveySource.toLowerCase().includes('moonlighting')) return 'MOONLIGHTING';
       }
       return dataCategory;
     }).filter((item): item is string => Boolean(item));
-    const availableDataCategoriesFromAllData = [...new Set(allDataCategories)].sort();
-    // Format data categories for display
-    const formattedDataCategoriesFromAllData = availableDataCategoriesFromAllData.map(cat => {
+    const availableDataCategoriesFromCascading = [...new Set(dataCategoriesFromCascading)].sort();
+    const formattedDataCategoriesFromCascading = availableDataCategoriesFromCascading.map(cat => {
       if (cat === 'CALL_PAY') return 'Call Pay';
       if (cat === 'MOONLIGHTING') return 'Moonlighting';
       if (cat === 'COMPENSATION') return 'Compensation';
       return cat;
     });
-    
-    // CRITICAL DEBUG: Check for MGMA surveys specifically
-    const mgmaSources = allSurveySources.filter(src => src.toLowerCase().includes('mgma'));
-    const uniqueMgmaSources = [...new Set(mgmaSources)];
-    
-    // Enhanced logging to debug survey source generation
-    console.log('🔍 SurveyAnalytics: Survey source generation:', {
-      totalRows: allData.length,
-      totalSurveySources: allSurveySources.length,
-      uniqueSurveySources: availableSourcesFromAllData.length,
-      allSurveySourcesList: availableSourcesFromAllData,
-      mgmaSourcesRaw: mgmaSources,
-      uniqueMgmaSources: uniqueMgmaSources,
-      hasMgmaPhysician: availableSourcesFromAllData.some(s => s === 'MGMA Physician'),
-      hasMgmaCallPay: availableSourcesFromAllData.some(s => s === 'MGMA Call Pay'),
-      sampleRows: allData.slice(0, 10).map(row => ({
-        surveySource: row.surveySource,
-        dataCategory: (row as any).dataCategory,
-        providerType: row.providerType,
-        specialty: row.standardizedName
-      })),
-      mgmaRows: (allData as (AggregatedData | DynamicAggregatedData)[]).filter((row: AggregatedData | DynamicAggregatedData) => row.surveySource && row.surveySource.toLowerCase().includes('mgma')).slice(0, 5).map((row: AggregatedData | DynamicAggregatedData) => ({
-        surveySource: row.surveySource,
-        dataCategory: (row as any).dataCategory,
-        providerType: row.providerType,
-        specialty: row.standardizedName
-      }))
-    });
-    
-    // Generate other options from the cascading-filtered dataset (for specialties, regions, etc.)
+
+    // All other options from cascading data (specialties, regions, years, provider types)
     const availableSpecialties = [...new Set(cascadingData.map(row => row.standardizedName).filter((item): item is string => Boolean(item)))].sort();
-    
-    console.log('🔍 SurveyAnalytics: Filter options generated:', {
-      specialties: availableSpecialties.length,
-      sources: availableSourcesFromAllData.length,
-      sourcesFromCascading: [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].length,
-      specialtiesList: availableSpecialties.slice(0, 5), // Show first 5
-      sourcesList: availableSourcesFromAllData, // Show all sources
-      cascadingSourcesList: [...new Set(cascadingData.map(row => row.surveySource).filter((item): item is string => Boolean(item)))].slice(0, 5)
-    });
     
     // Get unique regions and create formatted display options
     const uniqueRegions = [...new Set(cascadingData.map(row => row.geographicRegion).filter((item): item is string => Boolean(item)))].sort();
@@ -706,35 +643,64 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
     });
     const availableProviderTypes = Array.from(providerTypeMap.values()).sort();
     const availableYears = [...new Set(cascadingData.map(row => row.surveyYear).filter((item): item is string => Boolean(item)))].sort();
-    
-    // CRITICAL FIX: Use data categories from ALL data, not cascading-filtered data
-    // This ensures all data categories are always available in the dropdown, regardless of other filter selections
-    // This matches the pattern used for survey sources above
-    // Note: formattedDataCategoriesFromAllData was already created above from allData
 
-    console.log('🔍 SurveyAnalytics: All filter options:', {
-      specialties: availableSpecialties.length,
-      sources: availableSourcesFromAllData.length,
-      regions: availableRegions.length,
-      providerTypes: availableProviderTypes.length,
-      dataCategories: formattedDataCategoriesFromAllData.length,
-      years: availableYears.length,
-      providerTypesList: availableProviderTypes.slice(0, 5),
-      dataCategoriesList: formattedDataCategoriesFromAllData.slice(0, 5),
-      yearsList: availableYears.slice(0, 5),
-      allSourcesList: availableSourcesFromAllData
-    });
+    // Only show specialty options that have data (avoids referencing filterOptions before init)
+    const allowedSpecialtyNames = new Set(availableSpecialties);
+    const dataBackedSpecialtyOptions = allowedSpecialtyNames.size === 0
+      ? []
+      : specialtyOptions.filter(opt => allowedSpecialtyNames.has(opt.name));
 
     return {
       specialties: availableSpecialties,
-      sources: availableSourcesFromAllData, // CRITICAL FIX: Use all sources from allData, not cascading-filtered
+      sources: availableSourcesFromCascading,
       regions: availableRegions,
       regionMapping: regionMapping,
       providerTypes: availableProviderTypes,
-      dataCategories: formattedDataCategoriesFromAllData, // CRITICAL FIX: Use all data categories from allData, not cascading-filtered
-      years: availableYears
+      dataCategories: formattedDataCategoriesFromCascading,
+      years: availableYears,
+      dataBackedSpecialtyOptions
     };
-  }, [allData, filters, isBenchmarkingScreen]);
+  }, [allData, filters, isBenchmarkingScreen, specialtyOptions]);
+
+  // Only show Display Variables that have data for the current filter combination (Year, Source, Specialty, etc.).
+  const dataBackedVariableSet = useMemo(() => {
+    const set = new Set<string>();
+    (data as (AggregatedData | DynamicAggregatedData)[]).forEach((row: AggregatedData | DynamicAggregatedData) => {
+      const vars = (row as { variables?: Record<string, unknown> }).variables;
+      if (vars && typeof vars === 'object') {
+        Object.keys(vars).forEach(k => set.add(k));
+      }
+    });
+    return set;
+  }, [data]);
+
+  const dataBackedVariables = useMemo(() => {
+    // Preserve discovery order; only include variables that appear in current filtered data
+    const ordered = availableVariables.filter(v => dataBackedVariableSet.has(v));
+    // Include any variables in data not yet in discovery (edge case)
+    const extra: string[] = [];
+    dataBackedVariableSet.forEach(v => {
+      if (!availableVariables.includes(v)) extra.push(v);
+    });
+    return [...ordered, ...extra.sort()];
+  }, [availableVariables, dataBackedVariableSet]);
+
+  // Clear specialty when it's no longer in the data-backed list (e.g. after changing Year or Survey Source)
+  useEffect(() => {
+    if (!filters.specialty) return;
+    const allowed = new Set(filterOptions.specialties);
+    if (allowed.has(filters.specialty)) return;
+    setFilters({ ...filters, specialty: '' });
+  }, [filterOptions.specialties, filters.specialty, setFilters]);
+
+  // Clear selected variables that no longer have data for the current filter combination
+  useEffect(() => {
+    if (selectedVariables.length === 0) return;
+    const allowed = new Set(dataBackedVariables);
+    const valid = selectedVariables.filter(v => allowed.has(v));
+    if (valid.length === selectedVariables.length) return;
+    setSelectedVariables(valid);
+  }, [dataBackedVariables, selectedVariables, setSelectedVariables]);
 
   // Debug: Log final data length after all filtering
   console.log('🔍 SurveyAnalytics: Final data length after all filters:', data.length);
@@ -812,9 +778,9 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = memo(({ providerTypeFilt
             availableDataCategories={isBenchmarkingScreen ? [] : filterOptions.dataCategories} // Hide data category filter on benchmarking screen
             availableYears={filterOptions.years}
             selectedVariables={selectedVariables}
-            availableVariables={availableVariables}
+            availableVariables={dataBackedVariables}
             onVariablesChange={setSelectedVariables}
-            availableSpecialtyOptions={specialtyOptions} // NEW: Pass enriched specialty options with mapping transparency
+            availableSpecialtyOptions={filterOptions.dataBackedSpecialtyOptions}
             specialtyOptionsLoading={specialtyOptionsLoading} // NEW: Pass loading state to prevent showing empty dropdown
             specialtyOptionsError={specialtyOptionsError} // NEW: Pass error state for user-friendly error messages
           />

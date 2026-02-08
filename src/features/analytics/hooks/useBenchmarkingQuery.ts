@@ -1,9 +1,12 @@
 /**
  * Benchmarking Query Hook
- * 
+ *
  * TanStack Query wrapper for benchmarking/analytics data.
- * Provides instant render with background refresh pattern.
- * 
+ * Uses canonical key BENCHMARKING_QUERY_KEY so prefetch, hook, and restore share one cache entry.
+ *
+ * Invalidation: Only survey upload, survey delete, or mapping changes should invalidate
+ * benchmarking cache. No invalidation on navigation, window focus, or mount.
+ *
  * COMPATIBILITY: Matches exact interface of useAnalyticsData hook
  * to ensure seamless integration with existing SurveyAnalytics component.
  */
@@ -12,8 +15,8 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnalyticsDataService } from '../services/analyticsDataService';
 import { getDataService } from '../../../services/DataService';
-import { queryKeys } from '../../../shared/services/queryClient';
-import { createQueryFn, createFiltersHash } from '../../../shared/services/queryFetcher';
+import { BENCHMARKING_QUERY_KEY } from '../../../shared/services/queryClient';
+import { createQueryFn } from '../../../shared/services/queryFetcher';
 import { trackFetch } from '../../../shared/hooks/useQueryTelemetry';
 import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
 import { AnalyticsFilters, AggregatedData } from '../types/analytics';
@@ -129,14 +132,8 @@ export const useBenchmarkingQuery = (
   // Loading progress hook (matches useAnalyticsData)
   const { progress: loadingProgress, startProgress, completeProgress, resetProgress } = useSmoothProgress();
 
-  // Query key for caching (always fetch all data, filter in UI)
-  const queryKey = queryKeys.benchmarking({
-    year: '', // Always fetch all data - filtering happens client-side
-    specialty: '',
-    providerType: '',
-    region: '',
-    surveySource: '',
-  });
+  // Canonical key: single cache entry for full benchmarking dataset (filter in UI)
+  const queryKey = BENCHMARKING_QUERY_KEY;
 
   // Query options with caching policy
   const query = useQuery<BenchmarkingQueryData>({
@@ -151,15 +148,15 @@ export const useBenchmarkingQuery = (
     placeholderData: (previousData) => previousData, // Keep previous data while fetching new data (v5 API)
   });
 
-  // Start/stop progress based on loading state
+  // Start/stop progress only when we have no data (initial load). Don't show loading during background refetch.
   useEffect(() => {
-    if (query.isLoading || query.isFetching) {
+    if (query.isLoading) {
       startProgress();
     } else {
       completeProgress();
       resetProgress();
     }
-  }, [query.isLoading, query.isFetching, startProgress, completeProgress, resetProgress]);
+  }, [query.isLoading, startProgress, completeProgress, resetProgress]);
 
   // Apply filters client-side (matches useAnalyticsData behavior)
   // NOTE: Component may re-filter this data, but we maintain interface compatibility
@@ -175,9 +172,9 @@ export const useBenchmarkingQuery = (
 
   // Force refresh function (matches interface)
   const forceRefresh = useCallback(async () => {
-    queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({ queryKey: BENCHMARKING_QUERY_KEY });
     await query.refetch();
-  }, [queryClient, queryKey, query]);
+  }, [queryClient, query]);
 
   // Export functions (matches interface - import dynamically to avoid bundle bloat)
   const exportToExcel = useCallback(() => {
@@ -204,11 +201,12 @@ export const useBenchmarkingQuery = (
     });
   }, [filteredData, filters, selectedVariables]);
 
-  // Return interface matching useAnalyticsData exactly
+  // Return interface matching useAnalyticsData exactly.
+  // loading = only when no cached data (isLoading). When we have data, never show skeleton (stale-while-revalidate).
   return {
     data: filteredData, // Filtered data for display
     allData: query.data?.data || [], // All data for filter options
-    loading: query.isLoading || query.isFetching,
+    loading: query.isLoading,
     loadingProgress,
     error: query.error ? (query.error instanceof Error ? query.error.message : String(query.error)) : null,
     filters,
@@ -221,10 +219,10 @@ export const useBenchmarkingQuery = (
 };
 
 /**
- * Invalidate benchmarking queries
- * Call this when surveys are uploaded/deleted or mappings are updated
+ * Invalidate benchmarking queries.
+ * Call only when surveys are uploaded/deleted or mappings are updated (not on navigation/focus).
  */
 export const invalidateBenchmarkingQueries = (queryClient: ReturnType<typeof useQueryClient>) => {
-  queryClient.invalidateQueries({ queryKey: ['benchmarking'] });
+  queryClient.invalidateQueries({ queryKey: BENCHMARKING_QUERY_KEY });
 };
 

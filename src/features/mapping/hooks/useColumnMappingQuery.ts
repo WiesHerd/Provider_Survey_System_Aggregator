@@ -25,6 +25,7 @@ export const useColumnMappingQuery = () => {
   
   const query = useQuery<ColumnMappingData>({
     queryKey: cacheKey,
+    placeholderData: (previousData) => previousData, // Stale-while-revalidate (same as Analysis Tools)
     queryFn: async () => {
       const startTime = performance.now();
       

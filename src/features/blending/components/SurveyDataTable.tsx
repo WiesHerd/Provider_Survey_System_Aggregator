@@ -4,12 +4,12 @@
  * Handles the survey data table with selection, sorting, and pagination
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
 import { ModernPagination } from '../../../shared/components/ModernPagination';
-import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
+import { TableSkeletonLoader } from '../../../shared/components/TableSkeletonLoader';
 import { EmptyState } from '../../mapping/components/shared/EmptyState';
 import { BoltIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline';
-import { formatSpecialtyForDisplay, formatRegionForDisplay, capitalizeWords } from '../../../shared/utils/formatters';
+import { formatSpecialtyForDisplay, formatRegionForDisplay, capitalizeWords, formatCurrency } from '../../../shared/utils/formatters';
 
 interface SurveyDataTableProps {
   data: any[];
@@ -19,7 +19,7 @@ interface SurveyDataTableProps {
   progress: number;
 }
 
-export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
+const SurveyDataTableInner: React.FC<SurveyDataTableProps> = ({
   data,
   selectedRows,
   onRowSelectionChange,
@@ -62,14 +62,45 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
     direction: 'asc' | 'desc';
   } | null>(null);
 
-  // Paginated data for better performance
+  // Sorted order: array of indices into data. When sortConfig is null, order is [0,1,...,n-1].
+  const sortedOrder = useMemo(() => {
+    const indices = data.map((_, i) => i);
+    if (!sortConfig) return indices;
+    const key = sortConfig.key;
+    const dir = sortConfig.direction === 'asc' ? 1 : -1;
+    const numericKeys = ['tcc_p25', 'tcc_p50', 'tcc_p75', 'tcc_p90', 'wrvu_p25', 'wrvu_p50', 'wrvu_p75', 'wrvu_p90', 'cf_p25', 'cf_p50', 'cf_p75', 'cf_p90'];
+    const isNumeric = numericKeys.includes(key);
+    indices.sort((a, b) => {
+      const rowA = data[a];
+      const rowB = data[b];
+      let valA: number | string = rowA?.[key];
+      let valB: number | string = rowB?.[key];
+      if (isNumeric) {
+        valA = typeof valA === 'number' ? valA : (typeof valA === 'string' ? parseFloat(valA.replace(/[,$]/g, '')) : NaN);
+        valB = typeof valB === 'number' ? valB : (typeof valB === 'string' ? parseFloat(valB.replace(/[,$]/g, '')) : NaN);
+        const na = Number.isNaN(valA as number) ? -Infinity : (valA as number);
+        const nb = Number.isNaN(valB as number) ? -Infinity : (valB as number);
+        return dir * (na - nb);
+      }
+      const sa = String(valA ?? '').trim();
+      const sb = String(valB ?? '').trim();
+      return dir * sa.localeCompare(sb, undefined, { numeric: true });
+    });
+    return indices;
+  }, [data, sortConfig]);
+
+  // Paginated data: sort then paginate. Each item is { row, actualIndex } so selection uses index in original data.
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    return data.slice(startIndex, endIndex);
-  }, [data, currentPage, itemsPerPage]);
+    const pageIndices = sortedOrder.slice(startIndex, endIndex);
+    return pageIndices.map((actualIndex) => ({ row: data[actualIndex], actualIndex }));
+  }, [data, sortedOrder, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(data.length / itemsPerPage);
+
+  // O(1) selection lookup for row highlight and checkbox
+  const selectedSet = useMemo(() => new Set(selectedRows), [selectedRows]);
 
   // Calculate visible columns based on showAllPercentiles
   const visibleColumns = useMemo(() => {
@@ -133,12 +164,12 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
 
   // Handle row selection
   const handleRowClick = useCallback((actualIndex: number) => {
-    if (selectedRows.includes(actualIndex)) {
+    if (selectedSet.has(actualIndex)) {
       onRowSelectionChange(selectedRows.filter(i => i !== actualIndex));
     } else {
       onRowSelectionChange([...selectedRows, actualIndex]);
     }
-  }, [selectedRows, onRowSelectionChange]);
+  }, [selectedRows, selectedSet, onRowSelectionChange]);
 
   // Handle checkbox selection
   const handleCheckboxChange = useCallback((actualIndex: number, checked: boolean) => {
@@ -160,14 +191,13 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
 
   if (isLoading) {
     return (
-      <EnterpriseLoadingSpinner
-        message="Loading survey data..."
-        recordCount="auto"
-        data={data}
-        progress={progress}
-        variant="inline"
-        loading={isLoading}
-      />
+      <div className="rounded-b-xl border border-gray-200 border-t-0 overflow-hidden">
+        <TableSkeletonLoader
+          message="Loading survey data…"
+          rowCount={8}
+          columnCount={5}
+        />
+      </div>
     );
   }
 
@@ -233,16 +263,18 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
           }
         `}</style>
         <div className="overflow-x-auto max-w-full overflow-y-visible">
-          <table className="w-full border-collapse survey-data-table" style={{ tableLayout: showAllPercentiles ? 'fixed' : 'auto', width: '100%', borderSpacing: 0 }}>
+          <table className="border-collapse survey-data-table" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%', borderSpacing: 0 }}>
             <colgroup>
               {visibleColumns.map((key) => {
                 const colWidth = columnWidths[key as keyof typeof columnWidths] || 100;
+                const isTextColumn = ['specialty', 'survey', 'region', 'provider'].includes(key);
                 return (
                   <col 
                     key={key} 
                     style={{ 
-                      width: showAllPercentiles ? `${colWidth}px` : undefined,
-                      minWidth: `${colWidth}px`
+                      width: showAllPercentiles ? `${colWidth}px` : `${colWidth}px`,
+                      minWidth: `${colWidth}px`,
+                      maxWidth: isTextColumn ? `${colWidth}px` : undefined
                     }} 
                   />
                 );
@@ -261,13 +293,13 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   />
                 </th>
                 <th 
-                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none" 
-                  style={{ width: `${columnWidths.specialty}px` }}
+                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative cursor-pointer hover:bg-gray-100 select-none overflow-hidden"
+                  style={{ width: `${columnWidths.specialty}px`, maxWidth: `${columnWidths.specialty}px`, minWidth: 0 }}
                   onClick={() => handleSort('surveySpecialty')}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-1">
-                      <span>Specialty</span>
+                  <div className="flex items-center justify-between min-w-0">
+                    <div className="flex items-center space-x-1 min-w-0 truncate">
+                      <span className="truncate">Specialty</span>
                       {sortConfig?.key === 'surveySpecialty' && (
                         <span className="text-purple-600">
                           {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -372,9 +404,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                     style={{ width: `${columnWidths.tcc_p25}px` }}
                     onClick={() => handleSort('tcc_p25')}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-end">
                       <div className="flex items-center space-x-1">
-                        <span>TCC P25</span>
+                        <span>TCC P25 ($)</span>
                         {sortConfig?.key === 'tcc_p25' && (
                           <span className="text-purple-600">
                             {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -394,9 +426,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   style={{ width: `${columnWidths.tcc_p50}px` }}
                   onClick={() => handleSort('tcc_p50')}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-end">
                     <div className="flex items-center space-x-1">
-                      <span>TCC P50</span>
+                      <span>TCC P50 ($)</span>
                       {sortConfig?.key === 'tcc_p50' && (
                         <span className="text-purple-600">
                           {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -417,9 +449,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       style={{ width: `${columnWidths.tcc_p75}px` }}
                       onClick={() => handleSort('tcc_p75')}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <div className="flex items-center space-x-1">
-                          <span>TCC P75</span>
+                          <span>TCC P75 ($)</span>
                           {sortConfig?.key === 'tcc_p75' && (
                             <span className="text-purple-600">
                               {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -438,9 +470,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       style={{ width: `${columnWidths.tcc_p90}px` }}
                       onClick={() => handleSort('tcc_p90')}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <div className="flex items-center space-x-1">
-                          <span>TCC P90</span>
+                          <span>TCC P90 ($)</span>
                           {sortConfig?.key === 'tcc_p90' && (
                             <span className="text-purple-600">
                               {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -463,7 +495,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                     style={{ width: `${columnWidths.wrvu_p25}px` }}
                     onClick={() => handleSort('wrvu_p25')}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-end">
                       <div className="flex items-center space-x-1">
                         <span>wRVU P25</span>
                         {sortConfig?.key === 'wrvu_p25' && (
@@ -485,7 +517,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   style={{ width: `${columnWidths.wrvu_p50}px` }}
                   onClick={() => handleSort('wrvu_p50')}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-end">
                     <div className="flex items-center space-x-1">
                       <span>wRVU P50</span>
                       {sortConfig?.key === 'wrvu_p50' && (
@@ -508,7 +540,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       style={{ width: `${columnWidths.wrvu_p75}px` }}
                       onClick={() => handleSort('wrvu_p75')}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <div className="flex items-center space-x-1">
                           <span>wRVU P75</span>
                           {sortConfig?.key === 'wrvu_p75' && (
@@ -529,7 +561,7 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       style={{ width: `${columnWidths.wrvu_p90}px` }}
                       onClick={() => handleSort('wrvu_p90')}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <div className="flex items-center space-x-1">
                           <span>wRVU P90</span>
                           {sortConfig?.key === 'wrvu_p90' && (
@@ -554,9 +586,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                     style={{ width: `${columnWidths.cf_p25}px` }}
                     onClick={() => handleSort('cf_p25')}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-end">
                       <div className="flex items-center space-x-1">
-                        <span>CF P25</span>
+                        <span>CF P25 ($)</span>
                         {sortConfig?.key === 'cf_p25' && (
                           <span className="text-purple-600">
                             {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -576,9 +608,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   style={{ width: `${columnWidths.cf_p50}px` }}
                   onClick={() => handleSort('cf_p50')}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-end">
                     <div className="flex items-center space-x-1">
-                      <span>CF P50</span>
+                      <span>CF P50 ($)</span>
                       {sortConfig?.key === 'cf_p50' && (
                         <span className="text-purple-600">
                           {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -599,9 +631,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       style={{ width: `${columnWidths.cf_p75}px` }}
                       onClick={() => handleSort('cf_p75')}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <div className="flex items-center space-x-1">
-                          <span>CF P75</span>
+                          <span>CF P75 ($)</span>
                           {sortConfig?.key === 'cf_p75' && (
                             <span className="text-purple-600">
                               {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -620,9 +652,9 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       style={{ width: `${columnWidths.cf_p90}px` }}
                       onClick={() => handleSort('cf_p90')}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <div className="flex items-center space-x-1">
-                          <span>CF P90</span>
+                          <span>CF P90 ($)</span>
                           {sortConfig?.key === 'cf_p90' && (
                             <span className="text-purple-600">
                               {sortConfig.direction === 'asc' ? '↑' : '↓'}
@@ -641,20 +673,18 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
               </tr>
             </thead>
             <tbody>
-              {paginatedData.map((row, index) => {
-                const actualIndex = (currentPage - 1) * itemsPerPage + index;
-                return (
+              {paginatedData.map(({ row, actualIndex }, index) => (
                 <tr 
-                  key={index}
+                  key={actualIndex}
                   className={`hover:bg-gray-50 cursor-pointer ${
-                    selectedRows.includes(actualIndex) ? 'bg-blue-50' : ''
+                    selectedSet.has(actualIndex) ? 'bg-blue-50' : ''
                   }`}
                   onClick={() => handleRowClick(actualIndex)}
                 >
                   <td className="px-2 py-3 whitespace-nowrap" style={{ width: `${columnWidths.checkbox}px` }}>
                     <input
                       type="checkbox"
-                      checked={selectedRows.includes(actualIndex)}
+                      checked={selectedSet.has(actualIndex)}
                       onChange={(e) => {
                         e.stopPropagation();
                         handleCheckboxChange(actualIndex, e.target.checked);
@@ -664,45 +694,39 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                       title={`Select row ${index + 1}`}
                     />
                   </td>
-                  <td className="px-2 py-3 text-sm font-medium text-gray-900" style={{ width: `${columnWidths.specialty}px` }}>
-                    <div className="truncate" title={row.surveySpecialty}>
+                  <td className="px-2 py-3 text-sm font-medium text-gray-900 overflow-hidden" style={{ width: `${columnWidths.specialty}px`, maxWidth: `${columnWidths.specialty}px`, minWidth: 0 }} title={formatSpecialtyForDisplay(row.surveySpecialty)}>
+                    <div className="truncate">
                       {formatSpecialtyForDisplay(row.surveySpecialty)}
                     </div>
                   </td>
-                  <td className="px-2 py-3 text-sm text-gray-500" style={{ width: `${columnWidths.survey}px` }}>
-                    <div className="truncate" title={row.surveySource}>
-                      {row.surveySource}
-                    </div>
+                  <td className="px-2 py-3 text-sm text-gray-500 overflow-hidden" style={{ width: `${columnWidths.survey}px`, maxWidth: `${columnWidths.survey}px`, minWidth: 0 }} title={row.surveySource}>
+                    <div className="truncate">{row.surveySource}</div>
                   </td>
                   <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-500" style={{ width: `${columnWidths.year}px` }}>
                     {row.surveyYear}
                   </td>
-                  <td className="px-2 py-3 text-sm text-gray-500" style={{ width: `${columnWidths.region}px` }}>
-                    <div className="truncate" title={row.geographicRegion}>
-                      {formatRegionForDisplay(row.geographicRegion)}
-                    </div>
+                  <td className="px-2 py-3 text-sm text-gray-500 overflow-hidden" style={{ width: `${columnWidths.region}px`, maxWidth: `${columnWidths.region}px`, minWidth: 0 }} title={formatRegionForDisplay(row.geographicRegion)}>
+                    <div className="truncate">{formatRegionForDisplay(row.geographicRegion)}</div>
                   </td>
-                  <td className="px-2 py-3 text-sm text-gray-500 border-r-2 border-gray-200" style={{ width: `${columnWidths.provider}px` }}>
-                    <div className="truncate" title={row.providerType}>
-                      {capitalizeWords(row.providerType || '')}
-                    </div>
+                  <td className="px-2 py-3 text-sm text-gray-500 border-r-2 border-gray-200 overflow-hidden" style={{ width: `${columnWidths.provider}px`, maxWidth: `${columnWidths.provider}px`, minWidth: 0 }} title={capitalizeWords(row.providerType || '')}>
+                    <div className="truncate">{capitalizeWords(row.providerType || '')}</div>
                   </td>
                   {/* TCC Percentiles */}
                   {showAllPercentiles && (
                     <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.tcc_p25}px` }}>
-                      {row.tcc_p25 ? parseFloat(row.tcc_p25.toString()).toLocaleString() : '***'}
+                      {row.tcc_p25 != null && !Number.isNaN(parseFloat(String(row.tcc_p25))) ? formatCurrency(parseFloat(String(row.tcc_p25).replace(/[,$]/g, '')), 2) : '***'}
                     </td>
                   )}
                   <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r-2 border-gray-200'}`} style={{ width: `${columnWidths.tcc_p50}px` }}>
-                    {row.tcc_p50 ? parseFloat(row.tcc_p50.toString()).toLocaleString() : '***'}
+                    {row.tcc_p50 != null && !Number.isNaN(parseFloat(String(row.tcc_p50))) ? formatCurrency(parseFloat(String(row.tcc_p50).replace(/[,$]/g, '')), 2) : '***'}
                   </td>
                   {showAllPercentiles && (
                     <>
                       <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.tcc_p75}px` }}>
-                        {row.tcc_p75 ? parseFloat(row.tcc_p75.toString()).toLocaleString() : '***'}
+                        {row.tcc_p75 != null && !Number.isNaN(parseFloat(String(row.tcc_p75))) ? formatCurrency(parseFloat(String(row.tcc_p75).replace(/[,$]/g, '')), 2) : '***'}
                       </td>
                       <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right border-r-2 border-gray-200" style={{ width: `${columnWidths.tcc_p90}px` }}>
-                        {row.tcc_p90 ? parseFloat(row.tcc_p90.toString()).toLocaleString() : '***'}
+                        {row.tcc_p90 != null && !Number.isNaN(parseFloat(String(row.tcc_p90))) ? formatCurrency(parseFloat(String(row.tcc_p90).replace(/[,$]/g, '')), 2) : '***'}
                       </td>
                     </>
                   )}
@@ -728,25 +752,24 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
                   {/* CF Percentiles */}
                   {showAllPercentiles && (
                     <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.cf_p25}px` }}>
-                      {row.cf_p25 ? parseFloat(row.cf_p25.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '***'}
+                      {row.cf_p25 != null && !Number.isNaN(parseFloat(String(row.cf_p25))) ? formatCurrency(parseFloat(String(row.cf_p25).replace(/[,$]/g, '')), 2) : '***'}
                     </td>
                   )}
                   <td className={`px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium ${showAllPercentiles ? '' : 'border-r-2 border-gray-200'}`} style={{ width: `${columnWidths.cf_p50}px` }}>
-                    {row.cf_p50 ? parseFloat(row.cf_p50.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '***'}
+                    {row.cf_p50 != null && !Number.isNaN(parseFloat(String(row.cf_p50))) ? formatCurrency(parseFloat(String(row.cf_p50).replace(/[,$]/g, '')), 2) : '***'}
                   </td>
                   {showAllPercentiles && (
                     <>
                       <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.cf_p75}px` }}>
-                        {row.cf_p75 ? parseFloat(row.cf_p75.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '***'}
+                        {row.cf_p75 != null && !Number.isNaN(parseFloat(String(row.cf_p75))) ? formatCurrency(parseFloat(String(row.cf_p75).replace(/[,$]/g, '')), 2) : '***'}
                       </td>
                       <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-900 text-right" style={{ width: `${columnWidths.cf_p90}px` }}>
-                        {row.cf_p90 ? parseFloat(row.cf_p90.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '***'}
+                        {row.cf_p90 != null && !Number.isNaN(parseFloat(String(row.cf_p90))) ? formatCurrency(parseFloat(String(row.cf_p90).replace(/[,$]/g, '')), 2) : '***'}
                       </td>
                     </>
                   )}
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
           
@@ -779,3 +802,5 @@ export const SurveyDataTable: React.FC<SurveyDataTableProps> = ({
     </div>
   );
 };
+
+export const SurveyDataTable = memo(SurveyDataTableInner);

@@ -5,11 +5,18 @@
  * Appears after selections are made and blending method is chosen
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, memo } from 'react';
 import { formatNumber, formatCurrency } from '../../../shared/utils/formatters';
-import { ExclamationTriangleIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import { useToast } from '../../../components/ui/use-toast';
+
+interface EffectiveDollarsPerRVU {
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+}
 
 interface BlendedMetrics {
   tcc_p25: number;
@@ -27,6 +34,12 @@ interface BlendedMetrics {
   totalRecords: number;
   specialties: string[];
   method: 'weighted' | 'simple' | 'custom';
+  totalIncumbents?: number;
+  confidence?: number;
+  effectiveDollarsPerRVU?: EffectiveDollarsPerRVU;
+  iqrTcc?: number;
+  iqrWrvu?: number;
+  iqrCf?: number;
 }
 
 interface BlendedResultsPreviewProps {
@@ -38,7 +51,7 @@ interface BlendedResultsPreviewProps {
   customWeights?: Record<number, number>;
 }
 
-export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
+const BlendedResultsPreviewInner: React.FC<BlendedResultsPreviewProps> = ({
   metrics,
   blendingMethod,
   selectedCount,
@@ -54,6 +67,34 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
     simple: 'Simple average (equal weights)',
     custom: 'Custom weights applied'
   };
+
+  const confidenceLabel = useMemo(() => {
+    const c = metrics?.confidence;
+    if (c == null || typeof c !== 'number') return null;
+    if (c > 0.7) return 'High';
+    if (c >= 0.4) return 'Medium';
+    return 'Low';
+  }, [metrics?.confidence]);
+
+  const effectiveDollarsPerRVU = useMemo(() => {
+    if (metrics?.effectiveDollarsPerRVU) return metrics.effectiveDollarsPerRVU;
+    if (!metrics) return null;
+    return {
+      p25: metrics.wrvu_p25 > 0 ? metrics.tcc_p25 / metrics.wrvu_p25 : NaN,
+      p50: metrics.wrvu_p50 > 0 ? metrics.tcc_p50 / metrics.wrvu_p50 : NaN,
+      p75: metrics.wrvu_p75 > 0 ? metrics.tcc_p75 / metrics.wrvu_p75 : NaN,
+      p90: metrics.wrvu_p90 > 0 ? metrics.tcc_p90 / metrics.wrvu_p90 : NaN
+    };
+  }, [metrics]);
+
+  const iqr = useMemo(() => {
+    if (!metrics) return null;
+    return {
+      tcc: metrics.iqrTcc ?? (metrics.tcc_p75 - metrics.tcc_p25),
+      wrvu: metrics.iqrWrvu ?? (metrics.wrvu_p75 - metrics.wrvu_p25),
+      cf: metrics.iqrCf ?? (metrics.cf_p75 - metrics.cf_p25)
+    };
+  }, [metrics]);
   
   // Excel export functionality
   const handleExportToExcel = () => {
@@ -64,6 +105,21 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
       // Create workbook
       const workbook = XLSX.utils.book_new();
       
+      const confLabel = typeof metrics.confidence === 'number'
+        ? (metrics.confidence > 0.7 ? 'High' : metrics.confidence >= 0.4 ? 'Medium' : 'Low')
+        : '';
+      const effDpr = effectiveDollarsPerRVU ?? {
+        p25: metrics.wrvu_p25 > 0 ? metrics.tcc_p25 / metrics.wrvu_p25 : NaN,
+        p50: metrics.wrvu_p50 > 0 ? metrics.tcc_p50 / metrics.wrvu_p50 : NaN,
+        p75: metrics.wrvu_p75 > 0 ? metrics.tcc_p75 / metrics.wrvu_p75 : NaN,
+        p90: metrics.wrvu_p90 > 0 ? metrics.tcc_p90 / metrics.wrvu_p90 : NaN
+      };
+      const iqrExport = iqr ?? {
+        tcc: metrics.tcc_p75 - metrics.tcc_p25,
+        wrvu: metrics.wrvu_p75 - metrics.wrvu_p25,
+        cf: metrics.cf_p75 - metrics.cf_p25
+      };
+
       // Summary sheet with blended metrics
       const summaryData = [
         ['Blended Compensation Metrics'],
@@ -71,11 +127,15 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
         ['Blending Method', methodLabels[blendingMethod]],
         ['Number of Specialties', metrics.specialties.length],
         ['Total Records', metrics.totalRecords],
+        ...(typeof metrics.totalIncumbents === 'number' ? [['Total Incumbents', metrics.totalIncumbents]] : []),
+        ...(confLabel ? [['Confidence', confLabel]] : []),
         [''],
         ['Metric', 'P25', 'P50 (Median)', 'P75', 'P90'],
         ['TCC ($)', metrics.tcc_p25, metrics.tcc_p50, metrics.tcc_p75, metrics.tcc_p90],
         ['Work RVU', metrics.wrvu_p25, metrics.wrvu_p50, metrics.wrvu_p75, metrics.wrvu_p90],
         ['CF ($)', metrics.cf_p25, metrics.cf_p50, metrics.cf_p75, metrics.cf_p90],
+        ['Effective $/wRVU (TCC ÷ wRVU)', Number.isNaN(effDpr.p25) ? '—' : effDpr.p25, Number.isNaN(effDpr.p50) ? '—' : effDpr.p50, Number.isNaN(effDpr.p75) ? '—' : effDpr.p75, Number.isNaN(effDpr.p90) ? '—' : effDpr.p90],
+        ['IQR (P75 − P25)', `TCC: ${formatCurrency(iqrExport.tcc, 0)}`, `wRVU: ${formatNumber(iqrExport.wrvu, 0)}`, `CF: $${formatNumber(iqrExport.cf, 2)}`, ''],
       ];
       
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
@@ -192,9 +252,14 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
     return issues;
   }, [metrics]);
 
-  // Early return after hooks
+  // Empty state when no rows selected
   if (!metrics || selectedCount === 0) {
-    return null;
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 px-6 py-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">Step 4: Preview Blended Results</h2>
+        <p className="text-sm text-gray-500">Select rows in the table above to see blended metrics and save your blend.</p>
+      </div>
+    );
   }
 
   return (
@@ -209,6 +274,12 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
               {methodLabels[blendingMethod]}
               {' • '}{metrics.specialties.length} {metrics.specialties.length === 1 ? 'specialty' : 'specialties'}
               {' • '}{metrics.totalRecords.toLocaleString()} records
+              {typeof metrics.totalIncumbents === 'number' && metrics.totalIncumbents > 0 && (
+                <> • {metrics.totalIncumbents.toLocaleString()} incumbents</>
+              )}
+              {confidenceLabel != null && (
+                <> • Confidence: {confidenceLabel}</>
+              )}
             </p>
           </div>
           <div className="flex space-x-3">
@@ -319,37 +390,53 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
                   ${formatNumber(metrics.cf_p90, 2)}
                 </td>
               </tr>
+              {effectiveDollarsPerRVU && (
+                <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-amber-500 rounded-full mr-3"></div>
+                      <div className="text-sm font-medium text-gray-900">Effective $/wRVU (TCC ÷ wRVU)</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
+                    {Number.isNaN(effectiveDollarsPerRVU.p25) ? '—' : formatCurrency(effectiveDollarsPerRVU.p25, 2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
+                    {Number.isNaN(effectiveDollarsPerRVU.p50) ? '—' : formatCurrency(effectiveDollarsPerRVU.p50, 2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
+                    {Number.isNaN(effectiveDollarsPerRVU.p75) ? '—' : formatCurrency(effectiveDollarsPerRVU.p75, 2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
+                    {Number.isNaN(effectiveDollarsPerRVU.p90) ? '—' : formatCurrency(effectiveDollarsPerRVU.p90, 2)}
+                  </td>
+                </tr>
+              )}
+              {iqr && (
+                <tr className="hover:bg-gray-50 border-t-2 border-gray-200">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-gray-400 rounded-full mr-3"></div>
+                      <div className="text-sm font-medium text-gray-900">IQR (P75 − P25)</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900" colSpan={4}>
+                    <span className="text-gray-600">TCC: {formatCurrency(iqr.tcc, 0)}</span>
+                    <span className="mx-2">|</span>
+                    <span className="text-gray-600">wRVU: {formatNumber(iqr.wrvu, 0)}</span>
+                    <span className="mx-2">|</span>
+                    <span className="text-gray-600">CF: ${formatNumber(iqr.cf, 2)}</span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Percentile Ordering Issues Notification */}
         {percentileIssues.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <ExclamationTriangleIcon className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-blue-900 mb-2">
-                  Percentile Ordering Notice
-                </h3>
-                <div className="text-sm text-blue-800 space-y-1">
-                  <p className="font-medium">The following percentile ordering issues were detected:</p>
-                  <ul className="list-disc list-inside ml-2 space-y-1">
-                    {percentileIssues.map((issue, index) => (
-                      <li key={index}>{issue}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-blue-700">
-                    This typically occurs when some source data rows have missing values for higher percentiles (P75, P90). 
-                    The blending calculation excludes missing values, which can result in these ordering differences. 
-                    Please review the source data to verify the results.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <p className="mt-3 text-xs text-gray-500">
+            Some values may appear out of order when source surveys don&apos;t report every percentile.
+          </p>
         )}
 
       </div>
@@ -357,3 +444,4 @@ export const BlendedResultsPreview: React.FC<BlendedResultsPreviewProps> = ({
   );
 };
 
+export const BlendedResultsPreview = memo(BlendedResultsPreviewInner);

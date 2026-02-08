@@ -54,12 +54,13 @@ export async function invalidateQueryCaches(surveyId?: string): Promise<void> {
     // Invalidate benchmarking queries
     try {
       const { invalidateBenchmarkingQueries } = require('../../features/analytics/hooks/useBenchmarkingQuery');
-      // invalidateBenchmarkingQueries expects the queryClient instance directly
       invalidateBenchmarkingQueries(queryClient as any);
     } catch (error) {
-      // Benchmarking queries might not be available, that's okay
       console.debug('Benchmarking query invalidation not available');
     }
+
+    // Invalidate Data Management (Specialties, Provider Types, Regions, Comp Metrics) so unmapped lists refresh
+    queryClient.invalidateQueries({ queryKey: ['mappings'], exact: false });
     
     console.log('✅ Invalidated TanStack Query cache after deletion');
   } catch (error) {

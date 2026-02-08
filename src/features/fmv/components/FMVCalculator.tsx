@@ -10,8 +10,7 @@ import { ResultsPanel } from './ResultsPanel';
 import BlendedResultsPanel from './BlendedResultsPanel';
 import { SavedFMVManager } from './SavedFMVManager';
 import FairMarketValuePrintable from '../../../components/FairMarketValuePrintable';
-import { EnterpriseLoadingSpinner } from '../../../shared/components/EnterpriseLoadingSpinner';
-import { useSmoothProgress } from '../../../shared/hooks/useSmoothProgress';
+import { TableSkeletonLoader } from '../../../shared/components/TableSkeletonLoader';
 import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
 
 /**
@@ -20,12 +19,6 @@ import { FMVCalculatorProps, SavedFMVCalculation } from '../types/fmv';
  * @param onPrint - Optional callback for print functionality
  */
 export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
-  // Use smooth progress for dynamic loading
-  const { progress, startProgress, completeProgress } = useSmoothProgress({
-    duration: 3000,
-    maxProgress: 90,
-    intervalMs: 100
-  });
   const {
     // State
     filters,
@@ -136,30 +129,13 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
     };
   };
 
-  // Start progress animation when loading begins
-  React.useEffect(() => {
-    if (loading) {
-      startProgress();
-    } else {
-      completeProgress();
-    }
-  }, [loading, startProgress, completeProgress]);
-
-  // Show loading state
-  if (loading) {
-    return (
-      <EnterpriseLoadingSpinner
-        message="Loading Fair Market Value data..."
-        progress={progress}
-        variant="overlay"
-        loading={loading}
-      />
-    );
-  }
-
   return (
     <div className="w-full min-h-screen pb-8">
       <div className="w-full flex flex-col gap-4">
+        {loading ? (
+          <TableSkeletonLoader message="Loading Fair Market Value data…" />
+        ) : (
+        <>
         {/* Integrated Data Configuration */}
         <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="mb-6 flex justify-between items-start">
@@ -437,6 +413,8 @@ export const FMVCalculator: React.FC<FMVCalculatorProps> = ({ onPrint }) => {
             providerName={currentProviderName}
           />
         </div>
+        </>
+        )}
       </div>
     </div>
   );

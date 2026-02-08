@@ -88,8 +88,9 @@ export const SpecialtyMapping: React.FC<SpecialtyMappingProps> = (props) => {
     }
   }, [loading]);
   
-  // Single loading experience: render page shell + one content-area spinner (avoids double spinner with Suspense)
-  if (loading && !emergencyTimeout) {
+  // Stale-while-revalidate: show spinner only when no data (same as Analysis Tools). If we have cached data, show it.
+  const hasNoData = !mappings.length && !unmappedSpecialties.length && !Object.keys(learnedMappings).length;
+  if (loading && hasNoData && !emergencyTimeout) {
     return (
       <div className="w-full min-h-screen">
         <div className="w-full flex flex-col gap-4">

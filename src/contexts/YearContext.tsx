@@ -76,12 +76,15 @@ export const YearProvider: React.FC<YearProviderProps> = ({ children }) => {
 
       setAvailableYears(years);
       setYearConfigs(configs);
-      setCurrentYearState(activeYear);
-      
-      // Set default year filter
-      setYearFilterState({
-        selectedYear: activeYear,
-        includeAllYears: false
+      setCurrentYearState((prev) => {
+        // Keep user's selection if it's still in the new list; otherwise use detected/active year
+        const keep = years.length > 0 && years.includes(prev);
+        return keep ? prev : activeYear;
+      });
+      setYearFilterState((prev) => {
+        const current = prev.selectedYear ?? activeYear;
+        const nextYear = years.length > 0 && years.includes(current) ? current : activeYear;
+        return { ...prev, selectedYear: nextYear };
       });
 
       console.log('🔍 YearContext: Year context initialized with currentYear:', activeYear);

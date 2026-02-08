@@ -83,3 +83,7 @@ export { WelcomeBanner, isWelcomeBannerDismissed, resetWelcomeBanner } from './W
 
 // Error Boundary - Enterprise-grade error handling
 export { ErrorBoundary } from './ErrorBoundary';
+
+// Table skeleton loader - same loading pattern as Chart & Report Builder for all analysis tools
+export { TableSkeletonLoader } from './TableSkeletonLoader';
+export type { TableSkeletonLoaderProps } from './TableSkeletonLoader';

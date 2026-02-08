@@ -132,11 +132,9 @@ export const useSurveyListQuery = (
     queryFn: createQueryFn((signal) => fetchSurveyList(year, providerType, signal)),
     enabled,
     // ENTERPRISE: 24 hours staleTime - survey list is static after upload; upload/delete invalidates cache
-    // This eliminates unnecessary Firebase reads and provides instant navigation
     staleTime: 1000 * 60 * 60 * 24, // 24 hours
-    // ENTERPRISE: 24 hours gcTime - keep surveys in memory for entire session
-    // Survey list is small (~100KB for 100 surveys), so memory impact is minimal
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    // ENTERPRISE: 7 days gcTime - same as Analysis Tools; survives session + IndexedDB restore
+    gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days
     // ENTERPRISE: Disable refetch on window focus - surveys don't change unless explicitly uploaded/deleted
     // Cache invalidation on upload/delete handles updates automatically
     refetchOnWindowFocus: false,

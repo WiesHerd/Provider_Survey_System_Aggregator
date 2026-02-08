@@ -69,8 +69,8 @@ export const useSpecialtyMappingQuery = (
     queryKey,
     queryFn: createQueryFn((signal) => fetchSpecialtyMappingData(providerType, signal)),
     enabled,
-    staleTime: 1000 * 60 * 30, // 30 minutes - mapping data only changes on create/delete (which invalidates cache)
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours - keep in cache for entire session
+    staleTime: 1000 * 60 * 60 * 24, // 24 hours - same as Analysis Tools; mapping data only changes on create/delete (which invalidates cache)
+    gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days - keep in cache (same as benchmarking)
     refetchOnWindowFocus: false, // Don't refetch on focus - mappings only change on explicit actions
     refetchOnMount: false, // Use cached data if available (stale-while-revalidate)
     refetchOnReconnect: false, // Don't refetch on reconnect - data is local

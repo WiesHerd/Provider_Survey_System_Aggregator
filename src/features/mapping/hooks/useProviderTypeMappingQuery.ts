@@ -15,16 +15,22 @@ interface ProviderTypeMappingData {
   learnedWithSource: Array<{original: string, corrected: string, surveySource: string}>;
 }
 
-export const useProviderTypeMappingQuery = () => {
+/**
+ * @param showAllCategories - When true, load all provider types (cache key 'all'). When false, use selectedProviderType from context.
+ */
+export const useProviderTypeMappingQuery = (showAllCategories: boolean = false) => {
   const { selectedProviderType } = useProviderContext();
   const queryClient = useQueryClient();
   const dataService = new DataService();
   
-  const dataProviderType = selectedProviderType === 'BOTH' ? undefined : selectedProviderType;
+  const dataProviderType = showAllCategories
+    ? undefined
+    : (selectedProviderType === 'BOTH' ? undefined : selectedProviderType);
   const cacheKey = [...queryKeys.mappings.providerType(), dataProviderType || 'all'] as const;
   
   const query = useQuery<ProviderTypeMappingData>({
     queryKey: cacheKey,
+    placeholderData: (previousData) => previousData, // Stale-while-revalidate (same as Analysis Tools)
     queryFn: async () => {
       const startTime = performance.now();
       
@@ -74,6 +80,14 @@ export const useProviderTypeMappingQuery = () => {
     mutationFn: async () => await dataService.clearAllProviderTypeMappings(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: cacheKey }),
   });
+
+  const removeLearnedMappingMutation = useMutation({
+    mutationFn: async (original: string) => {
+      await dataService.removeLearnedMapping('providerType', original);
+      return original;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: cacheKey }),
+  });
   
   return {
     data: query.data,
@@ -89,6 +103,7 @@ export const useProviderTypeMappingQuery = () => {
     updateMapping: updateMappingMutation.mutateAsync,
     deleteMapping: deleteMappingMutation.mutateAsync,
     clearAllMappings: clearAllMappingsMutation.mutateAsync,
+    removeLearnedMapping: removeLearnedMappingMutation.mutateAsync,
     isCreating: createMappingMutation.isPending,
     isUpdating: updateMappingMutation.isPending,
     isDeleting: deleteMappingMutation.isPending,
