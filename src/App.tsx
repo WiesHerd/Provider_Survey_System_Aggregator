@@ -727,7 +727,9 @@ function App() {
                 <MappingProvider>
                   <YearProvider>
                     <ProviderContextProvider>
-                      <AuthGuard requireAuth={true}>
+                      {/* Portfolio/demo mode: sign-in disabled so the app is browsable without auth.
+                          Flip back to requireAuth={true} to re-enable the sign-in gate. */}
+                      <AuthGuard requireAuth={false}>
                         <CacheGate>
                           <Router basename={basename}>
                             <PageContent />

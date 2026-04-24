@@ -50,12 +50,17 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
     );
   }
 
-  // Check if authentication should be required
-  // Allow bypassing auth requirement via environment variable for IndexedDB-only mode
+  // Check if authentication should be required.
+  // Precedence:
+  //   1. If the parent passes requireAuth={false}, always bypass auth (portfolio / demo mode).
+  //   2. REACT_APP_REQUIRE_AUTH env var overrides default.
+  //   3. Default: require in production, optional in development.
   const envRequireAuth = process.env.REACT_APP_REQUIRE_AUTH;
-  const shouldRequireAuth = envRequireAuth === undefined 
-    ? (process.env.NODE_ENV === 'production') // Default: require in production, optional in development
-    : envRequireAuth === 'true';
+  const shouldRequireAuth = requireAuth === false
+    ? false
+    : envRequireAuth === undefined
+      ? (process.env.NODE_ENV === 'production')
+      : envRequireAuth === 'true';
   
   // If Firebase is not available and auth is required, show error
   // If Firebase is not available and auth is not required, allow IndexedDB-only mode
